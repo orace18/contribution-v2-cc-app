@@ -26,7 +26,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics,prometheus
+        include: health,info,metrics,prometheus,loggers
   endpoint:
     health:
       show-details: when_authorized
@@ -56,3 +56,8 @@ psp:
     hmac-secret: ${JAWUPAY_HMAC_SECRET:change-me}
     replay-window-seconds: ${JAWUPAY_REPLAY_WINDOW_SECONDS:300}
     callback-rate-limit-per-minute: ${JAWUPAY_RATE_LIMIT_PER_MINUTE:60}
+
+logging:
+  level:
+    root: ${LOG_LEVEL_ROOT:INFO}
+    com.ccapp: ${LOG_LEVEL_CCAPP:INFO}

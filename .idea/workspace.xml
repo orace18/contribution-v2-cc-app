@@ -4,22 +4,14 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Mise en place du projet">
-      <change afterPath="$PROJECT_DIR$/src/main/resources/firebase/firebase-service-account-dev.json" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/resources/firebase/firebase-service-account-prod.json" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/resources/firebase/jawupay-bbc9f-firebase-adminsdk-q6oiw-73173de43d.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/accounting/ledger/domain/entity/AccountingEvent.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/accounting/ledger/domain/entity/AccountingEvent.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/accounting/ledger/domain/entity/LedgerEntry.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/accounting/ledger/domain/entity/LedgerEntry.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/config/FirebaseConfig.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/config/FirebaseConfig.java" afterDir="false" />
+    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Mise a jour du code">
+      <change beforePath="$PROJECT_DIR$/pom.xml" beforeDir="false" afterPath="$PROJECT_DIR$/pom.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/resources/application-dev.yml" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/application-dev.yml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/resources/application-prod.yml" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/application-prod.yml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/resources/application.yml" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/application.yml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/target/classes/application-dev.yml" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/application-dev.yml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/accounting/ledger/domain/entity/AccountingEvent$AccountingEventBuilder.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/accounting/ledger/domain/entity/AccountingEvent$AccountingEventBuilder.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/accounting/ledger/domain/entity/AccountingEvent.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/accounting/ledger/domain/entity/AccountingEvent.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/accounting/ledger/domain/entity/LedgerEntry$LedgerEntryBuilder.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/accounting/ledger/domain/entity/LedgerEntry$LedgerEntryBuilder.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/accounting/ledger/domain/entity/LedgerEntry.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/accounting/ledger/domain/entity/LedgerEntry.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/config/FirebaseConfig.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/config/FirebaseConfig.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/generated-sources/annotations/com/ccapp/identity/mapper/IdentityMapperImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/target/generated-sources/annotations/com/ccapp/identity/mapper/IdentityMapperImpl.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/generated-sources/annotations/com/ccapp/subscription/mapper/SubscriptionPlanMapperImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/target/generated-sources/annotations/com/ccapp/subscription/mapper/SubscriptionPlanMapperImpl.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/application-prod.yml" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/application-prod.yml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/application.yml" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/application.yml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -175,7 +167,23 @@
       <option name="project" value="LOCAL" />
       <updated>1772618138514</updated>
     </task>
-    <option name="localTasksCounter" value="5" />
+    <task id="LOCAL-00005" summary="Mise a jour du code">
+      <option name="closed" value="true" />
+      <created>1772639452023</created>
+      <option name="number" value="00005" />
+      <option name="presentableId" value="LOCAL-00005" />
+      <option name="project" value="LOCAL" />
+      <updated>1772639452023</updated>
+    </task>
+    <task id="LOCAL-00006" summary="Mise a jour du code">
+      <option name="closed" value="true" />
+      <created>1772639466953</created>
+      <option name="number" value="00006" />
+      <option name="presentableId" value="LOCAL-00006" />
+      <option name="project" value="LOCAL" />
+      <updated>1772639466953</updated>
+    </task>
+    <option name="localTasksCounter" value="7" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -191,7 +199,8 @@
   </component>
   <component name="VcsManagerConfiguration">
     <MESSAGE value="Mise en place du projet" />
-    <option name="LAST_COMMIT_MESSAGE" value="Mise en place du projet" />
+    <MESSAGE value="Mise a jour du code" />
+    <option name="LAST_COMMIT_MESSAGE" value="Mise a jour du code" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />

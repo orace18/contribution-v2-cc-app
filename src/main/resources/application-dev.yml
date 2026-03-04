@@ -13,4 +13,6 @@ firebase:
 
 logging:
   level:
+    root: ${LOG_LEVEL_ROOT:INFO}
+    com.ccapp: ${LOG_LEVEL_CCAPP:DEBUG}
     org.springframework.security: DEBUG
