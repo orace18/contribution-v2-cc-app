@@ -1,0 +1,545 @@
+{
+  "info": {
+    "name": "cc-app-backend local",
+    "_postman_id": "7f2d6f2b-fcca-4e1f-a0de-1f37dd210001",
+    "description": "Collection de test locale pour cc-app-backend (Spring Boot). Reponse standard: { success, message, data, timestamp }.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "bearerToken",
+      "value": "dev:alice"
+    },
+    {
+      "key": "internalApiKey",
+      "value": "test-internal-key"
+    },
+    {
+      "key": "country",
+      "value": "BJ"
+    },
+    {
+      "key": "currency",
+      "value": "XOF"
+    },
+    {
+      "key": "planCode",
+      "value": "BASIC"
+    },
+    {
+      "key": "deviceIdentifier",
+      "value": "device-001"
+    },
+    {
+      "key": "platform",
+      "value": "ANDROID"
+    },
+    {
+      "key": "userId",
+      "value": ""
+    },
+    {
+      "key": "deviceId",
+      "value": ""
+    },
+    {
+      "key": "sessionId",
+      "value": ""
+    },
+    {
+      "key": "refreshToken",
+      "value": ""
+    },
+    {
+      "key": "operationId",
+      "value": ""
+    },
+    {
+      "key": "callbackPspReference",
+      "value": "JAWU-DEMO-REF"
+    },
+    {
+      "key": "callbackAmount",
+      "value": "1000.00"
+    },
+    {
+      "key": "callbackCurrency",
+      "value": "XAF"
+    },
+    {
+      "key": "callbackStatus",
+      "value": "FAILED"
+    },
+    {
+      "key": "callbackNonce",
+      "value": ""
+    },
+    {
+      "key": "callbackTimestamp",
+      "value": ""
+    },
+    {
+      "key": "jawupayHmacSecret",
+      "value": "change-me"
+    },
+    {
+      "key": "jawupaySignature",
+      "value": ""
+    },
+    {
+      "key": "reconAmount",
+      "value": "1000.00"
+    },
+    {
+      "key": "reconCurrency",
+      "value": "XAF"
+    }
+  ],
+  "item": [
+    {
+      "name": "00 - Public & Monitoring",
+      "item": [
+        {
+          "name": "Actuator Health (public)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/actuator/health",
+            "description": "Verifie l'etat global de l'application."
+          }
+        },
+        {
+          "name": "Actuator Info (public)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/actuator/info",
+            "description": "Retourne les infos exposees via actuator."
+          }
+        },
+        {
+          "name": "Subscription Plans (public)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/subscriptions/plans?country={{country}}",
+            "description": "Liste les plans actifs par pays."
+          }
+        }
+      ]
+    },
+    {
+      "name": "01 - Identity (Bearer dev:<uid>)",
+      "item": [
+        {
+          "name": "Identity Sync",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+                  "var json = pm.response.json();",
+                  "if (json && json.data) {",
+                  "  pm.collectionVariables.set('userId', json.data.userId || '');",
+                  "  pm.collectionVariables.set('sessionId', json.data.sessionId || '');",
+                  "  pm.collectionVariables.set('refreshToken', json.data.refreshToken || '');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{bearerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"deviceIdentifier\": \"{{deviceIdentifier}}\",\n  \"platform\": \"{{platform}}\"\n}"
+            },
+            "url": "{{baseUrl}}/identity/sync",
+            "description": "Cree ou met a jour l'utilisateur via firebaseUid (token), upsert le device et cree une session avec refresh token."
+          }
+        },
+        {
+          "name": "Identity Me",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+                  "var json = pm.response.json();",
+                  "var data = json && json.data ? json.data : null;",
+                  "if (data && data.devices && data.devices.length > 0) {",
+                  "  pm.collectionVariables.set('deviceId', data.devices[0].id || '');",
+                  "}",
+                  "if (data && data.activeSessions && data.activeSessions.length > 0) {",
+                  "  pm.collectionVariables.set('sessionId', data.activeSessions[0].id || '');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{bearerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "url": "{{baseUrl}}/identity/me",
+            "description": "Retourne l'utilisateur courant, son profil, ses devices et ses sessions actives."
+          }
+        },
+        {
+          "name": "Identity Onboarding",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{bearerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"John\",\n  \"lastName\": \"Doe\",\n  \"country\": \"{{country}}\",\n  \"phone\": \"+237690000000\"\n}"
+            },
+            "url": "{{baseUrl}}/identity/onboarding",
+            "description": "Met a jour le profil utilisateur et fait passer KYC de NOT_STARTED a PENDING (si applicable)."
+          }
+        },
+        {
+          "name": "Register Device",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{bearerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"deviceIdentifier\": \"{{deviceIdentifier}}-2\",\n  \"platform\": \"WEB\"\n}"
+            },
+            "url": "{{baseUrl}}/identity/devices",
+            "description": "Upsert d'un device pour l'utilisateur courant."
+          }
+        },
+        {
+          "name": "Block Device",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{bearerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "url": "{{baseUrl}}/identity/devices/{{deviceId}}/block",
+            "description": "Bloque un device de l'utilisateur et revoque ses sessions actives associees."
+          }
+        },
+        {
+          "name": "Refresh Session",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+                  "var json = pm.response.json();",
+                  "if (json && json.data) {",
+                  "  pm.collectionVariables.set('sessionId', json.data.sessionId || '');",
+                  "  pm.collectionVariables.set('refreshToken', json.data.refreshToken || '');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{bearerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+            },
+            "url": "{{baseUrl}}/identity/sessions/refresh",
+            "description": "Rotation du refresh token: session courante revoquee puis nouvelle session creee."
+          }
+        },
+        {
+          "name": "Revoke Session",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{bearerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "url": "{{baseUrl}}/identity/sessions/{{sessionId}}/revoke",
+            "description": "Revoque explicitement une session de l'utilisateur courant."
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - Subscription",
+      "item": [
+        {
+          "name": "Initiate Subscription",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var json = pm.response.json();",
+                  "if (pm.response.code === 200 && json && json.data) {",
+                  "  pm.collectionVariables.set('operationId', json.data.operationId || '');",
+                  "  pm.collectionVariables.set('callbackPspReference', json.data.pspReference || '');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{bearerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"planCode\": \"{{planCode}}\",\n  \"country\": \"{{country}}\",\n  \"idempotencyKey\": \"sub-demo-001\"\n}"
+            },
+            "url": "{{baseUrl}}/subscriptions/initiate",
+            "description": "Cree une operation INITIATED, appelle Jawupay (mock) et renvoie operationId/pspReference/checkoutUrl."
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 - PSP Callback",
+      "item": [
+        {
+          "name": "Jawupay Callback (signed)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var payload = {",
+                  "  pspReference: pm.variables.replaceIn('{{callbackPspReference}}'),",
+                  "  amount: pm.variables.replaceIn('{{callbackAmount}}'),",
+                  "  currency: pm.variables.replaceIn('{{callbackCurrency}}'),",
+                  "  status: pm.variables.replaceIn('{{callbackStatus}}'),",
+                  "  nonce: 'nonce-' + Date.now(),",
+                  "  timestamp: Math.floor(Date.now() / 1000)",
+                  "};",
+                  "",
+                  "pm.collectionVariables.set('callbackNonce', payload.nonce);",
+                  "pm.collectionVariables.set('callbackTimestamp', String(payload.timestamp));",
+                  "",
+                  "var canonical = [",
+                  "  payload.pspReference,",
+                  "  payload.amount,",
+                  "  payload.currency,",
+                  "  payload.status,",
+                  "  payload.nonce,",
+                  "  payload.timestamp",
+                  "].join('|');",
+                  "",
+                  "var secret = pm.variables.replaceIn('{{jawupayHmacSecret}}');",
+                  "var signature = CryptoJS.HmacSHA256(canonical, secret).toString(CryptoJS.enc.Hex);",
+                  "pm.collectionVariables.set('jawupaySignature', signature);",
+                  "",
+                  "pm.request.body.update(JSON.stringify(payload, null, 2));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-JAWUPAY-SIGNATURE",
+                "value": "{{jawupaySignature}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pspReference\": \"{{callbackPspReference}}\",\n  \"amount\": \"{{callbackAmount}}\",\n  \"currency\": \"{{callbackCurrency}}\",\n  \"status\": \"{{callbackStatus}}\",\n  \"nonce\": \"{{callbackNonce}}\",\n  \"timestamp\": {{callbackTimestamp}}\n}"
+            },
+            "url": "{{baseUrl}}/psp/jawupay/callback",
+            "description": "Valide anti-replay + signature HMAC SHA-256. Si status=SUCCESS/CONFIRMED, tente de confirmer l'operation et poster la comptabilite."
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 - Reconciliation",
+      "item": [
+        {
+          "name": "Import Reconciliation Batch",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{bearerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"items\": [\n    {\n      \"pspReference\": \"{{callbackPspReference}}\",\n      \"amount\": \"{{reconAmount}}\",\n      \"currency\": \"{{reconCurrency}}\"\n    }\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/reconciliation/import",
+            "description": "Importe un lot PSP, marque matched/mismatched, et peut poster une operation d'ajustement comptable."
+          }
+        },
+        {
+          "name": "Settlement Summary",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{bearerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "url": "{{baseUrl}}/reconciliation/settlement-summary?currency={{currency}}",
+            "description": "Retourne les snapshots de solde par compte pour la devise demandee."
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 - Internal (X-API-KEY)",
+      "item": [
+        {
+          "name": "Block User Account",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-KEY",
+                "value": "{{internalApiKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Fraud check\"\n}"
+            },
+            "url": "{{baseUrl}}/internal/identity/users/{{userId}}/block",
+            "description": "Endpoint interne: bloque le compte utilisateur et revoque toutes ses sessions actives."
+          }
+        }
+      ]
+    }
+  ]
+}
