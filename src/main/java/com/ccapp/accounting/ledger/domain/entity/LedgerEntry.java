@@ -9,7 +9,6 @@ import java.math.BigDecimal;
 import java.util.UUID;
 
 @Getter
-@Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor

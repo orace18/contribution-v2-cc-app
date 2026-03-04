@@ -4,18 +4,50 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Mise en place du projet" />
+    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Mise en place du projet">
+      <change afterPath="$PROJECT_DIR$/src/main/resources/firebase/firebase-service-account-dev.json" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/main/resources/firebase/firebase-service-account-prod.json" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/main/resources/firebase/jawupay-bbc9f-firebase-adminsdk-q6oiw-73173de43d.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/accounting/ledger/domain/entity/AccountingEvent.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/accounting/ledger/domain/entity/AccountingEvent.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/accounting/ledger/domain/entity/LedgerEntry.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/accounting/ledger/domain/entity/LedgerEntry.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/config/FirebaseConfig.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/config/FirebaseConfig.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/resources/application-dev.yml" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/application-dev.yml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/application-dev.yml" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/application-dev.yml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/accounting/ledger/domain/entity/AccountingEvent$AccountingEventBuilder.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/accounting/ledger/domain/entity/AccountingEvent$AccountingEventBuilder.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/accounting/ledger/domain/entity/AccountingEvent.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/accounting/ledger/domain/entity/AccountingEvent.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/accounting/ledger/domain/entity/LedgerEntry$LedgerEntryBuilder.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/accounting/ledger/domain/entity/LedgerEntry$LedgerEntryBuilder.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/accounting/ledger/domain/entity/LedgerEntry.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/accounting/ledger/domain/entity/LedgerEntry.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/config/FirebaseConfig.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/config/FirebaseConfig.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/generated-sources/annotations/com/ccapp/identity/mapper/IdentityMapperImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/target/generated-sources/annotations/com/ccapp/identity/mapper/IdentityMapperImpl.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/generated-sources/annotations/com/ccapp/subscription/mapper/SubscriptionPlanMapperImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/target/generated-sources/annotations/com/ccapp/subscription/mapper/SubscriptionPlanMapperImpl.java" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
   <component name="EmbeddingIndexingInfo">
-    <option name="cachedIndexableFilesCount" value="105" />
+    <option name="cachedIndexableFilesCount" value="108" />
   </component>
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
+  <component name="GitLabMergeRequestFiltersHistory"><![CDATA[{
+  "lastFilter": {
+    "state": "OPENED",
+    "assignee": {
+      "type": "org.jetbrains.plugins.gitlab.mergerequest.ui.filters.GitLabMergeRequestsFiltersValue.MergeRequestsMemberFilterValue.MergeRequestsAssigneeFilterValue",
+      "username": "smiledev229",
+      "fullname": "Orace EDJO"
+    }
+  }
+}]]></component>
+  <component name="GitLabMergeRequestsSettings"><![CDATA[{
+  "selectedUrlAndAccountId": {
+    "first": "https://repo.hesystems-group.com/club-chretien/cc-backend-monolitic.git",
+    "second": "bdc0fa4e-f75d-4a66-9991-7b4b0e4ef646"
+  }
+}]]></component>
   <component name="GitToolBoxStore">
     <option name="recentBranches">
       <RecentBranches>
@@ -59,16 +91,22 @@
     "RunOnceActivity.MCP Project settings loaded": "true",
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
+    "RunOnceActivity.git.unshallow": "true",
     "Spring Boot.CcAppBackendApplication.executor": "Run",
     "com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1": "true",
     "git-widget-placeholder": "dev",
     "junie.onboarding.icon.badge.shown": "true",
     "kotlin-language-version-configured": "true",
-    "last_opened_file_path": "/home/user/workspace/clubchretien",
+    "last_opened_file_path": "/home/user/Documents/cc-app-backend-v2-monolitic/src/main/resources/firebase",
     "settings.editor.selected.configurable": "ml.llm.LLMThirdPartyAiProvidersConfigurable",
     "to.speed.mode.migration.done": "true"
   }
 }]]></component>
+  <component name="RecentsManager">
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/src/main/resources/firebase" />
+    </key>
+  </component>
   <component name="RunManager">
     <configuration name="CcAppBackendApplication" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot" temporary="true" nameIsGenerated="true">
       <option name="FRAME_DEACTIVATION_UPDATE_POLICY" value="UnknownPolicyInFreeMode" />

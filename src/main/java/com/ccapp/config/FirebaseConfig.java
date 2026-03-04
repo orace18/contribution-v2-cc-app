@@ -7,8 +7,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.io.ClassPathResource;
 
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 
@@ -39,6 +41,16 @@ public class FirebaseConfig {
 
     private GoogleCredentials loadCredentials(String credentialsPath) throws IOException {
         if (credentialsPath != null && !credentialsPath.isBlank()) {
+            if (credentialsPath.startsWith("classpath:")) {
+                String classpathLocation = credentialsPath.substring("classpath:".length());
+                ClassPathResource resource = new ClassPathResource(classpathLocation);
+                if (!resource.exists()) {
+                    throw new FileNotFoundException("Firebase credentials not found in classpath: " + classpathLocation);
+                }
+                try (InputStream stream = resource.getInputStream()) {
+                    return GoogleCredentials.fromStream(stream);
+                }
+            }
             try (InputStream stream = new FileInputStream(credentialsPath)) {
                 return GoogleCredentials.fromStream(stream);
             }

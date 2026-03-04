@@ -11,7 +11,6 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Getter
-@Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor

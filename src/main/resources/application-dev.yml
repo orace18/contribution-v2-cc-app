@@ -4,6 +4,13 @@ springdoc:
   swagger-ui:
     enabled: true
 
+firebase:
+  auth:
+    enabled: ${FIREBASE_AUTH_ENABLED:true}
+  credentials:
+    path: ${FIREBASE_CREDENTIALS_PATH:classpath:firebase/firebase-service-account-dev.json}
+  project-id: ${FIREBASE_PROJECT_ID:}
+
 logging:
   level:
     org.springframework.security: DEBUG
