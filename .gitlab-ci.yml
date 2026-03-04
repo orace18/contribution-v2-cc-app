@@ -1,0 +1,62 @@
+stages:
+  - test
+  - package
+  - image
+
+variables:
+  JDK_VERSION: "21"
+  MAVEN_VERSION: "3.9.11"
+  MAVEN_IMAGE: "maven:${MAVEN_VERSION}-eclipse-temurin-${JDK_VERSION}"
+  MAVEN_CLI_OPTS: "-B --errors --fail-at-end --show-version"
+  MAVEN_OPTS: "-Dmaven.repo.local=.m2/repository"
+  DOCKER_TLS_CERTDIR: "/certs"
+  DOCKER_DRIVER: overlay2
+
+cache:
+  key: "${CI_PROJECT_ID}"
+  paths:
+    - .m2/repository
+
+test:
+  stage: test
+  image: ${MAVEN_IMAGE}
+  script:
+    - java -version
+    - mvn ${MAVEN_CLI_OPTS} test
+  artifacts:
+    when: always
+    reports:
+      junit:
+        - target/surefire-reports/*.xml
+    expire_in: 1 week
+
+package:
+  stage: package
+  image: ${MAVEN_IMAGE}
+  script:
+    - java -version
+    - mvn ${MAVEN_CLI_OPTS} -DskipTests clean package
+  artifacts:
+    paths:
+      - target/*.jar
+    expire_in: 1 week
+
+docker-image:
+  stage: image
+  image: docker:27.4.1
+  services:
+    - name: docker:27.4.1-dind
+  rules:
+    - if: $CI_COMMIT_BRANCH
+    - if: $CI_COMMIT_TAG
+  before_script:
+    - echo "${CI_REGISTRY_PASSWORD}" | docker login -u "${CI_REGISTRY_USER}" --password-stdin "${CI_REGISTRY}"
+  script:
+    - IMAGE_TAG="${CI_COMMIT_TAG:-$CI_COMMIT_SHORT_SHA}"
+    - docker build --pull -t "${CI_REGISTRY_IMAGE}:${IMAGE_TAG}" .
+    - docker push "${CI_REGISTRY_IMAGE}:${IMAGE_TAG}"
+    - |
+      if [ "${CI_COMMIT_BRANCH}" = "${CI_DEFAULT_BRANCH}" ]; then
+        docker tag "${CI_REGISTRY_IMAGE}:${IMAGE_TAG}" "${CI_REGISTRY_IMAGE}:latest"
+        docker push "${CI_REGISTRY_IMAGE}:latest"
+      fi

@@ -1,0 +1,9 @@
+.git
+.gitignore
+.idea
+target
+logs
+.env
+.env.*
+*.iml
+src/main/resources/firebase/*.json

@@ -1,0 +1,51 @@
+services:
+  spring-app:
+    image: ${IMAGE_FULL}
+    container_name: ${CI_PROJECT_NAME}
+    restart: unless-stopped
+    environment:
+      - SPRING_PROFILES_ACTIVE=dev
+      - SERVER_PORT=${APP_PORT:-8080}
+
+      - DB_PORT=5432
+      - DB_HOST=${DATABASE_URL}
+      - DB_USER=${DATABASE_USER}
+      - DB_PASSWORD=${DATABASE_PASSWORD}
+      - DB_URL=jdbc:postgresql://${DATABASE_URL}:5432/${DATABASE_NAME:-cc_app_db}
+      - DB_USERNAME=${DATABASE_USER}
+
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY}
+      - JAWUPAY_HMAC_SECRET=${JAWUPAY_HMAC_SECRET}
+      - FIREBASE_AUTH_ENABLED=${FIREBASE_AUTH_ENABLED:-false}
+      - FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID:-}
+
+      - NEO4J_URL=${NEO4J_URL:-}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD:-}
+      - JWT_SECRET=${JWT_SECRET:-}
+      - REDIS_HOST=${REDIS_HOST:-}
+      - REDIS_PORT=${REDIS_PORT:-}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+
+      - LOG_LEVEL_ROOT=${LOG_LEVEL_ROOT:-INFO}
+      - LOG_LEVEL_CCAPP=${LOG_LEVEL_CCAPP:-DEBUG}
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik_net"
+      - "traefik.http.routers.cc-app-backend-dev.rule=Host(`${API_DOMAIN}`) && PathPrefix(`/${CI_PROJECT_NAME}`)"
+      - "traefik.http.routers.cc-app-backend-dev.entrypoints=websecure"
+      - "traefik.http.routers.cc-app-backend-dev.tls.certresolver=myresolver"
+      - "traefik.http.services.cc-app-backend-dev.loadbalancer.server.port=${APP_PORT:-8080}"
+
+    networks:
+      - traefik_net
+      - pgsql_net
+      - club_chretien_net
+
+networks:
+  traefik_net:
+    external: true
+  pgsql_net:
+    external: true
+  club_chretien_net:
+    external: true
