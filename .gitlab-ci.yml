@@ -6,7 +6,7 @@ stages:
 variables:
   JDK_VERSION: "21"
   MAVEN_VERSION: "3.9.11"
-  MAVEN_IMAGE: "maven:${MAVEN_VERSION}-eclipse-temurin-${JDK_VERSION}"
+  MAVEN_IMAGE: "maven:3.9.11-eclipse-temurin-21"
   MAVEN_CLI_OPTS: "-B --errors --fail-at-end --show-version"
   MAVEN_OPTS: "-Dmaven.repo.local=.m2/repository"
   DOCKER_TLS_CERTDIR: "/certs"
