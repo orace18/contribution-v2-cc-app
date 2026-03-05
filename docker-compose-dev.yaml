@@ -34,9 +34,9 @@ services:
       - "traefik.http.routers.cc-app-backend-dev.entrypoints=websecure"
       - "traefik.http.routers.cc-app-backend-dev.tls.certresolver=myresolver"
       - "traefik.http.services.cc-app-backend-dev.loadbalancer.server.port=${APP_PORT}"
-#      - "traefik.http.routers.cc-app-backend-dev.middlewares=cc-app-backend-dev-strip,cc-app-backend-dev-addctx"
-#      - "traefik.http.middlewares.cc-app-backend-dev-strip.stripprefix.prefixes=/${CI_PROJECT_NAME}"
-#      - "traefik.http.middlewares.cc-app-backend-dev-addctx.addprefix.prefix=/cc-app-backend"
+      - "traefik.http.routers.cc-app-backend-dev.middlewares=cc-app-backend-dev-strip,cc-app-backend-dev-addctx"
+      - "traefik.http.middlewares.cc-app-backend-dev-strip.stripprefix.prefixes=/${CI_PROJECT_NAME}"
+      - "traefik.http.middlewares.cc-app-backend-dev-addctx.addprefix.prefix=/cc-app-backend"
 
     networks:
       - traefik_net
