@@ -1,50 +1,173 @@
+workflow:
+  rules:
+    # autorise les push pipelines sur dev ou prod
+    - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "prod")'
+      when: always
+    # autorise merge request pipelines aussi
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && ($CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "prod")'
+      when: always
+    # AJOUTEZ CETTE RÈGLE : autorise les pipelines déclenchés (downstream)
+    - if: '$CI_PIPELINE_SOURCE == "pipeline" && ($CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "prod")'
+      when: always
+    # pour tout le reste, pas de pipeline
+    - when: never
+
 stages:
-  - test
-  - image
+  - info
+  - security
+  - build
+  - tag
+  - push
+  - deploy
+
+
+default:
+  tags:
+    - ${RUNNER_TAG}
 
 variables:
-  JDK_VERSION: "21"
-  MAVEN_VERSION: "3.9.11"
-  MAVEN_IMAGE: "maven:3.9.11-eclipse-temurin-21"
-  MAVEN_CLI_OPTS: "-B --errors --fail-at-end --show-version"
-  MAVEN_OPTS: "-Dmaven.repo.local=.m2/repository"
-  DOCKER_TLS_CERTDIR: "/certs"
-  DOCKER_DRIVER: overlay2
+  IMAGE_FULL: "${CI_REGISTRY_IMAGE}:${CI_PIPELINE_IID}"
 
-cache:
-  key: "${CI_PROJECT_ID}"
-  paths:
-    - .m2/repository
 
-test:
-  stage: test
-  image: ${MAVEN_IMAGE}
+# Étape info
+pipeline_info:
+  stage: info
+  environment:
+    name: $CI_COMMIT_REF_NAME
+    action: prepare
   script:
-    - java -version
-    - mvn ${MAVEN_CLI_OPTS} test
+    - echo "Pipeline info"
+    - echo "Project $CI_PROJECT_PATH"
+    - echo "Branch $CI_COMMIT_REF_NAME"
+    - echo "Pipeline ID $CI_PIPELINE_ID"
+    - echo "Pipeline IID $CI_PIPELINE_IID"
+    - echo "Commit SHA $CI_COMMIT_SHORT_SHA"
+    - echo "Triggered by $CI_PIPELINE_SOURCE"
+    - echo "Environment $CI_ENVIRONMENT_NAME"
+
+scan_dependencies:
+  stage: security
+  environment:
+    name: $CI_COMMIT_REF_NAME
+    action: prepare
+  needs:
+    - job: pipeline_info
+  script:
+    - trivy fs --severity HIGH,CRITICAL --format json --output trivy-deps-report.json .
+  allow_failure: true
   artifacts:
     when: always
+    paths:
+      - trivy-deps-report.json
     reports:
-      junit:
-        - target/surefire-reports/*.xml
-    expire_in: 1 week
+      dependency_scanning: trivy-deps-report.json
 
-docker-image:
-  stage: image
-  image: docker:27.4.1
-  services:
-    - name: docker:27.4.1-dind
-  rules:
-    - if: $CI_COMMIT_BRANCH
-    - if: $CI_COMMIT_TAG
-  before_script:
-    - echo "${CI_REGISTRY_PASSWORD}" | docker login -u "${CI_REGISTRY_USER}" --password-stdin "${CI_REGISTRY}"
+
+scan_secrets:
+  stage: security
+  environment:
+    name: $CI_COMMIT_REF_NAME
+    action: prepare
+  needs:
+    - job: pipeline_info
   script:
-    - IMAGE_TAG="${CI_COMMIT_TAG:-$CI_COMMIT_SHORT_SHA}"
-    - docker build --pull -t "${CI_REGISTRY_IMAGE}:${IMAGE_TAG}" .
-    - docker push "${CI_REGISTRY_IMAGE}:${IMAGE_TAG}"
-    - |
-      if [ "${CI_COMMIT_BRANCH}" = "${CI_DEFAULT_BRANCH}" ]; then
-        docker tag "${CI_REGISTRY_IMAGE}:${IMAGE_TAG}" "${CI_REGISTRY_IMAGE}:latest"
-        docker push "${CI_REGISTRY_IMAGE}:latest"
-      fi
+    - gitleaks detect --no-git --redact -f json -r gitleaks-report.json
+  allow_failure: true
+  artifacts:
+    when: always
+    paths:
+      - gitleaks-report.json
+    reports:
+      secret_detection: gitleaks-report.json
+
+scan_image:
+  stage: security
+  environment:
+    name: $CI_COMMIT_REF_NAME
+    action: prepare
+  needs:
+    - job: pipeline_info
+  script:
+    - trivy image --severity HIGH,CRITICAL --format json --output trivy-image-report.json "$IMAGE_FULL"
+  allow_failure: true
+  artifacts:
+    when: always
+    paths:
+      - trivy-image-report.json
+    reports:
+      container_scanning: trivy-image-report.json
+
+# Étape build
+build:
+  stage: build
+  environment:
+    name: $CI_COMMIT_REF_NAME
+    action: prepare
+  needs:
+    - job: scan_dependencies
+      optional: true
+    - job: scan_secrets
+      optional: true
+    - job: scan_image
+      optional: true
+  before_script:
+    - echo "Change java and javac version"
+    - sudo update-alternatives --set java /usr/lib/jvm/temurin-21-jdk-amd64/bin/java
+    - sudo update-alternatives --set javac /usr/lib/jvm/temurin-21-jdk-amd64/bin/javac
+  script:
+    - echo "Building package using Docker Maven image..."
+    - mvn clean install -DskipTests -Dmaven.repo.local=$CI_MAVEN_DIR -P$CI_COMMIT_REF_NAME
+
+
+# Étape tag
+tag:
+  stage: tag
+  environment:
+    name: $CI_COMMIT_REF_NAME
+    action: prepare
+  needs:
+    - job: build
+  script:
+    - echo "Packaging the application..."
+    - docker tag ${CI_PROJECT_NAME}_${CI_COMMIT_BRANCH}:latest $IMAGE_FULL
+
+push:
+  stage: push
+  environment:
+    name: $CI_COMMIT_REF_NAME
+    action: prepare
+  needs:
+    - job: tag
+  script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin $CI_REGISTRY
+    - echo "📦 Push de l'image $IMAGE_FULL"
+    - docker push $IMAGE_FULL
+
+deploy:
+  stage: deploy
+  environment:
+    name: $CI_COMMIT_REF_NAME
+  needs:
+    - job: push
+  variables:
+    DOCKER_TLS_VERIFY: "1"
+    DOCKER_HOST: "tcp://${DOCKER_HOST_CLUB_CHRETIEN}"
+    DOCKER_CERT_PATH: /tmp/docker-certs
+
+  before_script:
+    # TLS Docker
+    - mkdir -p "$DOCKER_CERT_PATH"
+    - printf '%s' "$DOCKER_CA_CLUB_CHRETIEN" | base64 -d > "$DOCKER_CERT_PATH/ca.pem"
+    - printf '%s' "$DOCKER_CERT_CLUB_CHRETIEN" | base64 -d > "$DOCKER_CERT_PATH/cert.pem"
+    - printf '%s' "$DOCKER_KEY_CLUB_CHRETIEN" | base64 -d > "$DOCKER_CERT_PATH/key.pem"
+    - chmod 600 "$DOCKER_CERT_PATH"/*
+
+    # Login registry
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+
+  script:
+    - echo "🚀 Déploiement sur l'environnement... $CI_COMMIT_REF_NAME"
+    - docker compose -f "${COMPOSE_FILE}" pull
+    - docker compose -f "${COMPOSE_FILE}" down --remove-orphans
+    - docker compose -f "${COMPOSE_FILE}" up -d
+

@@ -1,0 +1,31 @@
+services:
+  spring-app:
+    image: ${IMAGE_FULL}
+    container_name: ${CI_PROJECT_NAME}
+    restart: unless-stopped
+    ports:
+      - "9901:${APP_PORT}"
+
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+
+      - DB_PORT=${DATABASE_PORT_PROD}
+      - DB_HOST=${DATABASE_URL_PROD}
+      - DB_USER=${DATABASE_USER_PROD}
+      - DB_PASSWORD=${DATABASE_PASSWORD_PROD}
+
+      - NEO4J_URL=${NEO4J_URL}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+
+      - JWT_SECRET=${JWT_SECRET}
+
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PORT=${REDIS_PORT}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+
+    networks:
+      - club_chretien_net
+
+networks:
+  club_chretien_net:
+    external: true
