@@ -1,6 +1,5 @@
 stages:
   - test
-  - package
   - image
 
 variables:
@@ -28,17 +27,6 @@ test:
     reports:
       junit:
         - target/surefire-reports/*.xml
-    expire_in: 1 week
-
-package:
-  stage: package
-  image: ${MAVEN_IMAGE}
-  script:
-    - java -version
-    - mvn ${MAVEN_CLI_OPTS} -DskipTests clean package
-  artifacts:
-    paths:
-      - target/*.jar
     expire_in: 1 week
 
 docker-image:
