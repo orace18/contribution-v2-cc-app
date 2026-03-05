@@ -4,10 +4,8 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Revue du pom">
-      <change beforePath="$PROJECT_DIR$/src/main/resources/application-dev.properties" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/application-dev.properties" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/resources/application-prod.properties" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/application-prod.properties" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/resources/application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/application.properties" afterDir="false" />
+    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Revue du properties dev">
+      <change beforePath="$PROJECT_DIR$/docker-compose-dev.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/docker-compose-dev.yaml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -234,7 +232,23 @@
       <option name="project" value="LOCAL" />
       <updated>1772698930531</updated>
     </task>
-    <option name="localTasksCounter" value="13" />
+    <task id="LOCAL-00013" summary="Revue des properties">
+      <option name="closed" value="true" />
+      <created>1772700231148</created>
+      <option name="number" value="00013" />
+      <option name="presentableId" value="LOCAL-00013" />
+      <option name="project" value="LOCAL" />
+      <updated>1772700231148</updated>
+    </task>
+    <task id="LOCAL-00014" summary="Revue du properties dev">
+      <option name="closed" value="true" />
+      <created>1772701525866</created>
+      <option name="number" value="00014" />
+      <option name="presentableId" value="LOCAL-00014" />
+      <option name="project" value="LOCAL" />
+      <updated>1772701525866</updated>
+    </task>
+    <option name="localTasksCounter" value="15" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -255,7 +269,9 @@
     <MESSAGE value="Configuration gitlab-ci et docker-compose -Revue" />
     <MESSAGE value="Revue des configs docker et gitlab-ci" />
     <MESSAGE value="Revue du pom" />
-    <option name="LAST_COMMIT_MESSAGE" value="Revue du pom" />
+    <MESSAGE value="Revue des properties" />
+    <MESSAGE value="Revue du properties dev" />
+    <option name="LAST_COMMIT_MESSAGE" value="Revue du properties dev" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />
