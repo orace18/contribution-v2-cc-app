@@ -1,6 +1,8 @@
 package com.ccapp.config.security;
 
 import com.ccapp.common.security.AuthenticatedPrincipal;
+import com.ccapp.identity.app_user.domain.entity.AppUser;
+import com.ccapp.identity.app_user.repository.AppUserRepository;
 import com.ccapp.identity.repository.UserRepository;
 import com.ccapp.identity.service.FirebaseTokenVerifier;
 import com.ccapp.identity.service.FirebaseUserClaims;
@@ -18,18 +20,26 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
 public class FirebaseAuthenticationFilter extends OncePerRequestFilter {
 
     private final FirebaseTokenVerifier tokenVerifier;
+    private final AppUserRepository appUserRepository;
     private final UserRepository userRepository;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
+        String path = request.getServletPath();
+        if (path.startsWith("/api/admin/")) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
         if (SecurityContextHolder.getContext().getAuthentication() != null) {
             filterChain.doFilter(request, response);
             return;
@@ -52,10 +62,14 @@ public class FirebaseAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
 
+        AppUser appUser = appUserRepository.findByFirebaseUid(claims.uid()).orElse(null);
+        UUID legacyUserId = userRepository.findByFirebaseUid(claims.uid()).map(user -> user.getId()).orElse(null);
+
         AuthenticatedPrincipal principal = AuthenticatedPrincipal.builder()
                 .firebaseUid(claims.uid())
                 .email(claims.email())
-                .userId(userRepository.findByFirebaseUid(claims.uid()).map(user -> user.getId()).orElse(null))
+                .userId(appUser != null ? appUser.getId() : legacyUserId)
+                .accountHolderId(appUser != null ? appUser.getAccountHolderId() : legacyUserId)
                 .internal(false)
                 .build();
 

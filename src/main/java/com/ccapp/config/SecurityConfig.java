@@ -1,5 +1,6 @@
 package com.ccapp.config;
 
+import com.ccapp.admin.security.AdminJwtAuthenticationFilter;
 import com.ccapp.config.security.ApiKeyAuthenticationFilter;
 import com.ccapp.config.security.FirebaseAuthenticationFilter;
 import com.ccapp.config.security.RestAuthenticationEntryPoint;
@@ -18,6 +19,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @RequiredArgsConstructor
 public class SecurityConfig {
 
+    private final AdminJwtAuthenticationFilter adminJwtAuthenticationFilter;
     private final ApiKeyAuthenticationFilter apiKeyAuthenticationFilter;
     private final FirebaseAuthenticationFilter firebaseAuthenticationFilter;
     private final RestAuthenticationEntryPoint restAuthenticationEntryPoint;
@@ -32,10 +34,19 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health", "/actuator/info", "/error").permitAll()
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
+                        .requestMatchers("/api/admin/auth/**").permitAll()
+                        .requestMatchers("/api/admin/**").hasAnyAuthority(
+                                "ROLE_SUPER_ADMIN",
+                                "ROLE_COUNTRY_ADMIN",
+                                "ROLE_IMF_ADMIN",
+                                "ROLE_OPERATIONS",
+                                "ROLE_SUPPORT"
+                        )
                         .requestMatchers(HttpMethod.GET, "/subscriptions/plans").permitAll()
                         .requestMatchers(HttpMethod.POST, "/psp/jawupay/callback").permitAll()
                         .requestMatchers("/internal/**").hasAuthority("INTERNAL")
                         .anyRequest().authenticated())
+                .addFilterBefore(adminJwtAuthenticationFilter, ApiKeyAuthenticationFilter.class)
                 .addFilterBefore(apiKeyAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterAfter(firebaseAuthenticationFilter, ApiKeyAuthenticationFilter.class);
 

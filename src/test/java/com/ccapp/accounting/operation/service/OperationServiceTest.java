@@ -1,9 +1,9 @@
-package com.ccapp.accounting.operation.service;
+package com.ccapp.payments.operation.service;
 
-import com.ccapp.accounting.operation.domain.entity.Operation;
-import com.ccapp.accounting.operation.domain.enums.OperationStatus;
-import com.ccapp.accounting.operation.domain.enums.OperationType;
-import com.ccapp.accounting.operation.repository.OperationRepository;
+import com.ccapp.payments.operation.domain.entity.Operation;
+import com.ccapp.payments.operation.domain.enums.OperationStatus;
+import com.ccapp.payments.operation.domain.enums.OperationType;
+import com.ccapp.payments.operation.repository.OperationRepository;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.common.exception.ConflictException;
 import org.junit.jupiter.api.Test;
@@ -31,11 +31,12 @@ class OperationServiceTest {
 
     @Test
     void createInitiatedOperation_shouldReturnExisting_whenIdempotencyKeyAlreadyExists() {
-        UUID userId = UUID.randomUUID();
+        UUID accountHolderId = UUID.randomUUID();
         String idem = "idem-key-1";
         Operation existing = Operation.builder()
                 .id(UUID.randomUUID())
-                .userId(userId)
+                .accountHolderId(accountHolderId)
+                .actorUserId(accountHolderId)
                 .type(OperationType.SUBSCRIPTION)
                 .status(OperationStatus.INITIATED)
                 .amount(new BigDecimal("19.99"))
@@ -46,7 +47,7 @@ class OperationServiceTest {
         when(operationRepository.findByIdempotencyKey(idem)).thenReturn(Optional.of(existing));
 
         Operation result = operationService.createInitiatedOperation(
-                userId,
+                accountHolderId,
                 OperationType.SUBSCRIPTION,
                 new BigDecimal("19.99"),
                 "USD",
@@ -62,7 +63,8 @@ class OperationServiceTest {
         String pspRef = "PSP-123";
         Operation operation = Operation.builder()
                 .id(UUID.randomUUID())
-                .userId(UUID.randomUUID())
+                .accountHolderId(UUID.randomUUID())
+                .actorUserId(UUID.randomUUID())
                 .type(OperationType.SUBSCRIPTION)
                 .status(OperationStatus.INITIATED)
                 .amount(new BigDecimal("10.00"))
@@ -85,7 +87,8 @@ class OperationServiceTest {
         String pspRef = "PSP-456";
         Operation operation = Operation.builder()
                 .id(UUID.randomUUID())
-                .userId(UUID.randomUUID())
+                .accountHolderId(UUID.randomUUID())
+                .actorUserId(UUID.randomUUID())
                 .type(OperationType.SUBSCRIPTION)
                 .status(OperationStatus.INITIATED)
                 .amount(new BigDecimal("10.00"))
@@ -106,7 +109,8 @@ class OperationServiceTest {
         UUID operationId = UUID.randomUUID();
         Operation operation = Operation.builder()
                 .id(operationId)
-                .userId(UUID.randomUUID())
+                .accountHolderId(UUID.randomUUID())
+                .actorUserId(UUID.randomUUID())
                 .type(OperationType.SUBSCRIPTION)
                 .status(OperationStatus.INITIATED)
                 .amount(new BigDecimal("15.00"))

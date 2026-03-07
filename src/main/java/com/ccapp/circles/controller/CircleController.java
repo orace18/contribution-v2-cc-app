@@ -1,6 +1,12 @@
 package com.ccapp.circles.controller;
 
 import com.ccapp.circles.dto.*;
+import com.ccapp.circlesocial.dto.CircleActivityResponse;
+import com.ccapp.circlesocial.dto.CircleProgressResponse;
+import com.ccapp.circlesocial.dto.CircleScoreResponse;
+import com.ccapp.circlesocial.service.CircleActivityService;
+import com.ccapp.circlesocial.service.CircleProgressService;
+import com.ccapp.circlesocial.service.CircleScoreService;
 import com.ccapp.circles.service.CircleService;
 import com.ccapp.common.api.CommonResponse;
 import com.ccapp.common.security.SecurityUtils;
@@ -29,6 +35,9 @@ import java.util.UUID;
 public class CircleController {
 
     private final CircleService circleService;
+    private final CircleActivityService circleActivityService;
+    private final CircleProgressService circleProgressService;
+    private final CircleScoreService circleScoreService;
 
     @PostMapping
     @Operation(summary = "Creer un cercle")
@@ -39,8 +48,8 @@ public class CircleController {
             @ApiResponse(responseCode = "409", description = "Utilisateur deja dans un cercle actif", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
     })
     public ResponseEntity<CommonResponse<CircleResponse>> createCircle(@Valid @RequestBody CreateCircleRequest request) {
-        UUID userId = SecurityUtils.currentUserId();
-        return ResponseEntity.ok(CommonResponse.success("Circle created", circleService.createCircle(userId, request)));
+        UUID accountHolderId = SecurityUtils.currentAccountHolderId();
+        return ResponseEntity.ok(CommonResponse.success("Circle created", circleService.createCircle(accountHolderId, request)));
     }
 
     @PostMapping("/{circleId}/join")
@@ -54,8 +63,8 @@ public class CircleController {
     })
     public ResponseEntity<CommonResponse<CircleMemberResponse>> joinCircle(@PathVariable UUID circleId,
                                                                            @Valid @RequestBody JoinCircleRequest request) {
-        UUID userId = SecurityUtils.currentUserId();
-        return ResponseEntity.ok(CommonResponse.success("Circle joined", circleService.joinCircle(userId, circleId, request)));
+        UUID accountHolderId = SecurityUtils.currentAccountHolderId();
+        return ResponseEntity.ok(CommonResponse.success("Circle joined", circleService.joinCircle(accountHolderId, circleId, request)));
     }
 
     @GetMapping("/my-circle")
@@ -66,8 +75,8 @@ public class CircleController {
             @ApiResponse(responseCode = "404", description = "Aucun cercle actif", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
     })
     public ResponseEntity<CommonResponse<MyCircleResponse>> myCircle() {
-        UUID userId = SecurityUtils.currentUserId();
-        return ResponseEntity.ok(CommonResponse.success("My active circle", circleService.getMyCircle(userId)));
+        UUID accountHolderId = SecurityUtils.currentAccountHolderId();
+        return ResponseEntity.ok(CommonResponse.success("My active circle", circleService.getMyCircle(accountHolderId)));
     }
 
     @GetMapping("/{circleId}/members")
@@ -79,5 +88,38 @@ public class CircleController {
     })
     public ResponseEntity<CommonResponse<List<CircleMemberResponse>>> listMembers(@PathVariable UUID circleId) {
         return ResponseEntity.ok(CommonResponse.success("Circle members", circleService.listMembers(circleId)));
+    }
+
+    @GetMapping("/{circleId}/activity")
+    @Operation(summary = "Lister les activites sociales d'un cercle")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Succes", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Non authentifie", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Cercle introuvable", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
+    })
+    public ResponseEntity<CommonResponse<List<CircleActivityResponse>>> activity(@PathVariable UUID circleId) {
+        return ResponseEntity.ok(CommonResponse.success("Circle activity", circleActivityService.getCircleActivity(circleId)));
+    }
+
+    @GetMapping("/{circleId}/progress")
+    @Operation(summary = "Consulter la progression globale du cercle")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Succes", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Non authentifie", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Cercle introuvable", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
+    })
+    public ResponseEntity<CommonResponse<CircleProgressResponse>> progress(@PathVariable UUID circleId) {
+        return ResponseEntity.ok(CommonResponse.success("Circle progress", circleProgressService.getCircleProgress(circleId)));
+    }
+
+    @GetMapping("/{circleId}/score")
+    @Operation(summary = "Consulter le score global du cercle")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Succes", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Non authentifie", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Cercle introuvable", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
+    })
+    public ResponseEntity<CommonResponse<CircleScoreResponse>> score(@PathVariable UUID circleId) {
+        return ResponseEntity.ok(CommonResponse.success("Circle score", circleScoreService.getScore(circleId)));
     }
 }

@@ -11,11 +11,11 @@ import java.util.UUID;
 
 public interface UserTaskRepository extends JpaRepository<UserTask, UUID> {
 
-    Optional<UserTask> findByUserIdAndTaskType(UUID userId, TaskType taskType);
+    Optional<UserTask> findByAccountHolderIdAndTaskType(UUID accountHolderId, TaskType taskType);
 
-    List<UserTask> findByUserIdOrderByCreatedAtAsc(UUID userId);
+    List<UserTask> findByAccountHolderIdOrderByCreatedAtAsc(UUID accountHolderId);
 
-    long countByUserIdAndStatus(UUID userId, TaskStatus status);
+    long countByAccountHolderIdAndStatus(UUID accountHolderId, TaskStatus status);
 
-    Optional<UserTask> findTopByUserIdAndStatusOrderByValidatedAtDesc(UUID userId, TaskStatus status);
+    Optional<UserTask> findTopByAccountHolderIdAndStatusOrderByValidatedAtDesc(UUID accountHolderId, TaskStatus status);
 }

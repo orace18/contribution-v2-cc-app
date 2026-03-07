@@ -7,7 +7,7 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 
 public record UserProgressResponse(
-        UUID userId,
+        UUID accountHolderId,
         TaskType currentStep,
         BigDecimal progressPercentage,
         TaskType nextTask,

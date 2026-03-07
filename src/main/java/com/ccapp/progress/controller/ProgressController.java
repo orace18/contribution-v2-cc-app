@@ -36,7 +36,7 @@ public class ProgressController {
             @ApiResponse(responseCode = "404", description = "Utilisateur introuvable", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
     })
     public ResponseEntity<CommonResponse<UserProgressResponse>> me() {
-        UUID userId = SecurityUtils.currentUserId();
-        return ResponseEntity.ok(CommonResponse.success("User progress", progressService.getUserProgress(userId)));
+        UUID accountHolderId = SecurityUtils.currentAccountHolderId();
+        return ResponseEntity.ok(CommonResponse.success("User progress", progressService.getUserProgress(accountHolderId)));
     }
 }

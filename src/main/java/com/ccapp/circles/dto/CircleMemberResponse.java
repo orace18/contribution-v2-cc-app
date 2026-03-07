@@ -8,7 +8,7 @@ import java.util.UUID;
 
 public record CircleMemberResponse(
         UUID id,
-        UUID userId,
+        UUID accountHolderId,
         CircleMemberRole role,
         String businessActivity,
         String loanStatus,

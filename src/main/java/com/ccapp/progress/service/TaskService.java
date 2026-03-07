@@ -1,7 +1,11 @@
 package com.ccapp.progress.service;
 
 import com.ccapp.common.exception.NotFoundException;
-import com.ccapp.identity.repository.UserRepository;
+import com.ccapp.identity.account_holder.service.AccountHolderService;
+import com.ccapp.notifications.domain.enums.NotificationChannel;
+import com.ccapp.notifications.domain.enums.NotificationType;
+import com.ccapp.notifications.dto.CreateNotificationRequest;
+import com.ccapp.notifications.service.NotificationService;
 import com.ccapp.progress.domain.entity.UserTask;
 import com.ccapp.progress.domain.enums.TaskStatus;
 import com.ccapp.progress.domain.enums.TaskType;
@@ -10,6 +14,7 @@ import com.ccapp.progress.dto.UserProgressResponse;
 import com.ccapp.progress.dto.UserTaskResponse;
 import com.ccapp.progress.repository.UserTaskRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,19 +26,21 @@ import java.util.Map;
 import java.util.UUID;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class TaskService {
 
     private final UserTaskRepository userTaskRepository;
-    private final UserRepository userRepository;
+    private final AccountHolderService accountHolderService;
     private final ProgressService progressService;
+    private final NotificationService notificationService;
 
     @Transactional(readOnly = true)
-    public List<UserTaskResponse> getUserTasks(UUID userId) {
-        ensureUserExists(userId);
+    public List<UserTaskResponse> getUserTasks(UUID accountHolderId) {
+        ensureAccountHolderExists(accountHolderId);
 
         Map<TaskType, UserTask> taskByType = new EnumMap<>(TaskType.class);
-        for (UserTask task : userTaskRepository.findByUserIdOrderByCreatedAtAsc(userId)) {
+        for (UserTask task : userTaskRepository.findByAccountHolderIdOrderByCreatedAtAsc(accountHolderId)) {
             taskByType.put(task.getTaskType(), task);
         }
 
@@ -48,12 +55,12 @@ public class TaskService {
     }
 
     @Transactional
-    public TaskCompletionResponse completeTask(UUID userId, TaskType taskType) {
-        ensureUserExists(userId);
+    public TaskCompletionResponse completeTask(UUID accountHolderId, TaskType taskType) {
+        ensureAccountHolderExists(accountHolderId);
 
-        UserTask task = userTaskRepository.findByUserIdAndTaskType(userId, taskType)
+        UserTask task = userTaskRepository.findByAccountHolderIdAndTaskType(accountHolderId, taskType)
                 .orElseGet(() -> UserTask.builder()
-                        .userId(userId)
+                        .accountHolderId(accountHolderId)
                         .taskType(taskType)
                         .status(TaskStatus.PENDING)
                         .createdAt(OffsetDateTime.now())
@@ -63,14 +70,34 @@ public class TaskService {
         task.setValidatedAt(OffsetDateTime.now());
 
         UserTask savedTask = userTaskRepository.save(task);
-        UserProgressResponse progress = progressService.recalculateProgress(userId);
+        UserProgressResponse progress = progressService.recalculateProgress(accountHolderId);
+        emitTaskCompletedNotification(accountHolderId, taskType);
 
         return new TaskCompletionResponse(toResponse(savedTask), progress);
     }
 
-    private void ensureUserExists(UUID userId) {
-        if (!userRepository.existsById(userId)) {
-            throw new NotFoundException("User not found");
+    private void emitTaskCompletedNotification(UUID accountHolderId, TaskType taskType) {
+        try {
+            notificationService.createNotification(new CreateNotificationRequest(
+                    accountHolderId,
+                    null,
+                    NotificationType.TASK_COMPLETED,
+                    NotificationChannel.IN_APP,
+                    "TASK_COMPLETED",
+                    "Task completed: " + taskType.name(),
+                    null,
+                    true
+            ));
+        } catch (RuntimeException ex) {
+            log.warn("Failed to emit TASK_COMPLETED notification for accountHolderId={}", accountHolderId, ex);
+        }
+    }
+
+    private void ensureAccountHolderExists(UUID accountHolderId) {
+        try {
+            accountHolderService.getById(accountHolderId);
+        } catch (NotFoundException ex) {
+            throw new NotFoundException("Account holder not found");
         }
     }
 

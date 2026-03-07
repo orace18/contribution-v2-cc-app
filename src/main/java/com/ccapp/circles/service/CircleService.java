@@ -1,19 +1,18 @@
 package com.ccapp.circles.service;
 
 import com.ccapp.circles.domain.entity.Circle;
-import com.ccapp.circles.domain.entity.CircleActivity;
 import com.ccapp.circles.domain.entity.CircleMember;
-import com.ccapp.circles.domain.enums.CircleActivityType;
+import com.ccapp.identity.account_holder.service.AccountHolderService;
+import com.ccapp.circlesocial.domain.enums.ActivityType;
+import com.ccapp.circlesocial.service.CircleActivityService;
 import com.ccapp.circles.domain.enums.CircleMemberRole;
 import com.ccapp.circles.domain.enums.CircleStatus;
 import com.ccapp.circles.dto.*;
-import com.ccapp.circles.repository.CircleActivityRepository;
 import com.ccapp.circles.repository.CircleMemberRepository;
 import com.ccapp.circles.repository.CircleRepository;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.common.exception.ConflictException;
 import com.ccapp.common.exception.NotFoundException;
-import com.ccapp.identity.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,43 +29,49 @@ public class CircleService {
 
     private final CircleRepository circleRepository;
     private final CircleMemberRepository circleMemberRepository;
-    private final CircleActivityRepository circleActivityRepository;
-    private final UserRepository userRepository;
+    private final CircleActivityService circleActivityService;
+    private final AccountHolderService accountHolderService;
 
     @Transactional
-    public CircleResponse createCircle(UUID userId, CreateCircleRequest request) {
-        ensureUserExists(userId);
-        if (circleRepository.existsActiveCircleForUser(userId)) {
+    public CircleResponse createCircle(UUID accountHolderId, CreateCircleRequest request) {
+        ensureAccountHolderExists(accountHolderId);
+        if (circleRepository.existsActiveCircleForUser(accountHolderId)) {
             throw new ConflictException("User already belongs to an active circle");
         }
 
         Circle circle = circleRepository.save(Circle.builder()
                 .name(request.name().trim())
-                .coachId(userId)
+                .coachId(accountHolderId)
                 .status(CircleStatus.ACTIVE)
                 .build());
 
-        circleMemberRepository.save(CircleMember.builder()
+        CircleMember coachMember = circleMemberRepository.save(CircleMember.builder()
                 .circle(circle)
-                .userId(userId)
+                .accountHolderId(accountHolderId)
                 .role(CircleMemberRole.COACH)
                 .joinedAt(OffsetDateTime.now())
                 .build());
 
-        logActivity(circle, userId, CircleActivityType.CIRCLE_CREATED, "Circle created");
+        circleActivityService.logActivity(
+                circle.getId(),
+                accountHolderId,
+                ActivityType.MEMBER_JOINED,
+                coachMember.getId(),
+                "Coach created and joined circle"
+        );
         return toCircleResponse(circle, 1);
     }
 
     @Transactional
-    public CircleMemberResponse joinCircle(UUID userId, UUID circleId, JoinCircleRequest request) {
-        ensureUserExists(userId);
+    public CircleMemberResponse joinCircle(UUID accountHolderId, UUID circleId, JoinCircleRequest request) {
+        ensureAccountHolderExists(accountHolderId);
         Circle circle = circleRepository.findByIdAndStatus(circleId, CircleStatus.ACTIVE)
                 .orElseThrow(() -> new NotFoundException("Active circle not found"));
 
-        if (circleMemberRepository.existsByCircle_IdAndUserId(circleId, userId)) {
+        if (circleMemberRepository.existsByCircle_IdAndAccountHolderId(circleId, accountHolderId)) {
             throw new ConflictException("User already in this circle");
         }
-        if (circleRepository.existsActiveCircleForUser(userId)) {
+        if (circleRepository.existsActiveCircleForUser(accountHolderId)) {
             throw new ConflictException("User already belongs to an active circle");
         }
 
@@ -77,7 +82,7 @@ public class CircleService {
 
         CircleMember member = circleMemberRepository.save(CircleMember.builder()
                 .circle(circle)
-                .userId(userId)
+                .accountHolderId(accountHolderId)
                 .role(CircleMemberRole.MEMBER)
                 .businessActivity(request.businessActivity())
                 .loanStatus(request.loanStatus())
@@ -85,13 +90,19 @@ public class CircleService {
                 .joinedAt(OffsetDateTime.now())
                 .build());
 
-        logActivity(circle, userId, CircleActivityType.MEMBER_JOINED, "Member joined circle");
+        circleActivityService.logActivity(
+                circle.getId(),
+                accountHolderId,
+                ActivityType.MEMBER_JOINED,
+                member.getId(),
+                "Member joined circle"
+        );
         return toMemberResponse(member);
     }
 
     @Transactional(readOnly = true)
-    public MyCircleResponse getMyCircle(UUID userId) {
-        List<Circle> activeCircles = circleRepository.findActiveCirclesForUser(userId);
+    public MyCircleResponse getMyCircle(UUID accountHolderId) {
+        List<Circle> activeCircles = circleRepository.findActiveCirclesForUser(accountHolderId);
         if (activeCircles.isEmpty()) {
             throw new NotFoundException("No active circle found for user");
         }
@@ -123,19 +134,8 @@ public class CircleService {
                 .toList();
     }
 
-    private void ensureUserExists(UUID userId) {
-        if (!userRepository.existsById(userId)) {
-            throw new NotFoundException("User not found");
-        }
-    }
-
-    private void logActivity(Circle circle, UUID actorUserId, CircleActivityType type, String message) {
-        circleActivityRepository.save(CircleActivity.builder()
-                .circle(circle)
-                .actorUserId(actorUserId)
-                .activityType(type)
-                .message(message)
-                .build());
+    private void ensureAccountHolderExists(UUID accountHolderId) {
+        accountHolderService.getById(accountHolderId);
     }
 
     private CircleResponse toCircleResponse(Circle circle, int membersCount) {
@@ -152,7 +152,7 @@ public class CircleService {
     private CircleMemberResponse toMemberResponse(CircleMember member) {
         return new CircleMemberResponse(
                 member.getId(),
-                member.getUserId(),
+                member.getAccountHolderId(),
                 member.getRole(),
                 member.getBusinessActivity(),
                 member.getLoanStatus(),

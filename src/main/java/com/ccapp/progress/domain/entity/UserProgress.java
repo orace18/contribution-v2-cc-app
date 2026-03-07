@@ -19,7 +19,7 @@ public class UserProgress {
 
     @Id
     @Column(name = "user_id", nullable = false)
-    private UUID userId;
+    private UUID accountHolderId;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "current_step", length = 64)

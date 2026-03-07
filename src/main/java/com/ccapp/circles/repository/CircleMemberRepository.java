@@ -8,7 +8,7 @@ import java.util.UUID;
 
 public interface CircleMemberRepository extends JpaRepository<CircleMember, UUID> {
 
-    boolean existsByCircle_IdAndUserId(UUID circleId, UUID userId);
+    boolean existsByCircle_IdAndAccountHolderId(UUID circleId, UUID accountHolderId);
 
     long countByCircle_Id(UUID circleId);
 

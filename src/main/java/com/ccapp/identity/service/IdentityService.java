@@ -3,6 +3,9 @@ package com.ccapp.identity.service;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.common.exception.NotFoundException;
 import com.ccapp.common.exception.UnauthorizedException;
+import com.ccapp.identity.account_holder.service.AccountHolderService;
+import com.ccapp.identity.app_user.domain.entity.AppUser;
+import com.ccapp.identity.app_user.repository.AppUserRepository;
 import com.ccapp.identity.domain.entity.User;
 import com.ccapp.identity.domain.entity.UserDevice;
 import com.ccapp.identity.domain.entity.UserProfile;
@@ -33,6 +36,8 @@ public class IdentityService {
     private final UserProfileRepository userProfileRepository;
     private final UserDeviceRepository userDeviceRepository;
     private final UserSessionRepository userSessionRepository;
+    private final AccountHolderService accountHolderService;
+    private final AppUserRepository appUserRepository;
     private final RefreshTokenService refreshTokenService;
     private final IdentityMapper identityMapper;
 
@@ -49,6 +54,7 @@ public class IdentityService {
                 .kycStatus(KycStatus.NOT_STARTED)
                 .build()));
 
+        ensureDelegatedIdentityModel(user);
         ensureAccountActive(user);
 
         UserDevice device = upsertDevice(user, request.deviceIdentifier(), request.platform());
@@ -88,6 +94,7 @@ public class IdentityService {
                         .build());
 
         userProfileRepository.save(profile);
+        accountHolderService.updateProfile(user.getId(), request.firstName(), request.lastName(), request.phone());
         if (user.getKycStatus() == KycStatus.NOT_STARTED) {
             user.setKycStatus(KycStatus.PENDING);
             userRepository.save(user);
@@ -239,6 +246,21 @@ public class IdentityService {
         if (user.getAccountStatus() != AccountStatus.ACTIVE) {
             throw new BusinessException("Account is not active");
         }
+    }
+
+    private void ensureDelegatedIdentityModel(User user) {
+        UserProfile profile = userProfileRepository.findByUserId(user.getId()).orElse(null);
+        accountHolderService.ensureFromLegacyUser(user, profile);
+
+        appUserRepository.findById(user.getId())
+                .or(() -> appUserRepository.findByFirebaseUid(user.getFirebaseUid()))
+                .orElseGet(() -> appUserRepository.save(AppUser.builder()
+                        .id(user.getId())
+                        .firebaseUid(user.getFirebaseUid())
+                        .accountHolderId(user.getId())
+                        .role(user.getRole())
+                        .createdAt(user.getCreatedAt())
+                        .build()));
     }
 
     private record SessionCreation(UserSession session, String rawRefreshToken) {

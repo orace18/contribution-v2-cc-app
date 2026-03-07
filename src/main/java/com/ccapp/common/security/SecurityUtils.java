@@ -26,4 +26,15 @@ public final class SecurityUtils {
         }
         return principal.userId();
     }
+
+    public static UUID currentAccountHolderId() {
+        AuthenticatedPrincipal principal = currentPrincipal();
+        if (principal.accountHolderId() != null) {
+            return principal.accountHolderId();
+        }
+        if (principal.userId() != null) {
+            return principal.userId();
+        }
+        throw new UnauthorizedException("Account holder context missing");
+    }
 }

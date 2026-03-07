@@ -26,7 +26,7 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
-        String path = request.getRequestURI();
+        String path = request.getServletPath();
         if (!path.startsWith("/internal/")) {
             filterChain.doFilter(request, response);
             return;
@@ -42,6 +42,7 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
 
         AuthenticatedPrincipal principal = AuthenticatedPrincipal.builder()
                 .firebaseUid("internal")
+                .accountHolderId(null)
                 .internal(true)
                 .build();
         UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(

@@ -37,8 +37,8 @@ public class TaskController {
             @ApiResponse(responseCode = "404", description = "Utilisateur introuvable", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
     })
     public ResponseEntity<CommonResponse<List<UserTaskResponse>>> myTasks() {
-        UUID userId = SecurityUtils.currentUserId();
-        return ResponseEntity.ok(CommonResponse.success("User tasks", taskService.getUserTasks(userId)));
+        UUID accountHolderId = SecurityUtils.currentAccountHolderId();
+        return ResponseEntity.ok(CommonResponse.success("User tasks", taskService.getUserTasks(accountHolderId)));
     }
 
     @PostMapping("/{taskType}/complete")
@@ -50,7 +50,7 @@ public class TaskController {
             @ApiResponse(responseCode = "404", description = "Utilisateur introuvable", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
     })
     public ResponseEntity<CommonResponse<TaskCompletionResponse>> complete(@PathVariable TaskType taskType) {
-        UUID userId = SecurityUtils.currentUserId();
-        return ResponseEntity.ok(CommonResponse.success("Task completed", taskService.completeTask(userId, taskType)));
+        UUID accountHolderId = SecurityUtils.currentAccountHolderId();
+        return ResponseEntity.ok(CommonResponse.success("Task completed", taskService.completeTask(accountHolderId, taskType)));
     }
 }

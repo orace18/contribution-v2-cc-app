@@ -1,0 +1,11 @@
+package com.ccapp.notifications.domain.enums;
+
+public enum NotificationType {
+    SUBSCRIPTION_EXPIRING,
+    SUBSCRIPTION_EXPIRED,
+    LOAN_REPAYMENT_REMINDER,
+    LOAN_REPAID,
+    CIRCLE_ACTIVITY,
+    TASK_COMPLETED,
+    AGENT_ACTION
+}

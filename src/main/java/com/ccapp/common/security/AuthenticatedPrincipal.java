@@ -9,6 +9,7 @@ public record AuthenticatedPrincipal(
         String firebaseUid,
         String email,
         UUID userId,
+        UUID accountHolderId,
         boolean internal
 ) {
 }

@@ -1,0 +1,10 @@
+package com.ccapp.admin.dto;
+
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
+
+public record AdminVerifyTwoFactorRequest(
+        @NotBlank String challengeToken,
+        @NotBlank @Pattern(regexp = "\\d{6}") String code
+) {
+}

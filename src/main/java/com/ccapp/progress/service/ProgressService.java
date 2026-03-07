@@ -1,7 +1,7 @@
 package com.ccapp.progress.service;
 
 import com.ccapp.common.exception.NotFoundException;
-import com.ccapp.identity.repository.UserRepository;
+import com.ccapp.identity.account_holder.service.AccountHolderService;
 import com.ccapp.progress.domain.entity.UserProgress;
 import com.ccapp.progress.domain.entity.UserTask;
 import com.ccapp.progress.domain.enums.TaskStatus;
@@ -25,30 +25,30 @@ public class ProgressService {
 
     private final UserProgressRepository userProgressRepository;
     private final UserTaskRepository userTaskRepository;
-    private final UserRepository userRepository;
+    private final AccountHolderService accountHolderService;
 
     @Transactional
-    public UserProgressResponse getUserProgress(UUID userId) {
-        return recalculateProgress(userId);
+    public UserProgressResponse getUserProgress(UUID accountHolderId) {
+        return recalculateProgress(accountHolderId);
     }
 
     @Transactional
-    public UserProgressResponse recalculateProgress(UUID userId) {
-        ensureUserExists(userId);
+    public UserProgressResponse recalculateProgress(UUID accountHolderId) {
+        ensureAccountHolderExists(accountHolderId);
 
-        long completedTasks = userTaskRepository.countByUserIdAndStatus(userId, TaskStatus.COMPLETED);
+        long completedTasks = userTaskRepository.countByAccountHolderIdAndStatus(accountHolderId, TaskStatus.COMPLETED);
         int totalTasks = TaskType.values().length;
         BigDecimal progress = BigDecimal.valueOf(completedTasks * 100L)
                 .divide(BigDecimal.valueOf(totalTasks), 2, RoundingMode.HALF_UP);
 
-        TaskType currentStep = userTaskRepository.findTopByUserIdAndStatusOrderByValidatedAtDesc(userId, TaskStatus.COMPLETED)
+        TaskType currentStep = userTaskRepository.findTopByAccountHolderIdAndStatusOrderByValidatedAtDesc(accountHolderId, TaskStatus.COMPLETED)
                 .map(UserTask::getTaskType)
                 .orElse(null);
 
-        TaskType nextTask = resolveNextTask(userId);
+        TaskType nextTask = resolveNextTask(accountHolderId);
 
-        UserProgress userProgress = userProgressRepository.findById(userId)
-                .orElseGet(() -> UserProgress.builder().userId(userId).build());
+        UserProgress userProgress = userProgressRepository.findById(accountHolderId)
+                .orElseGet(() -> UserProgress.builder().accountHolderId(accountHolderId).build());
 
         userProgress.setCurrentStep(currentStep);
         userProgress.setProgressPercentage(progress);
@@ -58,8 +58,8 @@ public class ProgressService {
         return toResponse(saved);
     }
 
-    private TaskType resolveNextTask(UUID userId) {
-        Map<TaskType, TaskStatus> statusByTask = userTaskRepository.findByUserIdOrderByCreatedAtAsc(userId).stream()
+    private TaskType resolveNextTask(UUID accountHolderId) {
+        Map<TaskType, TaskStatus> statusByTask = userTaskRepository.findByAccountHolderIdOrderByCreatedAtAsc(accountHolderId).stream()
                 .collect(Collectors.toMap(UserTask::getTaskType, UserTask::getStatus, (left, right) -> right));
 
         for (TaskType taskType : TaskType.values()) {
@@ -71,15 +71,17 @@ public class ProgressService {
         return null;
     }
 
-    private void ensureUserExists(UUID userId) {
-        if (!userRepository.existsById(userId)) {
-            throw new NotFoundException("User not found");
+    private void ensureAccountHolderExists(UUID accountHolderId) {
+        try {
+            accountHolderService.getById(accountHolderId);
+        } catch (NotFoundException ex) {
+            throw new NotFoundException("Account holder not found");
         }
     }
 
     private UserProgressResponse toResponse(UserProgress progress) {
         return new UserProgressResponse(
-                progress.getUserId(),
+                progress.getAccountHolderId(),
                 progress.getCurrentStep(),
                 progress.getProgressPercentage(),
                 progress.getNextTask(),

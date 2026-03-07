@@ -13,16 +13,20 @@ public interface CircleRepository extends JpaRepository<Circle, UUID> {
 
     Optional<Circle> findByIdAndStatus(UUID id, CircleStatus status);
 
+    List<Circle> findAllByOrderByCreatedAtDesc();
+
+    long countByStatus(CircleStatus status);
+
     @Query("""
             select (count(c) > 0) from Circle c
             where c.status = com.ccapp.circles.domain.enums.CircleStatus.ACTIVE
               and exists (
                   select 1 from CircleMember cm
                   where cm.circle = c
-                    and cm.userId = :userId
+                    and cm.accountHolderId = :accountHolderId
               )
             """)
-    boolean existsActiveCircleForUser(UUID userId);
+    boolean existsActiveCircleForUser(UUID accountHolderId);
 
     @Query("""
             select c from Circle c
@@ -30,9 +34,9 @@ public interface CircleRepository extends JpaRepository<Circle, UUID> {
               and exists (
                   select 1 from CircleMember cm
                   where cm.circle = c
-                    and cm.userId = :userId
+                    and cm.accountHolderId = :accountHolderId
               )
             order by c.createdAt desc
             """)
-    List<Circle> findActiveCirclesForUser(UUID userId);
+    List<Circle> findActiveCirclesForUser(UUID accountHolderId);
 }
