@@ -13,6 +13,8 @@ public interface CircleRepository extends JpaRepository<Circle, UUID> {
 
     Optional<Circle> findByIdAndStatus(UUID id, CircleStatus status);
 
+    Optional<Circle> findByIdAndCountryCode(UUID id, String countryCode);
+
     List<Circle> findAllByOrderByCreatedAtDesc();
 
     long countByStatus(CircleStatus status);

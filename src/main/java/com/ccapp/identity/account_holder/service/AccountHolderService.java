@@ -1,6 +1,8 @@
 package com.ccapp.identity.account_holder.service;
 
+import com.ccapp.common.exception.BusinessException;
 import com.ccapp.common.exception.NotFoundException;
+import com.ccapp.country.service.CountryService;
 import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
 import com.ccapp.identity.account_holder.repository.AccountHolderRepository;
 import com.ccapp.identity.domain.entity.User;
@@ -18,6 +20,7 @@ import java.util.UUID;
 public class AccountHolderService {
 
     private final AccountHolderRepository accountHolderRepository;
+    private final CountryService countryService;
 
     @Transactional(readOnly = true)
     public AccountHolder getById(UUID accountHolderId) {
@@ -38,6 +41,9 @@ public class AccountHolderService {
                         .firstName(profile != null ? profile.getFirstName() : "Unknown")
                         .lastName(profile != null ? profile.getLastName() : "Unknown")
                         .phoneNumber(profile != null ? profile.getPhone() : null)
+                        .countryCode(profile != null
+                                ? countryService.resolveConfiguredOrFallback(profile.getCountry()).getCode()
+                                : null)
                         .kycStatus(user.getKycStatus() != null ? user.getKycStatus() : KycStatus.NOT_STARTED)
                         .kycVerifiedAt(user.getKycStatus() == KycStatus.VERIFIED ? OffsetDateTime.now() : null)
                         .createdAt(user.getCreatedAt())
@@ -45,11 +51,22 @@ public class AccountHolderService {
     }
 
     @Transactional
-    public AccountHolder updateProfile(UUID accountHolderId, String firstName, String lastName, String phoneNumber) {
+    public AccountHolder updateProfile(UUID accountHolderId,
+                                       String firstName,
+                                       String lastName,
+                                       String phoneNumber,
+                                       String requestedCountryCode) {
         AccountHolder accountHolder = getById(accountHolderId);
+        String resolvedCountryCode = countryService.resolveConfiguredOrFallback(requestedCountryCode).getCode();
+
+        if (accountHolder.getCountryCode() != null && !accountHolder.getCountryCode().equalsIgnoreCase(resolvedCountryCode)) {
+            throw new BusinessException("Account holder country is immutable");
+        }
+
         accountHolder.setFirstName(firstName);
         accountHolder.setLastName(lastName);
         accountHolder.setPhoneNumber(phoneNumber);
+        accountHolder.setCountryCode(resolvedCountryCode);
         if (accountHolder.getKycStatus() == KycStatus.NOT_STARTED) {
             accountHolder.setKycStatus(KycStatus.PENDING);
         }

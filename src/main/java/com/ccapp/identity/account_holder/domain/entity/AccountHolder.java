@@ -29,6 +29,9 @@ public class AccountHolder {
     @Column(name = "phone_number", length = 32)
     private String phoneNumber;
 
+    @Column(name = "country_code", length = 3)
+    private String countryCode;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "kyc_status", nullable = false, length = 16)
     private KycStatus kycStatus;

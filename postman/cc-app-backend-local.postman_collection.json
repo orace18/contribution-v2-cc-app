@@ -120,11 +120,21 @@
           }
         },
         {
-          "name": "Subscription Plans (public)",
+          "name": "Subscription Plans (my country)",
           "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{bearerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
             "method": "GET",
-            "url": "{{baseUrl}}/subscriptions/plans?country={{country}}",
-            "description": "Liste les plans actifs par pays."
+            "url": "{{baseUrl}}/subscriptions/plans",
+            "description": "Liste les plans actifs pour le pays canonique de l'utilisateur."
           }
         }
       ]
@@ -392,10 +402,10 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"planCode\": \"{{planCode}}\",\n  \"country\": \"{{country}}\",\n  \"idempotencyKey\": \"sub-demo-001\"\n}"
+              "raw": "{\n  \"planCode\": \"{{planCode}}\",\n  \"idempotencyKey\": \"sub-demo-001\"\n}"
             },
             "url": "{{baseUrl}}/subscriptions/initiate",
-            "description": "Cree une operation INITIATED, appelle Jawupay (mock) et renvoie operationId/pspReference/checkoutUrl."
+            "description": "Cree une operation INITIATED, derive le pays depuis account_holder, appelle Jawupay (mock) et renvoie operationId/pspReference/checkoutUrl."
           }
         }
       ]

@@ -63,7 +63,8 @@ public class CapitalController {
     })
     public ResponseEntity<CommonResponse<CapitalPoolResponse>> allocatePool(
             @Valid @RequestBody AllocateCapitalPoolRequest request) {
-        return ResponseEntity.ok(CommonResponse.success("Capital pool allocated", capitalPoolService.allocatePool(request)));
+        UUID accountHolderId = SecurityUtils.currentAccountHolderId();
+        return ResponseEntity.ok(CommonResponse.success("Capital pool allocated", capitalPoolService.allocatePool(accountHolderId, request)));
     }
 
     @GetMapping("/pools")
@@ -73,7 +74,8 @@ public class CapitalController {
             @ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
     })
     public ResponseEntity<CommonResponse<List<CapitalPoolResponse>>> listPools(@RequestParam(required = false) UUID circleId) {
-        return ResponseEntity.ok(CommonResponse.success("Capital pools", capitalPoolService.listPools(circleId)));
+        UUID accountHolderId = SecurityUtils.currentAccountHolderId();
+        return ResponseEntity.ok(CommonResponse.success("Capital pools", capitalPoolService.listPools(accountHolderId, circleId)));
     }
 
     @PostMapping("/loans/{loanId}/fund")

@@ -7,14 +7,19 @@ import com.ccapp.admin.dto.*;
 import com.ccapp.admin.repository.AdminCountryRepository;
 import com.ccapp.admin.repository.AdminPolicyRepository;
 import com.ccapp.common.exception.BusinessException;
+import com.ccapp.country.domain.entity.Country;
+import com.ccapp.country.domain.enums.CountryStatus;
+import com.ccapp.country.repository.CountryRepository;
 import com.ccapp.payments.subscription.domain.entity.SubscriptionPlan;
 import com.ccapp.payments.subscription.repository.SubscriptionPlanRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Locale;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -23,6 +28,7 @@ public class AdminCountryConfigService {
     private final AdminCountryRepository adminCountryRepository;
     private final AdminPolicyRepository adminPolicyRepository;
     private final SubscriptionPlanRepository subscriptionPlanRepository;
+    private final CountryRepository countryRepository;
 
     @Transactional(readOnly = true)
     public List<CountryConfigResponse> listCountries() {
@@ -50,6 +56,7 @@ public class AdminCountryConfigService {
         country.setActive(request.active());
 
         AdminCountry saved = adminCountryRepository.save(country);
+        syncCountryCatalogue(saved.getCountryCode(), saved.getName(), saved.isActive(), null);
         return new CountryConfigResponse(
                 saved.getId(),
                 saved.getCountryCode(),
@@ -88,6 +95,7 @@ public class AdminCountryConfigService {
                 .price(request.price())
                 .active(request.active())
                 .build());
+        syncCountryCatalogue(country, null, true, currency);
 
         return toPlanResponse(saved);
     }
@@ -133,5 +141,30 @@ public class AdminCountryConfigService {
                 plan.isActive(),
                 plan.getCreatedAt()
         );
+    }
+
+    private void syncCountryCatalogue(String code, String name, boolean active, String preferredCurrency) {
+        String normalizedCode = code.trim().toUpperCase(Locale.ROOT);
+        Country country = countryRepository.findByCode(normalizedCode)
+                .orElseGet(() -> Country.builder()
+                        .id(UUID.nameUUIDFromBytes(("country:" + normalizedCode).getBytes(StandardCharsets.UTF_8)))
+                        .code(normalizedCode)
+                        .internationalFallback(false)
+                        .build());
+
+        String currency = preferredCurrency != null && !preferredCurrency.isBlank()
+                ? preferredCurrency.trim().toUpperCase(Locale.ROOT)
+                : subscriptionPlanRepository.findByCountryAndActiveTrueOrderByPriceAsc(normalizedCode).stream()
+                .findFirst()
+                .map(plan -> plan.getCurrency().trim().toUpperCase(Locale.ROOT))
+                .orElse(country.getCurrency() != null ? country.getCurrency() : "USD");
+
+        String resolvedName = (name != null && !name.isBlank())
+                ? name.trim()
+                : (country.getName() != null && !country.getName().isBlank() ? country.getName() : normalizedCode);
+        country.setName(resolvedName);
+        country.setCurrency(currency);
+        country.setStatus(active ? CountryStatus.ACTIVE : CountryStatus.INACTIVE);
+        countryRepository.save(country);
     }
 }

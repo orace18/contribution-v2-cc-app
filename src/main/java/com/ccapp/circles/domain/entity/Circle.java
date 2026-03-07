@@ -28,6 +28,9 @@ public class Circle extends AuditableEntity {
     @Column(name = "coach_id", nullable = false)
     private UUID coachId;
 
+    @Column(name = "country_code", nullable = false, length = 3)
+    private String countryCode;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 16)
     private CircleStatus status;

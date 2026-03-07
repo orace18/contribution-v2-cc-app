@@ -13,7 +13,7 @@ Date de mise a jour: 2026-03-07
 - Endpoints publics:
   - `GET /actuator/health`
   - `GET /actuator/info`
-  - `GET /subscriptions/plans`
+  - `GET /public/countries`
   - `POST /psp/jawupay/callback`
 
 ## Format de reponse (standard)
@@ -105,10 +105,22 @@ Date de mise a jour: 2026-03-07
 }
 ```
 - Succes `200` (`MeResponse`)
+- Regle metier:
+  - `country` est resolu vers un pays configure.
+  - si non configure, fallback `INT`.
+  - le pays canonique est `account_holders.country_code` et il devient immuable.
 - Echec:
   - `400`: validation payload
   - `401`: utilisateur non authentifie
   - `404`: user introuvable
+
+## Public
+
+### GET `/public/countries`
+- Auth: publique
+- Succes `200` (`List<CountryResponse>`)
+- Echec:
+  - `500`: erreur inattendue
 
 ### GET `/identity/me`
 - Auth: Bearer
@@ -191,11 +203,12 @@ Date de mise a jour: 2026-03-07
 
 ## Subscription
 
-### GET `/subscriptions/plans?country={ISO2}`
-- Auth: publique
+### GET `/subscriptions/plans`
+- Auth: Bearer
+- Pays derive automatiquement de `account_holders.country_code`.
 - Succes `200` (`List<SubscriptionPlanResponse>`)
 - Echec:
-  - `400`: parametre invalide
+  - `401`: non authentifie
 
 ### POST `/subscriptions/initiate`
 - Auth: Bearer
@@ -203,10 +216,11 @@ Date de mise a jour: 2026-03-07
 ```json
 {
   "planCode": "BASIC_MONTHLY",
-  "country": "CI",
   "idempotencyKey": "sub-001"
 }
 ```
+- Regle metier:
+  - le pays est derive de `account_holders.country_code` (jamais du payload client).
 - Succes `200` (`InitiateSubscriptionResponse`):
   - `operationId`
   - `pspReference`
@@ -367,4 +381,3 @@ Date de mise a jour: 2026-03-07
   "timestamp": "2026-03-07T12:00:00Z"
 }
 ```
-

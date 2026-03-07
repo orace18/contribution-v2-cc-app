@@ -5,12 +5,14 @@ import com.ccapp.circles.domain.enums.CircleStatus;
 import com.ccapp.circles.repository.CircleRepository;
 import com.ccapp.circlesocial.service.CircleScoreService;
 import com.ccapp.common.exception.NotFoundException;
+import com.ccapp.country.service.CountryService;
 import com.ccapp.credit.config.CreditScoringProperties;
 import com.ccapp.credit.domain.entity.CreditEligibility;
 import com.ccapp.credit.dto.CreditEligibilityResponse;
 import com.ccapp.credit.repository.CreditEligibilityRepository;
 import com.ccapp.credit.service.scoring.CreditScoreFactor;
 import com.ccapp.credit.service.scoring.CreditScoringContext;
+import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
 import com.ccapp.identity.account_holder.service.AccountHolderService;
 import com.ccapp.identity.delegation.domain.enums.PermissionLevel;
 import com.ccapp.identity.delegation.service.AccessControlService;
@@ -36,6 +38,7 @@ public class CreditScoringService {
     private final AccountHolderService accountHolderService;
     private final AccessControlService accessControlService;
     private final CircleRepository circleRepository;
+    private final CountryService countryService;
     private final CircleScoreService circleScoreService;
     private final ProgressService progressService;
     private final CreditEligibilityRepository creditEligibilityRepository;
@@ -50,9 +53,10 @@ public class CreditScoringService {
 
     @Transactional
     public CreditEligibilityResponse evaluateEligibility(UUID accountHolderId, UUID circleId) {
-        ensureAccountHolderExists(accountHolderId);
+        AccountHolder accountHolder = ensureAccountHolderExists(accountHolderId);
+        String countryCode = countryService.resolveByCodeOrThrow(accountHolder.getCountryCode()).getCode();
 
-        UUID resolvedCircleId = resolveCircleId(accountHolderId, circleId);
+        UUID resolvedCircleId = resolveCircleId(accountHolderId, circleId, countryCode);
         CreditScoringContext context = new CreditScoringContext(
                 accountHolderId,
                 resolvedCircleId,
@@ -127,24 +131,29 @@ public class CreditScoringService {
         return score.setScale(2, RoundingMode.HALF_UP);
     }
 
-    private UUID resolveCircleId(UUID accountHolderId, UUID requestedCircleId) {
+    private UUID resolveCircleId(UUID accountHolderId, UUID requestedCircleId, String countryCode) {
         if (requestedCircleId != null) {
-            if (circleRepository.findByIdAndStatus(requestedCircleId, CircleStatus.ACTIVE).isEmpty()) {
+            Circle requestedCircle = circleRepository.findByIdAndStatus(requestedCircleId, CircleStatus.ACTIVE)
+                    .orElse(null);
+            if (requestedCircle == null || !countryCode.equalsIgnoreCase(requestedCircle.getCountryCode())) {
                 throw new NotFoundException("Circle not found");
             }
             return requestedCircleId;
         }
 
         List<Circle> activeCircles = circleRepository.findActiveCirclesForUser(accountHolderId);
+        activeCircles = activeCircles.stream()
+                .filter(circle -> countryCode.equalsIgnoreCase(circle.getCountryCode()))
+                .toList();
         if (activeCircles.isEmpty()) {
             return null;
         }
         return activeCircles.get(0).getId();
     }
 
-    private void ensureAccountHolderExists(UUID accountHolderId) {
+    private AccountHolder ensureAccountHolderExists(UUID accountHolderId) {
         try {
-            accountHolderService.getById(accountHolderId);
+            return accountHolderService.getById(accountHolderId);
         } catch (NotFoundException ex) {
             throw new NotFoundException("Account holder not found");
         }

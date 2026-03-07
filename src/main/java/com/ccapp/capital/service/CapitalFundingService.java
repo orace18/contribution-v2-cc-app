@@ -13,6 +13,9 @@ import com.ccapp.credit.domain.entity.Loan;
 import com.ccapp.credit.domain.enums.LoanStatus;
 import com.ccapp.credit.repository.LoanRepository;
 import com.ccapp.credit.service.LoanService;
+import com.ccapp.country.service.CountryService;
+import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
+import com.ccapp.identity.account_holder.service.AccountHolderService;
 import com.ccapp.identity.delegation.domain.enums.PermissionLevel;
 import com.ccapp.identity.delegation.service.AccessControlService;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +34,8 @@ public class CapitalFundingService {
     private final CapitalPoolRepository capitalPoolRepository;
     private final AccessControlService accessControlService;
     private final LoanService loanService;
+    private final AccountHolderService accountHolderService;
+    private final CountryService countryService;
 
     @Transactional
     public LoanFundingResponse fundLoan(UUID actorUserId, UUID loanId, UUID capitalPoolId) {
@@ -40,6 +45,11 @@ public class CapitalFundingService {
 
         Loan loan = loanRepository.findById(loanId)
                 .orElseThrow(() -> new NotFoundException("Loan not found"));
+        AccountHolder accountHolder = accountHolderService.getById(loan.getAccountHolderId());
+        String accountHolderCountry = countryService.resolveByCodeOrThrow(accountHolder.getCountryCode()).getCode();
+        if (!accountHolderCountry.equalsIgnoreCase(loan.getCountryCode())) {
+            throw new BusinessException("Loan country does not match account holder country");
+        }
 
         accessControlService.assertCanActOnAccountHolder(actorUserId, loan.getAccountHolderId(), PermissionLevel.TRANSACT);
 
@@ -62,6 +72,9 @@ public class CapitalFundingService {
 
         if (!pool.getCircleId().equals(loan.getCircleId())) {
             throw new BusinessException("Capital pool circle does not match loan circle");
+        }
+        if (!pool.getCountryCode().equalsIgnoreCase(accountHolderCountry)) {
+            throw new BusinessException("Capital pool country does not match account holder country");
         }
 
         Fund fund = pool.getFund();

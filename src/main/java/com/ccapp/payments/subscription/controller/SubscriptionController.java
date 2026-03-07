@@ -30,12 +30,14 @@ public class SubscriptionController {
 
     @GetMapping("/plans")
     @Operation(summary = "Lister les plans actifs par pays")
+    @SecurityRequirement(name = "bearerAuth")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Succes (endpoint public)", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "200", description = "Succes", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Non authentifie", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
             @ApiResponse(responseCode = "400", description = "Parametre invalide", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
     })
-    public ResponseEntity<CommonResponse<List<SubscriptionPlanResponse>>> plans(@RequestParam String country) {
-        return ResponseEntity.ok(CommonResponse.success("Subscription plans", subscriptionService.getPlans(country)));
+    public ResponseEntity<CommonResponse<List<SubscriptionPlanResponse>>> plans() {
+        return ResponseEntity.ok(CommonResponse.success("Subscription plans", subscriptionService.getPlans(SecurityUtils.currentAccountHolderId())));
     }
 
     @PostMapping("/initiate")

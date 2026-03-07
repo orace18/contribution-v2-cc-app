@@ -35,6 +35,7 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/health", "/actuator/info", "/error").permitAll()
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         .requestMatchers("/api/admin/auth/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/public/countries").permitAll()
                         .requestMatchers("/api/admin/**").hasAnyAuthority(
                                 "ROLE_SUPER_ADMIN",
                                 "ROLE_COUNTRY_ADMIN",
@@ -42,7 +43,6 @@ public class SecurityConfig {
                                 "ROLE_OPERATIONS",
                                 "ROLE_SUPPORT"
                         )
-                        .requestMatchers(HttpMethod.GET, "/subscriptions/plans").permitAll()
                         .requestMatchers(HttpMethod.POST, "/psp/jawupay/callback").permitAll()
                         .requestMatchers("/internal/**").hasAuthority("INTERNAL")
                         .anyRequest().authenticated())

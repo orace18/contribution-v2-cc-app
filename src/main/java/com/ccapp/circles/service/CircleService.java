@@ -2,6 +2,8 @@ package com.ccapp.circles.service;
 
 import com.ccapp.circles.domain.entity.Circle;
 import com.ccapp.circles.domain.entity.CircleMember;
+import com.ccapp.country.service.CountryService;
+import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
 import com.ccapp.identity.account_holder.service.AccountHolderService;
 import com.ccapp.circlesocial.domain.enums.ActivityType;
 import com.ccapp.circlesocial.service.CircleActivityService;
@@ -31,10 +33,11 @@ public class CircleService {
     private final CircleMemberRepository circleMemberRepository;
     private final CircleActivityService circleActivityService;
     private final AccountHolderService accountHolderService;
+    private final CountryService countryService;
 
     @Transactional
     public CircleResponse createCircle(UUID accountHolderId, CreateCircleRequest request) {
-        ensureAccountHolderExists(accountHolderId);
+        String accountHolderCountry = resolveAccountHolderCountry(accountHolderId);
         if (circleRepository.existsActiveCircleForUser(accountHolderId)) {
             throw new ConflictException("User already belongs to an active circle");
         }
@@ -42,6 +45,7 @@ public class CircleService {
         Circle circle = circleRepository.save(Circle.builder()
                 .name(request.name().trim())
                 .coachId(accountHolderId)
+                .countryCode(accountHolderCountry)
                 .status(CircleStatus.ACTIVE)
                 .build());
 
@@ -64,9 +68,13 @@ public class CircleService {
 
     @Transactional
     public CircleMemberResponse joinCircle(UUID accountHolderId, UUID circleId, JoinCircleRequest request) {
-        ensureAccountHolderExists(accountHolderId);
+        String accountHolderCountry = resolveAccountHolderCountry(accountHolderId);
         Circle circle = circleRepository.findByIdAndStatus(circleId, CircleStatus.ACTIVE)
                 .orElseThrow(() -> new NotFoundException("Active circle not found"));
+
+        if (!accountHolderCountry.equalsIgnoreCase(circle.getCountryCode())) {
+            throw new BusinessException("Member country must match circle country");
+        }
 
         if (circleMemberRepository.existsByCircle_IdAndAccountHolderId(circleId, accountHolderId)) {
             throw new ConflictException("User already in this circle");
@@ -134,8 +142,9 @@ public class CircleService {
                 .toList();
     }
 
-    private void ensureAccountHolderExists(UUID accountHolderId) {
-        accountHolderService.getById(accountHolderId);
+    private String resolveAccountHolderCountry(UUID accountHolderId) {
+        AccountHolder accountHolder = accountHolderService.getById(accountHolderId);
+        return countryService.resolveByCodeOrThrow(accountHolder.getCountryCode()).getCode();
     }
 
     private CircleResponse toCircleResponse(Circle circle, int membersCount) {

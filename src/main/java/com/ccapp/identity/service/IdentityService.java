@@ -4,6 +4,7 @@ import com.ccapp.common.exception.BusinessException;
 import com.ccapp.common.exception.NotFoundException;
 import com.ccapp.common.exception.UnauthorizedException;
 import com.ccapp.identity.account_holder.service.AccountHolderService;
+import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
 import com.ccapp.identity.app_user.domain.entity.AppUser;
 import com.ccapp.identity.app_user.repository.AppUserRepository;
 import com.ccapp.identity.domain.entity.User;
@@ -77,11 +78,20 @@ public class IdentityService {
         User user = findUser(userId);
         ensureAccountActive(user);
 
+        AccountHolder accountHolder = accountHolderService.updateProfile(
+                user.getId(),
+                request.firstName(),
+                request.lastName(),
+                request.phone(),
+                request.country()
+        );
+        String canonicalCountryCode = accountHolder.getCountryCode();
+
         UserProfile profile = userProfileRepository.findByUserId(userId)
                 .map(existing -> {
                     existing.setFirstName(request.firstName());
                     existing.setLastName(request.lastName());
-                    existing.setCountry(request.country());
+                    existing.setCountry(canonicalCountryCode);
                     existing.setPhone(request.phone());
                     return existing;
                 })
@@ -89,12 +99,11 @@ public class IdentityService {
                         .user(user)
                         .firstName(request.firstName())
                         .lastName(request.lastName())
-                        .country(request.country())
+                        .country(canonicalCountryCode)
                         .phone(request.phone())
                         .build());
 
         userProfileRepository.save(profile);
-        accountHolderService.updateProfile(user.getId(), request.firstName(), request.lastName(), request.phone());
         if (user.getKycStatus() == KycStatus.NOT_STARTED) {
             user.setKycStatus(KycStatus.PENDING);
             userRepository.save(user);

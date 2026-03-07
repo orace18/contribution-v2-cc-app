@@ -6,9 +6,6 @@ public record InitiateSubscriptionRequest(
         @NotBlank(message = "planCode is required")
         String planCode,
 
-        @NotBlank(message = "country is required")
-        String country,
-
         String idempotencyKey
 ) {
 }

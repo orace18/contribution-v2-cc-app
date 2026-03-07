@@ -5,6 +5,8 @@ import com.ccapp.payments.operation.domain.enums.OperationType;
 import com.ccapp.payments.operation.service.OperationService;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.common.exception.NotFoundException;
+import com.ccapp.country.service.CountryService;
+import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
 import com.ccapp.identity.account_holder.service.AccountHolderService;
 import com.ccapp.identity.delegation.domain.enums.PermissionLevel;
 import com.ccapp.identity.delegation.service.AccessControlService;
@@ -31,13 +33,16 @@ public class SubscriptionService {
     private final SubscriptionPlanRepository subscriptionPlanRepository;
     private final SubscriptionPlanMapper subscriptionPlanMapper;
     private final AccountHolderService accountHolderService;
+    private final CountryService countryService;
     private final AccessControlService accessControlService;
     private final OperationService operationService;
     private final JawupayClient jawupayClient;
 
     @Transactional(readOnly = true)
-    public List<SubscriptionPlanResponse> getPlans(String country) {
-        return subscriptionPlanRepository.findByCountryAndActiveTrueOrderByPriceAsc(country).stream()
+    public List<SubscriptionPlanResponse> getPlans(UUID accountHolderId) {
+        AccountHolder accountHolder = accountHolderService.getById(accountHolderId);
+        String countryCode = countryService.resolveByCodeOrThrow(accountHolder.getCountryCode()).getCode();
+        return subscriptionPlanRepository.findByCountryAndActiveTrueOrderByPriceAsc(countryCode).stream()
                 .map(subscriptionPlanMapper::toResponse)
                 .toList();
     }
@@ -46,14 +51,15 @@ public class SubscriptionService {
     public InitiateSubscriptionResponse initiate(UUID accountHolderId,
                                                  UUID actorUserId,
                                                  InitiateSubscriptionRequest request) {
-        accountHolderService.getById(accountHolderId);
+        AccountHolder accountHolder = accountHolderService.getById(accountHolderId);
         if (actorUserId == null) {
             throw new BusinessException("Actor user is required");
         }
         accessControlService.assertCanActOnAccountHolder(actorUserId, accountHolderId, PermissionLevel.TRANSACT);
+        String countryCode = countryService.resolveByCodeOrThrow(accountHolder.getCountryCode()).getCode();
 
         SubscriptionPlan plan = subscriptionPlanRepository
-                .findByCodeAndCountryAndActiveTrue(request.planCode(), request.country())
+                .findByCodeAndCountryAndActiveTrue(request.planCode(), countryCode)
                 .orElseThrow(() -> new NotFoundException("Subscription plan not found"));
 
         String idempotencyKey = request.idempotencyKey() == null || request.idempotencyKey().isBlank()

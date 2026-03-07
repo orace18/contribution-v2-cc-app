@@ -31,7 +31,7 @@ public class UserProfile extends AuditableEntity {
     @Column(name = "last_name", nullable = false, length = 120)
     private String lastName;
 
-    @Column(name = "country", nullable = false, length = 2)
+    @Column(name = "country", nullable = false, length = 3)
     private String country;
 
     @Column(name = "phone", nullable = false, length = 32)

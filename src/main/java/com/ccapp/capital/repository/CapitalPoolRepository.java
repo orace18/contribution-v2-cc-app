@@ -9,7 +9,11 @@ import java.util.UUID;
 
 public interface CapitalPoolRepository extends JpaRepository<CapitalPool, UUID> {
 
-    Optional<CapitalPool> findByFund_IdAndCircleId(UUID fundId, UUID circleId);
+    Optional<CapitalPool> findByFund_IdAndCircleIdAndCountryCode(UUID fundId, UUID circleId, String countryCode);
 
     List<CapitalPool> findByCircleIdOrderByIdDesc(UUID circleId);
+
+    List<CapitalPool> findByCountryCodeOrderByIdDesc(String countryCode);
+
+    List<CapitalPool> findByCircleIdAndCountryCodeOrderByIdDesc(UUID circleId, String countryCode);
 }

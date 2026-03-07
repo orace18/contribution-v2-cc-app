@@ -31,6 +31,9 @@ public class CapitalPool {
     @Column(name = "circle_id", nullable = false)
     private UUID circleId;
 
+    @Column(name = "country_code", nullable = false, length = 3)
+    private String countryCode;
+
     @Column(name = "allocated_amount", nullable = false, precision = 19, scale = 4)
     private BigDecimal allocatedAmount;
 

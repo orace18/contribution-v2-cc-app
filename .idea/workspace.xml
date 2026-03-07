@@ -5,10 +5,29 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Ajout des apis admin, credit, scoring">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/API_DOCUMENTATION.md" beforeDir="false" afterPath="$PROJECT_DIR$/API_DOCUMENTATION.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/postman/cc-app-backend-local.postman_collection.json" beforeDir="false" afterPath="$PROJECT_DIR$/postman/cc-app-backend-local.postman_collection.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/admin/repository/AdminPolicyRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/admin/repository/AdminPolicyRepository.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/capital/controller/CapitalController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/capital/controller/CapitalController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/capital/domain/entity/CapitalPool.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/capital/domain/entity/CapitalPool.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/capital/repository/CapitalPoolRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/capital/repository/CapitalPoolRepository.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/capital/service/CapitalFundingService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/capital/service/CapitalFundingService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/capital/service/CapitalPoolService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/capital/service/CapitalPoolService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/domain/entity/Circle.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/domain/entity/Circle.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/repository/CircleRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/repository/CircleRepository.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/service/CircleService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/service/CircleService.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/config/SecurityConfig.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/config/SecurityConfig.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/config/SecurityConfig.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/config/SecurityConfig.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/generated-sources/annotations/com/ccapp/identity/mapper/IdentityMapperImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/target/generated-sources/annotations/com/ccapp/identity/mapper/IdentityMapperImpl.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/generated-sources/annotations/com/ccapp/payments/subscription/mapper/SubscriptionPlanMapperImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/target/generated-sources/annotations/com/ccapp/payments/subscription/mapper/SubscriptionPlanMapperImpl.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/credit/domain/entity/Loan.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/credit/domain/entity/Loan.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/credit/service/CreditScoringService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/credit/service/CreditScoringService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/credit/service/LoanService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/credit/service/LoanService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/account_holder/domain/entity/AccountHolder.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/account_holder/domain/entity/AccountHolder.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/account_holder/service/AccountHolderService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/account_holder/service/AccountHolderService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/domain/entity/UserProfile.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/domain/entity/UserProfile.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/service/IdentityService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/service/IdentityService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/payments/subscription/controller/SubscriptionController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/payments/subscription/controller/SubscriptionController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/payments/subscription/dto/InitiateSubscriptionRequest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/payments/subscription/dto/InitiateSubscriptionRequest.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/payments/subscription/service/SubscriptionService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/payments/subscription/service/SubscriptionService.java" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -16,7 +35,7 @@
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
   <component name="EmbeddingIndexingInfo">
-    <option name="cachedIndexableFilesCount" value="128" />
+    <option name="cachedIndexableFilesCount" value="361" />
   </component>
   <component name="FileTemplateManagerImpl">
     <option name="RECENT_TEMPLATES">
@@ -81,23 +100,23 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "ModuleVcsDetector.initialDetectionPerformed": "true",
-    "RunOnceActivity.MCP Project settings loaded": "true",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
-    "RunOnceActivity.git.unshallow": "true",
-    "Spring Boot.CcAppBackendApplication.executor": "Run",
-    "com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1": "true",
-    "git-widget-placeholder": "dev",
-    "junie.onboarding.icon.badge.shown": "true",
-    "kotlin-language-version-configured": "true",
-    "last_opened_file_path": "/home/user/Documents/cc-app-backend-v2-monolitic/src/main/resources/firebase",
-    "settings.editor.selected.configurable": "editor.preferences.fonts.default",
-    "to.speed.mode.migration.done": "true"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.MCP Project settings loaded&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;Spring Boot.CcAppBackendApplication.executor&quot;: &quot;Run&quot;,
+    &quot;com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;dev&quot;,
+    &quot;junie.onboarding.icon.badge.shown&quot;: &quot;true&quot;,
+    &quot;kotlin-language-version-configured&quot;: &quot;true&quot;,
+    &quot;last_opened_file_path&quot;: &quot;/home/user/Documents/cc-app-backend-v2-monolitic/src/main/resources/firebase&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;editor.preferences.fonts.default&quot;,
+    &quot;to.speed.mode.migration.done&quot;: &quot;true&quot;
   }
-}]]></component>
+}</component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="$PROJECT_DIR$/src/main/resources/firebase" />
@@ -315,7 +334,15 @@
       <option name="project" value="LOCAL" />
       <updated>1772889207278</updated>
     </task>
-    <option name="localTasksCounter" value="23" />
+    <task id="LOCAL-00023" summary="Ajout des apis admin, credit, scoring">
+      <option name="closed" value="true" />
+      <created>1772889817415</created>
+      <option name="number" value="00023" />
+      <option name="presentableId" value="LOCAL-00023" />
+      <option name="project" value="LOCAL" />
+      <updated>1772889817415</updated>
+    </task>
+    <option name="localTasksCounter" value="24" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
