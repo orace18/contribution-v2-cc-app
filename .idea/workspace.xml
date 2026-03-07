@@ -4,14 +4,17 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="justement onboarding">
+    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Ajout de MinIO pour les images">
       <change beforePath="$PROJECT_DIR$/.env.example" beforeDir="false" afterPath="$PROJECT_DIR$/.env.example" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/API_DOCUMENTATION.md" beforeDir="false" afterPath="$PROJECT_DIR$/API_DOCUMENTATION.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pom.xml" beforeDir="false" afterPath="$PROJECT_DIR$/pom.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/domain/entity/UserProfile.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/domain/entity/UserProfile.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/dto/UserProfileDto.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/dto/UserProfileDto.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docker-compose-dev.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/docker-compose-dev.yaml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docker-compose-prod.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/docker-compose-prod.yaml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/media/storage/MediaBucketInitializer.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/media/storage/MediaBucketInitializer.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/resources/application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/application.properties" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/application.properties" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/media/storage/MediaBucketInitializer.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/media/storage/MediaBucketInitializer.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/generated-sources/annotations/com/ccapp/identity/mapper/IdentityMapperImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/target/generated-sources/annotations/com/ccapp/identity/mapper/IdentityMapperImpl.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/generated-sources/annotations/com/ccapp/payments/subscription/mapper/SubscriptionPlanMapperImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/target/generated-sources/annotations/com/ccapp/payments/subscription/mapper/SubscriptionPlanMapperImpl.java" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -334,7 +337,15 @@
       <option name="project" value="LOCAL" />
       <updated>1772920071555</updated>
     </task>
-    <option name="localTasksCounter" value="25" />
+    <task id="LOCAL-00025" summary="Ajout de MinIO pour les images">
+      <option name="closed" value="true" />
+      <created>1772922738201</created>
+      <option name="number" value="00025" />
+      <option name="presentableId" value="LOCAL-00025" />
+      <option name="project" value="LOCAL" />
+      <updated>1772922738201</updated>
+    </task>
+    <option name="localTasksCounter" value="26" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -362,7 +373,8 @@
     <MESSAGE value="Ajout de progress et de circle" />
     <MESSAGE value="Ajout des apis admin, credit, scoring" />
     <MESSAGE value="justement onboarding" />
-    <option name="LAST_COMMIT_MESSAGE" value="justement onboarding" />
+    <MESSAGE value="Ajout de MinIO pour les images" />
+    <option name="LAST_COMMIT_MESSAGE" value="Ajout de MinIO pour les images" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />

@@ -29,10 +29,27 @@ public class MediaBucketInitializer {
     @Value("${media.bucket.kyc:cc-media-kyc}")
     private String kycBucket;
 
+    @Value("${media.bucket.auto-create:true}")
+    private boolean autoCreateBuckets;
+
+    @Value("${media.storage.startup-strict:false}")
+    private boolean strictStartup;
+
     @PostConstruct
     public void ensureBuckets() {
+        if (!autoCreateBuckets) {
+            log.info("Media bucket auto-creation disabled");
+            return;
+        }
         for (String bucket : List.of(publicBucket, privateBucket, kycBucket)) {
-            ensureBucketExists(bucket);
+            try {
+                ensureBucketExists(bucket);
+            } catch (RuntimeException ex) {
+                if (strictStartup) {
+                    throw ex;
+                }
+                log.warn("Skipping media bucket initialization for {}: {}", bucket, ex.getMessage());
+            }
         }
     }
 
