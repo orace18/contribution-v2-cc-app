@@ -4,169 +4,11 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Ajout de progress et de circle">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/accounting/ledger/domain/entity/AccountBalanceSnapshot.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/accounting/ledger/domain/entity/AccountingEvent.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/accounting/ledger/domain/entity/LedgerEntry.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/accounting/ledger/domain/enums/AccountingEventType.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/accounting/ledger/domain/enums/LedgerEntryType.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/accounting/ledger/repository/AccountBalanceSnapshotRepository.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/accounting/ledger/repository/AccountingEventRepository.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/accounting/ledger/repository/LedgerEntryRepository.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/accounting/ledger/service/AccountingPostingService.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/accounting/operation/domain/entity/Operation.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/accounting/operation/domain/enums/OperationStatus.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/accounting/operation/domain/enums/OperationType.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/accounting/operation/repository/OperationRepository.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/accounting/operation/service/OperationService.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/accounting/reconciliation/controller/ReconciliationController.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/accounting/reconciliation/domain/entity/ReconciliationRecord.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/accounting/reconciliation/dto/ReconciliationImportRequest.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/accounting/reconciliation/dto/ReconciliationImportResponse.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/accounting/reconciliation/dto/ReconciliationItemRequest.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/accounting/reconciliation/dto/ReconciliationResultItem.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/accounting/reconciliation/dto/SettlementSummaryItem.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/accounting/reconciliation/repository/ReconciliationRecordRepository.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/accounting/reconciliation/service/ReconciliationService.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/controller/CircleController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/controller/CircleController.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/domain/entity/CircleActivity.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/domain/entity/CircleMember.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/domain/entity/CircleMember.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/domain/enums/CircleActivityType.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/dto/CircleMemberResponse.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/dto/CircleMemberResponse.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/repository/CircleActivityRepository.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/repository/CircleMemberRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/repository/CircleMemberRepository.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/repository/CircleRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/repository/CircleRepository.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/service/CircleService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/service/CircleService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/common/security/AuthenticatedPrincipal.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/common/security/AuthenticatedPrincipal.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/common/security/SecurityUtils.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/common/security/SecurityUtils.java" afterDir="false" />
+    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Ajout des apis admin, credit, scoring">
       <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/config/SecurityConfig.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/config/SecurityConfig.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/config/security/ApiKeyAuthenticationFilter.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/config/security/ApiKeyAuthenticationFilter.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/config/security/FirebaseAuthenticationFilter.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/config/security/FirebaseAuthenticationFilter.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/service/IdentityService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/service/IdentityService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/progress/controller/ProgressController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/progress/controller/ProgressController.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/progress/controller/TaskController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/progress/controller/TaskController.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/progress/domain/entity/UserProgress.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/progress/domain/entity/UserProgress.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/progress/domain/entity/UserTask.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/progress/domain/entity/UserTask.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/progress/dto/UserProgressResponse.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/progress/dto/UserProgressResponse.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/progress/repository/UserTaskRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/progress/repository/UserTaskRepository.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/progress/service/ProgressService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/progress/service/ProgressService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/progress/service/TaskService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/progress/service/TaskService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/psp/client/JawupayClient.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/psp/client/JawupayClientImpl.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/psp/controller/PspController.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/psp/domain/entity/PspCallbackEvent.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/psp/dto/JawupayCallbackRequest.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/psp/dto/JawupayInitiateRequest.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/psp/dto/JawupayInitiateResponse.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/psp/repository/PspCallbackEventRepository.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/psp/service/JawupayService.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/psp/service/SimpleRateLimiter.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/subscription/controller/SubscriptionController.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/subscription/domain/entity/SubscriptionPlan.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/subscription/dto/InitiateSubscriptionRequest.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/subscription/dto/InitiateSubscriptionResponse.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/subscription/dto/SubscriptionPlanResponse.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/subscription/mapper/SubscriptionPlanMapper.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/subscription/repository/SubscriptionPlanRepository.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/subscription/service/SubscriptionService.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/resources/application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/application.properties" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/test/java/com/ccapp/accounting/ledger/service/AccountingPostingServiceTest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/test/java/com/ccapp/accounting/ledger/service/AccountingPostingServiceTest.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/test/java/com/ccapp/accounting/operation/service/OperationServiceTest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/test/java/com/ccapp/accounting/operation/service/OperationServiceTest.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/application.properties" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/accounting/ledger/domain/entity/AccountBalanceSnapshot$AccountBalanceSnapshotBuilder.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/accounting/ledger/domain/entity/AccountBalanceSnapshot.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/accounting/ledger/domain/entity/AccountingEvent$AccountingEventBuilder.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/accounting/ledger/domain/entity/AccountingEvent.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/accounting/ledger/domain/entity/LedgerEntry$LedgerEntryBuilder.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/accounting/ledger/domain/entity/LedgerEntry.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/accounting/ledger/domain/enums/AccountingEventType.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/accounting/ledger/domain/enums/LedgerEntryType.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/accounting/ledger/repository/AccountBalanceSnapshotRepository.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/accounting/ledger/repository/AccountingEventRepository.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/accounting/ledger/repository/LedgerEntryRepository.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/accounting/ledger/service/AccountingPostingService$1.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/accounting/ledger/service/AccountingPostingService$PostingLine.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/accounting/ledger/service/AccountingPostingService.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/accounting/operation/domain/entity/Operation$OperationBuilder.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/accounting/operation/domain/entity/Operation.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/accounting/operation/domain/enums/OperationStatus.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/accounting/operation/domain/enums/OperationType.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/accounting/operation/repository/OperationRepository.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/accounting/operation/service/OperationService.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/accounting/reconciliation/controller/ReconciliationController.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/accounting/reconciliation/domain/entity/ReconciliationRecord$ReconciliationRecordBuilder.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/accounting/reconciliation/domain/entity/ReconciliationRecord.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/accounting/reconciliation/dto/ReconciliationImportRequest.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/accounting/reconciliation/dto/ReconciliationImportResponse.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/accounting/reconciliation/dto/ReconciliationItemRequest.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/accounting/reconciliation/dto/ReconciliationResultItem.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/accounting/reconciliation/dto/SettlementSummaryItem.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/accounting/reconciliation/repository/ReconciliationRecordRepository.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/accounting/reconciliation/service/ReconciliationService.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/circles/controller/CircleController.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/circles/controller/CircleController.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/circles/domain/entity/CircleActivity$CircleActivityBuilder.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/circles/domain/entity/CircleActivity.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/circles/domain/entity/CircleMember$CircleMemberBuilder.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/circles/domain/entity/CircleMember$CircleMemberBuilder.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/circles/domain/entity/CircleMember.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/circles/domain/entity/CircleMember.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/circles/domain/enums/CircleActivityType.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/circles/dto/CircleMemberResponse.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/circles/dto/CircleMemberResponse.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/circles/repository/CircleActivityRepository.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/circles/repository/CircleMemberRepository.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/circles/repository/CircleMemberRepository.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/circles/repository/CircleRepository.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/circles/repository/CircleRepository.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/circles/service/CircleService.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/circles/service/CircleService.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/common/security/AuthenticatedPrincipal$AuthenticatedPrincipalBuilder.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/common/security/AuthenticatedPrincipal$AuthenticatedPrincipalBuilder.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/common/security/AuthenticatedPrincipal.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/common/security/AuthenticatedPrincipal.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/common/security/SecurityUtils.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/common/security/SecurityUtils.class" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/config/SecurityConfig.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/config/SecurityConfig.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/config/security/ApiKeyAuthenticationFilter.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/config/security/ApiKeyAuthenticationFilter.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/config/security/FirebaseAuthenticationFilter.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/config/security/FirebaseAuthenticationFilter.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/identity/service/IdentityService$SessionCreation.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/identity/service/IdentityService$SessionCreation.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/identity/service/IdentityService.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/identity/service/IdentityService.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/progress/controller/ProgressController.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/progress/controller/ProgressController.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/progress/controller/TaskController.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/progress/controller/TaskController.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/progress/domain/entity/UserProgress$UserProgressBuilder.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/progress/domain/entity/UserProgress$UserProgressBuilder.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/progress/domain/entity/UserProgress.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/progress/domain/entity/UserProgress.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/progress/domain/entity/UserTask$UserTaskBuilder.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/progress/domain/entity/UserTask$UserTaskBuilder.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/progress/domain/entity/UserTask.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/progress/domain/entity/UserTask.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/progress/dto/UserProgressResponse.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/progress/dto/UserProgressResponse.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/progress/repository/UserTaskRepository.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/progress/repository/UserTaskRepository.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/progress/service/ProgressService.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/progress/service/ProgressService.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/progress/service/TaskService.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/progress/service/TaskService.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/psp/client/JawupayClient.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/psp/client/JawupayClientImpl.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/psp/controller/PspController.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/psp/domain/entity/PspCallbackEvent$PspCallbackEventBuilder.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/psp/domain/entity/PspCallbackEvent.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/psp/dto/JawupayCallbackRequest.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/psp/dto/JawupayInitiateRequest.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/psp/dto/JawupayInitiateResponse.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/psp/repository/PspCallbackEventRepository.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/psp/service/JawupayService.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/psp/service/SimpleRateLimiter.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/subscription/controller/SubscriptionController.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/subscription/domain/entity/SubscriptionPlan$SubscriptionPlanBuilder.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/subscription/domain/entity/SubscriptionPlan.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/subscription/dto/InitiateSubscriptionRequest.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/subscription/dto/InitiateSubscriptionResponse.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/subscription/dto/SubscriptionPlanResponse.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/subscription/mapper/SubscriptionPlanMapper.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/subscription/mapper/SubscriptionPlanMapperImpl.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/subscription/repository/SubscriptionPlanRepository.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/subscription/service/SubscriptionService.class" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/target/generated-sources/annotations/com/ccapp/identity/mapper/IdentityMapperImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/target/generated-sources/annotations/com/ccapp/identity/mapper/IdentityMapperImpl.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/generated-sources/annotations/com/ccapp/subscription/mapper/SubscriptionPlanMapperImpl.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/maven-status/maven-compiler-plugin/compile/default-compile/createdFiles.lst" beforeDir="false" afterPath="$PROJECT_DIR$/target/maven-status/maven-compiler-plugin/compile/default-compile/createdFiles.lst" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/maven-status/maven-compiler-plugin/compile/default-compile/inputFiles.lst" beforeDir="false" afterPath="$PROJECT_DIR$/target/maven-status/maven-compiler-plugin/compile/default-compile/inputFiles.lst" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/maven-status/maven-compiler-plugin/testCompile/default-testCompile/createdFiles.lst" beforeDir="false" afterPath="$PROJECT_DIR$/target/maven-status/maven-compiler-plugin/testCompile/default-testCompile/createdFiles.lst" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/surefire-reports/TEST-com.ccapp.accounting.ledger.service.AccountingPostingServiceTest.xml" beforeDir="false" afterPath="$PROJECT_DIR$/target/surefire-reports/TEST-com.ccapp.accounting.ledger.service.AccountingPostingServiceTest.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/surefire-reports/TEST-com.ccapp.accounting.operation.service.OperationServiceTest.xml" beforeDir="false" afterPath="$PROJECT_DIR$/target/surefire-reports/TEST-com.ccapp.accounting.operation.service.OperationServiceTest.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/surefire-reports/TEST-com.ccapp.identity.service.RefreshTokenServiceTest.xml" beforeDir="false" afterPath="$PROJECT_DIR$/target/surefire-reports/TEST-com.ccapp.identity.service.RefreshTokenServiceTest.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/surefire-reports/com.ccapp.accounting.ledger.service.AccountingPostingServiceTest.txt" beforeDir="false" afterPath="$PROJECT_DIR$/target/surefire-reports/com.ccapp.accounting.ledger.service.AccountingPostingServiceTest.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/surefire-reports/com.ccapp.accounting.operation.service.OperationServiceTest.txt" beforeDir="false" afterPath="$PROJECT_DIR$/target/surefire-reports/com.ccapp.accounting.operation.service.OperationServiceTest.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/surefire-reports/com.ccapp.identity.service.RefreshTokenServiceTest.txt" beforeDir="false" afterPath="$PROJECT_DIR$/target/surefire-reports/com.ccapp.identity.service.RefreshTokenServiceTest.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/test-classes/com/ccapp/accounting/ledger/service/AccountingPostingServiceTest.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/test-classes/com/ccapp/accounting/operation/service/OperationServiceTest.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/generated-sources/annotations/com/ccapp/payments/subscription/mapper/SubscriptionPlanMapperImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/target/generated-sources/annotations/com/ccapp/payments/subscription/mapper/SubscriptionPlanMapperImpl.java" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -465,7 +307,15 @@
       <option name="project" value="LOCAL" />
       <updated>1772872172218</updated>
     </task>
-    <option name="localTasksCounter" value="22" />
+    <task id="LOCAL-00022" summary="Ajout des apis admin, credit, scoring">
+      <option name="closed" value="true" />
+      <created>1772889207278</created>
+      <option name="number" value="00022" />
+      <option name="presentableId" value="LOCAL-00022" />
+      <option name="project" value="LOCAL" />
+      <updated>1772889207278</updated>
+    </task>
+    <option name="localTasksCounter" value="23" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -491,7 +341,8 @@
     <MESSAGE value="Revue du docker-compose-dev.yaml" />
     <MESSAGE value="Mise a jour de OpenApi" />
     <MESSAGE value="Ajout de progress et de circle" />
-    <option name="LAST_COMMIT_MESSAGE" value="Ajout de progress et de circle" />
+    <MESSAGE value="Ajout des apis admin, credit, scoring" />
+    <option name="LAST_COMMIT_MESSAGE" value="Ajout des apis admin, credit, scoring" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />

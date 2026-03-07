@@ -46,9 +46,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/psp/jawupay/callback").permitAll()
                         .requestMatchers("/internal/**").hasAuthority("INTERNAL")
                         .anyRequest().authenticated())
-                .addFilterBefore(adminJwtAuthenticationFilter, ApiKeyAuthenticationFilter.class)
                 .addFilterBefore(apiKeyAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
-                .addFilterAfter(firebaseAuthenticationFilter, ApiKeyAuthenticationFilter.class);
+                .addFilterAfter(adminJwtAuthenticationFilter, ApiKeyAuthenticationFilter.class)
+                .addFilterAfter(firebaseAuthenticationFilter, AdminJwtAuthenticationFilter.class);
 
         return http.build();
     }
