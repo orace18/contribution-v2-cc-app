@@ -19,6 +19,7 @@
     <properties>
         <java.version>21</java.version>
         <mapstruct.version>1.5.5.Final</mapstruct.version>
+        <aws.sdk.version>2.25.66</aws.sdk.version>
 <!--        <spring-boot.run.profiles>dev</spring-boot.run.profiles>-->
         <image.name.dev>cc-backend-monolitic_dev</image.name.dev>
         <image.name.prod>cc-backend-monolitic_prod</image.name.prod>
@@ -66,6 +67,12 @@
             <groupId>com.google.firebase</groupId>
             <artifactId>firebase-admin</artifactId>
             <version>9.2.0</version>
+        </dependency>
+
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3</artifactId>
+            <version>${aws.sdk.version}</version>
         </dependency>
 
         <dependency>

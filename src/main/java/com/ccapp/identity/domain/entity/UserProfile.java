@@ -36,4 +36,7 @@ public class UserProfile extends AuditableEntity {
 
     @Column(name = "phone", nullable = false, length = 32)
     private String phone;
+
+    @Column(name = "profile_photo_media_id")
+    private UUID profilePhotoMediaId;
 }

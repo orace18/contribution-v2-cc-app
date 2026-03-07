@@ -122,6 +122,61 @@ Date de mise a jour: 2026-03-07
 - Echec:
   - `500`: erreur inattendue
 
+## Media
+
+### POST `/api/media/upload-url`
+- Auth: Bearer
+- Body:
+```json
+{
+  "type": "PROFILE_PHOTO",
+  "contentType": "image/jpeg",
+  "size": 245678,
+  "originalFileName": "avatar.jpg"
+}
+```
+- Succes `200` (`CreateUploadUrlResponse`):
+  - `mediaId`
+  - `bucket`
+  - `objectKey`
+  - `uploadUrl` (pre-signed PUT)
+  - `expiresAt`
+- Echec:
+  - `400`: validation/regle metier (taille/type)
+  - `401`: non authentifie
+
+### POST `/api/media/confirm`
+- Auth: Bearer
+- Body:
+```json
+{
+  "mediaId": "uuid"
+}
+```
+- Succes `200` (`MediaFileResponse`)
+- Regles d'integration:
+  - `PROFILE_PHOTO` -> met a jour `user_profiles.profile_photo_media_id`
+  - `KYC_*` -> cree une entree `kyc_documents`
+- Echec:
+  - `400`: objet absent dans MinIO / statut invalide
+  - `401`: non authentifie
+  - `404`: media introuvable
+
+### GET `/api/media/{id}`
+- Auth: Bearer
+- Succes `200` (`MediaFileResponse`)
+- Echec:
+  - `401`: non authentifie
+  - `404`: media introuvable
+
+### GET `/api/media/{id}/download-url`
+- Auth: Bearer
+- Succes `200` (`DownloadUrlResponse`)
+- Echec:
+  - `400`: media pas encore confirme
+  - `401`: non authentifie
+  - `404`: media introuvable
+
 ### GET `/identity/me`
 - Auth: Bearer
 - Succes `200` (`MeResponse`):
