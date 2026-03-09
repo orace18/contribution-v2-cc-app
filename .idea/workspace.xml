@@ -4,10 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Config MinIO">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docker-compose-dev.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/docker-compose-dev.yaml" afterDir="false" />
-    </list>
+    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Revue du base name" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -353,7 +350,15 @@
       <option name="project" value="LOCAL" />
       <updated>1772923865594</updated>
     </task>
-    <option name="localTasksCounter" value="28" />
+    <task id="LOCAL-00028" summary="Revue du base name">
+      <option name="closed" value="true" />
+      <created>1773063816250</created>
+      <option name="number" value="00028" />
+      <option name="presentableId" value="LOCAL-00028" />
+      <option name="project" value="LOCAL" />
+      <updated>1773063816250</updated>
+    </task>
+    <option name="localTasksCounter" value="29" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -383,7 +388,8 @@
     <MESSAGE value="justement onboarding" />
     <MESSAGE value="Ajout de MinIO pour les images" />
     <MESSAGE value="Config MinIO" />
-    <option name="LAST_COMMIT_MESSAGE" value="Config MinIO" />
+    <MESSAGE value="Revue du base name" />
+    <option name="LAST_COMMIT_MESSAGE" value="Revue du base name" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />
