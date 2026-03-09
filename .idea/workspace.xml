@@ -4,17 +4,9 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Ajout de MinIO pour les images">
-      <change beforePath="$PROJECT_DIR$/.env.example" beforeDir="false" afterPath="$PROJECT_DIR$/.env.example" afterDir="false" />
+    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Config MinIO">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/docker-compose-dev.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/docker-compose-dev.yaml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docker-compose-prod.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/docker-compose-prod.yaml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/media/storage/MediaBucketInitializer.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/media/storage/MediaBucketInitializer.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/resources/application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/application.properties" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/application.properties" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/media/storage/MediaBucketInitializer.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/media/storage/MediaBucketInitializer.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/generated-sources/annotations/com/ccapp/identity/mapper/IdentityMapperImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/target/generated-sources/annotations/com/ccapp/identity/mapper/IdentityMapperImpl.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/generated-sources/annotations/com/ccapp/payments/subscription/mapper/SubscriptionPlanMapperImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/target/generated-sources/annotations/com/ccapp/payments/subscription/mapper/SubscriptionPlanMapperImpl.java" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -22,7 +14,7 @@
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
   <component name="EmbeddingIndexingInfo">
-    <option name="cachedIndexableFilesCount" value="361" />
+    <option name="cachedIndexableFilesCount" value="389" />
   </component>
   <component name="FileTemplateManagerImpl">
     <option name="RECENT_TEMPLATES">
@@ -345,7 +337,23 @@
       <option name="project" value="LOCAL" />
       <updated>1772922738201</updated>
     </task>
-    <option name="localTasksCounter" value="26" />
+    <task id="LOCAL-00026" summary="Ajout de MinIO pour les images">
+      <option name="closed" value="true" />
+      <created>1772923440342</created>
+      <option name="number" value="00026" />
+      <option name="presentableId" value="LOCAL-00026" />
+      <option name="project" value="LOCAL" />
+      <updated>1772923440342</updated>
+    </task>
+    <task id="LOCAL-00027" summary="Config MinIO">
+      <option name="closed" value="true" />
+      <created>1772923865594</created>
+      <option name="number" value="00027" />
+      <option name="presentableId" value="LOCAL-00027" />
+      <option name="project" value="LOCAL" />
+      <updated>1772923865594</updated>
+    </task>
+    <option name="localTasksCounter" value="28" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -374,7 +382,8 @@
     <MESSAGE value="Ajout des apis admin, credit, scoring" />
     <MESSAGE value="justement onboarding" />
     <MESSAGE value="Ajout de MinIO pour les images" />
-    <option name="LAST_COMMIT_MESSAGE" value="Ajout de MinIO pour les images" />
+    <MESSAGE value="Config MinIO" />
+    <option name="LAST_COMMIT_MESSAGE" value="Config MinIO" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />

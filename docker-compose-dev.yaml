@@ -51,7 +51,7 @@ services:
       - "traefik.http.routers.cc-app-backend-dev.middlewares=cc-app-backend-dev-strip,cc-app-backend-dev-addctx"
       - "traefik.http.middlewares.cc-app-backend-dev-strip.stripprefix.prefixes=/${CI_PROJECT_NAME}"
       - "traefik.http.middlewares.cc-app-backend-dev-addctx.addprefix.prefix=/cc-app-backend"
-      - "traefik.http.routers.cc-app-backend-dev-docs.rule=Host(`${API_DOMAIN}`) && (PathPrefix(`/cc-app-backend/v3/api-docs`) || PathPrefix(`/cc-app-backend/swagger-ui`) || Path(`/cc-app-backend/swagger-ui.html`))"
+      - "traefik.http.routers.cc-app-backend-dev-docs.rule=Host(`${API_DOMAIN}`) && (PathPrefix(`/cc-backend-monolitic/v3/api-docs`) || PathPrefix(`/cc-backend-monolitic/swagger-ui`) || Path(`/cc-backend-monolitic/swagger-ui.html`))"
       - "traefik.http.routers.cc-app-backend-dev-docs.entrypoints=websecure"
       - "traefik.http.routers.cc-app-backend-dev-docs.tls.certresolver=myresolver"
       - "traefik.http.routers.cc-app-backend-dev-docs.service=cc-app-backend-dev"
