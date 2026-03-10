@@ -12,6 +12,7 @@ import com.ccapp.identity.domain.entity.User;
 import com.ccapp.identity.domain.entity.UserProfile;
 import com.ccapp.identity.domain.enums.KycStatus;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,6 +21,7 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class AccountHolderService {
 
     private final AccountHolderRepository accountHolderRepository;
@@ -27,27 +29,31 @@ public class AccountHolderService {
 
     @Transactional(readOnly = true)
     public AccountHolder getById(UUID accountHolderId) {
+        log.info("Identity account-holder getById accountHolderId={}", accountHolderId);
         return accountHolderRepository.findById(accountHolderId)
                 .orElseThrow(() -> new NotFoundException("Account holder not found"));
     }
 
     @Transactional(readOnly = true)
     public boolean exists(UUID accountHolderId) {
+        log.debug("Identity account-holder exists check accountHolderId={}", accountHolderId);
         return accountHolderRepository.existsById(accountHolderId);
     }
 
     @Transactional
     public AccountHolder ensureFromLegacyUser(User user, UserProfile profile) {
+        log.info("Identity account-holder ensureFromLegacyUser userId={} firebaseUid={}", user.getId(), user.getFirebaseUid());
         String fallbackCountryCode = countryService.resolveFallbackCountry().getCode();
         String selectedCountryCode = null;
         String serviceCountryCode = fallbackCountryCode;
 
         AccountHolder existing = accountHolderRepository.findById(user.getId()).orElse(null);
         if (existing != null) {
+            log.debug("Identity account-holder already exists userId={} accountHolderId={}", user.getId(), existing.getId());
             return existing;
         }
 
-        return accountHolderRepository.save(AccountHolder.builder()
+        AccountHolder created = accountHolderRepository.save(AccountHolder.builder()
                 .id(user.getId())
                 .firstName(profile != null ? profile.getFirstName() : "Unknown")
                 .lastName(profile != null ? profile.getLastName() : "Unknown")
@@ -60,6 +66,8 @@ public class AccountHolderService {
                 .kycVerifiedAt(user.getKycStatus() == KycStatus.VERIFIED ? OffsetDateTime.now() : null)
                 .createdAt(user.getCreatedAt())
                 .build());
+        log.info("Identity account-holder created from legacy user accountHolderId={} serviceCountryCode={}", created.getId(), created.getServiceCountryCode());
+        return created;
     }
 
     @Transactional
@@ -68,17 +76,21 @@ public class AccountHolderService {
                                        String lastName,
                                        String phoneNumber,
                                        String requestedCountryCode) {
+        log.info("Identity account-holder updateProfile accountHolderId={} requestedCountryCode={}", accountHolderId, requestedCountryCode);
         AccountHolder accountHolder = getById(accountHolderId);
         String selectedCountryCode = countryService.resolveSelectedCountryOrThrow(requestedCountryCode).getCode();
         String serviceCountryCode = countryService.resolveServiceCountryForSelection(selectedCountryCode).getCode();
         String normalizedPhone = phoneNumber == null ? null : phoneNumber.trim();
 
         if (accountHolder.getCountryCode() != null && !accountHolder.getCountryCode().equalsIgnoreCase(selectedCountryCode)) {
+            log.warn("Identity account-holder updateProfile denied immutable country accountHolderId={} currentCountry={} requestedCountry={}",
+                    accountHolderId, accountHolder.getCountryCode(), selectedCountryCode);
             throw new BusinessException("Account holder country is immutable");
         }
         if (normalizedPhone != null
                 && !normalizedPhone.isBlank()
                 && accountHolderRepository.existsByPhoneNumberAndIdNot(normalizedPhone, accountHolderId)) {
+            log.warn("Identity account-holder updateProfile denied phone conflict accountHolderId={} phone={}", accountHolderId, normalizedPhone);
             throw new ConflictException("Phone number already used");
         }
 
@@ -90,6 +102,9 @@ public class AccountHolderService {
         if (accountHolder.getKycStatus() == KycStatus.NOT_STARTED) {
             accountHolder.setKycStatus(KycStatus.PENDING);
         }
-        return accountHolderRepository.save(accountHolder);
+        AccountHolder saved = accountHolderRepository.save(accountHolder);
+        log.info("Identity account-holder updateProfile success accountHolderId={} countryCode={} serviceCountryCode={}",
+                saved.getId(), saved.getCountryCode(), saved.getServiceCountryCode());
+        return saved;
     }
 }

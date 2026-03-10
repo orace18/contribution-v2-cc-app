@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -21,6 +22,7 @@ import java.util.List;
 @RequestMapping("/public")
 @RequiredArgsConstructor
 @Tag(name = "Public Onboarding Catalogs", description = "Onboarding public option catalogs")
+@Slf4j
 public class PublicOnboardingCatalogController {
 
     private final OnboardingCatalogService onboardingCatalogService;
@@ -31,6 +33,7 @@ public class PublicOnboardingCatalogController {
             @ApiResponse(responseCode = "200", description = "Success", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
     })
     public ResponseEntity<CommonResponse<List<OnboardingCatalogItemResponse>>> listActivitySectors() {
+        log.debug("PublicOnboardingCatalogController listActivitySectors");
         return ResponseEntity.ok(CommonResponse.success("Activity sectors", onboardingCatalogService.listActivitySectors()));
     }
 
@@ -40,6 +43,7 @@ public class PublicOnboardingCatalogController {
             @ApiResponse(responseCode = "200", description = "Success", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
     })
     public ResponseEntity<CommonResponse<List<OnboardingCatalogItemResponse>>> listIncomeBrackets() {
+        log.debug("PublicOnboardingCatalogController listIncomeBrackets");
         return ResponseEntity.ok(CommonResponse.success("Income brackets", onboardingCatalogService.listIncomeBrackets()));
     }
 }

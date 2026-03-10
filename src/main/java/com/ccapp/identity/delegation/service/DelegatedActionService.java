@@ -13,6 +13,7 @@ import com.ccapp.identity.delegation.domain.enums.DelegationStatus;
 import com.ccapp.identity.delegation.repository.AccountDelegationRepository;
 import com.ccapp.identity.delegation.repository.DelegatedActionRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,6 +23,7 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class DelegatedActionService {
 
     private final DelegatedActionRepository delegatedActionRepository;
@@ -31,7 +33,10 @@ public class DelegatedActionService {
 
     @Transactional
     public void log(UUID accountHolderId, UUID actorUserId, DelegatedActionType actionType, String payload) {
+        log.debug("Identity delegated-action log accountHolderId={} actorUserId={} actionType={}",
+                accountHolderId, actorUserId, actionType);
         if (accountHolderId == null || actorUserId == null || actionType == null) {
+            log.debug("Identity delegated-action skipped due to null values");
             return;
         }
         delegatedActionRepository.save(DelegatedAction.builder()
@@ -40,24 +45,33 @@ public class DelegatedActionService {
                 .actionType(actionType)
                 .payload(payload)
                 .build());
+        log.info("Identity delegated-action saved accountHolderId={} actorUserId={} actionType={}",
+                accountHolderId, actorUserId, actionType);
     }
 
     @Transactional
     public void logIfDelegatedActor(UUID accountHolderId, UUID actorUserId, DelegatedActionType actionType, String payload) {
+        log.debug("Identity delegated-action conditional log accountHolderId={} actorUserId={} actionType={}",
+                accountHolderId, actorUserId, actionType);
         if (accountHolderId == null || actorUserId == null || actionType == null) {
+            log.debug("Identity delegated-action conditional skipped due to null values");
             return;
         }
 
         Optional<AppUser> actorAppUser = appUserRepository.findById(actorUserId);
         if (actorAppUser.isEmpty()) {
+            log.debug("Identity delegated-action conditional skipped: actor appUser not found actorUserId={}", actorUserId);
             return;
         }
         if (accountHolderId.equals(actorAppUser.get().getAccountHolderId())) {
+            log.debug("Identity delegated-action conditional skipped: actor is owner accountHolderId={} actorUserId={}",
+                    accountHolderId, actorUserId);
             return;
         }
 
         Optional<AccountHolder> targetAccountHolder = accountHolderRepository.findById(accountHolderId);
         if (targetAccountHolder.isEmpty() || targetAccountHolder.get().getAccountType() != AccountType.ASSISTED) {
+            log.debug("Identity delegated-action conditional skipped: target not assisted accountHolderId={}", accountHolderId);
             return;
         }
 
@@ -68,14 +82,19 @@ public class DelegatedActionService {
                         DelegationStatus.ACTIVE
                 );
         if (delegation.isEmpty()) {
+            log.debug("Identity delegated-action conditional skipped: no active delegation accountHolderId={} actorUserId={}",
+                    accountHolderId, actorUserId);
             return;
         }
 
         AccountDelegation activeDelegation = delegation.get();
         if (activeDelegation.getRole() != DelegationRole.MANAGER) {
+            log.debug("Identity delegated-action conditional skipped: role not MANAGER delegationId={} role={}",
+                    activeDelegation.getId(), activeDelegation.getRole());
             return;
         }
         if (activeDelegation.getExpiresAt() != null && activeDelegation.getExpiresAt().isBefore(OffsetDateTime.now())) {
+            log.debug("Identity delegated-action conditional skipped: delegation expired delegationId={}", activeDelegation.getId());
             return;
         }
 

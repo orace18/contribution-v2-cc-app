@@ -2,6 +2,7 @@ package com.ccapp.identity.service;
 
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.identity.dto.OnboardingCatalogItemResponse;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -10,6 +11,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
+@Slf4j
 public class OnboardingCatalogService {
 
     private static final List<OnboardingCatalogItemResponse> ACTIVITY_SECTORS = List.of(
@@ -43,26 +45,32 @@ public class OnboardingCatalogService {
             .collect(Collectors.toUnmodifiableSet());
 
     public List<OnboardingCatalogItemResponse> listActivitySectors() {
+        log.debug("Identity onboarding-catalog listActivitySectors count={}", ACTIVITY_SECTORS.size());
         return ACTIVITY_SECTORS;
     }
 
     public List<OnboardingCatalogItemResponse> listIncomeBrackets() {
+        log.debug("Identity onboarding-catalog listIncomeBrackets count={}", INCOME_BRACKETS.size());
         return INCOME_BRACKETS;
     }
 
     public String normalizeAndValidateActivitySectorCode(String code) {
         String normalized = normalizeCode(code);
         if (!ACTIVITY_SECTOR_CODES.contains(normalized)) {
+            log.warn("Identity onboarding-catalog invalid activitySectorCode input={} normalized={}", code, normalized);
             throw new BusinessException("Unsupported activity sector");
         }
+        log.debug("Identity onboarding-catalog validated activitySectorCode={}", normalized);
         return normalized;
     }
 
     public String normalizeAndValidateIncomeBracketCode(String code) {
         String normalized = normalizeCode(code);
         if (!INCOME_BRACKET_CODES.contains(normalized)) {
+            log.warn("Identity onboarding-catalog invalid incomeBracketCode input={} normalized={}", code, normalized);
             throw new BusinessException("Unsupported income bracket");
         }
+        log.debug("Identity onboarding-catalog validated incomeBracketCode={}", normalized);
         return normalized;
     }
 

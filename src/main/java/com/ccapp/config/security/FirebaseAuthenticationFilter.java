@@ -11,6 +11,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -24,6 +25,7 @@ import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class FirebaseAuthenticationFilter extends OncePerRequestFilter {
 
     private final FirebaseTokenVerifier tokenVerifier;
@@ -56,6 +58,12 @@ public class FirebaseAuthenticationFilter extends OncePerRequestFilter {
         try {
             claims = tokenVerifier.verify(token);
         } catch (RuntimeException ex) {
+            log.warn(
+                    "Firebase auth failed path={} method={} reason={}",
+                    path,
+                    request.getMethod(),
+                    ex.getMessage()
+            );
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
             response.getWriter().write("{\"success\":false,\"message\":\"Invalid or expired token\",\"data\":null}");
@@ -64,6 +72,9 @@ public class FirebaseAuthenticationFilter extends OncePerRequestFilter {
 
         AppUser appUser = appUserRepository.findByFirebaseUid(claims.uid()).orElse(null);
         UUID legacyUserId = userRepository.findByFirebaseUid(claims.uid()).map(user -> user.getId()).orElse(null);
+        if (appUser == null && legacyUserId == null) {
+            log.warn("Firebase auth accepted but no local user mapping uid={}", claims.uid());
+        }
 
         AuthenticatedPrincipal principal = AuthenticatedPrincipal.builder()
                 .firebaseUid(claims.uid())

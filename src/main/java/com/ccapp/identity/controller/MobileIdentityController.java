@@ -16,6 +16,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -24,6 +25,7 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 @Tag(name = "Mobile Identity", description = "Mobile identity flows")
 @SecurityRequirement(name = "bearerAuth")
+@Slf4j
 public class MobileIdentityController {
 
     private final IdentityService identityService;
@@ -47,6 +49,7 @@ public class MobileIdentityController {
     public ResponseEntity<CommonResponse<LinkAssistedAccountResponse>> linkAccount(
             @Valid @RequestBody LinkAssistedAccountRequest request) {
         AuthenticatedPrincipal principal = SecurityUtils.currentPrincipal();
+        log.info("MobileIdentityController linkAccount firebaseUid={} phone={}", principal.firebaseUid(), request.phoneNumber());
         LinkAssistedAccountResponse response = identityService.linkAssistedAccount(
                 principal.firebaseUid(),
                 principal.email(),

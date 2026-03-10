@@ -15,6 +15,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -26,6 +27,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Tag(name = "Identity", description = "Gestion de l'identite, devices et sessions utilisateur")
 @SecurityRequirement(name = "bearerAuth")
+@Slf4j
 public class IdentityController {
 
     private final IdentityService identityService;
@@ -39,6 +41,8 @@ public class IdentityController {
     })
     public ResponseEntity<CommonResponse<SyncResponse>> sync(@Valid @RequestBody SyncRequest request, Authentication authentication) {
         FirebaseUserClaims claims = toClaims(authentication);
+        log.info("IdentityController sync firebaseUid={} platform={} deviceIdentifier={}",
+                claims.uid(), request.platform(), request.deviceIdentifier());
         return ResponseEntity.ok(CommonResponse.success("Identity synced", identityService.sync(claims, request)));
     }
 
@@ -52,6 +56,7 @@ public class IdentityController {
     })
     public ResponseEntity<CommonResponse<MeResponse>> onboarding(@Valid @RequestBody OnboardingRequest request) {
         UUID userId = SecurityUtils.currentUserId();
+        log.info("IdentityController onboarding userId={}", userId);
         return ResponseEntity.ok(CommonResponse.success("Onboarding updated", identityService.onboarding(userId, request)));
     }
 
@@ -64,6 +69,7 @@ public class IdentityController {
     })
     public ResponseEntity<CommonResponse<OnboardingStatusResponse>> onboardingStatus() {
         UUID userId = SecurityUtils.currentUserId();
+        log.debug("IdentityController onboardingStatus userId={}", userId);
         return ResponseEntity.ok(CommonResponse.success("Onboarding status", identityService.getOnboardingStatus(userId)));
     }
 
@@ -77,6 +83,7 @@ public class IdentityController {
     })
     public ResponseEntity<CommonResponse<OnboardingStatusResponse>> onboardingStep1(@Valid @RequestBody OnboardingStep1Request request) {
         UUID userId = SecurityUtils.currentUserId();
+        log.info("IdentityController onboardingStep1 userId={}", userId);
         return ResponseEntity.ok(CommonResponse.success("Onboarding step 1 updated", identityService.onboardingStep1(userId, request)));
     }
 
@@ -90,6 +97,7 @@ public class IdentityController {
     })
     public ResponseEntity<CommonResponse<OnboardingStatusResponse>> onboardingStep2(@Valid @RequestBody OnboardingStep2Request request) {
         UUID userId = SecurityUtils.currentUserId();
+        log.info("IdentityController onboardingStep2 userId={}", userId);
         return ResponseEntity.ok(CommonResponse.success("Onboarding step 2 updated", identityService.onboardingStep2(userId, request)));
     }
 
@@ -103,6 +111,7 @@ public class IdentityController {
     })
     public ResponseEntity<CommonResponse<OnboardingStatusResponse>> onboardingStep3(@Valid @RequestBody OnboardingStep3Request request) {
         UUID userId = SecurityUtils.currentUserId();
+        log.info("IdentityController onboardingStep3 userId={}", userId);
         return ResponseEntity.ok(CommonResponse.success("Onboarding step 3 updated", identityService.onboardingStep3(userId, request)));
     }
 
@@ -115,6 +124,7 @@ public class IdentityController {
     })
     public ResponseEntity<CommonResponse<MeResponse>> me() {
         UUID userId = SecurityUtils.currentUserId();
+        log.debug("IdentityController me userId={}", userId);
         return ResponseEntity.ok(CommonResponse.success("Current user", identityService.me(userId)));
     }
 
@@ -127,6 +137,8 @@ public class IdentityController {
     })
     public ResponseEntity<CommonResponse<UserDeviceDto>> registerDevice(@Valid @RequestBody RegisterDeviceRequest request) {
         UUID userId = SecurityUtils.currentUserId();
+        log.info("IdentityController registerDevice userId={} platform={} deviceIdentifier={}",
+                userId, request.platform(), request.deviceIdentifier());
         return ResponseEntity.ok(CommonResponse.success("Device upserted", identityService.registerDevice(userId, request)));
     }
 
@@ -139,6 +151,7 @@ public class IdentityController {
     })
     public ResponseEntity<CommonResponse<Void>> blockDevice(@PathVariable UUID deviceId) {
         UUID userId = SecurityUtils.currentUserId();
+        log.info("IdentityController blockDevice userId={} deviceId={}", userId, deviceId);
         identityService.blockDevice(userId, deviceId);
         return ResponseEntity.ok(CommonResponse.success("Device blocked"));
     }
@@ -151,6 +164,7 @@ public class IdentityController {
             @ApiResponse(responseCode = "401", description = "Refresh token invalide/expire", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
     })
     public ResponseEntity<CommonResponse<RefreshTokenResponse>> refresh(@Valid @RequestBody RefreshTokenRequest request) {
+        log.info("IdentityController refresh");
         return ResponseEntity.ok(CommonResponse.success("Refresh token rotated", identityService.rotateRefreshToken(request)));
     }
 
@@ -163,6 +177,7 @@ public class IdentityController {
     })
     public ResponseEntity<CommonResponse<Void>> revokeSession(@PathVariable UUID sessionId) {
         UUID userId = SecurityUtils.currentUserId();
+        log.info("IdentityController revokeSession userId={} sessionId={}", userId, sessionId);
         identityService.revokeSession(userId, sessionId);
         return ResponseEntity.ok(CommonResponse.success("Session revoked"));
     }

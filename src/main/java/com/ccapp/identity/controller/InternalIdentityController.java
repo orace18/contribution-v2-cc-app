@@ -12,6 +12,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -22,6 +23,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Tag(name = "Internal Identity", description = "Operations internes sur les comptes utilisateurs")
 @SecurityRequirement(name = "apiKeyAuth")
+@Slf4j
 public class InternalIdentityController {
 
     private final IdentityService identityService;
@@ -36,6 +38,7 @@ public class InternalIdentityController {
     })
     public ResponseEntity<CommonResponse<Void>> blockAccount(@PathVariable UUID userId,
                                                              @Valid @RequestBody BlockAccountRequest request) {
+        log.info("InternalIdentityController blockAccount userId={} reason={}", userId, request.reason());
         identityService.blockAccount(userId, request.reason());
         return ResponseEntity.ok(CommonResponse.success("Account blocked"));
     }

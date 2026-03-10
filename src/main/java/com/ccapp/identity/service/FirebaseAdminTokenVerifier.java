@@ -4,11 +4,13 @@ import com.ccapp.common.exception.UnauthorizedException;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseAuthException;
 import com.google.firebase.auth.FirebaseToken;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 @Service
 @ConditionalOnProperty(name = "firebase.auth.enabled", havingValue = "true")
+@Slf4j
 public class FirebaseAdminTokenVerifier implements FirebaseTokenVerifier {
 
     @Override
@@ -17,6 +19,11 @@ public class FirebaseAdminTokenVerifier implements FirebaseTokenVerifier {
             FirebaseToken decodedToken = FirebaseAuth.getInstance().verifyIdToken(token, true);
             return new FirebaseUserClaims(decodedToken.getUid(), decodedToken.getEmail());
         } catch (FirebaseAuthException e) {
+            log.warn(
+                    "Firebase token verification failed authErrorCode={} message={}",
+                    e.getAuthErrorCode(),
+                    e.getMessage()
+            );
             throw new UnauthorizedException("Invalid Firebase token");
         }
     }

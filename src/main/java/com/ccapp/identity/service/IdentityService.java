@@ -26,6 +26,7 @@ import com.ccapp.identity.repository.UserProfileRepository;
 import com.ccapp.identity.repository.UserRepository;
 import com.ccapp.identity.repository.UserSessionRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,6 +41,7 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class IdentityService {
 
     private final UserRepository userRepository;
@@ -62,6 +64,8 @@ public class IdentityService {
 
     @Transactional
     public SyncResponse sync(FirebaseUserClaims claims, SyncRequest request) {
+        log.info("Identity sync start firebaseUid={} platform={} deviceIdentifier={}",
+                claims.uid(), request.platform(), request.deviceIdentifier());
         User user = userRepository.findByFirebaseUid(claims.uid()).orElseGet(() -> userRepository.save(User.builder()
                 .firebaseUid(claims.uid())
                 .email(claims.email())
@@ -76,6 +80,7 @@ public class IdentityService {
         UserDevice device = upsertDevice(user, request.deviceIdentifier(), request.platform());
         SessionCreation sessionCreation = createSession(user, device);
 
+        log.info("Identity sync success userId={} sessionId={}", user.getId(), sessionCreation.session().getId());
         return new SyncResponse(
                 user.getId(),
                 user.getFirebaseUid(),
@@ -90,17 +95,20 @@ public class IdentityService {
 
     @Transactional
     public MeResponse onboarding(UUID userId, OnboardingRequest request) {
+        log.info("Identity onboarding shortcut start userId={}", userId);
         onboardingStep1(userId, new OnboardingStep1Request(
                 request.firstName(),
                 request.lastName(),
                 request.country(),
                 request.phone()
         ));
+        log.info("Identity onboarding shortcut completed userId={}", userId);
         return me(userId);
     }
 
     @Transactional
     public OnboardingStatusResponse getOnboardingStatus(UUID userId) {
+        log.debug("Identity onboarding status userId={}", userId);
         User user = findUser(userId);
         ensureAccountActive(user);
         UserProfile profile = userProfileRepository.findByUserId(userId)
@@ -114,6 +122,7 @@ public class IdentityService {
 
     @Transactional
     public OnboardingStatusResponse onboardingStep1(UUID userId, OnboardingStep1Request request) {
+        log.info("Identity onboarding step1 start userId={} requestedCountry={}", userId, request.country());
         User user = findUser(userId);
         ensureAccountActive(user);
 
@@ -139,11 +148,14 @@ public class IdentityService {
             userRepository.save(user);
         }
 
+        log.info("Identity onboarding step1 success userId={} canonicalCountry={}", userId, canonicalCountryCode);
         return buildOnboardingStatus(user, saved);
     }
 
     @Transactional
     public OnboardingStatusResponse onboardingStep2(UUID userId, OnboardingStep2Request request) {
+        log.info("Identity onboarding step2 start userId={} activitySectorCode={} incomeBracketCode={}",
+                userId, request.activitySectorCode(), request.monthlyIncomeBracketCode());
         User user = findUser(userId);
         ensureAccountActive(user);
 
@@ -151,6 +163,7 @@ public class IdentityService {
                 .orElseThrow(() -> new BusinessException("Onboarding step 1 must be completed first"));
 
         if (!isStep1Completed(profile)) {
+            log.warn("Identity onboarding step2 denied: step1 incomplete userId={}", userId);
             throw new BusinessException("Onboarding step 1 must be completed first");
         }
 
@@ -161,11 +174,13 @@ public class IdentityService {
         updateOnboardingState(profile);
 
         UserProfile saved = userProfileRepository.save(profile);
+        log.info("Identity onboarding step2 success userId={}", userId);
         return buildOnboardingStatus(user, saved);
     }
 
     @Transactional
     public OnboardingStatusResponse onboardingStep3(UUID userId, OnboardingStep3Request request) {
+        log.info("Identity onboarding step3 start userId={} availableCapital={}", userId, request.availableCapital());
         User user = findUser(userId);
         ensureAccountActive(user);
 
@@ -173,15 +188,19 @@ public class IdentityService {
                 .orElseThrow(() -> new BusinessException("Onboarding step 1 must be completed first"));
 
         if (!isStep1Completed(profile)) {
+            log.warn("Identity onboarding step3 denied: step1 incomplete userId={}", userId);
             throw new BusinessException("Onboarding step 1 must be completed first");
         }
         if (!isStep2Completed(profile)) {
+            log.warn("Identity onboarding step3 denied: step2 incomplete userId={}", userId);
             throw new BusinessException("Onboarding step 2 must be completed first");
         }
         if (!Boolean.TRUE.equals(request.solidarityGuaranteeAccepted())) {
+            log.warn("Identity onboarding step3 denied: solidarity not accepted userId={}", userId);
             throw new BusinessException("Solidarity guarantee acceptance is required");
         }
         if (!Boolean.TRUE.equals(request.termsAccepted())) {
+            log.warn("Identity onboarding step3 denied: terms not accepted userId={}", userId);
             throw new BusinessException("Terms acceptance is required");
         }
 
@@ -194,11 +213,13 @@ public class IdentityService {
         updateOnboardingState(profile);
 
         UserProfile saved = userProfileRepository.save(profile);
+        log.info("Identity onboarding step3 success userId={} onboardingCompleted={}", userId, saved.isOnboardingCompleted());
         return buildOnboardingStatus(user, saved);
     }
 
     @Transactional(readOnly = true)
     public MeResponse me(UUID userId) {
+        log.debug("Identity me userId={}", userId);
         User user = findUser(userId);
         UserProfileDto profile = userProfileRepository.findByUserId(userId)
                 .map(identityMapper::toDto)
@@ -226,6 +247,8 @@ public class IdentityService {
 
     @Transactional
     public UserDeviceDto registerDevice(UUID userId, RegisterDeviceRequest request) {
+        log.info("Identity registerDevice userId={} platform={} deviceIdentifier={}",
+                userId, request.platform(), request.deviceIdentifier());
         User user = findUser(userId);
         ensureAccountActive(user);
         return identityMapper.toDto(upsertDevice(user, request.deviceIdentifier(), request.platform()));
@@ -233,9 +256,12 @@ public class IdentityService {
 
     @Transactional
     public void blockDevice(UUID userId, UUID deviceId) {
+        log.info("Identity blockDevice userId={} deviceId={}", userId, deviceId);
         UserDevice device = userDeviceRepository.findById(deviceId)
                 .orElseThrow(() -> new NotFoundException("Device not found"));
         if (!device.getUser().getId().equals(userId)) {
+            log.warn("Identity blockDevice denied userId={} deviceId={} ownerUserId={}",
+                    userId, deviceId, device.getUser().getId());
             throw new UnauthorizedException("Cannot block another user device");
         }
         device.setBlocked(true);
@@ -248,22 +274,29 @@ public class IdentityService {
                 .filter(session -> session.getDevice().getId().equals(deviceId))
                 .forEach(session -> session.setRevokedAt(revokedAt));
         userSessionRepository.saveAll(activeSessions);
+        log.info("Identity blockDevice success userId={} deviceId={} affectedSessions={}",
+                userId, deviceId, activeSessions.stream().filter(session -> session.getDevice().getId().equals(deviceId)).count());
     }
 
     @Transactional
     public RefreshTokenResponse rotateRefreshToken(RefreshTokenRequest request) {
+        log.info("Identity rotateRefreshToken start");
         String hash = refreshTokenService.hash(request.refreshToken());
         UserSession currentSession = userSessionRepository.findByRefreshTokenHash(hash)
                 .orElseThrow(() -> new UnauthorizedException("Invalid refresh token"));
 
         OffsetDateTime now = OffsetDateTime.now();
         if (currentSession.getRevokedAt() != null || currentSession.getExpiresAt().isBefore(now)) {
+            log.warn("Identity rotateRefreshToken denied sessionId={} revokedAt={} expiresAt={}",
+                    currentSession.getId(), currentSession.getRevokedAt(), currentSession.getExpiresAt());
             throw new UnauthorizedException("Refresh token expired or revoked");
         }
 
         User user = currentSession.getUser();
         ensureAccountActive(user);
         if (currentSession.getDevice().isBlocked()) {
+            log.warn("Identity rotateRefreshToken denied blocked device sessionId={} deviceId={}",
+                    currentSession.getId(), currentSession.getDevice().getId());
             throw new UnauthorizedException("Device is blocked");
         }
 
@@ -271,25 +304,33 @@ public class IdentityService {
         userSessionRepository.save(currentSession);
 
         SessionCreation newSession = createSession(user, currentSession.getDevice());
+        log.info("Identity rotateRefreshToken success oldSessionId={} newSessionId={}",
+                currentSession.getId(), newSession.session().getId());
         return new RefreshTokenResponse(newSession.session().getId(), newSession.rawRefreshToken());
     }
 
     @Transactional
     public void revokeSession(UUID userId, UUID sessionId) {
+        log.info("Identity revokeSession userId={} sessionId={}", userId, sessionId);
         UserSession session = userSessionRepository.findById(sessionId)
                 .orElseThrow(() -> new NotFoundException("Session not found"));
         if (!session.getUser().getId().equals(userId)) {
+            log.warn("Identity revokeSession denied userId={} sessionId={} ownerUserId={}",
+                    userId, sessionId, session.getUser().getId());
             throw new UnauthorizedException("Cannot revoke another user session");
         }
         session.setRevokedAt(OffsetDateTime.now());
         userSessionRepository.save(session);
+        log.info("Identity revokeSession success userId={} sessionId={}", userId, sessionId);
     }
 
     @Transactional
     public LinkAssistedAccountResponse linkAssistedAccount(String firebaseUid,
                                                            String email,
                                                            LinkAssistedAccountRequest request) {
+        log.info("Identity linkAssistedAccount start firebaseUid={} phone={}", firebaseUid, request.phoneNumber());
         if (firebaseUid == null || firebaseUid.isBlank()) {
+            log.warn("Identity linkAssistedAccount denied: missing firebaseUid");
             throw new UnauthorizedException("Firebase identity is required");
         }
 
@@ -297,12 +338,16 @@ public class IdentityService {
         AccountHolder accountHolder = accountHolderRepository.findByPhoneNumber(normalizedPhone)
                 .orElseThrow(() -> new NotFoundException("Account holder not found"));
         if (accountHolder.getAccountType() != AccountType.ASSISTED) {
+            log.warn("Identity linkAssistedAccount denied: accountHolder not assisted accountHolderId={} accountType={}",
+                    accountHolder.getId(), accountHolder.getAccountType());
             throw new BusinessException("ASSISTED_ACCOUNT_REQUIRED");
         }
 
         Optional<AppUser> existingByFirebaseUid = appUserRepository.findByFirebaseUid(firebaseUid);
         if (existingByFirebaseUid.isPresent()
                 && !existingByFirebaseUid.get().getAccountHolderId().equals(accountHolder.getId())) {
+            log.warn("Identity linkAssistedAccount denied: firebaseUid already linked firebaseUid={} linkedAccountHolderId={} targetAccountHolderId={}",
+                    firebaseUid, existingByFirebaseUid.get().getAccountHolderId(), accountHolder.getId());
             throw new ConflictException("Firebase account already linked");
         }
 
@@ -316,6 +361,7 @@ public class IdentityService {
                         .build()));
 
         if (user.getAccountStatus() != AccountStatus.ACTIVE) {
+            log.warn("Identity linkAssistedAccount denied: inactive user userId={} status={}", user.getId(), user.getAccountStatus());
             throw new BusinessException("Account is not active");
         }
         if (email != null && !email.isBlank() && (user.getEmail() == null || user.getEmail().isBlank())) {
@@ -327,6 +373,8 @@ public class IdentityService {
         appUserRepository.findById(user.getId())
                 .filter(existing -> !existing.getFirebaseUid().equals(firebaseUid))
                 .ifPresent(existing -> {
+                    log.warn("Identity linkAssistedAccount denied: appUser id collision userId={} existingFirebaseUid={} requestedFirebaseUid={}",
+                            user.getId(), existing.getFirebaseUid(), firebaseUid);
                     throw new ConflictException("Identity already linked");
                 });
 
@@ -338,9 +386,12 @@ public class IdentityService {
                 .createdAt(OffsetDateTime.now())
                 .build()));
         if (!appUser.getId().equals(user.getId())) {
+            log.warn("Identity linkAssistedAccount denied: inconsistent mapping appUserId={} userId={}", appUser.getId(), user.getId());
             throw new ConflictException("Inconsistent identity mapping");
         }
         if (!appUser.getAccountHolderId().equals(accountHolder.getId())) {
+            log.warn("Identity linkAssistedAccount denied: accountHolder mismatch appUserId={} appUserAccountHolderId={} targetAccountHolderId={}",
+                    appUser.getId(), appUser.getAccountHolderId(), accountHolder.getId());
             throw new ConflictException("Account already linked to a different holder");
         }
 
@@ -360,6 +411,8 @@ public class IdentityService {
         accountHolder.setAccountType(AccountType.STANDARD);
         accountHolderRepository.save(accountHolder);
 
+        log.info("Identity linkAssistedAccount success firebaseUid={} appUserId={} accountHolderId={}",
+                firebaseUid, appUser.getId(), accountHolder.getId());
         return new LinkAssistedAccountResponse(
                 appUser.getId(),
                 accountHolder.getId(),
@@ -372,6 +425,7 @@ public class IdentityService {
 
     @Transactional
     public void blockAccount(UUID userId, String reason) {
+        log.info("Identity blockAccount userId={} reason={}", userId, reason);
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new NotFoundException("User not found"));
         user.setAccountStatus(AccountStatus.BLOCKED);
@@ -382,14 +436,17 @@ public class IdentityService {
         List<UserSession> activeSessions = userSessionRepository.findByUserIdAndRevokedAtIsNullAndExpiresAtAfter(user.getId(), revokedAt);
         activeSessions.forEach(session -> session.setRevokedAt(revokedAt));
         userSessionRepository.saveAll(activeSessions);
+        log.info("Identity blockAccount success userId={} revokedSessions={}", userId, activeSessions.size());
     }
 
     private User findUser(UUID userId) {
+        log.debug("Identity findUser userId={}", userId);
         return userRepository.findById(userId)
                 .orElseThrow(() -> new NotFoundException("User not found"));
     }
 
     private UserProfile getOrCreateProfile(User user) {
+        log.debug("Identity getOrCreateProfile userId={}", user.getId());
         return userProfileRepository.findByUserId(user.getId())
                 .orElseGet(() -> UserProfile.builder()
                         .user(user)
@@ -401,6 +458,7 @@ public class IdentityService {
     }
 
     private UserDevice upsertDevice(User user, String deviceIdentifier, com.ccapp.identity.domain.enums.Platform platform) {
+        log.debug("Identity upsertDevice userId={} deviceIdentifier={} platform={}", user.getId(), deviceIdentifier, platform);
         UserDevice device = userDeviceRepository.findByUserIdAndDeviceIdentifierAndDeletedFalse(user.getId(), deviceIdentifier)
                 .orElseGet(() -> UserDevice.builder()
                         .user(user)
@@ -413,11 +471,15 @@ public class IdentityService {
             device.setBlocked(false);
             device.setBlockedAt(null);
         }
-        return userDeviceRepository.save(device);
+        UserDevice saved = userDeviceRepository.save(device);
+        log.debug("Identity upsertDevice saved deviceId={} userId={}", saved.getId(), user.getId());
+        return saved;
     }
 
     private SessionCreation createSession(User user, UserDevice device) {
+        log.debug("Identity createSession userId={} deviceId={}", user.getId(), device.getId());
         if (device.isBlocked()) {
+            log.warn("Identity createSession denied: blocked device userId={} deviceId={}", user.getId(), device.getId());
             throw new UnauthorizedException("Device is blocked");
         }
         String rawRefreshToken = refreshTokenService.generateToken();
@@ -430,16 +492,19 @@ public class IdentityService {
                 .expiresAt(OffsetDateTime.now().plusHours(refreshTtlHours))
                 .build();
         userSessionRepository.save(session);
+        log.debug("Identity createSession success userId={} sessionId={}", user.getId(), session.getId());
         return new SessionCreation(session, rawRefreshToken);
     }
 
     private void ensureAccountActive(User user) {
         if (user.getAccountStatus() != AccountStatus.ACTIVE) {
+            log.warn("Identity ensureAccountActive failed userId={} status={}", user.getId(), user.getAccountStatus());
             throw new BusinessException("Account is not active");
         }
     }
 
     private void ensureDelegatedIdentityModel(User user) {
+        log.debug("Identity ensureDelegatedIdentityModel userId={} firebaseUid={}", user.getId(), user.getFirebaseUid());
         UserProfile profile = userProfileRepository.findByUserId(user.getId()).orElse(null);
         Optional<AppUser> existingAppUser = appUserRepository.findById(user.getId())
                 .or(() -> appUserRepository.findByFirebaseUid(user.getFirebaseUid()));
@@ -458,9 +523,11 @@ public class IdentityService {
                 .role(user.getRole())
                 .createdAt(user.getCreatedAt())
                 .build());
+        log.debug("Identity ensureDelegatedIdentityModel migrated legacy userId={}", user.getId());
     }
 
     private void updateOnboardingState(UserProfile profile) {
+        log.debug("Identity updateOnboardingState userId={}", profile.getUser() != null ? profile.getUser().getId() : null);
         boolean step1Completed = isStep1Completed(profile);
         boolean step2Completed = step1Completed && isStep2Completed(profile);
         boolean step3Completed = step2Completed && isStep3Completed(profile);
@@ -519,6 +586,7 @@ public class IdentityService {
     }
 
     private OnboardingStatusResponse buildOnboardingStatus(User user, UserProfile profile) {
+        log.debug("Identity buildOnboardingStatus userId={} hasProfile={}", user.getId(), profile != null);
         boolean step1Completed = profile != null && isStep1Completed(profile);
         boolean step2Completed = profile != null && step1Completed && isStep2Completed(profile);
         boolean step3Completed = profile != null && step2Completed && isStep3Completed(profile);

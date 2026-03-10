@@ -9,6 +9,7 @@ import com.ccapp.identity.delegation.domain.enums.DelegationStatus;
 import com.ccapp.identity.delegation.domain.enums.PermissionLevel;
 import com.ccapp.identity.delegation.repository.AccountDelegationRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,6 +21,7 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class DelegationService {
 
     private final AccountDelegationRepository accountDelegationRepository;
@@ -31,11 +33,13 @@ public class DelegationService {
                                               UUID delegateUserId,
                                               PermissionLevel permissionLevel,
                                               OffsetDateTime expiresAt) {
+        log.info("Identity delegation create accountHolderId={} delegateUserId={} permissionLevel={} expiresAt={}",
+                accountHolderId, delegateUserId, permissionLevel, expiresAt);
         accountHolderService.getById(accountHolderId);
         appUserRepository.findById(delegateUserId)
                 .orElseThrow(() -> new NotFoundException("Delegate app user not found"));
 
-        return accountDelegationRepository.save(AccountDelegation.builder()
+        AccountDelegation delegation = accountDelegationRepository.save(AccountDelegation.builder()
                 .accountHolderId(accountHolderId)
                 .delegateUserId(delegateUserId)
                 .permissionLevel(permissionLevel)
@@ -43,15 +47,20 @@ public class DelegationService {
                 .status(DelegationStatus.ACTIVE)
                 .expiresAt(expiresAt)
                 .build());
+        log.info("Identity delegation created id={} accountHolderId={} delegateUserId={}",
+                delegation.getId(), delegation.getAccountHolderId(), delegation.getDelegateUserId());
+        return delegation;
     }
 
     @Transactional
     public AccountDelegation createManagerDelegation(UUID accountHolderId, UUID delegateUserId) {
+        log.info("Identity delegation createManagerDelegation accountHolderId={} delegateUserId={}", accountHolderId, delegateUserId);
         return createDelegation(accountHolderId, delegateUserId, PermissionLevel.FULL, null);
     }
 
     @Transactional(readOnly = true)
     public Optional<PermissionLevel> getPermission(UUID accountHolderId, UUID delegateUserId) {
+        log.debug("Identity delegation getPermission accountHolderId={} delegateUserId={}", accountHolderId, delegateUserId);
         Optional<AccountDelegation> latest = accountDelegationRepository
                 .findFirstByAccountHolderIdAndDelegateUserIdAndStatusOrderByCreatedAtDesc(
                         accountHolderId,
@@ -64,6 +73,8 @@ public class DelegationService {
 
         AccountDelegation delegation = latest.get();
         if (delegation.getExpiresAt() != null && delegation.getExpiresAt().isBefore(OffsetDateTime.now())) {
+            log.debug("Identity delegation expired accountHolderId={} delegateUserId={} delegationId={}",
+                    accountHolderId, delegateUserId, delegation.getId());
             return Optional.empty();
         }
         return Optional.of(delegation.getPermissionLevel());
@@ -71,14 +82,17 @@ public class DelegationService {
 
     @Transactional(readOnly = true)
     public List<AccountDelegation> getActiveDelegationsForDelegate(UUID delegateUserId) {
+        log.debug("Identity delegation getActiveDelegationsForDelegate delegateUserId={}", delegateUserId);
         List<AccountDelegation> result = new ArrayList<>();
         result.addAll(accountDelegationRepository.findByDelegateUserIdAndStatusAndExpiresAtIsNull(delegateUserId, DelegationStatus.ACTIVE));
         result.addAll(accountDelegationRepository.findByDelegateUserIdAndStatusAndExpiresAtAfter(delegateUserId, DelegationStatus.ACTIVE, OffsetDateTime.now()));
+        log.debug("Identity delegation active count delegateUserId={} count={}", delegateUserId, result.size());
         return result;
     }
 
     @Transactional(readOnly = true)
     public Optional<AccountDelegation> findActiveManagerDelegation(UUID accountHolderId) {
+        log.debug("Identity delegation findActiveManagerDelegation accountHolderId={}", accountHolderId);
         return accountDelegationRepository.findFirstByAccountHolderIdAndStatusOrderByCreatedAtDesc(
                 accountHolderId,
                 DelegationStatus.ACTIVE
@@ -88,6 +102,7 @@ public class DelegationService {
 
     @Transactional
     public void deactivateActiveDelegations(UUID accountHolderId) {
+        log.info("Identity delegation deactivateActiveDelegations accountHolderId={}", accountHolderId);
         OffsetDateTime now = OffsetDateTime.now();
         List<AccountDelegation> activeDelegations = accountDelegationRepository.findByAccountHolderIdAndStatus(
                 accountHolderId,
@@ -98,5 +113,6 @@ public class DelegationService {
             delegation.setExpiresAt(now);
         });
         accountDelegationRepository.saveAll(activeDelegations);
+        log.info("Identity delegation deactivated accountHolderId={} count={}", accountHolderId, activeDelegations.size());
     }
 }
