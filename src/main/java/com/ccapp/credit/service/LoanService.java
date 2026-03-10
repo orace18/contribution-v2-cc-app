@@ -9,8 +9,8 @@ import com.ccapp.circlesocial.domain.enums.ActivityType;
 import com.ccapp.circlesocial.service.CircleActivityService;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.common.exception.NotFoundException;
-import com.ccapp.country.domain.entity.Country;
-import com.ccapp.country.service.CountryService;
+import com.ccapp.country.dto.CountryContext;
+import com.ccapp.country.service.CountryContextService;
 import com.ccapp.credit.domain.entity.Loan;
 import com.ccapp.credit.domain.entity.RepaymentSchedule;
 import com.ccapp.credit.domain.enums.InstallmentStatus;
@@ -21,7 +21,6 @@ import com.ccapp.credit.dto.LoanResponse;
 import com.ccapp.credit.dto.RepaymentScheduleResponse;
 import com.ccapp.credit.repository.LoanRepository;
 import com.ccapp.credit.repository.RepaymentScheduleRepository;
-import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
 import com.ccapp.identity.account_holder.service.AccountHolderService;
 import com.ccapp.identity.delegation.domain.enums.PermissionLevel;
 import com.ccapp.identity.delegation.service.AccessControlService;
@@ -52,7 +51,7 @@ public class LoanService {
     private final CircleMemberRepository circleMemberRepository;
     private final AccessControlService accessControlService;
     private final CreditScoringService creditScoringService;
-    private final CountryService countryService;
+    private final CountryContextService countryContextService;
     private final AdminPolicyRepository adminPolicyRepository;
     private final OperationService operationService;
     private final AccountingPostingService accountingPostingService;
@@ -64,23 +63,23 @@ public class LoanService {
             throw new BusinessException("Actor user is required");
         }
 
-        AccountHolder accountHolder = accountHolderService.getById(accountHolderId);
+        CountryContext countryContext = countryContextService.resolve(accountHolderId);
+        String serviceCountryCode = countryContext.serviceCountryCode();
         accessControlService.assertCanActOnAccountHolder(actorUserId, accountHolderId, PermissionLevel.TRANSACT);
-        Country country = countryService.resolveServiceCountryByCodeOrFallback(accountHolder.getServiceCountryCode());
-        ensureCreditPolicyConfigured(country.getCode());
+        ensureCreditPolicyConfigured(serviceCountryCode);
 
         var circle = circleRepository.findByIdAndStatus(request.circleId(), CircleStatus.ACTIVE)
                 .orElse(null);
         if (circle == null) {
             throw new BusinessException("Circle not found");
         }
-        if (!country.getCode().equalsIgnoreCase(circle.getCountryCode())) {
+        if (!serviceCountryCode.equalsIgnoreCase(circle.getCountryCode())) {
             throw new BusinessException("Circle country must match account holder service country");
         }
         if (!circleMemberRepository.existsByCircle_IdAndAccountHolderId(request.circleId(), accountHolderId)) {
             throw new BusinessException("Account holder is not a member of this circle");
         }
-        if (!country.getCurrency().equalsIgnoreCase(request.currency())) {
+        if (!countryContext.currency().equalsIgnoreCase(request.currency())) {
             throw new BusinessException("Loan currency must match account holder country currency");
         }
 
@@ -89,7 +88,7 @@ public class LoanService {
         Loan loan = Loan.builder()
                 .accountHolderId(accountHolderId)
                 .circleId(request.circleId())
-                .countryCode(country.getCode())
+                .countryCode(serviceCountryCode)
                 .amount(request.amount())
                 .currency(request.currency().toUpperCase())
                 .interestRate(request.interestRate())

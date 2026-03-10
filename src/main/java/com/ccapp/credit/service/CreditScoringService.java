@@ -5,15 +5,14 @@ import com.ccapp.circles.domain.enums.CircleStatus;
 import com.ccapp.circles.repository.CircleRepository;
 import com.ccapp.circlesocial.service.CircleScoreService;
 import com.ccapp.common.exception.NotFoundException;
-import com.ccapp.country.service.CountryService;
+import com.ccapp.country.dto.CountryContext;
+import com.ccapp.country.service.CountryContextService;
 import com.ccapp.credit.config.CreditScoringProperties;
 import com.ccapp.credit.domain.entity.CreditEligibility;
 import com.ccapp.credit.dto.CreditEligibilityResponse;
 import com.ccapp.credit.repository.CreditEligibilityRepository;
 import com.ccapp.credit.service.scoring.CreditScoreFactor;
 import com.ccapp.credit.service.scoring.CreditScoringContext;
-import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
-import com.ccapp.identity.account_holder.service.AccountHolderService;
 import com.ccapp.identity.delegation.domain.enums.PermissionLevel;
 import com.ccapp.identity.delegation.service.AccessControlService;
 import com.ccapp.progress.service.ProgressService;
@@ -35,10 +34,9 @@ public class CreditScoringService {
     private static final BigDecimal HUNDRED = BigDecimal.valueOf(100);
     private static final BigDecimal BASE_MAX_ELIGIBLE_AMOUNT = new BigDecimal("1000000");
 
-    private final AccountHolderService accountHolderService;
     private final AccessControlService accessControlService;
     private final CircleRepository circleRepository;
-    private final CountryService countryService;
+    private final CountryContextService countryContextService;
     private final CircleScoreService circleScoreService;
     private final ProgressService progressService;
     private final CreditEligibilityRepository creditEligibilityRepository;
@@ -53,8 +51,8 @@ public class CreditScoringService {
 
     @Transactional
     public CreditEligibilityResponse evaluateEligibility(UUID accountHolderId, UUID circleId) {
-        AccountHolder accountHolder = ensureAccountHolderExists(accountHolderId);
-        String countryCode = countryService.resolveServiceCountryByCodeOrFallback(accountHolder.getServiceCountryCode()).getCode();
+        CountryContext countryContext = countryContextService.resolve(accountHolderId);
+        String countryCode = countryContext.serviceCountryCode();
 
         UUID resolvedCircleId = resolveCircleId(accountHolderId, circleId, countryCode);
         CreditScoringContext context = new CreditScoringContext(
@@ -149,14 +147,6 @@ public class CreditScoringService {
             return null;
         }
         return activeCircles.get(0).getId();
-    }
-
-    private AccountHolder ensureAccountHolderExists(UUID accountHolderId) {
-        try {
-            return accountHolderService.getById(accountHolderId);
-        } catch (NotFoundException ex) {
-            throw new NotFoundException("Account holder not found");
-        }
     }
 
     private CreditEligibilityResponse toResponse(CreditEligibility eligibility) {

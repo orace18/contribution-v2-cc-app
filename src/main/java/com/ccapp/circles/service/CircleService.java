@@ -2,9 +2,8 @@ package com.ccapp.circles.service;
 
 import com.ccapp.circles.domain.entity.Circle;
 import com.ccapp.circles.domain.entity.CircleMember;
-import com.ccapp.country.service.CountryService;
-import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
-import com.ccapp.identity.account_holder.service.AccountHolderService;
+import com.ccapp.country.dto.CountryContext;
+import com.ccapp.country.service.CountryContextService;
 import com.ccapp.circlesocial.domain.enums.ActivityType;
 import com.ccapp.circlesocial.service.CircleActivityService;
 import com.ccapp.circles.domain.enums.CircleMemberRole;
@@ -28,12 +27,12 @@ import java.util.UUID;
 public class CircleService {
 
     private static final long MAX_MEMBERS_PER_CIRCLE = 5;
+    private static final String CROSS_COUNTRY_CIRCLE_NOT_ALLOWED = "CROSS_COUNTRY_CIRCLE_NOT_ALLOWED";
 
     private final CircleRepository circleRepository;
     private final CircleMemberRepository circleMemberRepository;
     private final CircleActivityService circleActivityService;
-    private final AccountHolderService accountHolderService;
-    private final CountryService countryService;
+    private final CountryContextService countryContextService;
 
     @Transactional
     public CircleResponse createCircle(UUID accountHolderId, CreateCircleRequest request) {
@@ -73,7 +72,7 @@ public class CircleService {
                 .orElseThrow(() -> new NotFoundException("Active circle not found"));
 
         if (!accountHolderCountry.equalsIgnoreCase(circle.getCountryCode())) {
-            throw new BusinessException("Member country must match circle country");
+            throw new BusinessException(CROSS_COUNTRY_CIRCLE_NOT_ALLOWED);
         }
 
         if (circleMemberRepository.existsByCircle_IdAndAccountHolderId(circleId, accountHolderId)) {
@@ -143,8 +142,8 @@ public class CircleService {
     }
 
     private String resolveAccountHolderCountry(UUID accountHolderId) {
-        AccountHolder accountHolder = accountHolderService.getById(accountHolderId);
-        return countryService.resolveServiceCountryByCodeOrFallback(accountHolder.getServiceCountryCode()).getCode();
+        CountryContext context = countryContextService.resolve(accountHolderId);
+        return context.serviceCountryCode();
     }
 
     private CircleResponse toCircleResponse(Circle circle, int membersCount) {

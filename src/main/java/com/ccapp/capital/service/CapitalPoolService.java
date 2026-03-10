@@ -12,9 +12,8 @@ import com.ccapp.circles.domain.entity.Circle;
 import com.ccapp.circles.repository.CircleRepository;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.common.exception.NotFoundException;
-import com.ccapp.country.service.CountryService;
-import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
-import com.ccapp.identity.account_holder.service.AccountHolderService;
+import com.ccapp.country.dto.CountryContext;
+import com.ccapp.country.service.CountryContextService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,8 +29,7 @@ public class CapitalPoolService {
     private final CapitalPoolRepository capitalPoolRepository;
     private final FundRepository fundRepository;
     private final CircleRepository circleRepository;
-    private final AccountHolderService accountHolderService;
-    private final CountryService countryService;
+    private final CountryContextService countryContextService;
     private final AdminPolicyRepository adminPolicyRepository;
 
     @Transactional
@@ -39,7 +37,8 @@ public class CapitalPoolService {
         Fund fund = fundRepository.findById(request.fundId())
                 .orElseThrow(() -> new NotFoundException("Fund not found"));
 
-        String countryCode = resolveAccountHolderCountryCode(accountHolderId);
+        CountryContext countryContext = countryContextService.resolve(accountHolderId);
+        String countryCode = countryContext.serviceCountryCode();
         Circle circle = circleRepository.findByIdAndCountryCode(request.circleId(), countryCode)
                 .orElseThrow(() -> new NotFoundException("Circle not found for account holder country"));
 
@@ -98,7 +97,8 @@ public class CapitalPoolService {
 
     @Transactional(readOnly = true)
     public List<CapitalPoolResponse> listPools(UUID accountHolderId, UUID circleId) {
-        String countryCode = resolveAccountHolderCountryCode(accountHolderId);
+        CountryContext countryContext = countryContextService.resolve(accountHolderId);
+        String countryCode = countryContext.serviceCountryCode();
         List<CapitalPool> pools = circleId == null
                 ? capitalPoolRepository.findByCountryCodeOrderByIdDesc(countryCode)
                 : capitalPoolRepository.findByCircleIdAndCountryCodeOrderByIdDesc(circleId, countryCode);
@@ -112,11 +112,6 @@ public class CapitalPoolService {
                 ? capitalPoolRepository.findAll()
                 : capitalPoolRepository.findByCircleIdOrderByIdDesc(circleId);
         return pools.stream().map(this::toResponse).toList();
-    }
-
-    private String resolveAccountHolderCountryCode(UUID accountHolderId) {
-        AccountHolder accountHolder = accountHolderService.getById(accountHolderId);
-        return countryService.resolveServiceCountryByCodeOrFallback(accountHolder.getServiceCountryCode()).getCode();
     }
 
     private void ensureSeedCapitalPolicyConfigured(String countryCode) {

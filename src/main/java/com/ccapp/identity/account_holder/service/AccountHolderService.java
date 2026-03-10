@@ -35,17 +35,9 @@ public class AccountHolderService {
 
     @Transactional
     public AccountHolder ensureFromLegacyUser(User user, UserProfile profile) {
+        String fallbackCountryCode = countryService.resolveFallbackCountry().getCode();
         String selectedCountryCode = null;
-        if (profile != null && profile.getCountry() != null && !profile.getCountry().isBlank()) {
-            try {
-                selectedCountryCode = countryService.resolveSelectedCountryOrThrow(profile.getCountry()).getCode();
-            } catch (BusinessException ex) {
-                selectedCountryCode = countryService.resolveFallbackCountry().getCode();
-            }
-        }
-        String serviceCountryCode = selectedCountryCode != null
-                ? countryService.resolveServiceCountryForSelection(selectedCountryCode).getCode()
-                : countryService.resolveFallbackCountry().getCode();
+        String serviceCountryCode = fallbackCountryCode;
 
         AccountHolder existing = accountHolderRepository.findById(user.getId()).orElse(null);
         if (existing != null) {

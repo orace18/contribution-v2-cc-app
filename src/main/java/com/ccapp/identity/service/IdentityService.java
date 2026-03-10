@@ -385,7 +385,6 @@ public class IdentityService {
     private boolean isStep1Completed(UserProfile profile) {
         return hasText(profile.getFirstName())
                 && hasText(profile.getLastName())
-                && hasText(profile.getCountry())
                 && hasText(profile.getPhone());
     }
 

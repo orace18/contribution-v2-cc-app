@@ -6,8 +6,27 @@
   <component name="ChangeListManager">
     <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Configuration pays">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/capital/service/CapitalFundingService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/capital/service/CapitalFundingService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/capital/service/CapitalPoolService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/capital/service/CapitalPoolService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/service/CircleService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/service/CircleService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/credit/service/CreditScoringService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/credit/service/CreditScoringService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/credit/service/LoanService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/credit/service/LoanService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/account_holder/service/AccountHolderService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/account_holder/service/AccountHolderService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/service/IdentityService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/service/IdentityService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/payments/subscription/service/SubscriptionService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/payments/subscription/service/SubscriptionService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/capital/service/CapitalFundingService.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/capital/service/CapitalFundingService.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/capital/service/CapitalPoolService.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/capital/service/CapitalPoolService.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/circles/service/CircleService.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/circles/service/CircleService.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/credit/service/CreditScoringService.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/credit/service/CreditScoringService.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/credit/service/LoanService.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/credit/service/LoanService.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/identity/account_holder/service/AccountHolderService.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/identity/account_holder/service/AccountHolderService.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/identity/service/IdentityService$SessionCreation.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/identity/service/IdentityService$SessionCreation.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/identity/service/IdentityService.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/identity/service/IdentityService.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/payments/subscription/service/SubscriptionService.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/payments/subscription/service/SubscriptionService.class" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/target/generated-sources/annotations/com/ccapp/identity/mapper/IdentityMapperImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/target/generated-sources/annotations/com/ccapp/identity/mapper/IdentityMapperImpl.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/target/generated-sources/annotations/com/ccapp/payments/subscription/mapper/SubscriptionPlanMapperImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/target/generated-sources/annotations/com/ccapp/payments/subscription/mapper/SubscriptionPlanMapperImpl.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/maven-status/maven-compiler-plugin/compile/default-compile/createdFiles.lst" beforeDir="false" afterPath="$PROJECT_DIR$/target/maven-status/maven-compiler-plugin/compile/default-compile/createdFiles.lst" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/maven-status/maven-compiler-plugin/compile/default-compile/inputFiles.lst" beforeDir="false" afterPath="$PROJECT_DIR$/target/maven-status/maven-compiler-plugin/compile/default-compile/inputFiles.lst" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/target/surefire-reports/TEST-com.ccapp.identity.service.RefreshTokenServiceTest.xml" beforeDir="false" afterPath="$PROJECT_DIR$/target/surefire-reports/TEST-com.ccapp.identity.service.RefreshTokenServiceTest.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/target/surefire-reports/TEST-com.ccapp.ledger.service.AccountingPostingServiceTest.xml" beforeDir="false" afterPath="$PROJECT_DIR$/target/surefire-reports/TEST-com.ccapp.ledger.service.AccountingPostingServiceTest.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/target/surefire-reports/TEST-com.ccapp.payments.operation.service.OperationServiceTest.xml" beforeDir="false" afterPath="$PROJECT_DIR$/target/surefire-reports/TEST-com.ccapp.payments.operation.service.OperationServiceTest.xml" afterDir="false" />
@@ -392,7 +411,15 @@
       <option name="project" value="LOCAL" />
       <updated>1773131598588</updated>
     </task>
-    <option name="localTasksCounter" value="32" />
+    <task id="LOCAL-00032" summary="Configuration pays">
+      <option name="closed" value="true" />
+      <created>1773133762062</created>
+      <option name="number" value="00032" />
+      <option name="presentableId" value="LOCAL-00032" />
+      <option name="project" value="LOCAL" />
+      <updated>1773133762062</updated>
+    </task>
+    <option name="localTasksCounter" value="33" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">

@@ -5,9 +5,8 @@ import com.ccapp.payments.operation.domain.enums.OperationType;
 import com.ccapp.payments.operation.service.OperationService;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.common.exception.NotFoundException;
-import com.ccapp.country.service.CountryService;
-import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
-import com.ccapp.identity.account_holder.service.AccountHolderService;
+import com.ccapp.country.dto.CountryContext;
+import com.ccapp.country.service.CountryContextService;
 import com.ccapp.identity.delegation.domain.enums.PermissionLevel;
 import com.ccapp.identity.delegation.service.AccessControlService;
 import com.ccapp.payments.psp.client.JawupayClient;
@@ -32,17 +31,15 @@ public class SubscriptionService {
 
     private final SubscriptionPlanRepository subscriptionPlanRepository;
     private final SubscriptionPlanMapper subscriptionPlanMapper;
-    private final AccountHolderService accountHolderService;
-    private final CountryService countryService;
+    private final CountryContextService countryContextService;
     private final AccessControlService accessControlService;
     private final OperationService operationService;
     private final JawupayClient jawupayClient;
 
     @Transactional(readOnly = true)
     public List<SubscriptionPlanResponse> getPlans(UUID accountHolderId) {
-        AccountHolder accountHolder = accountHolderService.getById(accountHolderId);
-        String countryCode = countryService.resolveServiceCountryByCodeOrFallback(accountHolder.getServiceCountryCode()).getCode();
-        return subscriptionPlanRepository.findByCountryAndActiveTrueOrderByPriceAsc(countryCode).stream()
+        CountryContext countryContext = countryContextService.resolve(accountHolderId);
+        return subscriptionPlanRepository.findByCountryAndActiveTrueOrderByPriceAsc(countryContext.serviceCountryCode()).stream()
                 .map(subscriptionPlanMapper::toResponse)
                 .toList();
     }
@@ -51,16 +48,18 @@ public class SubscriptionService {
     public InitiateSubscriptionResponse initiate(UUID accountHolderId,
                                                  UUID actorUserId,
                                                  InitiateSubscriptionRequest request) {
-        AccountHolder accountHolder = accountHolderService.getById(accountHolderId);
         if (actorUserId == null) {
             throw new BusinessException("Actor user is required");
         }
         accessControlService.assertCanActOnAccountHolder(actorUserId, accountHolderId, PermissionLevel.TRANSACT);
-        String countryCode = countryService.resolveServiceCountryByCodeOrFallback(accountHolder.getServiceCountryCode()).getCode();
+        CountryContext countryContext = countryContextService.resolve(accountHolderId);
 
         SubscriptionPlan plan = subscriptionPlanRepository
-                .findByCodeAndCountryAndActiveTrue(request.planCode(), countryCode)
+                .findByCodeAndCountryAndActiveTrue(request.planCode(), countryContext.serviceCountryCode())
                 .orElseThrow(() -> new NotFoundException("Subscription plan not found"));
+        if (!plan.getCountry().equalsIgnoreCase(countryContext.serviceCountryCode())) {
+            throw new BusinessException("Subscription plan country must match account holder service country");
+        }
 
         String idempotencyKey = request.idempotencyKey() == null || request.idempotencyKey().isBlank()
                 ? "sub:" + UUID.randomUUID()
