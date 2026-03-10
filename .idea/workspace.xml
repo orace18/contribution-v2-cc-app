@@ -6,6 +6,9 @@
   <component name="ChangeListManager">
     <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Ajout des apis de community">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/resources/firebase/firebase-service-account-dev.json" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/firebase/firebase-service-account-dev.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/resources/firebase/firebase-service-account-prod.json" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/firebase/firebase-service-account-prod.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/resources/firebase/jawupay-bbc9f-firebase-adminsdk-q6oiw-73173de43d.json" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/firebase/jawupay-bbc9f-firebase-adminsdk-q6oiw-73173de43d.json" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -424,7 +427,15 @@
       <option name="project" value="LOCAL" />
       <updated>1773150348520</updated>
     </task>
-    <option name="localTasksCounter" value="37" />
+    <task id="LOCAL-00037" summary="Ajout des apis de community">
+      <option name="closed" value="true" />
+      <created>1773151430123</created>
+      <option name="number" value="00037" />
+      <option name="presentableId" value="LOCAL-00037" />
+      <option name="project" value="LOCAL" />
+      <updated>1773151430123</updated>
+    </task>
+    <option name="localTasksCounter" value="38" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
