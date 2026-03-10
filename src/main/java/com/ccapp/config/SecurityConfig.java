@@ -36,6 +36,8 @@ public class SecurityConfig {
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         .requestMatchers("/api/admin/auth/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/public/countries").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/public/activity-sectors").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/public/income-brackets").permitAll()
                         .requestMatchers("/api/admin/**").hasAnyAuthority(
                                 "ROLE_SUPER_ADMIN",
                                 "ROLE_COUNTRY_ADMIN",

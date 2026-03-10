@@ -2,9 +2,13 @@ package com.ccapp.media.service;
 
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.common.exception.NotFoundException;
+import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
 import com.ccapp.identity.account_holder.service.AccountHolderService;
+import com.ccapp.identity.domain.entity.User;
 import com.ccapp.identity.domain.entity.UserProfile;
+import com.ccapp.identity.domain.enums.OnboardingStep;
 import com.ccapp.identity.repository.UserProfileRepository;
+import com.ccapp.identity.repository.UserRepository;
 import com.ccapp.media.domain.dto.*;
 import com.ccapp.media.domain.entity.KycDocument;
 import com.ccapp.media.domain.entity.MediaFile;
@@ -33,6 +37,7 @@ public class MediaService {
     private final KycDocumentRepository kycDocumentRepository;
     private final AccountHolderService accountHolderService;
     private final UserProfileRepository userProfileRepository;
+    private final UserRepository userRepository;
     private final ObjectStorageService objectStorageService;
 
     @Value("${media.bucket.public:cc-media-public}")
@@ -167,7 +172,7 @@ public class MediaService {
     private void attachMediaToDomain(MediaFile media) {
         if (media.getType() == MediaType.PROFILE_PHOTO) {
             UserProfile profile = userProfileRepository.findByUserId(media.getAccountHolderId())
-                    .orElseThrow(() -> new BusinessException("User profile must exist before attaching profile photo"));
+                    .orElseGet(() -> createProfileSkeleton(media.getAccountHolderId()));
             profile.setProfilePhotoMediaId(media.getId());
             userProfileRepository.save(profile);
             return;
@@ -201,6 +206,22 @@ public class MediaService {
             case PROFILE_PHOTO, KYC_IDENTITY_FRONT, KYC_IDENTITY_BACK, KYC_SELFIE, GENERIC_PUBLIC -> true;
             case GENERIC_PRIVATE -> false;
         };
+    }
+
+    private UserProfile createProfileSkeleton(UUID accountHolderId) {
+        AccountHolder accountHolder = accountHolderService.getById(accountHolderId);
+        User user = userRepository.findById(accountHolderId)
+                .orElseThrow(() -> new NotFoundException("User not found"));
+
+        return UserProfile.builder()
+                .user(user)
+                .firstName(accountHolder.getFirstName())
+                .lastName(accountHolder.getLastName())
+                .country(accountHolder.getCountryCode() != null ? accountHolder.getCountryCode() : "INT")
+                .phone(accountHolder.getPhoneNumber() != null ? accountHolder.getPhoneNumber() : "")
+                .onboardingStep(OnboardingStep.STEP_1)
+                .onboardingCompleted(false)
+                .build();
     }
 
     private MediaFile loadOwnedMedia(UUID accountHolderId, UUID mediaId) {

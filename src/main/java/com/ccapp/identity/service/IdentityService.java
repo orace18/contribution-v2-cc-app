@@ -13,6 +13,7 @@ import com.ccapp.identity.domain.entity.UserProfile;
 import com.ccapp.identity.domain.entity.UserSession;
 import com.ccapp.identity.domain.enums.AccountStatus;
 import com.ccapp.identity.domain.enums.KycStatus;
+import com.ccapp.identity.domain.enums.OnboardingStep;
 import com.ccapp.identity.domain.enums.UserRole;
 import com.ccapp.identity.dto.*;
 import com.ccapp.identity.mapper.IdentityMapper;
@@ -25,7 +26,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.OffsetDateTime;
+import java.util.Locale;
 import java.util.List;
 import java.util.UUID;
 
@@ -40,10 +44,14 @@ public class IdentityService {
     private final AccountHolderService accountHolderService;
     private final AppUserRepository appUserRepository;
     private final RefreshTokenService refreshTokenService;
+    private final OnboardingCatalogService onboardingCatalogService;
     private final IdentityMapper identityMapper;
 
     @Value("${identity.refresh-token.ttl-hours:720}")
     private long refreshTtlHours;
+
+    private static final int ONBOARDING_TOTAL_STEPS = 3;
+    private static final String DEFAULT_COUNTRY_CODE = "INT";
 
     @Transactional
     public SyncResponse sync(FirebaseUserClaims claims, SyncRequest request) {
@@ -75,40 +83,111 @@ public class IdentityService {
 
     @Transactional
     public MeResponse onboarding(UUID userId, OnboardingRequest request) {
+        onboardingStep1(userId, new OnboardingStep1Request(
+                request.firstName(),
+                request.lastName(),
+                request.country(),
+                request.phone()
+        ));
+        return me(userId);
+    }
+
+    @Transactional
+    public OnboardingStatusResponse getOnboardingStatus(UUID userId) {
+        User user = findUser(userId);
+        ensureAccountActive(user);
+        UserProfile profile = userProfileRepository.findByUserId(userId)
+                .map(existing -> {
+                    updateOnboardingState(existing);
+                    return userProfileRepository.save(existing);
+                })
+                .orElse(null);
+        return buildOnboardingStatus(user, profile);
+    }
+
+    @Transactional
+    public OnboardingStatusResponse onboardingStep1(UUID userId, OnboardingStep1Request request) {
         User user = findUser(userId);
         ensureAccountActive(user);
 
         AccountHolder accountHolder = accountHolderService.updateProfile(
                 user.getId(),
-                request.firstName(),
-                request.lastName(),
-                request.phone(),
-                request.country()
+                request.firstName().trim(),
+                request.lastName().trim(),
+                request.phone().trim(),
+                request.country().trim().toUpperCase(Locale.ROOT)
         );
         String canonicalCountryCode = accountHolder.getCountryCode();
 
-        UserProfile profile = userProfileRepository.findByUserId(userId)
-                .map(existing -> {
-                    existing.setFirstName(request.firstName());
-                    existing.setLastName(request.lastName());
-                    existing.setCountry(canonicalCountryCode);
-                    existing.setPhone(request.phone());
-                    return existing;
-                })
-                .orElseGet(() -> UserProfile.builder()
-                        .user(user)
-                        .firstName(request.firstName())
-                        .lastName(request.lastName())
-                        .country(canonicalCountryCode)
-                        .phone(request.phone())
-                        .build());
+        UserProfile profile = getOrCreateProfile(user);
+        profile.setFirstName(request.firstName().trim());
+        profile.setLastName(request.lastName().trim());
+        profile.setCountry(canonicalCountryCode);
+        profile.setPhone(request.phone().trim());
+        updateOnboardingState(profile);
 
-        userProfileRepository.save(profile);
+        UserProfile saved = userProfileRepository.save(profile);
         if (user.getKycStatus() == KycStatus.NOT_STARTED) {
             user.setKycStatus(KycStatus.PENDING);
             userRepository.save(user);
         }
-        return me(userId);
+
+        return buildOnboardingStatus(user, saved);
+    }
+
+    @Transactional
+    public OnboardingStatusResponse onboardingStep2(UUID userId, OnboardingStep2Request request) {
+        User user = findUser(userId);
+        ensureAccountActive(user);
+
+        UserProfile profile = userProfileRepository.findByUserId(userId)
+                .orElseThrow(() -> new BusinessException("Onboarding step 1 must be completed first"));
+
+        if (!isStep1Completed(profile)) {
+            throw new BusinessException("Onboarding step 1 must be completed first");
+        }
+
+        profile.setActivitySectorCode(onboardingCatalogService.normalizeAndValidateActivitySectorCode(request.activitySectorCode()));
+        profile.setBusinessExperience(request.businessExperience());
+        profile.setMonthlyIncomeBracketCode(onboardingCatalogService.normalizeAndValidateIncomeBracketCode(request.monthlyIncomeBracketCode()));
+        profile.setProjectDescription(request.projectDescription().trim());
+        updateOnboardingState(profile);
+
+        UserProfile saved = userProfileRepository.save(profile);
+        return buildOnboardingStatus(user, saved);
+    }
+
+    @Transactional
+    public OnboardingStatusResponse onboardingStep3(UUID userId, OnboardingStep3Request request) {
+        User user = findUser(userId);
+        ensureAccountActive(user);
+
+        UserProfile profile = userProfileRepository.findByUserId(userId)
+                .orElseThrow(() -> new BusinessException("Onboarding step 1 must be completed first"));
+
+        if (!isStep1Completed(profile)) {
+            throw new BusinessException("Onboarding step 1 must be completed first");
+        }
+        if (!isStep2Completed(profile)) {
+            throw new BusinessException("Onboarding step 2 must be completed first");
+        }
+        if (!Boolean.TRUE.equals(request.solidarityGuaranteeAccepted())) {
+            throw new BusinessException("Solidarity guarantee acceptance is required");
+        }
+        if (!Boolean.TRUE.equals(request.termsAccepted())) {
+            throw new BusinessException("Terms acceptance is required");
+        }
+
+        profile.setAvailableCapital(request.availableCapital());
+        profile.setSolidarityGuaranteeAccepted(true);
+        profile.setTermsAccepted(true);
+        if (profile.getTermsAcceptedAt() == null) {
+            profile.setTermsAcceptedAt(OffsetDateTime.now());
+        }
+        updateOnboardingState(profile);
+
+        UserProfile saved = userProfileRepository.save(profile);
+        return buildOnboardingStatus(user, saved);
     }
 
     @Transactional(readOnly = true)
@@ -218,6 +297,17 @@ public class IdentityService {
                 .orElseThrow(() -> new NotFoundException("User not found"));
     }
 
+    private UserProfile getOrCreateProfile(User user) {
+        return userProfileRepository.findByUserId(user.getId())
+                .orElseGet(() -> UserProfile.builder()
+                        .user(user)
+                        .onboardingStep(OnboardingStep.STEP_1)
+                        .onboardingCompleted(false)
+                        .country(DEFAULT_COUNTRY_CODE)
+                        .phone("")
+                        .build());
+    }
+
     private UserDevice upsertDevice(User user, String deviceIdentifier, com.ccapp.identity.domain.enums.Platform platform) {
         UserDevice device = userDeviceRepository.findByUserIdAndDeviceIdentifierAndDeletedFalse(user.getId(), deviceIdentifier)
                 .orElseGet(() -> UserDevice.builder()
@@ -270,6 +360,89 @@ public class IdentityService {
                         .role(user.getRole())
                         .createdAt(user.getCreatedAt())
                         .build()));
+    }
+
+    private void updateOnboardingState(UserProfile profile) {
+        boolean step1Completed = isStep1Completed(profile);
+        boolean step2Completed = step1Completed && isStep2Completed(profile);
+        boolean step3Completed = step2Completed && isStep3Completed(profile);
+
+        OnboardingStep onboardingStep = resolveOnboardingStep(step1Completed, step2Completed, step3Completed);
+        profile.setOnboardingStep(onboardingStep);
+        profile.setOnboardingCompleted(step3Completed);
+        if (step3Completed) {
+            if (profile.getOnboardingCompletedAt() == null) {
+                profile.setOnboardingCompletedAt(OffsetDateTime.now());
+            }
+        } else {
+            profile.setOnboardingCompletedAt(null);
+        }
+        if (!profile.isTermsAccepted()) {
+            profile.setTermsAcceptedAt(null);
+        }
+    }
+
+    private boolean isStep1Completed(UserProfile profile) {
+        return hasText(profile.getFirstName())
+                && hasText(profile.getLastName())
+                && hasText(profile.getCountry())
+                && hasText(profile.getPhone());
+    }
+
+    private boolean isStep2Completed(UserProfile profile) {
+        return hasText(profile.getActivitySectorCode())
+                && profile.getBusinessExperience() != null
+                && hasText(profile.getMonthlyIncomeBracketCode())
+                && hasText(profile.getProjectDescription())
+                && profile.getProjectDescription().trim().length() >= 20;
+    }
+
+    private boolean isStep3Completed(UserProfile profile) {
+        return profile.getAvailableCapital() != null
+                && profile.getAvailableCapital().compareTo(BigDecimal.ZERO) >= 0
+                && profile.isSolidarityGuaranteeAccepted()
+                && profile.isTermsAccepted();
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.trim().isEmpty();
+    }
+
+    private OnboardingStep resolveOnboardingStep(boolean step1Completed, boolean step2Completed, boolean step3Completed) {
+        if (step3Completed) {
+            return OnboardingStep.COMPLETED;
+        }
+        if (step2Completed) {
+            return OnboardingStep.STEP_3;
+        }
+        if (step1Completed) {
+            return OnboardingStep.STEP_2;
+        }
+        return OnboardingStep.STEP_1;
+    }
+
+    private OnboardingStatusResponse buildOnboardingStatus(User user, UserProfile profile) {
+        boolean step1Completed = profile != null && isStep1Completed(profile);
+        boolean step2Completed = profile != null && step1Completed && isStep2Completed(profile);
+        boolean step3Completed = profile != null && step2Completed && isStep3Completed(profile);
+        OnboardingStep onboardingStep = resolveOnboardingStep(step1Completed, step2Completed, step3Completed);
+        BigDecimal progressPercentage = BigDecimal.valueOf(((step1Completed ? 1 : 0) + (step2Completed ? 1 : 0) + (step3Completed ? 1 : 0)) * 100L)
+                .divide(BigDecimal.valueOf(ONBOARDING_TOTAL_STEPS), 2, RoundingMode.HALF_UP);
+        int currentStep = step3Completed ? 3 : (step2Completed ? 3 : (step1Completed ? 2 : 1));
+
+        return new OnboardingStatusResponse(
+                user.getId(),
+                onboardingStep,
+                currentStep,
+                ONBOARDING_TOTAL_STEPS,
+                progressPercentage,
+                step1Completed,
+                step2Completed,
+                step3Completed,
+                step3Completed,
+                profile != null ? profile.getOnboardingCompletedAt() : null,
+                profile != null ? identityMapper.toDto(profile) : null
+        );
     }
 
     private record SessionCreation(UserSession session, String rawRefreshToken) {

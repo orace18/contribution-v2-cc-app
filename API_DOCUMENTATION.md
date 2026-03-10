@@ -114,6 +114,77 @@ Date de mise a jour: 2026-03-07
   - `401`: utilisateur non authentifie
   - `404`: user introuvable
 
+### GET `/identity/onboarding`
+- Auth: Bearer
+- Succes `200` (`OnboardingStatusResponse`):
+  - `onboardingStep` (`STEP_1|STEP_2|STEP_3|COMPLETED`)
+  - `currentStep` (1..3)
+  - `totalSteps` (=3)
+  - `progressPercentage` (0..100)
+  - `step1Completed`, `step2Completed`, `step3Completed`
+  - `onboardingCompleted`, `onboardingCompletedAt`
+  - `profile` (snapshot profil courant)
+- Echec:
+  - `401`: utilisateur non authentifie
+  - `404`: user introuvable
+
+### PATCH `/identity/onboarding/step-1`
+- Auth: Bearer
+- Body:
+```json
+{
+  "firstName": "John",
+  "lastName": "Doe",
+  "country": "CI",
+  "phone": "+22501020304"
+}
+```
+- Succes `200` (`OnboardingStatusResponse`)
+- Echec:
+  - `400`: validation payload ou pays immuable
+  - `401`: utilisateur non authentifie
+  - `404`: user introuvable
+
+### PATCH `/identity/onboarding/step-2`
+- Auth: Bearer
+- Body:
+```json
+{
+  "activitySectorCode": "COMMERCE",
+  "businessExperience": "THREE_TO_FIVE_YEARS",
+  "monthlyIncomeBracketCode": "BETWEEN_300K_600K",
+  "projectDescription": "Description detaillee du projet et de l'activite."
+}
+```
+- Succes `200` (`OnboardingStatusResponse`)
+- Regles:
+  - etape 1 doit etre complete
+  - `activitySectorCode` doit exister dans `/public/activity-sectors`
+  - `monthlyIncomeBracketCode` doit exister dans `/public/income-brackets`
+- Echec:
+  - `400`: validation payload / ordre des etapes / code catalogue invalide
+  - `401`: utilisateur non authentifie
+  - `404`: user introuvable
+
+### PATCH `/identity/onboarding/step-3`
+- Auth: Bearer
+- Body:
+```json
+{
+  "availableCapital": 15000.00,
+  "solidarityGuaranteeAccepted": true,
+  "termsAccepted": true
+}
+```
+- Succes `200` (`OnboardingStatusResponse`)
+- Regles:
+  - etapes 1 et 2 doivent etre completes
+  - les 2 consentements doivent etre `true`
+- Echec:
+  - `400`: validation payload / ordre des etapes / consentements obligatoires
+  - `401`: utilisateur non authentifie
+  - `404`: user introuvable
+
 ## Public
 
 ### GET `/public/countries`
@@ -121,6 +192,14 @@ Date de mise a jour: 2026-03-07
 - Succes `200` (`List<CountryResponse>`)
 - Echec:
   - `500`: erreur inattendue
+
+### GET `/public/activity-sectors`
+- Auth: publique
+- Succes `200` (`List<OnboardingCatalogItemResponse>`)
+
+### GET `/public/income-brackets`
+- Auth: publique
+- Succes `200` (`List<OnboardingCatalogItemResponse>`)
 
 ## Media
 

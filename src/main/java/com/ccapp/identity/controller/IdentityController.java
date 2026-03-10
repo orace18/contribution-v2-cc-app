@@ -55,6 +55,57 @@ public class IdentityController {
         return ResponseEntity.ok(CommonResponse.success("Onboarding updated", identityService.onboarding(userId, request)));
     }
 
+    @GetMapping("/onboarding")
+    @Operation(summary = "Recuperer le statut d'onboarding multi-etapes")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Succes", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Non authentifie", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Utilisateur introuvable", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
+    })
+    public ResponseEntity<CommonResponse<OnboardingStatusResponse>> onboardingStatus() {
+        UUID userId = SecurityUtils.currentUserId();
+        return ResponseEntity.ok(CommonResponse.success("Onboarding status", identityService.getOnboardingStatus(userId)));
+    }
+
+    @PatchMapping("/onboarding/step-1")
+    @Operation(summary = "Onboarding etape 1: profil")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Succes", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Validation invalide", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Non authentifie", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Utilisateur introuvable", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
+    })
+    public ResponseEntity<CommonResponse<OnboardingStatusResponse>> onboardingStep1(@Valid @RequestBody OnboardingStep1Request request) {
+        UUID userId = SecurityUtils.currentUserId();
+        return ResponseEntity.ok(CommonResponse.success("Onboarding step 1 updated", identityService.onboardingStep1(userId, request)));
+    }
+
+    @PatchMapping("/onboarding/step-2")
+    @Operation(summary = "Onboarding etape 2: activite")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Succes", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Validation invalide", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Non authentifie", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Utilisateur introuvable", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
+    })
+    public ResponseEntity<CommonResponse<OnboardingStatusResponse>> onboardingStep2(@Valid @RequestBody OnboardingStep2Request request) {
+        UUID userId = SecurityUtils.currentUserId();
+        return ResponseEntity.ok(CommonResponse.success("Onboarding step 2 updated", identityService.onboardingStep2(userId, request)));
+    }
+
+    @PatchMapping("/onboarding/step-3")
+    @Operation(summary = "Onboarding etape 3: capital et consentements")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Succes", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Validation invalide", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Non authentifie", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Utilisateur introuvable", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
+    })
+    public ResponseEntity<CommonResponse<OnboardingStatusResponse>> onboardingStep3(@Valid @RequestBody OnboardingStep3Request request) {
+        UUID userId = SecurityUtils.currentUserId();
+        return ResponseEntity.ok(CommonResponse.success("Onboarding step 3 updated", identityService.onboardingStep3(userId, request)));
+    }
+
     @GetMapping("/me")
     @Operation(summary = "Recuperer le profil de l'utilisateur courant")
     @ApiResponses(value = {
