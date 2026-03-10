@@ -4,14 +4,12 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Refact de retour api">
+    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Ajout de inscription sans phone">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/account_holder/domain/entity/AccountHolder.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/account_holder/domain/entity/AccountHolder.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/account_holder/repository/AccountHolderRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/account_holder/repository/AccountHolderRepository.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/account_holder/service/AccountHolderService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/account_holder/service/AccountHolderService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/delegation/domain/entity/AccountDelegation.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/delegation/domain/entity/AccountDelegation.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/delegation/repository/AccountDelegationRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/delegation/repository/AccountDelegationRepository.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/delegation/service/DelegationService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/delegation/service/DelegationService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/generated-sources/annotations/com/ccapp/identity/mapper/IdentityMapperImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/target/generated-sources/annotations/com/ccapp/identity/mapper/IdentityMapperImpl.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/generated-sources/annotations/com/ccapp/payments/subscription/mapper/SubscriptionPlanMapperImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/target/generated-sources/annotations/com/ccapp/payments/subscription/mapper/SubscriptionPlanMapperImpl.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/maven-status/maven-compiler-plugin/compile/default-compile/createdFiles.lst" beforeDir="false" afterPath="$PROJECT_DIR$/target/maven-status/maven-compiler-plugin/compile/default-compile/createdFiles.lst" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/maven-status/maven-compiler-plugin/compile/default-compile/inputFiles.lst" beforeDir="false" afterPath="$PROJECT_DIR$/target/maven-status/maven-compiler-plugin/compile/default-compile/inputFiles.lst" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/target/surefire-reports/TEST-com.ccapp.identity.service.RefreshTokenServiceTest.xml" beforeDir="false" afterPath="$PROJECT_DIR$/target/surefire-reports/TEST-com.ccapp.identity.service.RefreshTokenServiceTest.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/target/surefire-reports/TEST-com.ccapp.ledger.service.AccountingPostingServiceTest.xml" beforeDir="false" afterPath="$PROJECT_DIR$/target/surefire-reports/TEST-com.ccapp.ledger.service.AccountingPostingServiceTest.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/target/surefire-reports/TEST-com.ccapp.payments.operation.service.OperationServiceTest.xml" beforeDir="false" afterPath="$PROJECT_DIR$/target/surefire-reports/TEST-com.ccapp.payments.operation.service.OperationServiceTest.xml" afterDir="false" />
@@ -420,7 +418,15 @@
       <option name="project" value="LOCAL" />
       <updated>1773137346445</updated>
     </task>
-    <option name="localTasksCounter" value="35" />
+    <task id="LOCAL-00035" summary="Ajout de inscription sans phone">
+      <option name="closed" value="true" />
+      <created>1773141624570</created>
+      <option name="number" value="00035" />
+      <option name="presentableId" value="LOCAL-00035" />
+      <option name="project" value="LOCAL" />
+      <updated>1773141624570</updated>
+    </task>
+    <option name="localTasksCounter" value="36" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -455,7 +461,8 @@
     <MESSAGE value="Configuration pays" />
     <MESSAGE value="Refact de pays" />
     <MESSAGE value="Refact de retour api" />
-    <option name="LAST_COMMIT_MESSAGE" value="Refact de retour api" />
+    <MESSAGE value="Ajout de inscription sans phone" />
+    <option name="LAST_COMMIT_MESSAGE" value="Ajout de inscription sans phone" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />
