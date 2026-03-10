@@ -1,6 +1,7 @@
 package com.ccapp.media.controller;
 
 import com.ccapp.common.api.CommonResponse;
+import com.ccapp.common.security.AuthenticatedPrincipal;
 import com.ccapp.common.security.SecurityUtils;
 import com.ccapp.media.domain.dto.*;
 import com.ccapp.media.service.MediaService;
@@ -36,8 +37,13 @@ public class MediaController {
     })
     public ResponseEntity<CommonResponse<CreateUploadUrlResponse>> createUploadUrl(
             @Valid @RequestBody CreateUploadUrlRequest request) {
-        UUID accountHolderId = SecurityUtils.currentAccountHolderId();
-        return ResponseEntity.ok(CommonResponse.success("Upload URL generated", mediaService.createUploadUrl(accountHolderId, request)));
+        UUID actorAccountHolderId = SecurityUtils.currentAccountHolderId();
+        AuthenticatedPrincipal principal = SecurityUtils.currentPrincipal();
+        UUID actorUserId = principal.userId() != null ? principal.userId() : actorAccountHolderId;
+        return ResponseEntity.ok(CommonResponse.success(
+                "Upload URL generated",
+                mediaService.createUploadUrl(actorUserId, actorAccountHolderId, request)
+        ));
     }
 
     @PostMapping("/confirm")
@@ -50,8 +56,13 @@ public class MediaController {
     })
     public ResponseEntity<CommonResponse<MediaFileResponse>> confirm(
             @Valid @RequestBody ConfirmUploadRequest request) {
-        UUID accountHolderId = SecurityUtils.currentAccountHolderId();
-        return ResponseEntity.ok(CommonResponse.success("Media upload confirmed", mediaService.confirmUpload(accountHolderId, request)));
+        UUID actorAccountHolderId = SecurityUtils.currentAccountHolderId();
+        AuthenticatedPrincipal principal = SecurityUtils.currentPrincipal();
+        UUID actorUserId = principal.userId() != null ? principal.userId() : actorAccountHolderId;
+        return ResponseEntity.ok(CommonResponse.success(
+                "Media upload confirmed",
+                mediaService.confirmUpload(actorUserId, actorAccountHolderId, request)
+        ));
     }
 
     @GetMapping("/{id}")
@@ -62,8 +73,13 @@ public class MediaController {
             @ApiResponse(responseCode = "404", description = "Media not found", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
     })
     public ResponseEntity<CommonResponse<MediaFileResponse>> getMedia(@PathVariable UUID id) {
-        UUID accountHolderId = SecurityUtils.currentAccountHolderId();
-        return ResponseEntity.ok(CommonResponse.success("Media file", mediaService.getMedia(accountHolderId, id)));
+        UUID actorAccountHolderId = SecurityUtils.currentAccountHolderId();
+        AuthenticatedPrincipal principal = SecurityUtils.currentPrincipal();
+        UUID actorUserId = principal.userId() != null ? principal.userId() : actorAccountHolderId;
+        return ResponseEntity.ok(CommonResponse.success(
+                "Media file",
+                mediaService.getMedia(actorUserId, actorAccountHolderId, id)
+        ));
     }
 
     @GetMapping("/{id}/download-url")
@@ -75,7 +91,12 @@ public class MediaController {
             @ApiResponse(responseCode = "404", description = "Media not found", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
     })
     public ResponseEntity<CommonResponse<DownloadUrlResponse>> createDownloadUrl(@PathVariable UUID id) {
-        UUID accountHolderId = SecurityUtils.currentAccountHolderId();
-        return ResponseEntity.ok(CommonResponse.success("Download URL generated", mediaService.createDownloadUrl(accountHolderId, id)));
+        UUID actorAccountHolderId = SecurityUtils.currentAccountHolderId();
+        AuthenticatedPrincipal principal = SecurityUtils.currentPrincipal();
+        UUID actorUserId = principal.userId() != null ? principal.userId() : actorAccountHolderId;
+        return ResponseEntity.ok(CommonResponse.success(
+                "Download URL generated",
+                mediaService.createDownloadUrl(actorUserId, actorAccountHolderId, id)
+        ));
     }
 }

@@ -2,6 +2,10 @@ package com.ccapp.progress.service;
 
 import com.ccapp.common.exception.NotFoundException;
 import com.ccapp.identity.account_holder.service.AccountHolderService;
+import com.ccapp.identity.delegation.domain.enums.DelegatedActionType;
+import com.ccapp.identity.delegation.domain.enums.PermissionLevel;
+import com.ccapp.identity.delegation.service.AccessControlService;
+import com.ccapp.identity.delegation.service.DelegatedActionService;
 import com.ccapp.notifications.domain.enums.NotificationChannel;
 import com.ccapp.notifications.domain.enums.NotificationType;
 import com.ccapp.notifications.dto.CreateNotificationRequest;
@@ -34,9 +38,12 @@ public class TaskService {
     private final AccountHolderService accountHolderService;
     private final ProgressService progressService;
     private final NotificationService notificationService;
+    private final AccessControlService accessControlService;
+    private final DelegatedActionService delegatedActionService;
 
     @Transactional(readOnly = true)
-    public List<UserTaskResponse> getUserTasks(UUID accountHolderId) {
+    public List<UserTaskResponse> getUserTasks(UUID actorUserId, UUID accountHolderId) {
+        accessControlService.assertCanActOnAccountHolder(actorUserId, accountHolderId, PermissionLevel.VIEW);
         ensureAccountHolderExists(accountHolderId);
 
         Map<TaskType, UserTask> taskByType = new EnumMap<>(TaskType.class);
@@ -55,7 +62,8 @@ public class TaskService {
     }
 
     @Transactional
-    public TaskCompletionResponse completeTask(UUID accountHolderId, TaskType taskType) {
+    public TaskCompletionResponse completeTask(UUID actorUserId, UUID accountHolderId, TaskType taskType) {
+        accessControlService.assertCanActOnAccountHolder(actorUserId, accountHolderId, PermissionLevel.TRANSACT);
         ensureAccountHolderExists(accountHolderId);
 
         UserTask task = userTaskRepository.findByAccountHolderIdAndTaskType(accountHolderId, taskType)
@@ -72,6 +80,12 @@ public class TaskService {
         UserTask savedTask = userTaskRepository.save(task);
         UserProgressResponse progress = progressService.recalculateProgress(accountHolderId);
         emitTaskCompletedNotification(accountHolderId, taskType);
+        delegatedActionService.logIfDelegatedActor(
+                accountHolderId,
+                actorUserId,
+                DelegatedActionType.PROGRESS_UPDATED,
+                "{\"taskType\":\"" + taskType.name() + "\"}"
+        );
 
         return new TaskCompletionResponse(toResponse(savedTask), progress);
     }

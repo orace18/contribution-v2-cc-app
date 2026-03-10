@@ -1,6 +1,7 @@
 package com.ccapp.progress.controller;
 
 import com.ccapp.common.api.CommonResponse;
+import com.ccapp.common.security.AuthenticatedPrincipal;
 import com.ccapp.common.security.SecurityUtils;
 import com.ccapp.progress.domain.enums.TaskType;
 import com.ccapp.progress.dto.TaskCompletionResponse;
@@ -36,9 +37,15 @@ public class TaskController {
             @ApiResponse(responseCode = "401", description = "Non authentifie", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
             @ApiResponse(responseCode = "404", description = "Utilisateur introuvable", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
     })
-    public ResponseEntity<CommonResponse<List<UserTaskResponse>>> myTasks() {
-        UUID accountHolderId = SecurityUtils.currentAccountHolderId();
-        return ResponseEntity.ok(CommonResponse.success("User tasks", taskService.getUserTasks(accountHolderId)));
+    public ResponseEntity<CommonResponse<List<UserTaskResponse>>> myTasks(@RequestParam(required = false) UUID accountHolderId) {
+        UUID actorAccountHolderId = SecurityUtils.currentAccountHolderId();
+        AuthenticatedPrincipal principal = SecurityUtils.currentPrincipal();
+        UUID actorUserId = principal.userId() != null ? principal.userId() : actorAccountHolderId;
+        UUID targetAccountHolderId = accountHolderId != null ? accountHolderId : actorAccountHolderId;
+        return ResponseEntity.ok(CommonResponse.success(
+                "User tasks",
+                taskService.getUserTasks(actorUserId, targetAccountHolderId)
+        ));
     }
 
     @PostMapping("/{taskType}/complete")
@@ -49,8 +56,15 @@ public class TaskController {
             @ApiResponse(responseCode = "401", description = "Non authentifie", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
             @ApiResponse(responseCode = "404", description = "Utilisateur introuvable", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
     })
-    public ResponseEntity<CommonResponse<TaskCompletionResponse>> complete(@PathVariable TaskType taskType) {
-        UUID accountHolderId = SecurityUtils.currentAccountHolderId();
-        return ResponseEntity.ok(CommonResponse.success("Task completed", taskService.completeTask(accountHolderId, taskType)));
+    public ResponseEntity<CommonResponse<TaskCompletionResponse>> complete(@PathVariable TaskType taskType,
+                                                                           @RequestParam(required = false) UUID accountHolderId) {
+        UUID actorAccountHolderId = SecurityUtils.currentAccountHolderId();
+        AuthenticatedPrincipal principal = SecurityUtils.currentPrincipal();
+        UUID actorUserId = principal.userId() != null ? principal.userId() : actorAccountHolderId;
+        UUID targetAccountHolderId = accountHolderId != null ? accountHolderId : actorAccountHolderId;
+        return ResponseEntity.ok(CommonResponse.success(
+                "Task completed",
+                taskService.completeTask(actorUserId, targetAccountHolderId, taskType)
+        ));
     }
 }

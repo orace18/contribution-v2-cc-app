@@ -1,12 +1,16 @@
 package com.ccapp.identity.service;
 
 import com.ccapp.common.exception.BusinessException;
+import com.ccapp.common.exception.ConflictException;
 import com.ccapp.common.exception.NotFoundException;
 import com.ccapp.common.exception.UnauthorizedException;
+import com.ccapp.identity.account_holder.domain.enums.AccountType;
 import com.ccapp.identity.account_holder.service.AccountHolderService;
 import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
+import com.ccapp.identity.account_holder.repository.AccountHolderRepository;
 import com.ccapp.identity.app_user.domain.entity.AppUser;
 import com.ccapp.identity.app_user.repository.AppUserRepository;
+import com.ccapp.identity.delegation.service.DelegationService;
 import com.ccapp.identity.domain.entity.User;
 import com.ccapp.identity.domain.entity.UserDevice;
 import com.ccapp.identity.domain.entity.UserProfile;
@@ -31,6 +35,7 @@ import java.math.RoundingMode;
 import java.time.OffsetDateTime;
 import java.util.Locale;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -42,7 +47,9 @@ public class IdentityService {
     private final UserDeviceRepository userDeviceRepository;
     private final UserSessionRepository userSessionRepository;
     private final AccountHolderService accountHolderService;
+    private final AccountHolderRepository accountHolderRepository;
     private final AppUserRepository appUserRepository;
+    private final DelegationService delegationService;
     private final RefreshTokenService refreshTokenService;
     private final OnboardingCatalogService onboardingCatalogService;
     private final IdentityMapper identityMapper;
@@ -279,6 +286,91 @@ public class IdentityService {
     }
 
     @Transactional
+    public LinkAssistedAccountResponse linkAssistedAccount(String firebaseUid,
+                                                           String email,
+                                                           LinkAssistedAccountRequest request) {
+        if (firebaseUid == null || firebaseUid.isBlank()) {
+            throw new UnauthorizedException("Firebase identity is required");
+        }
+
+        String normalizedPhone = request.phoneNumber().trim();
+        AccountHolder accountHolder = accountHolderRepository.findByPhoneNumber(normalizedPhone)
+                .orElseThrow(() -> new NotFoundException("Account holder not found"));
+        if (accountHolder.getAccountType() != AccountType.ASSISTED) {
+            throw new BusinessException("ASSISTED_ACCOUNT_REQUIRED");
+        }
+
+        Optional<AppUser> existingByFirebaseUid = appUserRepository.findByFirebaseUid(firebaseUid);
+        if (existingByFirebaseUid.isPresent()
+                && !existingByFirebaseUid.get().getAccountHolderId().equals(accountHolder.getId())) {
+            throw new ConflictException("Firebase account already linked");
+        }
+
+        User user = userRepository.findByFirebaseUid(firebaseUid)
+                .orElseGet(() -> userRepository.save(User.builder()
+                        .firebaseUid(firebaseUid)
+                        .email(email)
+                        .role(UserRole.USER)
+                        .accountStatus(AccountStatus.ACTIVE)
+                        .kycStatus(accountHolder.getKycStatus())
+                        .build()));
+
+        if (user.getAccountStatus() != AccountStatus.ACTIVE) {
+            throw new BusinessException("Account is not active");
+        }
+        if (email != null && !email.isBlank() && (user.getEmail() == null || user.getEmail().isBlank())) {
+            user.setEmail(email);
+        }
+        user.setKycStatus(accountHolder.getKycStatus());
+        userRepository.save(user);
+
+        appUserRepository.findById(user.getId())
+                .filter(existing -> !existing.getFirebaseUid().equals(firebaseUid))
+                .ifPresent(existing -> {
+                    throw new ConflictException("Identity already linked");
+                });
+
+        AppUser appUser = existingByFirebaseUid.orElseGet(() -> appUserRepository.save(AppUser.builder()
+                .id(user.getId())
+                .firebaseUid(firebaseUid)
+                .accountHolderId(accountHolder.getId())
+                .role(UserRole.USER)
+                .createdAt(OffsetDateTime.now())
+                .build()));
+        if (!appUser.getId().equals(user.getId())) {
+            throw new ConflictException("Inconsistent identity mapping");
+        }
+        if (!appUser.getAccountHolderId().equals(accountHolder.getId())) {
+            throw new ConflictException("Account already linked to a different holder");
+        }
+
+        UserProfile profile = userProfileRepository.findByUserId(user.getId())
+                .orElseGet(() -> UserProfile.builder()
+                        .user(user)
+                        .onboardingStep(OnboardingStep.STEP_1)
+                        .onboardingCompleted(false)
+                        .build());
+        profile.setFirstName(accountHolder.getFirstName());
+        profile.setLastName(accountHolder.getLastName());
+        profile.setPhone(accountHolder.getPhoneNumber() != null ? accountHolder.getPhoneNumber() : "");
+        profile.setCountry(accountHolder.getCountryCode());
+        userProfileRepository.save(profile);
+
+        delegationService.deactivateActiveDelegations(accountHolder.getId());
+        accountHolder.setAccountType(AccountType.STANDARD);
+        accountHolderRepository.save(accountHolder);
+
+        return new LinkAssistedAccountResponse(
+                appUser.getId(),
+                accountHolder.getId(),
+                accountHolder.getAccountType(),
+                accountHolder.getCountryCode(),
+                accountHolder.getServiceCountryCode(),
+                OffsetDateTime.now()
+        );
+    }
+
+    @Transactional
     public void blockAccount(UUID userId, String reason) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new NotFoundException("User not found"));
@@ -349,17 +441,23 @@ public class IdentityService {
 
     private void ensureDelegatedIdentityModel(User user) {
         UserProfile profile = userProfileRepository.findByUserId(user.getId()).orElse(null);
-        accountHolderService.ensureFromLegacyUser(user, profile);
+        Optional<AppUser> existingAppUser = appUserRepository.findById(user.getId())
+                .or(() -> appUserRepository.findByFirebaseUid(user.getFirebaseUid()));
+        if (existingAppUser.isPresent()) {
+            if (!accountHolderService.exists(existingAppUser.get().getAccountHolderId())) {
+                accountHolderService.ensureFromLegacyUser(user, profile);
+            }
+            return;
+        }
 
-        appUserRepository.findById(user.getId())
-                .or(() -> appUserRepository.findByFirebaseUid(user.getFirebaseUid()))
-                .orElseGet(() -> appUserRepository.save(AppUser.builder()
-                        .id(user.getId())
-                        .firebaseUid(user.getFirebaseUid())
-                        .accountHolderId(user.getId())
-                        .role(user.getRole())
-                        .createdAt(user.getCreatedAt())
-                        .build()));
+        accountHolderService.ensureFromLegacyUser(user, profile);
+        appUserRepository.save(AppUser.builder()
+                .id(user.getId())
+                .firebaseUid(user.getFirebaseUid())
+                .accountHolderId(user.getId())
+                .role(user.getRole())
+                .createdAt(user.getCreatedAt())
+                .build());
     }
 
     private void updateOnboardingState(UserProfile profile) {

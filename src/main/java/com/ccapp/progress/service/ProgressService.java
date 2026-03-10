@@ -2,6 +2,8 @@ package com.ccapp.progress.service;
 
 import com.ccapp.common.exception.NotFoundException;
 import com.ccapp.identity.account_holder.service.AccountHolderService;
+import com.ccapp.identity.delegation.domain.enums.PermissionLevel;
+import com.ccapp.identity.delegation.service.AccessControlService;
 import com.ccapp.progress.domain.entity.UserProgress;
 import com.ccapp.progress.domain.entity.UserTask;
 import com.ccapp.progress.domain.enums.TaskStatus;
@@ -26,6 +28,13 @@ public class ProgressService {
     private final UserProgressRepository userProgressRepository;
     private final UserTaskRepository userTaskRepository;
     private final AccountHolderService accountHolderService;
+    private final AccessControlService accessControlService;
+
+    @Transactional
+    public UserProgressResponse getUserProgress(UUID actorUserId, UUID accountHolderId) {
+        accessControlService.assertCanActOnAccountHolder(actorUserId, accountHolderId, PermissionLevel.VIEW);
+        return recalculateProgress(accountHolderId);
+    }
 
     @Transactional
     public UserProgressResponse getUserProgress(UUID accountHolderId) {

@@ -6,6 +6,8 @@ import java.util.UUID;
 
 public record ConfirmUploadRequest(
         @NotNull(message = "mediaId is required")
-        UUID mediaId
+        UUID mediaId,
+
+        UUID accountHolderId
 ) {
 }

@@ -1,5 +1,7 @@
 package com.ccapp.identity.delegation.domain.entity;
 
+import com.ccapp.identity.delegation.domain.enums.DelegationRole;
+import com.ccapp.identity.delegation.domain.enums.DelegationStatus;
 import com.ccapp.identity.delegation.domain.enums.PermissionLevel;
 import jakarta.persistence.*;
 import lombok.*;
@@ -33,6 +35,14 @@ public class AccountDelegation {
     @Column(name = "permission_level", nullable = false, length = 16)
     private PermissionLevel permissionLevel;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "role", nullable = false, length = 16)
+    private DelegationRole role;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 16)
+    private DelegationStatus status;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
 
@@ -43,6 +53,12 @@ public class AccountDelegation {
     protected void onCreate() {
         if (createdAt == null) {
             createdAt = OffsetDateTime.now();
+        }
+        if (role == null) {
+            role = DelegationRole.MANAGER;
+        }
+        if (status == null) {
+            status = DelegationStatus.ACTIVE;
         }
     }
 }

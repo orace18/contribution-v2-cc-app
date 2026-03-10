@@ -2,8 +2,12 @@ package com.ccapp.media.service;
 
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.common.exception.NotFoundException;
+import com.ccapp.country.dto.CountryContext;
+import com.ccapp.country.service.CountryContextService;
 import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
 import com.ccapp.identity.account_holder.service.AccountHolderService;
+import com.ccapp.identity.delegation.domain.enums.PermissionLevel;
+import com.ccapp.identity.delegation.service.AccessControlService;
 import com.ccapp.identity.domain.entity.User;
 import com.ccapp.identity.domain.entity.UserProfile;
 import com.ccapp.identity.domain.enums.OnboardingStep;
@@ -36,6 +40,8 @@ public class MediaService {
     private final MediaFileRepository mediaFileRepository;
     private final KycDocumentRepository kycDocumentRepository;
     private final AccountHolderService accountHolderService;
+    private final AccessControlService accessControlService;
+    private final CountryContextService countryContextService;
     private final UserProfileRepository userProfileRepository;
     private final UserRepository userRepository;
     private final ObjectStorageService objectStorageService;
@@ -59,15 +65,19 @@ public class MediaService {
     private long maxSizeBytes;
 
     @Transactional
-    public CreateUploadUrlResponse createUploadUrl(UUID accountHolderId, CreateUploadUrlRequest request) {
-        accountHolderService.getById(accountHolderId);
+    public CreateUploadUrlResponse createUploadUrl(UUID actorUserId,
+                                                   UUID actorAccountHolderId,
+                                                   CreateUploadUrlRequest request) {
+        UUID targetAccountHolderId = resolveTargetAccountHolderId(actorAccountHolderId, request.accountHolderId());
+        assertDelegatedAccess(actorUserId, actorAccountHolderId, targetAccountHolderId);
+        accountHolderService.getById(targetAccountHolderId);
         validateRequest(request);
 
         String bucket = resolveBucket(request.type());
-        String objectKey = buildObjectKey(accountHolderId, request.type(), request.originalFileName());
+        String objectKey = buildObjectKey(targetAccountHolderId, request.type(), request.originalFileName());
 
         MediaFile media = mediaFileRepository.save(MediaFile.builder()
-                .accountHolderId(accountHolderId)
+                .accountHolderId(targetAccountHolderId)
                 .type(request.type())
                 .bucket(bucket)
                 .objectKey(objectKey)
@@ -93,8 +103,12 @@ public class MediaService {
     }
 
     @Transactional
-    public MediaFileResponse confirmUpload(UUID accountHolderId, ConfirmUploadRequest request) {
-        MediaFile media = loadOwnedMedia(accountHolderId, request.mediaId());
+    public MediaFileResponse confirmUpload(UUID actorUserId,
+                                           UUID actorAccountHolderId,
+                                           ConfirmUploadRequest request) {
+        UUID targetAccountHolderId = resolveTargetAccountHolderId(actorAccountHolderId, request.accountHolderId());
+        assertDelegatedAccess(actorUserId, actorAccountHolderId, targetAccountHolderId);
+        MediaFile media = loadOwnedMedia(targetAccountHolderId, request.mediaId());
         if (media.getStatus() != MediaStatus.PENDING_UPLOAD) {
             throw new BusinessException("Media file is not pending upload confirmation");
         }
@@ -109,13 +123,22 @@ public class MediaService {
     }
 
     @Transactional(readOnly = true)
-    public MediaFileResponse getMedia(UUID accountHolderId, UUID mediaId) {
-        return toResponse(loadOwnedMedia(accountHolderId, mediaId));
+    public MediaFileResponse getMedia(UUID actorUserId,
+                                      UUID actorAccountHolderId,
+                                      UUID mediaId) {
+        MediaFile media = mediaFileRepository.findById(mediaId)
+                .orElseThrow(() -> new NotFoundException("Media file not found"));
+        assertDelegatedAccess(actorUserId, actorAccountHolderId, media.getAccountHolderId());
+        return toResponse(media);
     }
 
     @Transactional(readOnly = true)
-    public DownloadUrlResponse createDownloadUrl(UUID accountHolderId, UUID mediaId) {
-        MediaFile media = loadOwnedMedia(accountHolderId, mediaId);
+    public DownloadUrlResponse createDownloadUrl(UUID actorUserId,
+                                                 UUID actorAccountHolderId,
+                                                 UUID mediaId) {
+        MediaFile media = mediaFileRepository.findById(mediaId)
+                .orElseThrow(() -> new NotFoundException("Media file not found"));
+        assertDelegatedAccess(actorUserId, actorAccountHolderId, media.getAccountHolderId());
         if (media.getStatus() != MediaStatus.READY) {
             throw new BusinessException("Media file is not available");
         }
@@ -228,6 +251,23 @@ public class MediaService {
         accountHolderService.getById(accountHolderId);
         return mediaFileRepository.findByIdAndAccountHolderId(mediaId, accountHolderId)
                 .orElseThrow(() -> new NotFoundException("Media file not found"));
+    }
+
+    private UUID resolveTargetAccountHolderId(UUID actorAccountHolderId, UUID requestedTargetAccountHolderId) {
+        return requestedTargetAccountHolderId != null ? requestedTargetAccountHolderId : actorAccountHolderId;
+    }
+
+    private void assertDelegatedAccess(UUID actorUserId, UUID actorAccountHolderId, UUID targetAccountHolderId) {
+        if (actorUserId == null) {
+            throw new BusinessException("Actor user is required");
+        }
+        accessControlService.assertCanActOnAccountHolder(actorUserId, targetAccountHolderId, PermissionLevel.FULL);
+
+        CountryContext actorContext = countryContextService.resolve(actorAccountHolderId);
+        CountryContext targetContext = countryContextService.resolve(targetAccountHolderId);
+        if (!actorContext.serviceCountryCode().equalsIgnoreCase(targetContext.serviceCountryCode())) {
+            throw new BusinessException("CROSS_COUNTRY_DELEGATION_NOT_ALLOWED");
+        }
     }
 
     private MediaFileResponse toResponse(MediaFile media) {

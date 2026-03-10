@@ -1,5 +1,7 @@
 package com.ccapp.identity.account_holder.domain.entity;
 
+import com.ccapp.identity.account_holder.domain.enums.AccountCreatedVia;
+import com.ccapp.identity.account_holder.domain.enums.AccountType;
 import com.ccapp.identity.domain.enums.KycStatus;
 import jakarta.persistence.*;
 import lombok.*;
@@ -36,6 +38,17 @@ public class AccountHolder {
     private String serviceCountryCode;
 
     @Enumerated(EnumType.STRING)
+    @Column(name = "account_type", nullable = false, length = 16)
+    private AccountType accountType;
+
+    @Column(name = "created_by_user_id")
+    private UUID createdByUserId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "created_via", nullable = false, length = 16)
+    private AccountCreatedVia createdVia;
+
+    @Enumerated(EnumType.STRING)
     @Column(name = "kyc_status", nullable = false, length = 16)
     private KycStatus kycStatus;
 
@@ -52,6 +65,12 @@ public class AccountHolder {
         }
         if (kycStatus == null) {
             kycStatus = KycStatus.NOT_STARTED;
+        }
+        if (accountType == null) {
+            accountType = AccountType.STANDARD;
+        }
+        if (createdVia == null) {
+            createdVia = AccountCreatedVia.SELF;
         }
     }
 }

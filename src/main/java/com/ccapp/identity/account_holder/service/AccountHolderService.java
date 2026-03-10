@@ -1,9 +1,12 @@
 package com.ccapp.identity.account_holder.service;
 
 import com.ccapp.common.exception.BusinessException;
+import com.ccapp.common.exception.ConflictException;
 import com.ccapp.common.exception.NotFoundException;
 import com.ccapp.country.service.CountryService;
 import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
+import com.ccapp.identity.account_holder.domain.enums.AccountCreatedVia;
+import com.ccapp.identity.account_holder.domain.enums.AccountType;
 import com.ccapp.identity.account_holder.repository.AccountHolderRepository;
 import com.ccapp.identity.domain.entity.User;
 import com.ccapp.identity.domain.entity.UserProfile;
@@ -51,6 +54,8 @@ public class AccountHolderService {
                 .phoneNumber(profile != null ? profile.getPhone() : null)
                 .countryCode(selectedCountryCode)
                 .serviceCountryCode(serviceCountryCode)
+                .accountType(AccountType.STANDARD)
+                .createdVia(AccountCreatedVia.SELF)
                 .kycStatus(user.getKycStatus() != null ? user.getKycStatus() : KycStatus.NOT_STARTED)
                 .kycVerifiedAt(user.getKycStatus() == KycStatus.VERIFIED ? OffsetDateTime.now() : null)
                 .createdAt(user.getCreatedAt())
@@ -66,14 +71,20 @@ public class AccountHolderService {
         AccountHolder accountHolder = getById(accountHolderId);
         String selectedCountryCode = countryService.resolveSelectedCountryOrThrow(requestedCountryCode).getCode();
         String serviceCountryCode = countryService.resolveServiceCountryForSelection(selectedCountryCode).getCode();
+        String normalizedPhone = phoneNumber == null ? null : phoneNumber.trim();
 
         if (accountHolder.getCountryCode() != null && !accountHolder.getCountryCode().equalsIgnoreCase(selectedCountryCode)) {
             throw new BusinessException("Account holder country is immutable");
         }
+        if (normalizedPhone != null
+                && !normalizedPhone.isBlank()
+                && accountHolderRepository.existsByPhoneNumberAndIdNot(normalizedPhone, accountHolderId)) {
+            throw new ConflictException("Phone number already used");
+        }
 
         accountHolder.setFirstName(firstName);
         accountHolder.setLastName(lastName);
-        accountHolder.setPhoneNumber(phoneNumber);
+        accountHolder.setPhoneNumber(normalizedPhone);
         accountHolder.setCountryCode(selectedCountryCode);
         accountHolder.setServiceCountryCode(serviceCountryCode);
         if (accountHolder.getKycStatus() == KycStatus.NOT_STARTED) {

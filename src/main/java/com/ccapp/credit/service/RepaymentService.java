@@ -16,7 +16,9 @@ import com.ccapp.credit.repository.LoanRepaymentRepository;
 import com.ccapp.credit.repository.LoanRepository;
 import com.ccapp.credit.repository.RepaymentScheduleRepository;
 import com.ccapp.identity.delegation.domain.enums.PermissionLevel;
+import com.ccapp.identity.delegation.domain.enums.DelegatedActionType;
 import com.ccapp.identity.delegation.service.AccessControlService;
+import com.ccapp.identity.delegation.service.DelegatedActionService;
 import com.ccapp.ledger.service.AccountingPostingService;
 import com.ccapp.notifications.domain.enums.NotificationChannel;
 import com.ccapp.notifications.domain.enums.NotificationType;
@@ -48,6 +50,7 @@ public class RepaymentService {
     private final AccountingPostingService accountingPostingService;
     private final CircleActivityService circleActivityService;
     private final NotificationService notificationService;
+    private final DelegatedActionService delegatedActionService;
 
     @Transactional
     public LoanRepaymentResponse repay(UUID actorUserId, UUID loanId, RepayLoanRequest request) {
@@ -98,6 +101,12 @@ public class RepaymentService {
         repaymentScheduleRepository.save(installment);
 
         triggerRepaymentLedger(loan, actorUserId, repayment);
+        delegatedActionService.logIfDelegatedActor(
+                loan.getAccountHolderId(),
+                actorUserId,
+                DelegatedActionType.REPAYMENT_RECORDED,
+                "{\"loanId\":\"" + loan.getId() + "\",\"repaymentId\":\"" + repayment.getId() + "\"}"
+        );
 
         long remainingInstallments = repaymentScheduleRepository.countByLoan_IdAndStatusIn(
                 loanId,

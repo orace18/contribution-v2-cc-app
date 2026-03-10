@@ -6,6 +6,8 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
+import java.util.UUID;
+
 public record CreateUploadUrlRequest(
         @NotNull(message = "type is required")
         MediaType type,
@@ -19,6 +21,8 @@ public record CreateUploadUrlRequest(
         Long size,
 
         @Size(max = 255, message = "originalFileName max size is 255")
-        String originalFileName
+        String originalFileName,
+
+        UUID accountHolderId
 ) {
 }
