@@ -6,10 +6,7 @@
   <component name="ChangeListManager">
     <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Revue des configs firebase">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/resources/application-dev.properties" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/application-dev.properties" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/resources/firebase/firebase-service-account-dev.json" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/firebase/firebase-service-account-dev.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/resources/firebase/firebase-service-account-prod.json" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/firebase/firebase-service-account-prod.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/resources/firebase/jawupay-bbc9f-firebase-adminsdk-q6oiw-73173de43d.json" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/firebase/jawupay-bbc9f-firebase-adminsdk-q6oiw-73173de43d.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/config/SecurityConfig.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/config/SecurityConfig.java" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -17,7 +14,7 @@
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
   <component name="EmbeddingIndexingInfo">
-    <option name="cachedIndexableFilesCount" value="389" />
+    <option name="cachedIndexableFilesCount" value="435" />
   </component>
   <component name="FileTemplateManagerImpl">
     <option name="RECENT_TEMPLATES">
@@ -444,7 +441,15 @@
       <option name="project" value="LOCAL" />
       <updated>1773155647468</updated>
     </task>
-    <option name="localTasksCounter" value="39" />
+    <task id="LOCAL-00039" summary="Revue des configs firebase">
+      <option name="closed" value="true" />
+      <created>1773156976862</created>
+      <option name="number" value="00039" />
+      <option name="presentableId" value="LOCAL-00039" />
+      <option name="project" value="LOCAL" />
+      <updated>1773156976862</updated>
+    </task>
+    <option name="localTasksCounter" value="40" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
