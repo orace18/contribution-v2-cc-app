@@ -4,8 +4,28 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Revue du base name">
+    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Refact de onboarding">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/admin/controller/AdminCountryConfigController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/admin/controller/AdminCountryConfigController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/admin/domain/entity/AdminPolicy.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/admin/domain/entity/AdminPolicy.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/admin/dto/AdminPolicyRequest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/admin/dto/AdminPolicyRequest.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/admin/dto/AdminSubscriptionPlanRequest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/admin/dto/AdminSubscriptionPlanRequest.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/admin/dto/CountryConfigResponse.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/admin/dto/CountryConfigResponse.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/admin/service/AdminCountryConfigService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/admin/service/AdminCountryConfigService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/capital/service/CapitalFundingService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/capital/service/CapitalFundingService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/capital/service/CapitalPoolService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/capital/service/CapitalPoolService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/service/CircleService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/service/CircleService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/country/controller/PublicCountryController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/country/controller/PublicCountryController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/country/domain/entity/Country.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/country/domain/entity/Country.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/country/dto/CountryResponse.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/country/dto/CountryResponse.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/country/repository/CountryRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/country/repository/CountryRepository.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/country/service/CountryService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/country/service/CountryService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/credit/service/CreditScoringService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/credit/service/CreditScoringService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/credit/service/LoanService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/credit/service/LoanService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/account_holder/domain/entity/AccountHolder.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/account_holder/domain/entity/AccountHolder.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/account_holder/service/AccountHolderService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/account_holder/service/AccountHolderService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/payments/subscription/domain/entity/SubscriptionPlan.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/payments/subscription/domain/entity/SubscriptionPlan.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/payments/subscription/service/SubscriptionService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/payments/subscription/service/SubscriptionService.java" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -368,7 +388,15 @@
       <option name="project" value="LOCAL" />
       <updated>1773064844077</updated>
     </task>
-    <option name="localTasksCounter" value="30" />
+    <task id="LOCAL-00030" summary="Refact de onboarding">
+      <option name="closed" value="true" />
+      <created>1773128986428</created>
+      <option name="number" value="00030" />
+      <option name="presentableId" value="LOCAL-00030" />
+      <option name="project" value="LOCAL" />
+      <updated>1773128986428</updated>
+    </task>
+    <option name="localTasksCounter" value="31" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -399,7 +427,8 @@
     <MESSAGE value="Ajout de MinIO pour les images" />
     <MESSAGE value="Config MinIO" />
     <MESSAGE value="Revue du base name" />
-    <option name="LAST_COMMIT_MESSAGE" value="Revue du base name" />
+    <MESSAGE value="Refact de onboarding" />
+    <option name="LAST_COMMIT_MESSAGE" value="Refact de onboarding" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />

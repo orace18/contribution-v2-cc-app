@@ -35,19 +35,34 @@ public class AccountHolderService {
 
     @Transactional
     public AccountHolder ensureFromLegacyUser(User user, UserProfile profile) {
-        return accountHolderRepository.findById(user.getId())
-                .orElseGet(() -> accountHolderRepository.save(AccountHolder.builder()
-                        .id(user.getId())
-                        .firstName(profile != null ? profile.getFirstName() : "Unknown")
-                        .lastName(profile != null ? profile.getLastName() : "Unknown")
-                        .phoneNumber(profile != null ? profile.getPhone() : null)
-                        .countryCode(profile != null
-                                ? countryService.resolveConfiguredOrFallback(profile.getCountry()).getCode()
-                                : null)
-                        .kycStatus(user.getKycStatus() != null ? user.getKycStatus() : KycStatus.NOT_STARTED)
-                        .kycVerifiedAt(user.getKycStatus() == KycStatus.VERIFIED ? OffsetDateTime.now() : null)
-                        .createdAt(user.getCreatedAt())
-                        .build()));
+        String selectedCountryCode = null;
+        if (profile != null && profile.getCountry() != null && !profile.getCountry().isBlank()) {
+            try {
+                selectedCountryCode = countryService.resolveSelectedCountryOrThrow(profile.getCountry()).getCode();
+            } catch (BusinessException ex) {
+                selectedCountryCode = countryService.resolveFallbackCountry().getCode();
+            }
+        }
+        String serviceCountryCode = selectedCountryCode != null
+                ? countryService.resolveServiceCountryForSelection(selectedCountryCode).getCode()
+                : countryService.resolveFallbackCountry().getCode();
+
+        AccountHolder existing = accountHolderRepository.findById(user.getId()).orElse(null);
+        if (existing != null) {
+            return existing;
+        }
+
+        return accountHolderRepository.save(AccountHolder.builder()
+                .id(user.getId())
+                .firstName(profile != null ? profile.getFirstName() : "Unknown")
+                .lastName(profile != null ? profile.getLastName() : "Unknown")
+                .phoneNumber(profile != null ? profile.getPhone() : null)
+                .countryCode(selectedCountryCode)
+                .serviceCountryCode(serviceCountryCode)
+                .kycStatus(user.getKycStatus() != null ? user.getKycStatus() : KycStatus.NOT_STARTED)
+                .kycVerifiedAt(user.getKycStatus() == KycStatus.VERIFIED ? OffsetDateTime.now() : null)
+                .createdAt(user.getCreatedAt())
+                .build());
     }
 
     @Transactional
@@ -57,16 +72,18 @@ public class AccountHolderService {
                                        String phoneNumber,
                                        String requestedCountryCode) {
         AccountHolder accountHolder = getById(accountHolderId);
-        String resolvedCountryCode = countryService.resolveConfiguredOrFallback(requestedCountryCode).getCode();
+        String selectedCountryCode = countryService.resolveSelectedCountryOrThrow(requestedCountryCode).getCode();
+        String serviceCountryCode = countryService.resolveServiceCountryForSelection(selectedCountryCode).getCode();
 
-        if (accountHolder.getCountryCode() != null && !accountHolder.getCountryCode().equalsIgnoreCase(resolvedCountryCode)) {
+        if (accountHolder.getCountryCode() != null && !accountHolder.getCountryCode().equalsIgnoreCase(selectedCountryCode)) {
             throw new BusinessException("Account holder country is immutable");
         }
 
         accountHolder.setFirstName(firstName);
         accountHolder.setLastName(lastName);
         accountHolder.setPhoneNumber(phoneNumber);
-        accountHolder.setCountryCode(resolvedCountryCode);
+        accountHolder.setCountryCode(selectedCountryCode);
+        accountHolder.setServiceCountryCode(serviceCountryCode);
         if (accountHolder.getKycStatus() == KycStatus.NOT_STARTED) {
             accountHolder.setKycStatus(KycStatus.PENDING);
         }

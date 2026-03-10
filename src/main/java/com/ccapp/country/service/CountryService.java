@@ -2,7 +2,6 @@ package com.ccapp.country.service;
 
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.country.domain.entity.Country;
-import com.ccapp.country.domain.enums.CountryStatus;
 import com.ccapp.country.dto.CountryResponse;
 import com.ccapp.country.repository.CountryRepository;
 import lombok.RequiredArgsConstructor;
@@ -21,30 +20,31 @@ public class CountryService {
     private final CountryRepository countryRepository;
 
     @Transactional(readOnly = true)
-    public List<CountryResponse> listConfiguredCountries() {
-        return countryRepository.findByStatusOrderByNameAsc(CountryStatus.ACTIVE).stream()
+    public List<CountryResponse> listActiveCountries() {
+        return countryRepository.findByActiveTrueOrderByNameAsc().stream()
                 .map(country -> new CountryResponse(
                         country.getCode(),
                         country.getName(),
                         country.getCurrency(),
-                        country.getStatus(),
-                        country.isInternationalFallback()
+                        country.isActive(),
+                        country.isConfigured(),
+                        country.isFallback()
                 ))
                 .toList();
     }
 
     @Transactional(readOnly = true)
-    public Country resolveConfiguredOrFallback(String requestedCountryCode) {
-        if (requestedCountryCode != null) {
-            String normalized = requestedCountryCode.trim().toUpperCase(Locale.ROOT);
-            if (!normalized.isEmpty()) {
-                Country configured = countryRepository.findByCode(normalized).orElse(null);
-                if (configured != null && configured.getStatus() == CountryStatus.ACTIVE) {
-                    return configured;
-                }
-            }
-        }
-        return resolveFallbackCountry();
+    public List<CountryResponse> listAllCountries() {
+        return countryRepository.findAllByOrderByCodeAsc().stream()
+                .map(country -> new CountryResponse(
+                        country.getCode(),
+                        country.getName(),
+                        country.getCurrency(),
+                        country.isActive(),
+                        country.isConfigured(),
+                        country.isFallback()
+                ))
+                .toList();
     }
 
     @Transactional(readOnly = true)
@@ -52,15 +52,50 @@ public class CountryService {
         if (countryCode == null || countryCode.isBlank()) {
             throw new BusinessException("Account holder country is not set");
         }
-        return countryRepository.findByCode(countryCode.trim().toUpperCase(Locale.ROOT))
-                .filter(country -> country.getStatus() == CountryStatus.ACTIVE)
+        return countryRepository.findByCode(normalize(countryCode))
+                .filter(Country::isActive)
                 .orElseThrow(() -> new BusinessException("Account holder country is not configured"));
     }
 
-    private Country resolveFallbackCountry() {
-        return countryRepository.findByInternationalFallbackTrue()
+    @Transactional(readOnly = true)
+    public Country resolveSelectedCountryOrThrow(String requestedCountryCode) {
+        if (requestedCountryCode == null || requestedCountryCode.isBlank()) {
+            throw new BusinessException("Country is required");
+        }
+        return countryRepository.findByCode(normalize(requestedCountryCode))
+                .filter(Country::isActive)
+                .orElseThrow(() -> new BusinessException("Selected country is not active"));
+    }
+
+    @Transactional(readOnly = true)
+    public Country resolveServiceCountryForSelection(String selectedCountryCode) {
+        Country selected = resolveSelectedCountryOrThrow(selectedCountryCode);
+        if (selected.isConfigured()) {
+            return selected;
+        }
+        return resolveFallbackCountry();
+    }
+
+    @Transactional(readOnly = true)
+    public Country resolveServiceCountryByCodeOrFallback(String serviceCountryCode) {
+        if (serviceCountryCode != null && !serviceCountryCode.isBlank()) {
+            Country country = countryRepository.findByCode(normalize(serviceCountryCode)).orElse(null);
+            if (country != null && country.isActive()) {
+                return country;
+            }
+        }
+        return resolveFallbackCountry();
+    }
+
+    @Transactional(readOnly = true)
+    public Country resolveFallbackCountry() {
+        return countryRepository.findByFallbackTrue()
                 .or(() -> countryRepository.findByCode(INTERNATIONAL_FALLBACK_CODE))
-                .filter(country -> country.getStatus() == CountryStatus.ACTIVE)
+                .filter(Country::isActive)
                 .orElseThrow(() -> new BusinessException("International fallback country not configured"));
+    }
+
+    private String normalize(String countryCode) {
+        return countryCode.trim().toUpperCase(Locale.ROOT);
     }
 }

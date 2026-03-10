@@ -66,7 +66,7 @@ public class LoanService {
 
         AccountHolder accountHolder = accountHolderService.getById(accountHolderId);
         accessControlService.assertCanActOnAccountHolder(actorUserId, accountHolderId, PermissionLevel.TRANSACT);
-        Country country = countryService.resolveByCodeOrThrow(accountHolder.getCountryCode());
+        Country country = countryService.resolveServiceCountryByCodeOrFallback(accountHolder.getServiceCountryCode());
         ensureCreditPolicyConfigured(country.getCode());
 
         var circle = circleRepository.findByIdAndStatus(request.circleId(), CircleStatus.ACTIVE)
@@ -75,7 +75,7 @@ public class LoanService {
             throw new BusinessException("Circle not found");
         }
         if (!country.getCode().equalsIgnoreCase(circle.getCountryCode())) {
-            throw new BusinessException("Circle country must match account holder country");
+            throw new BusinessException("Circle country must match account holder service country");
         }
         if (!circleMemberRepository.existsByCircle_IdAndAccountHolderId(request.circleId(), accountHolderId)) {
             throw new BusinessException("Account holder is not a member of this circle");

@@ -41,7 +41,7 @@ public class SubscriptionService {
     @Transactional(readOnly = true)
     public List<SubscriptionPlanResponse> getPlans(UUID accountHolderId) {
         AccountHolder accountHolder = accountHolderService.getById(accountHolderId);
-        String countryCode = countryService.resolveByCodeOrThrow(accountHolder.getCountryCode()).getCode();
+        String countryCode = countryService.resolveServiceCountryByCodeOrFallback(accountHolder.getServiceCountryCode()).getCode();
         return subscriptionPlanRepository.findByCountryAndActiveTrueOrderByPriceAsc(countryCode).stream()
                 .map(subscriptionPlanMapper::toResponse)
                 .toList();
@@ -56,7 +56,7 @@ public class SubscriptionService {
             throw new BusinessException("Actor user is required");
         }
         accessControlService.assertCanActOnAccountHolder(actorUserId, accountHolderId, PermissionLevel.TRANSACT);
-        String countryCode = countryService.resolveByCodeOrThrow(accountHolder.getCountryCode()).getCode();
+        String countryCode = countryService.resolveServiceCountryByCodeOrFallback(accountHolder.getServiceCountryCode()).getCode();
 
         SubscriptionPlan plan = subscriptionPlanRepository
                 .findByCodeAndCountryAndActiveTrue(request.planCode(), countryCode)

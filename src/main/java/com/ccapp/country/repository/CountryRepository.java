@@ -1,7 +1,6 @@
 package com.ccapp.country.repository;
 
 import com.ccapp.country.domain.entity.Country;
-import com.ccapp.country.domain.enums.CountryStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
@@ -12,7 +11,9 @@ public interface CountryRepository extends JpaRepository<Country, UUID> {
 
     Optional<Country> findByCode(String code);
 
-    Optional<Country> findByInternationalFallbackTrue();
+    Optional<Country> findByFallbackTrue();
 
-    List<Country> findByStatusOrderByNameAsc(CountryStatus status);
+    List<Country> findByActiveTrueOrderByNameAsc();
+
+    List<Country> findAllByOrderByCodeAsc();
 }

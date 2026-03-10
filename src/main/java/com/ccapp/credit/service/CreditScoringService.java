@@ -54,7 +54,7 @@ public class CreditScoringService {
     @Transactional
     public CreditEligibilityResponse evaluateEligibility(UUID accountHolderId, UUID circleId) {
         AccountHolder accountHolder = ensureAccountHolderExists(accountHolderId);
-        String countryCode = countryService.resolveByCodeOrThrow(accountHolder.getCountryCode()).getCode();
+        String countryCode = countryService.resolveServiceCountryByCodeOrFallback(accountHolder.getServiceCountryCode()).getCode();
 
         UUID resolvedCircleId = resolveCircleId(accountHolderId, circleId, countryCode);
         CreditScoringContext context = new CreditScoringContext(

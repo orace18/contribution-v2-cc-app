@@ -1,14 +1,11 @@
 package com.ccapp.admin.service;
 
-import com.ccapp.admin.domain.entity.AdminCountry;
 import com.ccapp.admin.domain.entity.AdminPolicy;
 import com.ccapp.admin.domain.enums.AdminPolicyType;
 import com.ccapp.admin.dto.*;
-import com.ccapp.admin.repository.AdminCountryRepository;
 import com.ccapp.admin.repository.AdminPolicyRepository;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.country.domain.entity.Country;
-import com.ccapp.country.domain.enums.CountryStatus;
 import com.ccapp.country.repository.CountryRepository;
 import com.ccapp.payments.subscription.domain.entity.SubscriptionPlan;
 import com.ccapp.payments.subscription.repository.SubscriptionPlanRepository;
@@ -25,19 +22,21 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class AdminCountryConfigService {
 
-    private final AdminCountryRepository adminCountryRepository;
     private final AdminPolicyRepository adminPolicyRepository;
     private final SubscriptionPlanRepository subscriptionPlanRepository;
     private final CountryRepository countryRepository;
 
     @Transactional(readOnly = true)
     public List<CountryConfigResponse> listCountries() {
-        return adminCountryRepository.findAllByOrderByCountryCodeAsc().stream()
+        return countryRepository.findAllByOrderByCodeAsc().stream()
                 .map(country -> new CountryConfigResponse(
                         country.getId(),
-                        country.getCountryCode(),
+                        country.getCode(),
                         country.getName(),
+                        country.getCurrency(),
                         country.isActive(),
+                        country.isConfigured(),
+                        country.isFallback(),
                         country.getCreatedAt()
                 ))
                 .toList();
@@ -47,23 +46,50 @@ public class AdminCountryConfigService {
     public CountryConfigResponse saveCountry(CountryConfigRequest request) {
         String countryCode = request.countryCode().trim().toUpperCase(Locale.ROOT);
 
-        AdminCountry country = adminCountryRepository.findByCountryCode(countryCode)
-                .orElseGet(() -> AdminCountry.builder()
-                        .countryCode(countryCode)
+        Country country = countryRepository.findByCode(countryCode)
+                .orElseGet(() -> Country.builder()
+                        .id(UUID.nameUUIDFromBytes(("country:" + countryCode).getBytes(StandardCharsets.UTF_8)))
+                        .code(countryCode)
+                        .currency("USD")
+                        .configured(false)
+                        .fallback(false)
                         .build());
 
-        country.setName(request.name().trim());
-        country.setActive(request.active());
+        if (country.isFallback() && !request.active()) {
+            throw new BusinessException("Fallback country cannot be deactivated");
+        }
 
-        AdminCountry saved = adminCountryRepository.save(country);
-        syncCountryCatalogue(saved.getCountryCode(), saved.getName(), saved.isActive(), null);
+        country.setName(request.name().trim());
+        country.setActive(request.active() || country.isFallback());
+
+        Country saved = countryRepository.save(country);
         return new CountryConfigResponse(
                 saved.getId(),
-                saved.getCountryCode(),
+                saved.getCode(),
                 saved.getName(),
+                saved.getCurrency(),
                 saved.isActive(),
+                saved.isConfigured(),
+                saved.isFallback(),
                 saved.getCreatedAt()
         );
+    }
+
+    @Transactional
+    public CountryConfigResponse activateCountry(String code) {
+        Country country = loadCountryByCode(code);
+        country.setActive(true);
+        Country saved = countryRepository.save(country);
+        return toCountryResponse(saved);
+    }
+
+    @Transactional
+    public CountryConfigResponse configureCountry(String code) {
+        Country country = loadCountryByCode(code);
+        country.setActive(true);
+        country.setConfigured(true);
+        Country saved = countryRepository.save(country);
+        return toCountryResponse(saved);
     }
 
     @Transactional(readOnly = true)
@@ -95,7 +121,7 @@ public class AdminCountryConfigService {
                 .price(request.price())
                 .active(request.active())
                 .build());
-        syncCountryCatalogue(country, null, true, currency);
+        ensureCountryExists(country, currency);
 
         return toPlanResponse(saved);
     }
@@ -143,28 +169,38 @@ public class AdminCountryConfigService {
         );
     }
 
-    private void syncCountryCatalogue(String code, String name, boolean active, String preferredCurrency) {
+    private void ensureCountryExists(String code, String preferredCurrency) {
         String normalizedCode = code.trim().toUpperCase(Locale.ROOT);
-        Country country = countryRepository.findByCode(normalizedCode)
-                .orElseGet(() -> Country.builder()
-                        .id(UUID.nameUUIDFromBytes(("country:" + normalizedCode).getBytes(StandardCharsets.UTF_8)))
-                        .code(normalizedCode)
-                        .internationalFallback(false)
-                        .build());
+        countryRepository.findByCode(normalizedCode).orElseGet(() -> countryRepository.save(Country.builder()
+                .id(UUID.nameUUIDFromBytes(("country:" + normalizedCode).getBytes(StandardCharsets.UTF_8)))
+                .code(normalizedCode)
+                .name(normalizedCode)
+                .currency(preferredCurrency == null || preferredCurrency.isBlank() ? "USD" : preferredCurrency.trim().toUpperCase(Locale.ROOT))
+                .active(true)
+                .configured(false)
+                .fallback(false)
+                .build()));
+    }
 
-        String currency = preferredCurrency != null && !preferredCurrency.isBlank()
-                ? preferredCurrency.trim().toUpperCase(Locale.ROOT)
-                : subscriptionPlanRepository.findByCountryAndActiveTrueOrderByPriceAsc(normalizedCode).stream()
-                .findFirst()
-                .map(plan -> plan.getCurrency().trim().toUpperCase(Locale.ROOT))
-                .orElse(country.getCurrency() != null ? country.getCurrency() : "USD");
+    private Country loadCountryByCode(String code) {
+        if (code == null || code.isBlank()) {
+            throw new BusinessException("Country code is required");
+        }
+        String normalizedCode = code.trim().toUpperCase(Locale.ROOT);
+        return countryRepository.findByCode(normalizedCode)
+                .orElseThrow(() -> new BusinessException("Country not found"));
+    }
 
-        String resolvedName = (name != null && !name.isBlank())
-                ? name.trim()
-                : (country.getName() != null && !country.getName().isBlank() ? country.getName() : normalizedCode);
-        country.setName(resolvedName);
-        country.setCurrency(currency);
-        country.setStatus(active ? CountryStatus.ACTIVE : CountryStatus.INACTIVE);
-        countryRepository.save(country);
+    private CountryConfigResponse toCountryResponse(Country country) {
+        return new CountryConfigResponse(
+                country.getId(),
+                country.getCode(),
+                country.getName(),
+                country.getCurrency(),
+                country.isActive(),
+                country.isConfigured(),
+                country.isFallback(),
+                country.getCreatedAt()
+        );
     }
 }

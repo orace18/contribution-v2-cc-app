@@ -46,9 +46,9 @@ public class CapitalFundingService {
         Loan loan = loanRepository.findById(loanId)
                 .orElseThrow(() -> new NotFoundException("Loan not found"));
         AccountHolder accountHolder = accountHolderService.getById(loan.getAccountHolderId());
-        String accountHolderCountry = countryService.resolveByCodeOrThrow(accountHolder.getCountryCode()).getCode();
+        String accountHolderCountry = countryService.resolveServiceCountryByCodeOrFallback(accountHolder.getServiceCountryCode()).getCode();
         if (!accountHolderCountry.equalsIgnoreCase(loan.getCountryCode())) {
-            throw new BusinessException("Loan country does not match account holder country");
+            throw new BusinessException("Loan country does not match account holder service country");
         }
 
         accessControlService.assertCanActOnAccountHolder(actorUserId, loan.getAccountHolderId(), PermissionLevel.TRANSACT);
@@ -74,7 +74,7 @@ public class CapitalFundingService {
             throw new BusinessException("Capital pool circle does not match loan circle");
         }
         if (!pool.getCountryCode().equalsIgnoreCase(accountHolderCountry)) {
-            throw new BusinessException("Capital pool country does not match account holder country");
+            throw new BusinessException("Capital pool country does not match account holder service country");
         }
 
         Fund fund = pool.getFund();

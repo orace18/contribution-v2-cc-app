@@ -26,11 +26,11 @@ public class PublicCountryController {
     private final CountryService countryService;
 
     @GetMapping
-    @Operation(summary = "List configured countries")
+    @Operation(summary = "List active countries")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Success", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
     })
     public ResponseEntity<CommonResponse<List<CountryResponse>>> list() {
-        return ResponseEntity.ok(CommonResponse.success("Configured countries", countryService.listConfiguredCountries()));
+        return ResponseEntity.ok(CommonResponse.success("Active countries", countryService.listActiveCountries()));
     }
 }

@@ -1,7 +1,6 @@
 package com.ccapp.country.domain.entity;
 
 import com.ccapp.common.model.AuditableEntity;
-import com.ccapp.country.domain.enums.CountryStatus;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -14,7 +13,7 @@ import java.util.UUID;
 @AllArgsConstructor
 @Entity
 @Table(name = "countries", indexes = {
-        @Index(name = "idx_countries_status_code", columnList = "status, code")
+        @Index(name = "idx_countries_active_name", columnList = "active, name")
 }, uniqueConstraints = {
         @UniqueConstraint(name = "uk_countries_code", columnNames = "code")
 })
@@ -33,10 +32,12 @@ public class Country extends AuditableEntity {
     @Column(name = "currency", nullable = false, length = 3)
     private String currency;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false, length = 16)
-    private CountryStatus status;
+    @Column(name = "active", nullable = false)
+    private boolean active;
 
-    @Column(name = "is_international_fallback", nullable = false)
-    private boolean internationalFallback;
+    @Column(name = "configured", nullable = false)
+    private boolean configured;
+
+    @Column(name = "fallback", nullable = false)
+    private boolean fallback;
 }

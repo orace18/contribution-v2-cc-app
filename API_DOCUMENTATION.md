@@ -106,9 +106,11 @@ Date de mise a jour: 2026-03-07
 ```
 - Succes `200` (`MeResponse`)
 - Regle metier:
-  - `country` est resolu vers un pays configure.
-  - si non configure, fallback `INT`.
-  - le pays canonique est `account_holders.country_code` et il devient immuable.
+  - `country` doit etre un pays actif (`countries.active=true`).
+  - `account_holders.country_code` stocke le pays selectionne par l'utilisateur (immuable).
+  - `account_holders.service_country_code` est derive:
+    - si `countries.configured=true` pour le pays selectionne: service country = pays selectionne
+    - sinon: service country = `INT` (fallback international)
 - Echec:
   - `400`: validation payload
   - `401`: utilisateur non authentifie
@@ -189,6 +191,7 @@ Date de mise a jour: 2026-03-07
 
 ### GET `/public/countries`
 - Auth: publique
+- Retourne tous les pays avec `active=true`.
 - Succes `200` (`List<CountryResponse>`)
 - Echec:
   - `500`: erreur inattendue
@@ -200,6 +203,23 @@ Date de mise a jour: 2026-03-07
 ### GET `/public/income-brackets`
 - Auth: publique
 - Succes `200` (`List<OnboardingCatalogItemResponse>`)
+
+## Admin Countries
+
+### GET `/api/admin/countries`
+- Auth: Bearer admin (`/api/admin/**`)
+- Retourne le catalogue central `countries` (actif/configure/fallback).
+- Succes `200` (`List<CountryConfigResponse>`)
+
+### POST `/api/admin/countries/{code}/activate`
+- Auth: Bearer admin
+- Active le pays cible (`active=true`).
+- Succes `200` (`CountryConfigResponse`)
+
+### POST `/api/admin/countries/{code}/configure`
+- Auth: Bearer admin
+- Configure le pays cible pour services locaux (`configured=true`, et `active=true`).
+- Succes `200` (`CountryConfigResponse`)
 
 ## Media
 
@@ -339,7 +359,7 @@ Date de mise a jour: 2026-03-07
 
 ### GET `/subscriptions/plans`
 - Auth: Bearer
-- Pays derive automatiquement de `account_holders.country_code`.
+- Pays derive automatiquement de `account_holders.service_country_code`.
 - Succes `200` (`List<SubscriptionPlanResponse>`)
 - Echec:
   - `401`: non authentifie
@@ -354,7 +374,7 @@ Date de mise a jour: 2026-03-07
 }
 ```
 - Regle metier:
-  - le pays est derive de `account_holders.country_code` (jamais du payload client).
+  - le pays est derive de `account_holders.service_country_code` (jamais du payload client).
 - Succes `200` (`InitiateSubscriptionResponse`):
   - `operationId`
   - `pspReference`
@@ -427,6 +447,8 @@ Date de mise a jour: 2026-03-07
 }
 ```
 - Succes `200` (`CircleResponse`)
+- Regle metier:
+  - le pays du cercle est derive de `account_holders.service_country_code`.
 - Echec:
   - `401`: non authentifie
   - `404`: user introuvable
@@ -443,6 +465,8 @@ Date de mise a jour: 2026-03-07
 }
 ```
 - Succes `200` (`CircleMemberResponse`)
+- Regle metier:
+  - `account_holders.service_country_code` du membre doit matcher le pays du cercle.
 - Echec:
   - `401`: non authentifie
   - `404`: cercle actif introuvable / user introuvable

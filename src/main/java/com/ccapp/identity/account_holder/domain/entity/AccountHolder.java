@@ -32,6 +32,9 @@ public class AccountHolder {
     @Column(name = "country_code", length = 3)
     private String countryCode;
 
+    @Column(name = "service_country_code", length = 3)
+    private String serviceCountryCode;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "kyc_status", nullable = false, length = 16)
     private KycStatus kycStatus;

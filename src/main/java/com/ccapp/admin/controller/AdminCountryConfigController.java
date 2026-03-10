@@ -37,6 +37,22 @@ public class AdminCountryConfigController {
         return ResponseEntity.ok(CommonResponse.success("Country configuration saved", response));
     }
 
+    @PostMapping("/countries/{code}/activate")
+    public ResponseEntity<CommonResponse<CountryConfigResponse>> activateCountry(@PathVariable String code) {
+        requireSuperOrOperations();
+        CountryConfigResponse response = adminCountryConfigService.activateCountry(code);
+        adminAuditService.logAction(AdminSecurityUtils.currentAdminUserId(), "ACTIVATE_COUNTRY", "COUNTRY_CONFIG", response.id().toString(), "code=" + code);
+        return ResponseEntity.ok(CommonResponse.success("Country activated", response));
+    }
+
+    @PostMapping("/countries/{code}/configure")
+    public ResponseEntity<CommonResponse<CountryConfigResponse>> configureCountry(@PathVariable String code) {
+        requireSuperOrOperations();
+        CountryConfigResponse response = adminCountryConfigService.configureCountry(code);
+        adminAuditService.logAction(AdminSecurityUtils.currentAdminUserId(), "CONFIGURE_COUNTRY", "COUNTRY_CONFIG", response.id().toString(), "code=" + code);
+        return ResponseEntity.ok(CommonResponse.success("Country configured", response));
+    }
+
     @GetMapping("/subscription-plans")
     public ResponseEntity<CommonResponse<List<AdminSubscriptionPlanResponse>>> listPlans() {
         List<AdminSubscriptionPlanResponse> response = adminCountryConfigService.listSubscriptionPlans();

@@ -7,7 +7,10 @@ public record CountryConfigResponse(
         UUID id,
         String countryCode,
         String name,
+        String currency,
         boolean active,
+        boolean configured,
+        boolean fallback,
         OffsetDateTime createdAt
 ) {
 }

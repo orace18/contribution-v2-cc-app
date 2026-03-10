@@ -30,7 +30,7 @@ public class SubscriptionPlan extends AuditableEntity {
     @Column(name = "name", nullable = false, length = 128)
     private String name;
 
-    @Column(name = "country", nullable = false, length = 2)
+    @Column(name = "country", nullable = false, length = 3)
     private String country;
 
     @Column(name = "currency", nullable = false, length = 3)

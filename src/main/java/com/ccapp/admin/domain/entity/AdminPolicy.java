@@ -27,7 +27,7 @@ public class AdminPolicy {
     @Column(name = "policy_type", nullable = false, length = 64)
     private AdminPolicyType policyType;
 
-    @Column(name = "country_code", length = 2)
+    @Column(name = "country_code", length = 3)
     private String countryCode;
 
     @Column(name = "payload", nullable = false, columnDefinition = "TEXT")

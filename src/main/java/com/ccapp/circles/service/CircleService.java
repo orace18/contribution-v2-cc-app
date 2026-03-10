@@ -144,7 +144,7 @@ public class CircleService {
 
     private String resolveAccountHolderCountry(UUID accountHolderId) {
         AccountHolder accountHolder = accountHolderService.getById(accountHolderId);
-        return countryService.resolveByCodeOrThrow(accountHolder.getCountryCode()).getCode();
+        return countryService.resolveServiceCountryByCodeOrFallback(accountHolder.getServiceCountryCode()).getCode();
     }
 
     private CircleResponse toCircleResponse(Circle circle, int membersCount) {
