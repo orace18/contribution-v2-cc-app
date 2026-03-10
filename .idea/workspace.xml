@@ -4,49 +4,13 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Revue des cors">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/admin/security/AdminJwtAuthenticationFilter.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/admin/security/AdminJwtAuthenticationFilter.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/admin/service/AdminAuthService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/admin/service/AdminAuthService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/config/security/FirebaseAuthenticationFilter.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/config/security/FirebaseAuthenticationFilter.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/account_holder/service/AccountHolderService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/account_holder/service/AccountHolderService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/controller/IdentityController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/controller/IdentityController.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/controller/InternalIdentityController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/controller/InternalIdentityController.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/controller/MobileIdentityController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/controller/MobileIdentityController.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/controller/PublicOnboardingCatalogController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/controller/PublicOnboardingCatalogController.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/delegation/service/AccessControlService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/delegation/service/AccessControlService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/delegation/service/AssistedMemberVerificationService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/delegation/service/AssistedMemberVerificationService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/delegation/service/DelegatedActionService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/delegation/service/DelegatedActionService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/delegation/service/DelegationService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/delegation/service/DelegationService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/device/service/DeviceService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/device/service/DeviceService.java" afterDir="false" />
+    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Ajout de logs">
       <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/service/DevTokenVerifier.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/service/DevTokenVerifier.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/service/FirebaseAdminTokenVerifier.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/service/FirebaseAdminTokenVerifier.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/service/IdentityService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/service/IdentityService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/service/OnboardingCatalogService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/service/OnboardingCatalogService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/service/RefreshTokenService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/service/RefreshTokenService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/session/service/SessionService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/session/service/SessionService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/wallet/service/WalletService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/wallet/service/WalletService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/admin/security/AdminJwtAuthenticationFilter.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/admin/security/AdminJwtAuthenticationFilter.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/admin/service/AdminAuthService.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/admin/service/AdminAuthService.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/config/security/FirebaseAuthenticationFilter.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/config/security/FirebaseAuthenticationFilter.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/identity/account_holder/service/AccountHolderService.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/identity/account_holder/service/AccountHolderService.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/identity/controller/IdentityController.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/identity/controller/IdentityController.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/identity/controller/InternalIdentityController.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/identity/controller/InternalIdentityController.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/identity/controller/MobileIdentityController.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/identity/controller/MobileIdentityController.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/identity/controller/PublicOnboardingCatalogController.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/identity/controller/PublicOnboardingCatalogController.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/identity/delegation/service/AccessControlService.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/identity/delegation/service/AccessControlService.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/identity/delegation/service/AssistedMemberVerificationService.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/identity/delegation/service/AssistedMemberVerificationService.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/identity/delegation/service/DelegatedActionService.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/identity/delegation/service/DelegatedActionService.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/identity/delegation/service/DelegationService.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/identity/delegation/service/DelegationService.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/identity/device/service/DeviceService.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/identity/device/service/DeviceService.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/resources/application-prod.properties" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/application-prod.properties" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/resources/application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/application.properties" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/application-prod.properties" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/application-prod.properties" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/application.properties" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/identity/service/DevTokenVerifier.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/identity/service/DevTokenVerifier.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/identity/service/FirebaseAdminTokenVerifier.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/identity/service/FirebaseAdminTokenVerifier.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/identity/service/IdentityService$SessionCreation.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/identity/service/IdentityService$SessionCreation.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/identity/service/IdentityService.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/identity/service/IdentityService.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/identity/service/OnboardingCatalogService.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/identity/service/OnboardingCatalogService.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/identity/service/RefreshTokenService.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/identity/service/RefreshTokenService.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/identity/session/service/SessionService.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/identity/session/service/SessionService.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/identity/wallet/service/WalletService.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/identity/wallet/service/WalletService.class" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/target/generated-sources/annotations/com/ccapp/identity/mapper/IdentityMapperImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/target/generated-sources/annotations/com/ccapp/identity/mapper/IdentityMapperImpl.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/target/generated-sources/annotations/com/ccapp/payments/subscription/mapper/SubscriptionPlanMapperImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/target/generated-sources/annotations/com/ccapp/payments/subscription/mapper/SubscriptionPlanMapperImpl.java" afterDir="false" />
     </list>
@@ -499,7 +463,15 @@
       <option name="project" value="LOCAL" />
       <updated>1773159592488</updated>
     </task>
-    <option name="localTasksCounter" value="41" />
+    <task id="LOCAL-00041" summary="Ajout de logs">
+      <option name="closed" value="true" />
+      <created>1773161541860</created>
+      <option name="number" value="00041" />
+      <option name="presentableId" value="LOCAL-00041" />
+      <option name="project" value="LOCAL" />
+      <updated>1773161541860</updated>
+    </task>
+    <option name="localTasksCounter" value="42" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -538,7 +510,8 @@
     <MESSAGE value="Ajout des apis de community" />
     <MESSAGE value="Revue des configs firebase" />
     <MESSAGE value="Revue des cors" />
-    <option name="LAST_COMMIT_MESSAGE" value="Revue des cors" />
+    <MESSAGE value="Ajout de logs" />
+    <option name="LAST_COMMIT_MESSAGE" value="Ajout de logs" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />

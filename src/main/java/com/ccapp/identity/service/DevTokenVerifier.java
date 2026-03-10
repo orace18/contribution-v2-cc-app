@@ -6,7 +6,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 @Service
-@ConditionalOnProperty(name = "firebase.auth.enabled", havingValue = "false", matchIfMissing = true)
+@ConditionalOnProperty(name = "firebase.auth.enabled", havingValue = "false")
 @Slf4j
 public class DevTokenVerifier implements FirebaseTokenVerifier {
 
