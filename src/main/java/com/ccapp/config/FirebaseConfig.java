@@ -5,7 +5,6 @@ import com.google.firebase.FirebaseApp;
 import com.google.firebase.FirebaseOptions;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.ClassPathResource;
 
@@ -16,7 +15,6 @@ import java.io.InputStream;
 
 @Slf4j
 @Configuration
-@ConditionalOnProperty(name = "firebase.auth.enabled", havingValue = "true")
 public class FirebaseConfig {
 
     public FirebaseConfig(@Value("${firebase.credentials.path:}") String credentialsPath,

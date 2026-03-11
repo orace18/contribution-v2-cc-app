@@ -12,7 +12,7 @@
     },
     {
       "key": "bearerToken",
-      "value": "dev:alice"
+      "value": "<FIREBASE_ID_TOKEN>"
     },
     {
       "key": "internalApiKey",
@@ -140,7 +140,7 @@
       ]
     },
     {
-      "name": "01 - Identity (Bearer dev:<uid>)",
+      "name": "01 - Identity (Bearer Firebase ID token)",
       "item": [
         {
           "name": "Identity Sync",

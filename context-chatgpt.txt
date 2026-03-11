@@ -7,13 +7,13 @@ Stack technique:
 - Flyway (migrations SQL)
 - MapStruct, Lombok
 - OpenAPI/Swagger (activable en dev)
-- Firebase Admin (auth optionnelle)
+- Firebase Admin (authentification)
 - Build/deploy: Maven + Docker + GitLab CI
 
 Modules existants et état fonctionnel:
 
 1) Identity (fonctionnel)
-- Sync utilisateur via token Firebase/dev token
+- Sync utilisateur via token Firebase (ID token valide)
 - Création/upsert user, device, session
 - Onboarding profil
 - Lecture profil courant (/me)
@@ -66,7 +66,7 @@ Sécurité actuelle:
   - POST /psp/jawupay/callback
   - actuator health/info
 - Le reste requiert authentification Bearer
-- Mode dev: token de type "Bearer dev:<uid>" possible si Firebase désactivé
+- Mode dev: token de type "Bearer <Firebase ID token>" requis
 
 Qualité / tests:
 - Tests unitaires présents sur:

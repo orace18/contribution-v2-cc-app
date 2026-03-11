@@ -22,7 +22,7 @@ Branche de travail: dev
 3) Modules métiers en place
 
 3.1 Identity
-- Synchronisation utilisateur via token (Firebase ou mode dev token).
+- Synchronisation utilisateur via token Firebase (ID token valide, y compris en dev).
 - Création/upsert utilisateur, device, session.
 - Onboarding profil utilisateur.
 - Consultation du profil courant.

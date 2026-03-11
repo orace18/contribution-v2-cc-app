@@ -4,15 +4,21 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Ajout de logs">
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/service/DevTokenVerifier.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/service/DevTokenVerifier.java" afterDir="false" />
+    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Firebase">
+      <change beforePath="$PROJECT_DIR$/.env.example" beforeDir="false" afterPath="$PROJECT_DIR$/.env.example" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/API_DOCUMENTATION.md" beforeDir="false" afterPath="$PROJECT_DIR$/API_DOCUMENTATION.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/context-chatgpt.txt" beforeDir="false" afterPath="$PROJECT_DIR$/context-chatgpt.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docker-compose-dev.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/docker-compose-dev.yaml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/postman/cc-app-backend-local.postman_collection.json" beforeDir="false" afterPath="$PROJECT_DIR$/postman/cc-app-backend-local.postman_collection.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/postman/cc-app-backend-local.postman_environment.json" beforeDir="false" afterPath="$PROJECT_DIR$/postman/cc-app-backend-local.postman_environment.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/resume-executif-projet.txt" beforeDir="false" afterPath="$PROJECT_DIR$/resume-executif-projet.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/config/FirebaseConfig.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/config/FirebaseConfig.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/service/DevTokenVerifier.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/service/FirebaseAdminTokenVerifier.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/service/FirebaseAdminTokenVerifier.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/resources/application-dev.properties" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/application-dev.properties" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/resources/application-prod.properties" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/application-prod.properties" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/resources/application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/application.properties" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/application-prod.properties" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/application-prod.properties" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/application.properties" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/identity/service/DevTokenVerifier.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/identity/service/DevTokenVerifier.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/generated-sources/annotations/com/ccapp/identity/mapper/IdentityMapperImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/target/generated-sources/annotations/com/ccapp/identity/mapper/IdentityMapperImpl.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/generated-sources/annotations/com/ccapp/payments/subscription/mapper/SubscriptionPlanMapperImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/target/generated-sources/annotations/com/ccapp/payments/subscription/mapper/SubscriptionPlanMapperImpl.java" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -471,7 +477,15 @@
       <option name="project" value="LOCAL" />
       <updated>1773161541860</updated>
     </task>
-    <option name="localTasksCounter" value="42" />
+    <task id="LOCAL-00042" summary="Firebase">
+      <option name="closed" value="true" />
+      <created>1773162136384</created>
+      <option name="number" value="00042" />
+      <option name="presentableId" value="LOCAL-00042" />
+      <option name="project" value="LOCAL" />
+      <updated>1773162136384</updated>
+    </task>
+    <option name="localTasksCounter" value="43" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -486,7 +500,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="Mise en place du projet" />
     <MESSAGE value="Mise a jour du code" />
     <MESSAGE value="Configuration gitlab-ci et docker-compose" />
     <MESSAGE value="Configuration gitlab-ci et docker-compose -Revue" />
@@ -511,7 +524,8 @@
     <MESSAGE value="Revue des configs firebase" />
     <MESSAGE value="Revue des cors" />
     <MESSAGE value="Ajout de logs" />
-    <option name="LAST_COMMIT_MESSAGE" value="Ajout de logs" />
+    <MESSAGE value="Firebase" />
+    <option name="LAST_COMMIT_MESSAGE" value="Firebase" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />

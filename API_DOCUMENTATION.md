@@ -8,7 +8,7 @@ Date de mise a jour: 2026-03-07
 
 ## Authentification
 - `Bearer <token>` requis pour la plupart des endpoints.
-- Mode dev possible si `firebase.auth.enabled=false`: token `Bearer dev:<uid>`.
+- Meme en `dev`, le token doit etre un `Firebase ID token` valide (`Bearer <idToken>`).
 - Endpoints internes (`/internal/**`): header `X-API-KEY`.
 - Endpoints publics:
   - `GET /actuator/health`
