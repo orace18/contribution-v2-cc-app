@@ -23,7 +23,7 @@ services:
       - INTERNAL_API_KEY=${INTERNAL_API_KEY}
       - JAWUPAY_HMAC_SECRET=${JAWUPAY_HMAC_SECRET}
       - FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID:-}
-      - FIREBASE_CREDENTIALS_PATH=${FIREBASE_CREDENTIALS_PATH}
+      - FIREBASE_CREDENTIALS_PATH=${FIREBASE_CREDENTIALS_PATH:-/run/secrets/firebase-service-account.json}
       - PARTNER_API_KEY=${PARTNER_API_KEY}
       - MAIL_PASSWORD=${MAIL_PASSWORD}
       - SENTRY_DSN=${SENTRY_DSN}
@@ -47,6 +47,9 @@ services:
       - MEDIA_UPLOAD_URL_TTL_MINUTES=${MEDIA_UPLOAD_URL_TTL_MINUTES:-15}
       - MEDIA_DOWNLOAD_URL_TTL_MINUTES=${MEDIA_DOWNLOAD_URL_TTL_MINUTES:-15}
       - MEDIA_MAX_SIZE_BYTES=${MEDIA_MAX_SIZE_BYTES:-10485760}
+
+    volumes:
+      - ${FIREBASE_CREDENTIALS_FILE:-./secrets/firebase-service-account-prod.json}:/run/secrets/firebase-service-account.json:ro
 
     networks:
       - club_chretien_net
