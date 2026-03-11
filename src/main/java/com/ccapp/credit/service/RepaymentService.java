@@ -1,10 +1,10 @@
 package com.ccapp.credit.service;
 
-import com.ccapp.circlesocial.domain.enums.ActivityType;
-import com.ccapp.circlesocial.service.CircleActivityService;
+import com.ccapp.common.events.DomainEventPublisher;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.common.exception.ConflictException;
 import com.ccapp.common.exception.NotFoundException;
+import com.ccapp.credit.event.LoanRepaidEvent;
 import com.ccapp.credit.domain.entity.Loan;
 import com.ccapp.credit.domain.entity.LoanRepayment;
 import com.ccapp.credit.domain.entity.RepaymentSchedule;
@@ -20,15 +20,10 @@ import com.ccapp.identity.delegation.domain.enums.DelegatedActionType;
 import com.ccapp.identity.delegation.service.AccessControlService;
 import com.ccapp.identity.delegation.service.DelegatedActionService;
 import com.ccapp.ledger.service.AccountingPostingService;
-import com.ccapp.notifications.domain.enums.NotificationChannel;
-import com.ccapp.notifications.domain.enums.NotificationType;
-import com.ccapp.notifications.dto.CreateNotificationRequest;
-import com.ccapp.notifications.service.NotificationService;
 import com.ccapp.payments.operation.domain.entity.Operation;
 import com.ccapp.payments.operation.domain.enums.OperationType;
 import com.ccapp.payments.operation.service.OperationService;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,7 +33,6 @@ import java.util.List;
 import java.util.UUID;
 
 @Service
-@Slf4j
 @RequiredArgsConstructor
 public class RepaymentService {
 
@@ -48,9 +42,8 @@ public class RepaymentService {
     private final AccessControlService accessControlService;
     private final OperationService operationService;
     private final AccountingPostingService accountingPostingService;
-    private final CircleActivityService circleActivityService;
-    private final NotificationService notificationService;
     private final DelegatedActionService delegatedActionService;
+    private final DomainEventPublisher domainEventPublisher;
 
     @Transactional
     public LoanRepaymentResponse repay(UUID actorUserId, UUID loanId, RepayLoanRequest request) {
@@ -116,8 +109,14 @@ public class RepaymentService {
         if (remainingInstallments == 0) {
             loan.setStatus(LoanStatus.REPAID);
             loanRepository.save(loan);
-            circleActivityService.logActivity(loan.getCircleId(), actorUserId, ActivityType.LOAN_REPAID, loan.getId(), "Loan fully repaid");
-            emitLoanRepaidNotification(loan, actorUserId);
+            domainEventPublisher.publish(LoanRepaidEvent.create(
+                    loan.getId(),
+                    loan.getAccountHolderId(),
+                    actorUserId,
+                    loan.getCircleId(),
+                    repayment.getAmount(),
+                    repayment.getCurrency()
+            ));
         }
 
         return new LoanRepaymentResponse(
@@ -170,20 +169,4 @@ public class RepaymentService {
         accountingPostingService.postConfirmedOperation(operation.getId());
     }
 
-    private void emitLoanRepaidNotification(Loan loan, UUID actorUserId) {
-        try {
-            notificationService.createNotification(new CreateNotificationRequest(
-                    loan.getAccountHolderId(),
-                    actorUserId,
-                    NotificationType.LOAN_REPAID,
-                    NotificationChannel.IN_APP,
-                    "LOAN_REPAID",
-                    "Your loan " + loan.getId() + " has been fully repaid.",
-                    null,
-                    true
-            ));
-        } catch (RuntimeException ex) {
-            log.warn("Failed to emit LOAN_REPAID notification for loanId={}", loan.getId(), ex);
-        }
-    }
 }

@@ -19,7 +19,7 @@ import java.util.List;
 @Component
 public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
 
-    @Value("${security.internal-api-key:}")
+    @Value("${security.internal-api-key}")
     private String internalApiKey;
 
     @Override

@@ -2,6 +2,7 @@ package com.ccapp.admin.controller;
 
 import com.ccapp.common.api.CommonResponse;
 import com.ccapp.community.dto.CommunityPostResponse;
+import com.ccapp.community.dto.CreateCommunityPostRequest;
 import com.ccapp.community.dto.FeatureCommunityPostRequest;
 import com.ccapp.community.service.CommunityAdminService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -27,6 +28,17 @@ import java.util.UUID;
 public class AdminCommunityController {
 
     private final CommunityAdminService communityAdminService;
+
+    @PostMapping
+    @Operation(summary = "Create a community post")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Success", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Validation or business rule error", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
+    })
+    public ResponseEntity<CommonResponse<CommunityPostResponse>> create(@Valid @RequestBody CreateCommunityPostRequest request) {
+        CommunityPostResponse response = communityAdminService.create(request);
+        return ResponseEntity.ok(CommonResponse.success("Community post created", response));
+    }
 
     @PostMapping("/{id}/feature")
     @Operation(summary = "Feature a community post")

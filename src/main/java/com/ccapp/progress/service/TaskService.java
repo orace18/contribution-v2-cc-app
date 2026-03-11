@@ -6,10 +6,10 @@ import com.ccapp.identity.delegation.domain.enums.DelegatedActionType;
 import com.ccapp.identity.delegation.domain.enums.PermissionLevel;
 import com.ccapp.identity.delegation.service.AccessControlService;
 import com.ccapp.identity.delegation.service.DelegatedActionService;
+import com.ccapp.common.events.DomainEventPublisher;
 import com.ccapp.notifications.domain.enums.NotificationChannel;
 import com.ccapp.notifications.domain.enums.NotificationType;
-import com.ccapp.notifications.dto.CreateNotificationRequest;
-import com.ccapp.notifications.service.NotificationService;
+import com.ccapp.notifications.event.NotificationRequestedEvent;
 import com.ccapp.progress.domain.entity.UserTask;
 import com.ccapp.progress.domain.enums.TaskStatus;
 import com.ccapp.progress.domain.enums.TaskType;
@@ -37,7 +37,7 @@ public class TaskService {
     private final UserTaskRepository userTaskRepository;
     private final AccountHolderService accountHolderService;
     private final ProgressService progressService;
-    private final NotificationService notificationService;
+    private final DomainEventPublisher domainEventPublisher;
     private final AccessControlService accessControlService;
     private final DelegatedActionService delegatedActionService;
 
@@ -92,7 +92,7 @@ public class TaskService {
 
     private void emitTaskCompletedNotification(UUID accountHolderId, TaskType taskType) {
         try {
-            notificationService.createNotification(new CreateNotificationRequest(
+            domainEventPublisher.publish(NotificationRequestedEvent.create(
                     accountHolderId,
                     null,
                     NotificationType.TASK_COMPLETED,

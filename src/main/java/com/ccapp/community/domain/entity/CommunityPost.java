@@ -32,6 +32,15 @@ public class CommunityPost extends AuditableEntity {
     @Column(name = "media_url", length = 512)
     private String mediaUrl;
 
+    @Column(name = "author_account_holder_id")
+    private UUID authorAccountHolderId;
+
+    @Column(name = "community_id")
+    private UUID communityId;
+
+    @Column(name = "visibility", length = 32)
+    private String visibility;
+
     @Column(name = "active", nullable = false)
     @Builder.Default
     private boolean active = true;

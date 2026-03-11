@@ -1,6 +1,5 @@
 package com.ccapp.media.storage;
 
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -13,21 +12,19 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 import java.net.URI;
 
-@Slf4j
 @Configuration
 public class MediaStorageConfig {
 
     @Bean
     public S3Client mediaS3Client(@Value("${media.storage.endpoint:http://localhost:9000}") String endpoint,
                                   @Value("${media.storage.region:us-east-1}") String region,
-                                  @Value("${media.storage.access-key:minioadmin}") String accessKey,
-                                  @Value("${media.storage.secret-key:minioadmin}") String secretKey,
+                                  @Value("${media.storage.access-key}") String accessKey,
+                                  @Value("${media.storage.secret-key}") String secretKey,
                                   @Value("${media.storage.path-style:true}") boolean pathStyle) {
         String resolvedEndpoint = defaultIfBlank(endpoint, "http://localhost:9000");
         String resolvedRegion = defaultIfBlank(region, "us-east-1");
-        String resolvedAccessKey = defaultIfBlank(accessKey, "minioadmin");
-        String resolvedSecretKey = defaultIfBlank(secretKey, "minioadmin");
-        warnIfCredentialFallback(accessKey, secretKey);
+        String resolvedAccessKey = requireNonBlank(accessKey, "media.storage.access-key");
+        String resolvedSecretKey = requireNonBlank(secretKey, "media.storage.secret-key");
 
         AwsBasicCredentials credentials = AwsBasicCredentials.create(resolvedAccessKey, resolvedSecretKey);
         S3Configuration s3Configuration = S3Configuration.builder()
@@ -44,14 +41,13 @@ public class MediaStorageConfig {
     @Bean
     public S3Presigner mediaS3Presigner(@Value("${media.storage.endpoint:http://localhost:9000}") String endpoint,
                                         @Value("${media.storage.region:us-east-1}") String region,
-                                        @Value("${media.storage.access-key:minioadmin}") String accessKey,
-                                        @Value("${media.storage.secret-key:minioadmin}") String secretKey,
+                                        @Value("${media.storage.access-key}") String accessKey,
+                                        @Value("${media.storage.secret-key}") String secretKey,
                                         @Value("${media.storage.path-style:true}") boolean pathStyle) {
         String resolvedEndpoint = defaultIfBlank(endpoint, "http://localhost:9000");
         String resolvedRegion = defaultIfBlank(region, "us-east-1");
-        String resolvedAccessKey = defaultIfBlank(accessKey, "minioadmin");
-        String resolvedSecretKey = defaultIfBlank(secretKey, "minioadmin");
-        warnIfCredentialFallback(accessKey, secretKey);
+        String resolvedAccessKey = requireNonBlank(accessKey, "media.storage.access-key");
+        String resolvedSecretKey = requireNonBlank(secretKey, "media.storage.secret-key");
 
         AwsBasicCredentials credentials = AwsBasicCredentials.create(resolvedAccessKey, resolvedSecretKey);
         S3Configuration s3Configuration = S3Configuration.builder()
@@ -69,10 +65,11 @@ public class MediaStorageConfig {
         return value == null || value.trim().isEmpty() ? fallback : value.trim();
     }
 
-    private void warnIfCredentialFallback(String accessKey, String secretKey) {
-        if (isBlank(accessKey) || isBlank(secretKey)) {
-            log.warn("MEDIA_STORAGE_ACCESS_KEY or MEDIA_STORAGE_SECRET_KEY is blank; using fallback credentials.");
+    private String requireNonBlank(String value, String propertyName) {
+        if (isBlank(value)) {
+            throw new IllegalStateException("Missing required secret: " + propertyName);
         }
+        return value.trim();
     }
 
     private boolean isBlank(String value) {

@@ -5,10 +5,11 @@ import com.ccapp.circles.domain.entity.CircleMember;
 import com.ccapp.country.dto.CountryContext;
 import com.ccapp.country.service.CountryContextService;
 import com.ccapp.circlesocial.domain.enums.ActivityType;
-import com.ccapp.circlesocial.service.CircleActivityService;
+import com.ccapp.circlesocial.event.CircleActivityRequestedEvent;
 import com.ccapp.circles.domain.enums.CircleMemberRole;
 import com.ccapp.circles.domain.enums.CircleStatus;
 import com.ccapp.circles.dto.*;
+import com.ccapp.common.events.DomainEventPublisher;
 import com.ccapp.circles.repository.CircleMemberRepository;
 import com.ccapp.circles.repository.CircleRepository;
 import com.ccapp.common.exception.BusinessException;
@@ -43,7 +44,7 @@ public class CircleService {
 
     private final CircleRepository circleRepository;
     private final CircleMemberRepository circleMemberRepository;
-    private final CircleActivityService circleActivityService;
+    private final DomainEventPublisher domainEventPublisher;
     private final CountryContextService countryContextService;
     private final AccountHolderRepository accountHolderRepository;
     private final AppUserRepository appUserRepository;
@@ -71,13 +72,13 @@ public class CircleService {
                 .joinedAt(OffsetDateTime.now())
                 .build());
 
-        circleActivityService.logActivity(
+        domainEventPublisher.publish(CircleActivityRequestedEvent.create(
                 circle.getId(),
                 accountHolderId,
                 ActivityType.MEMBER_JOINED,
                 coachMember.getId(),
                 "Coach created and joined circle"
-        );
+        ));
         return toCircleResponse(circle, 1);
     }
 
@@ -113,13 +114,13 @@ public class CircleService {
                 .joinedAt(OffsetDateTime.now())
                 .build());
 
-        circleActivityService.logActivity(
+        domainEventPublisher.publish(CircleActivityRequestedEvent.create(
                 circle.getId(),
                 accountHolderId,
                 ActivityType.MEMBER_JOINED,
                 member.getId(),
                 "Member joined circle"
-        );
+        ));
         return toMemberResponse(member);
     }
 
@@ -217,13 +218,13 @@ public class CircleService {
                 .joinedAt(OffsetDateTime.now())
                 .build());
 
-        circleActivityService.logActivity(
+        domainEventPublisher.publish(CircleActivityRequestedEvent.create(
                 circle.getId(),
                 actorUserId,
                 ActivityType.MEMBER_JOINED,
                 member.getId(),
                 "Assisted member created and joined circle"
-        );
+        ));
         delegatedActionService.log(
                 assistedAccountHolder.getId(),
                 actorUserId,

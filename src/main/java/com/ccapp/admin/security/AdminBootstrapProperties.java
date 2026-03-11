@@ -8,7 +8,7 @@ import org.springframework.stereotype.Component;
 public class AdminBootstrapProperties {
 
     private String email = "admin@platform.com";
-    private String password = "change_me_securely";
+    private String password;
 
     public String getEmail() {
         return email;

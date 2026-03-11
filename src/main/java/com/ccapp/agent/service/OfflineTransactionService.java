@@ -1,18 +1,21 @@
 package com.ccapp.agent.service;
 
 import com.ccapp.agent.domain.entity.OfflineTransaction;
+import com.ccapp.agent.domain.enums.TransactionType;
 import com.ccapp.agent.dto.CreateOfflineTransactionRequest;
 import com.ccapp.agent.dto.OfflineTransactionResponse;
 import com.ccapp.agent.dto.SyncOfflineTransactionsRequest;
 import com.ccapp.agent.dto.SyncOfflineTransactionsResponse;
 import com.ccapp.agent.repository.OfflineTransactionRepository;
+import com.ccapp.circles.repository.CircleRepository;
+import com.ccapp.circlesocial.event.CircleContributionEvent;
+import com.ccapp.common.events.DomainEventPublisher;
 import com.ccapp.common.exception.NotFoundException;
 import com.ccapp.identity.account_holder.repository.AccountHolderRepository;
 import com.ccapp.ledger.service.AccountingPostingService;
 import com.ccapp.notifications.domain.enums.NotificationChannel;
 import com.ccapp.notifications.domain.enums.NotificationType;
-import com.ccapp.notifications.dto.CreateNotificationRequest;
-import com.ccapp.notifications.service.NotificationService;
+import com.ccapp.notifications.event.NotificationRequestedEvent;
 import com.ccapp.payments.operation.domain.entity.Operation;
 import com.ccapp.payments.operation.domain.enums.OperationType;
 import com.ccapp.payments.operation.service.OperationService;
@@ -33,10 +36,11 @@ public class OfflineTransactionService {
 
     private final OfflineTransactionRepository offlineTransactionRepository;
     private final AccountHolderRepository accountHolderRepository;
+    private final CircleRepository circleRepository;
     private final AgentService agentService;
     private final OperationService operationService;
     private final AccountingPostingService accountingPostingService;
-    private final NotificationService notificationService;
+    private final DomainEventPublisher domainEventPublisher;
 
     @Transactional
     public OfflineTransactionResponse createOfflineTransaction(UUID actorUserId, CreateOfflineTransactionRequest request) {
@@ -55,6 +59,9 @@ public class OfflineTransactionService {
                 .status("PENDING_SYNC")
                 .build());
         emitAgentActionNotification(saved);
+        if (saved.getTransactionType() == TransactionType.CONTRIBUTION) {
+            emitCircleContribution(saved);
+        }
 
         return toResponse(saved);
     }
@@ -103,7 +110,7 @@ public class OfflineTransactionService {
             case LOAN_DISBURSEMENT -> postLoanOperation(tx, OperationType.LOAN_DISBURSEMENT, "Offline loan disbursement");
             case LOAN_REPAYMENT -> postLoanOperation(tx, OperationType.LOAN_REPAYMENT, "Offline loan repayment");
             case CONTRIBUTION -> {
-                // Contribution is only synchronized as an offline record for now.
+                // Contribution event is emitted at recording time to keep producer semantics consistent.
             }
         }
     }
@@ -138,7 +145,7 @@ public class OfflineTransactionService {
 
     private void emitAgentActionNotification(OfflineTransaction tx) {
         try {
-            notificationService.createNotification(new CreateNotificationRequest(
+            domainEventPublisher.publish(NotificationRequestedEvent.create(
                     tx.getAccountHolderId(),
                     tx.getAgentUserId(),
                     NotificationType.AGENT_ACTION,
@@ -150,6 +157,23 @@ public class OfflineTransactionService {
             ));
         } catch (RuntimeException ex) {
             log.warn("Failed to emit AGENT_ACTION notification for offlineTransactionId={}", tx.getId(), ex);
+        }
+    }
+
+    private void emitCircleContribution(OfflineTransaction tx) {
+        try {
+            circleRepository.findActiveCirclesForUser(tx.getAccountHolderId())
+                    .stream()
+                    .findFirst()
+                    .ifPresent(circle -> domainEventPublisher.publish(CircleContributionEvent.create(
+                            circle.getId(),
+                            tx.getAccountHolderId(),
+                            tx.getAgentUserId(),
+                            tx.getAmount(),
+                            tx.getCurrency()
+                    )));
+        } catch (RuntimeException ex) {
+            log.warn("Failed to emit CircleContributionEvent for offlineTransactionId={}", tx.getId(), ex);
         }
     }
 }

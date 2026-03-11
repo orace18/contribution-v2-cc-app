@@ -1,9 +1,12 @@
 package com.ccapp.community.service;
 
+import com.ccapp.common.events.DomainEventPublisher;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.common.exception.NotFoundException;
 import com.ccapp.community.domain.entity.CommunityPost;
 import com.ccapp.community.dto.CommunityPostResponse;
+import com.ccapp.community.dto.CreateCommunityPostRequest;
+import com.ccapp.community.event.PostCreatedEvent;
 import com.ccapp.community.repository.CommunityPostRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -19,6 +22,31 @@ public class CommunityAdminService {
     private static final int MAX_FEATURED_POSTS = 5;
 
     private final CommunityPostRepository communityPostRepository;
+    private final DomainEventPublisher domainEventPublisher;
+
+    @Transactional
+    public CommunityPostResponse create(CreateCommunityPostRequest request) {
+        CommunityPost saved = communityPostRepository.save(CommunityPost.builder()
+                .title(request.title().trim())
+                .content(request.content().trim())
+                .mediaUrl(request.mediaUrl())
+                .authorAccountHolderId(request.authorAccountHolderId())
+                .communityId(request.communityId())
+                .visibility(normalizeVisibility(request.visibility()))
+                .active(true)
+                .featured(false)
+                .featuredPriority(null)
+                .featuredAt(null)
+                .build());
+
+        domainEventPublisher.publish(PostCreatedEvent.create(
+                saved.getId(),
+                saved.getAuthorAccountHolderId(),
+                saved.getCommunityId(),
+                saved.getVisibility()
+        ));
+        return toResponse(saved);
+    }
 
     @Transactional
     public CommunityPostResponse feature(UUID postId, int priority) {
@@ -60,5 +88,12 @@ public class CommunityAdminService {
                 post.getFeaturedAt(),
                 post.getCreatedAt()
         );
+    }
+
+    private String normalizeVisibility(String visibility) {
+        if (visibility == null || visibility.isBlank()) {
+            return "PUBLIC";
+        }
+        return visibility.trim().toUpperCase();
     }
 }

@@ -17,7 +17,7 @@ import java.io.InputStream;
 @Configuration
 public class FirebaseConfig {
 
-    public FirebaseConfig(@Value("${firebase.credentials.path:}") String credentialsPath,
+    public FirebaseConfig(@Value("${firebase.credentials.path}") String credentialsPath,
                           @Value("${firebase.project-id:}") String projectId) {
         if (!FirebaseApp.getApps().isEmpty()) {
             return;
@@ -38,21 +38,23 @@ public class FirebaseConfig {
     }
 
     private GoogleCredentials loadCredentials(String credentialsPath) throws IOException {
-        if (credentialsPath != null && !credentialsPath.isBlank()) {
-            if (credentialsPath.startsWith("classpath:")) {
-                String classpathLocation = credentialsPath.substring("classpath:".length());
-                ClassPathResource resource = new ClassPathResource(classpathLocation);
-                if (!resource.exists()) {
-                    throw new FileNotFoundException("Firebase credentials not found in classpath: " + classpathLocation);
-                }
-                try (InputStream stream = resource.getInputStream()) {
-                    return GoogleCredentials.fromStream(stream);
-                }
+        if (credentialsPath == null || credentialsPath.isBlank()) {
+            throw new IllegalStateException("Missing required secret: firebase.credentials.path");
+        }
+
+        if (credentialsPath.startsWith("classpath:")) {
+            String classpathLocation = credentialsPath.substring("classpath:".length());
+            ClassPathResource resource = new ClassPathResource(classpathLocation);
+            if (!resource.exists()) {
+                throw new FileNotFoundException("Firebase credentials not found in classpath: " + classpathLocation);
             }
-            try (InputStream stream = new FileInputStream(credentialsPath)) {
+            try (InputStream stream = resource.getInputStream()) {
                 return GoogleCredentials.fromStream(stream);
             }
         }
-        return GoogleCredentials.getApplicationDefault();
+
+        try (InputStream stream = new FileInputStream(credentialsPath)) {
+            return GoogleCredentials.fromStream(stream);
+        }
     }
 }

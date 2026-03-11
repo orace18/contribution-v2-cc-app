@@ -4,12 +4,12 @@ import com.ccapp.agent.domain.entity.AssistedSession;
 import com.ccapp.agent.dto.AssistedSessionResponse;
 import com.ccapp.agent.dto.CreateAssistedSessionRequest;
 import com.ccapp.agent.repository.AssistedSessionRepository;
+import com.ccapp.common.events.DomainEventPublisher;
 import com.ccapp.common.exception.NotFoundException;
 import com.ccapp.identity.account_holder.repository.AccountHolderRepository;
 import com.ccapp.notifications.domain.enums.NotificationChannel;
 import com.ccapp.notifications.domain.enums.NotificationType;
-import com.ccapp.notifications.dto.CreateNotificationRequest;
-import com.ccapp.notifications.service.NotificationService;
+import com.ccapp.notifications.event.NotificationRequestedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -25,7 +25,7 @@ public class AssistedSessionService {
     private final AssistedSessionRepository assistedSessionRepository;
     private final AccountHolderRepository accountHolderRepository;
     private final AgentService agentService;
-    private final NotificationService notificationService;
+    private final DomainEventPublisher domainEventPublisher;
 
     @Transactional
     public AssistedSessionResponse createSession(UUID actorUserId, CreateAssistedSessionRequest request) {
@@ -47,7 +47,7 @@ public class AssistedSessionService {
 
     private void emitAgentActionNotification(AssistedSession session) {
         try {
-            notificationService.createNotification(new CreateNotificationRequest(
+            domainEventPublisher.publish(NotificationRequestedEvent.create(
                     session.getAccountHolderId(),
                     session.getAgentUserId(),
                     NotificationType.AGENT_ACTION,

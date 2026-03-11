@@ -1,6 +1,7 @@
 package com.ccapp.payments.psp.service;
 
 import com.ccapp.ledger.service.AccountingPostingService;
+import com.ccapp.payments.commission.service.MlmCommissionService;
 import com.ccapp.payments.operation.domain.entity.Operation;
 import com.ccapp.payments.operation.service.OperationService;
 import com.ccapp.common.exception.BusinessException;
@@ -28,10 +29,11 @@ public class JawupayService {
 
     private final OperationService operationService;
     private final AccountingPostingService accountingPostingService;
+    private final MlmCommissionService mlmCommissionService;
     private final PspCallbackEventRepository callbackEventRepository;
     private final SimpleRateLimiter simpleRateLimiter;
 
-    @Value("${psp.jawupay.hmac-secret:change-me}")
+    @Value("${psp.jawupay.hmac-secret}")
     private String jawupayHmacSecret;
 
     @Value("${psp.jawupay.replay-window-seconds:300}")
@@ -62,6 +64,7 @@ public class JawupayService {
             Operation confirmedOperation = operationService.confirmByPspReference(
                     request.pspReference(), request.amount(), request.currency());
             accountingPostingService.postConfirmedOperation(confirmedOperation.getId());
+            mlmCommissionService.calculateForOperation(confirmedOperation);
         }
     }
 

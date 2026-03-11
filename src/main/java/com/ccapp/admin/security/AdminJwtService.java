@@ -28,7 +28,7 @@ public class AdminJwtService {
     private final long challengeTtlMinutes;
 
     public AdminJwtService(ObjectMapper objectMapper,
-                           @Value("${admin.jwt.secret:change-me-admin-jwt-secret}") String jwtSecret,
+                           @Value("${admin.jwt.secret}") String jwtSecret,
                            @Value("${admin.jwt.access-token-ttl-minutes:480}") long accessTtlMinutes,
                            @Value("${admin.jwt.challenge-token-ttl-minutes:10}") long challengeTtlMinutes) {
         this.objectMapper = objectMapper;

@@ -6,7 +6,8 @@ import com.ccapp.circles.domain.enums.CircleStatus;
 import com.ccapp.admin.domain.enums.AdminPolicyType;
 import com.ccapp.admin.repository.AdminPolicyRepository;
 import com.ccapp.circlesocial.domain.enums.ActivityType;
-import com.ccapp.circlesocial.service.CircleActivityService;
+import com.ccapp.circlesocial.event.CircleActivityRequestedEvent;
+import com.ccapp.common.events.DomainEventPublisher;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.common.exception.NotFoundException;
 import com.ccapp.country.dto.CountryContext;
@@ -55,7 +56,7 @@ public class LoanService {
     private final AdminPolicyRepository adminPolicyRepository;
     private final OperationService operationService;
     private final AccountingPostingService accountingPostingService;
-    private final CircleActivityService circleActivityService;
+    private final DomainEventPublisher domainEventPublisher;
 
     @Transactional
     public LoanResponse createLoan(UUID accountHolderId, UUID actorUserId, CreateLoanRequest request) {
@@ -126,7 +127,13 @@ public class LoanService {
         Loan saved = loanRepository.save(loan);
 
         triggerDisbursementLedger(saved, actorUserId, idempotencyKey);
-        circleActivityService.logActivity(saved.getCircleId(), actorUserId, ActivityType.LOAN_GRANTED, saved.getId(), "Loan disbursed");
+        domainEventPublisher.publish(CircleActivityRequestedEvent.create(
+                saved.getCircleId(),
+                actorUserId,
+                ActivityType.LOAN_GRANTED,
+                saved.getId(),
+                "Loan disbursed"
+        ));
         return saved;
     }
 

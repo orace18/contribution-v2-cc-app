@@ -5,12 +5,12 @@ import com.ccapp.circlesocial.domain.enums.ActivityType;
 import com.ccapp.circlesocial.dto.CircleActivityResponse;
 import com.ccapp.circlesocial.repository.CircleActivityRepository;
 import com.ccapp.circles.repository.CircleRepository;
+import com.ccapp.common.events.DomainEventPublisher;
 import com.ccapp.common.exception.NotFoundException;
 import com.ccapp.identity.app_user.repository.AppUserRepository;
 import com.ccapp.notifications.domain.enums.NotificationChannel;
 import com.ccapp.notifications.domain.enums.NotificationType;
-import com.ccapp.notifications.dto.CreateNotificationRequest;
-import com.ccapp.notifications.service.NotificationService;
+import com.ccapp.notifications.event.NotificationRequestedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -29,7 +29,7 @@ public class CircleActivityService {
     private final CircleProgressService circleProgressService;
     private final CircleScoreService circleScoreService;
     private final AppUserRepository appUserRepository;
-    private final NotificationService notificationService;
+    private final DomainEventPublisher domainEventPublisher;
 
     @Transactional
     public CircleActivityResponse logActivity(UUID circleId,
@@ -90,7 +90,7 @@ public class CircleActivityService {
                 return;
             }
 
-            notificationService.createNotification(new CreateNotificationRequest(
+            domainEventPublisher.publish(NotificationRequestedEvent.create(
                     recipientAccountHolderId,
                     activity.getActorUserId(),
                     NotificationType.CIRCLE_ACTIVITY,
