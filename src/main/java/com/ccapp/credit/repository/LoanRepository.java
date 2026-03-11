@@ -2,6 +2,8 @@ package com.ccapp.credit.repository;
 
 import com.ccapp.credit.domain.entity.Loan;
 import com.ccapp.credit.domain.enums.LoanStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Collection;
@@ -11,6 +13,8 @@ import java.util.UUID;
 public interface LoanRepository extends JpaRepository<Loan, UUID> {
 
     List<Loan> findByAccountHolderIdOrderByCreatedAtDesc(UUID accountHolderId);
+
+    Page<Loan> findByAccountHolderIdAndStatusIn(UUID accountHolderId, Collection<LoanStatus> statuses, Pageable pageable);
 
     List<Loan> findAllByOrderByCreatedAtDesc();
 

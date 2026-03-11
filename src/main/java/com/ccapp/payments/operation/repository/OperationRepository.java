@@ -15,6 +15,10 @@ public interface OperationRepository extends JpaRepository<Operation, UUID> {
 
     Optional<Operation> findByPspReference(String pspReference);
 
+    Optional<Operation> findFirstByAccountHolderIdAndTypeAndStatusOrderByCreatedAtDesc(UUID accountHolderId,
+                                                                                         OperationType type,
+                                                                                         OperationStatus status);
+
     long countByType(OperationType type);
 
     long countByTypeAndStatus(OperationType type, OperationStatus status);
