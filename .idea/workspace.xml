@@ -4,12 +4,10 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Reajustement firebase">
-      <change beforePath="$PROJECT_DIR$/.env.example" beforeDir="false" afterPath="$PROJECT_DIR$/.env.example" afterDir="false" />
+    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Config smtp et secret key">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/docker-compose-dev.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/docker-compose-dev.yaml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/docker-compose-prod.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/docker-compose-prod.yaml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/resources/application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/application.properties" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -524,7 +522,15 @@
       <option name="project" value="LOCAL" />
       <updated>1773267952307</updated>
     </task>
-    <option name="localTasksCounter" value="49" />
+    <task id="LOCAL-00049" summary="Config smtp et secret key">
+      <option name="closed" value="true" />
+      <created>1773302320648</created>
+      <option name="number" value="00049" />
+      <option name="presentableId" value="LOCAL-00049" />
+      <option name="project" value="LOCAL" />
+      <updated>1773302320648</updated>
+    </task>
+    <option name="localTasksCounter" value="50" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -539,7 +545,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="Revue des properties" />
     <MESSAGE value="Revue du properties dev" />
     <MESSAGE value="Revue du docker-compose-dev.yaml" />
     <MESSAGE value="Mise a jour de OpenApi" />
@@ -564,7 +569,8 @@
     <MESSAGE value="Correction de la configuration firebase" />
     <MESSAGE value="Firebase location" />
     <MESSAGE value="Reajustement firebase" />
-    <option name="LAST_COMMIT_MESSAGE" value="Reajustement firebase" />
+    <MESSAGE value="Config smtp et secret key" />
+    <option name="LAST_COMMIT_MESSAGE" value="Config smtp et secret key" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />
