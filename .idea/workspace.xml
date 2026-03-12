@@ -4,10 +4,8 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Config smtp et secret key">
+    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Ajout de url su back-office">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docker-compose-dev.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/docker-compose-dev.yaml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docker-compose-prod.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/docker-compose-prod.yaml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -137,22 +135,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1772553173766</updated>
-    </task>
-    <task id="LOCAL-00001" summary="Mise en place du projet">
-      <option name="closed" value="true" />
-      <created>1772617462794</created>
-      <option name="number" value="00001" />
-      <option name="presentableId" value="LOCAL-00001" />
-      <option name="project" value="LOCAL" />
-      <updated>1772617462794</updated>
-    </task>
-    <task id="LOCAL-00002" summary="Mise en place du projet">
-      <option name="closed" value="true" />
-      <created>1772617749241</created>
-      <option name="number" value="00002" />
-      <option name="presentableId" value="LOCAL-00002" />
-      <option name="project" value="LOCAL" />
-      <updated>1772617749241</updated>
     </task>
     <task id="LOCAL-00003" summary="Mise en place du projet">
       <option name="closed" value="true" />
@@ -530,7 +512,23 @@
       <option name="project" value="LOCAL" />
       <updated>1773302320648</updated>
     </task>
-    <option name="localTasksCounter" value="50" />
+    <task id="LOCAL-00050" summary="Config des secrets key">
+      <option name="closed" value="true" />
+      <created>1773303826976</created>
+      <option name="number" value="00050" />
+      <option name="presentableId" value="LOCAL-00050" />
+      <option name="project" value="LOCAL" />
+      <updated>1773303826977</updated>
+    </task>
+    <task id="LOCAL-00051" summary="Ajout de url su back-office">
+      <option name="closed" value="true" />
+      <created>1773304382788</created>
+      <option name="number" value="00051" />
+      <option name="presentableId" value="LOCAL-00051" />
+      <option name="project" value="LOCAL" />
+      <updated>1773304382788</updated>
+    </task>
+    <option name="localTasksCounter" value="52" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -545,8 +543,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="Revue du properties dev" />
-    <MESSAGE value="Revue du docker-compose-dev.yaml" />
     <MESSAGE value="Mise a jour de OpenApi" />
     <MESSAGE value="Ajout de progress et de circle" />
     <MESSAGE value="Ajout des apis admin, credit, scoring" />
@@ -570,7 +566,9 @@
     <MESSAGE value="Firebase location" />
     <MESSAGE value="Reajustement firebase" />
     <MESSAGE value="Config smtp et secret key" />
-    <option name="LAST_COMMIT_MESSAGE" value="Config smtp et secret key" />
+    <MESSAGE value="Config des secrets key" />
+    <MESSAGE value="Ajout de url su back-office" />
+    <option name="LAST_COMMIT_MESSAGE" value="Ajout de url su back-office" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />

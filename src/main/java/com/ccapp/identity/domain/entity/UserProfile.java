@@ -81,6 +81,7 @@ public class UserProfile extends AuditableEntity {
 
     @PrePersist
     protected void onCreate() {
+        super.onCreate();
         if (onboardingStep == null) {
             onboardingStep = OnboardingStep.STEP_1;
         }
