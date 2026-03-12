@@ -1,7 +1,11 @@
 package com.ccapp.payments.commission.domain.entity;
 
+import com.ccapp.payments.commission.domain.enums.CommissionType;
+import com.ccapp.payments.commission.domain.enums.CommissionStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -25,16 +29,26 @@ import java.util.UUID;
 @AllArgsConstructor
 @Entity
 @Table(name = "mlm_commissions",
-        uniqueConstraints = @UniqueConstraint(name = "uk_mlm_commissions_operation", columnNames = "operation_id"),
-        indexes = @Index(name = "idx_mlm_commissions_beneficiary_created",
-                columnList = "beneficiary_account_holder_id, created_at"))
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uk_mlm_commissions_operation", columnNames = "operation_id"),
+                @UniqueConstraint(name = "uk_mlm_commissions_member_type_week",
+                        columnNames = {"beneficiary_account_holder_id", "commission_type", "week_id"})
+        },
+        indexes = {
+                @Index(name = "idx_mlm_commissions_beneficiary_created",
+                        columnList = "beneficiary_account_holder_id, created_at"),
+                @Index(name = "idx_mlm_commissions_type_week", columnList = "commission_type, week_id"),
+                @Index(name = "idx_mlm_commissions_week_type_status", columnList = "week_id, commission_type, status"),
+                @Index(name = "idx_mlm_commissions_payout_batch", columnList = "payout_batch_id"),
+                @Index(name = "idx_mlm_commissions_payout_item", columnList = "payout_item_id")
+        })
 public class MlmCommission {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @Column(name = "operation_id", nullable = false)
+    @Column(name = "operation_id")
     private UUID operationId;
 
     @Column(name = "beneficiary_account_holder_id", nullable = false)
@@ -49,6 +63,26 @@ public class MlmCommission {
     @Column(name = "source", nullable = false, length = 64)
     private String source;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "commission_type", nullable = false, length = 32)
+    private CommissionType commissionType;
+
+    @Column(name = "week_id")
+    private Integer weekId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 16)
+    private CommissionStatus status;
+
+    @Column(name = "paid_at")
+    private OffsetDateTime paidAt;
+
+    @Column(name = "payout_batch_id")
+    private UUID payoutBatchId;
+
+    @Column(name = "payout_item_id")
+    private UUID payoutItemId;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
 
@@ -56,6 +90,12 @@ public class MlmCommission {
     protected void onCreate() {
         if (createdAt == null) {
             createdAt = OffsetDateTime.now();
+        }
+        if (commissionType == null) {
+            commissionType = CommissionType.SUBSCRIPTION;
+        }
+        if (status == null) {
+            status = CommissionStatus.PENDING;
         }
     }
 }

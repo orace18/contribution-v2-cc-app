@@ -14,6 +14,7 @@ import com.ccapp.payments.operation.domain.enums.OperationType;
 import com.ccapp.payments.operation.service.OperationService;
 import com.ccapp.common.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,12 +27,16 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class AccountingPostingService {
 
     private static final String ACCOUNT_CASH_CLEARING = "1000_CASH_CLEARING";
     private static final String ACCOUNT_LOAN_PORTFOLIO = "1300_LOAN_PORTFOLIO";
     private static final String ACCOUNT_SUBSCRIPTION_REVENUE = "4000_SUBSCRIPTION_REVENUE";
     private static final String ACCOUNT_ADJUSTMENT_EXPENSE = "6100_RECON_ADJUSTMENT_EXPENSE";
+    private static final String ACCOUNT_MLM_COMMISSION_EXPENSE = "6200_MLM_COMMISSION_EXPENSE";
+    private static final String ACCOUNT_WITHHOLDING_TAX_PAYABLE = "2200_WITHHOLDING_TAX_PAYABLE";
+    private static final String MEMBER_WALLET_ACCOUNT_PREFIX = "2101_MEMBER_WALLET_";
 
     private final OperationService operationService;
     private final AccountingEventRepository accountingEventRepository;
@@ -50,12 +55,46 @@ public class AccountingPostingService {
                 .orElseGet(() -> doPost(operation));
     }
 
+    @Transactional
+    public AccountingEvent postCommissionPayout(Operation operation,
+                                                UUID beneficiaryAccountHolderId,
+                                                BigDecimal taxAmount,
+                                                BigDecimal netAmount) {
+        if (operation.getType() != OperationType.COMMISSION_PAYOUT) {
+            throw new BusinessException("Operation type must be COMMISSION_PAYOUT");
+        }
+        if (taxAmount == null || taxAmount.signum() < 0 || netAmount == null || netAmount.signum() < 0) {
+            throw new BusinessException("Invalid payout tax/net amounts");
+        }
+        if (operation.getAmount().compareTo(taxAmount.add(netAmount)) != 0) {
+            throw new BusinessException("Payout amount mismatch against tax/net split");
+        }
+
+        List<PostingLine> lines = List.of(
+                new PostingLine(ACCOUNT_MLM_COMMISSION_EXPENSE, LedgerEntryType.DEBIT, operation.getAmount(), operation.getCurrency(),
+                        "Commission payout gross expense"),
+                new PostingLine(resolveMemberWalletAccount(beneficiaryAccountHolderId), LedgerEntryType.CREDIT, netAmount, operation.getCurrency(),
+                        "Member wallet credit"),
+                new PostingLine(ACCOUNT_WITHHOLDING_TAX_PAYABLE, LedgerEntryType.CREDIT, taxAmount, operation.getCurrency(),
+                        "Tax withholding on commission payout")
+        );
+        return accountingEventRepository.findByOperationId(operation.getId())
+                .orElseGet(() -> doPost(operation, lines, AccountingEventType.OPERATION_CONFIRMED));
+    }
+
     private AccountingEvent doPost(Operation operation) {
+        AccountingEventType eventType = operation.getType() == OperationType.ADJUSTMENT
+                ? AccountingEventType.ADJUSTMENT_POSTED
+                : AccountingEventType.OPERATION_CONFIRMED;
+        List<PostingLine> lines = buildPostingLines(operation);
+        return doPost(operation, lines, eventType);
+    }
+
+    private AccountingEvent doPost(Operation operation, List<PostingLine> lines, AccountingEventType eventType) {
         if (operation.getStatus() != OperationStatus.CONFIRMED) {
             throw new BusinessException("Only CONFIRMED operations can be posted");
         }
 
-        List<PostingLine> lines = buildPostingLines(operation);
         validateCurrency(lines, operation.getCurrency());
         validateBalanced(lines);
 
@@ -70,7 +109,7 @@ public class AccountingPostingService {
 
         AccountingEvent event = AccountingEvent.builder()
                 .operation(operation)
-                .eventType(operation.getType() == OperationType.ADJUSTMENT ? AccountingEventType.ADJUSTMENT_POSTED : AccountingEventType.OPERATION_CONFIRMED)
+                .eventType(eventType)
                 .currency(operation.getCurrency())
                 .totalDebit(totalDebit)
                 .totalCredit(totalCredit)
@@ -101,7 +140,13 @@ public class AccountingPostingService {
 
         ledgerEntryRepository.saveAll(entries);
         updateSnapshots(entries);
+        log.info("ledger_posting_completed operationId={} operationType={} eventType={} entries={} totalDebit={} totalCredit={}",
+                operation.getId(), operation.getType(), eventType, entries.size(), totalDebit, totalCredit);
         return savedEvent;
+    }
+
+    private String resolveMemberWalletAccount(UUID accountHolderId) {
+        return MEMBER_WALLET_ACCOUNT_PREFIX + accountHolderId;
     }
 
     private List<PostingLine> buildPostingLines(Operation operation) {
@@ -121,6 +166,9 @@ public class AccountingPostingService {
             case LOAN_REPAYMENT -> List.of(
                     new PostingLine(ACCOUNT_CASH_CLEARING, LedgerEntryType.DEBIT, operation.getAmount(), operation.getCurrency(), "Loan repayment cash-in"),
                     new PostingLine(ACCOUNT_LOAN_PORTFOLIO, LedgerEntryType.CREDIT, operation.getAmount(), operation.getCurrency(), "Loan principal repayment")
+            );
+            case COMMISSION_PAYOUT -> throw new BusinessException(
+                    "Use postCommissionPayout for COMMISSION_PAYOUT operations"
             );
         };
     }

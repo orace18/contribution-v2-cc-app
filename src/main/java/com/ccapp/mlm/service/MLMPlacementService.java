@@ -9,8 +9,10 @@ import com.ccapp.identity.delegation.service.AccessControlService;
 import com.ccapp.mlm.domain.entity.MlmRelationship;
 import com.ccapp.mlm.dto.MlmPlacementResponse;
 import com.ccapp.mlm.event.MlmPlacementCreatedEvent;
+import com.ccapp.observability.PlatformMonitoringHooks;
 import com.ccapp.mlm.repository.MlmRelationshipRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,6 +23,7 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class MLMPlacementService {
 
     private static final int MAX_DIRECT_CHILDREN = 5;
@@ -83,6 +86,9 @@ public class MLMPlacementService {
 
         long directChildren = mlmRelationshipRepository.countByAncestorIdAndLevel(placementParentId, 1);
         long sponsorTeamSize = mlmRelationshipRepository.countTeamSize(sponsorAccountHolderId);
+        PlatformMonitoringHooks.onMlmPlacementCreated();
+        log.info("mlm_placement_created accountHolderId={} sponsorId={} placementParentId={} directChildren={} sponsorTeamSize={}",
+                accountHolderId, sponsorAccountHolderId, placementParentId, directChildren, sponsorTeamSize);
 
         return new MlmPlacementResponse(
                 accountHolderId,

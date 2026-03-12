@@ -4,6 +4,7 @@ import com.ccapp.common.events.DomainEventPublisher;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.common.exception.NotFoundException;
 import com.ccapp.identity.account_holder.service.AccountHolderService;
+import com.ccapp.observability.PlatformMonitoringHooks;
 import com.ccapp.shop.domain.entity.ShopCommissionPool;
 import com.ccapp.shop.domain.entity.ShopOrder;
 import com.ccapp.shop.domain.entity.ShopOrderItem;
@@ -20,6 +21,7 @@ import com.ccapp.shop.repository.ShopOrderItemRepository;
 import com.ccapp.shop.repository.ShopOrderRepository;
 import com.ccapp.shop.repository.ShopProductRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,6 +35,7 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ShopOrderService {
 
     private static final BigDecimal HUNDRED = BigDecimal.valueOf(100);
@@ -110,6 +113,9 @@ public class ShopOrderService {
                 .platformCommission(totalPlatformCommission.setScale(4, RoundingMode.HALF_UP))
                 .mlmVolume(mlmVolume)
                 .build());
+        PlatformMonitoringHooks.onMarketplaceOrderCheckout(items.size(), order.getTotalAmount());
+        log.info("marketplace_order_checkout orderId={} buyerId={} items={} totalAmount={} platformCommission={} mlmVolume={}",
+                order.getId(), buyerId, items.size(), order.getTotalAmount(), pool.getPlatformCommission(), pool.getMlmVolume());
 
         return toResponse(order, items, pool);
     }
@@ -149,6 +155,9 @@ public class ShopOrderService {
         if (targetStatus == ShopOrderStatus.DELIVERED) {
             ShopCommissionPool pool = shopCommissionPoolRepository.findByOrderId(saved.getId())
                     .orElseThrow(() -> new NotFoundException("Commission pool not found for delivered order"));
+            PlatformMonitoringHooks.onMarketplaceOrderDelivered(pool.getMlmVolume());
+            log.info("marketplace_order_delivered orderId={} buyerId={} merchantAmount={} platformCommission={} mlmVolume={}",
+                    saved.getId(), saved.getBuyerId(), pool.getMerchantAmount(), pool.getPlatformCommission(), pool.getMlmVolume());
             domainEventPublisher.publish(ShopOrderDeliveredEvent.create(
                     saved.getId(),
                     saved.getBuyerId(),

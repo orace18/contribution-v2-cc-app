@@ -3,6 +3,7 @@ package com.ccapp.mlm.repository;
 import com.ccapp.mlm.domain.entity.MlmRelationship;
 import com.ccapp.mlm.domain.entity.MlmRelationshipId;
 import com.ccapp.mlm.repository.projection.MlmHierarchyMemberProjection;
+import com.ccapp.mlm.repository.projection.MlmLevelBreakdownProjection;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
@@ -19,6 +20,15 @@ public interface MlmRelationshipRepository extends JpaRepository<MlmRelationship
     long countByAncestorIdAndLevel(UUID ancestorId, Integer level);
 
     long countByDescendantIdAndLevelGreaterThan(UUID descendantId, Integer level);
+
+    @Query("""
+            select r.descendantId
+            from MlmRelationship r
+            where r.ancestorId = :ancestorId
+              and r.level = 1
+            order by r.createdAt asc, r.descendantId asc
+            """)
+    List<UUID> findDirectChildrenOrdered(UUID ancestorId);
 
     @Query("""
             select r from MlmRelationship r
@@ -75,6 +85,17 @@ public interface MlmRelationshipRepository extends JpaRepository<MlmRelationship
             order by r.created_at asc
             """, nativeQuery = true)
     List<MlmHierarchyMemberProjection> findMembersAtLevel(UUID accountHolderId, int level);
+
+    @Query("""
+            select r.level as level,
+                   count(r.descendantId) as members
+            from MlmRelationship r
+            where r.ancestorId = :accountHolderId
+              and r.level > 0
+            group by r.level
+            order by r.level asc
+            """)
+    List<MlmLevelBreakdownProjection> countLevelBreakdown(UUID accountHolderId);
 
     @Query(value = """
             select cast(candidates.descendant_id as varchar)

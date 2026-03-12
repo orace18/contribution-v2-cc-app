@@ -1,6 +1,7 @@
 package com.ccapp.payments.commission.service;
 
 import com.ccapp.common.events.DomainEventPublisher;
+import com.ccapp.financial.audit.service.FinancialAuditService;
 import com.ccapp.payments.commission.domain.entity.MlmCommission;
 import com.ccapp.payments.commission.repository.MlmCommissionRepository;
 import com.ccapp.payments.event.CommissionGeneratedEvent;
@@ -32,6 +33,8 @@ class MlmCommissionServiceTest {
     private MlmCommissionRepository mlmCommissionRepository;
     @Mock
     private DomainEventPublisher domainEventPublisher;
+    @Mock
+    private FinancialAuditService financialAuditService;
 
     @InjectMocks
     private MlmCommissionService mlmCommissionService;
@@ -39,6 +42,7 @@ class MlmCommissionServiceTest {
     @BeforeEach
     void setUp() {
         ReflectionTestUtils.setField(mlmCommissionService, "commissionRatePercent", new BigDecimal("5.0"));
+        ReflectionTestUtils.setField(mlmCommissionService, "commissionSpikeThreshold", new BigDecimal("10000"));
     }
 
     @Test

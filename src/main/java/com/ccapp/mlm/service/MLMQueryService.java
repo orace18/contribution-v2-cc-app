@@ -9,6 +9,7 @@ import com.ccapp.mlm.dto.MlmTeamSizeResponse;
 import com.ccapp.mlm.repository.MlmRelationshipRepository;
 import com.ccapp.mlm.repository.projection.MlmHierarchyMemberProjection;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,6 +24,12 @@ public class MLMQueryService {
     private final AccountHolderService accountHolderService;
     private final AccessControlService accessControlService;
 
+    @Value("${mlm.query.max-level:20}")
+    private int maxQueryableLevel;
+
+    @Value("${mlm.query.max-downline-members:5000}")
+    private long maxDownlineMembers;
+
     @Transactional(readOnly = true)
     public List<MlmHierarchyMemberResponse> getUpline(UUID actorUserId, UUID accountHolderId) {
         assertAccess(actorUserId, accountHolderId);
@@ -34,6 +41,10 @@ public class MLMQueryService {
     @Transactional(readOnly = true)
     public List<MlmHierarchyMemberResponse> getDownline(UUID actorUserId, UUID accountHolderId) {
         assertAccess(actorUserId, accountHolderId);
+        long teamSize = mlmRelationshipRepository.countTeamSize(accountHolderId);
+        if (teamSize > maxDownlineMembers) {
+            throw new BusinessException("Downline query blocked by performance guard. Use level queries instead.");
+        }
         return mlmRelationshipRepository.findDownline(accountHolderId).stream()
                 .map(this::toResponse)
                 .toList();
@@ -49,6 +60,9 @@ public class MLMQueryService {
     public List<MlmHierarchyMemberResponse> getLevelMembers(UUID actorUserId, UUID accountHolderId, int level) {
         if (level < 1) {
             throw new BusinessException("Level must be >= 1");
+        }
+        if (level > maxQueryableLevel) {
+            throw new BusinessException("Level exceeds configured query guard");
         }
         assertAccess(actorUserId, accountHolderId);
         return mlmRelationshipRepository.findMembersAtLevel(accountHolderId, level).stream()
