@@ -4,74 +4,12 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Firebase config">
+    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Reajustement firebase">
       <change beforePath="$PROJECT_DIR$/.env.example" beforeDir="false" afterPath="$PROJECT_DIR$/.env.example" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/docker-compose-dev.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/docker-compose-dev.yaml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/docker-compose-prod.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/docker-compose-prod.yaml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/admin/controller/AdminCommunityController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/admin/controller/AdminCommunityController.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/admin/security/AdminBootstrapProperties.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/admin/security/AdminBootstrapProperties.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/admin/security/AdminJwtService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/admin/security/AdminJwtService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/agent/service/AssistedSessionService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/agent/service/AssistedSessionService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/agent/service/OfflineTransactionService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/agent/service/OfflineTransactionService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/service/CircleService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/service/CircleService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/circlesocial/service/CircleActivityService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/circlesocial/service/CircleActivityService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/community/domain/entity/CommunityPost.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/community/domain/entity/CommunityPost.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/community/service/CommunityAdminService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/community/service/CommunityAdminService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/config/FirebaseConfig.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/config/FirebaseConfig.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/config/security/ApiKeyAuthenticationFilter.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/config/security/ApiKeyAuthenticationFilter.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/credit/service/LoanService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/credit/service/LoanService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/credit/service/RepaymentService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/credit/service/RepaymentService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/service/IdentityService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/service/IdentityService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/media/storage/MediaStorageConfig.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/media/storage/MediaStorageConfig.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/payments/psp/service/JawupayService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/payments/psp/service/JawupayService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/progress/service/TaskService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/progress/service/TaskService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/resources/application-dev.properties" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/application-dev.properties" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/resources/application-prod.properties" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/application-prod.properties" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/resources/application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/application.properties" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/application-dev.properties" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/application-dev.properties" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/application-prod.properties" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/application-prod.properties" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/application.properties" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/admin/controller/AdminCommunityController.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/admin/controller/AdminCommunityController.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/admin/security/AdminBootstrapProperties.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/admin/security/AdminBootstrapProperties.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/admin/security/AdminJwtService.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/admin/security/AdminJwtService.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/agent/service/AssistedSessionService.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/agent/service/AssistedSessionService.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/agent/service/OfflineTransactionService$1.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/agent/service/OfflineTransactionService$1.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/agent/service/OfflineTransactionService.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/agent/service/OfflineTransactionService.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/circles/service/CircleService$NameParts.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/circles/service/CircleService$NameParts.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/circles/service/CircleService.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/circles/service/CircleService.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/circlesocial/service/CircleActivityService.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/circlesocial/service/CircleActivityService.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/community/domain/entity/CommunityPost$CommunityPostBuilder.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/community/domain/entity/CommunityPost$CommunityPostBuilder.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/community/domain/entity/CommunityPost.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/community/domain/entity/CommunityPost.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/community/repository/CommunityPostRepository.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/community/repository/CommunityPostRepository.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/community/service/CommunityAdminService.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/community/service/CommunityAdminService.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/config/FirebaseConfig.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/config/FirebaseConfig.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/config/SecurityConfig.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/config/SecurityConfig.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/config/security/ApiKeyAuthenticationFilter.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/config/security/ApiKeyAuthenticationFilter.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/credit/repository/LoanRepository.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/credit/repository/LoanRepository.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/credit/service/LoanService.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/credit/service/LoanService.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/credit/service/RepaymentService.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/credit/service/RepaymentService.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/identity/service/DevTokenVerifier.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/identity/service/FirebaseAdminTokenVerifier.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/identity/service/FirebaseAdminTokenVerifier.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/identity/service/IdentityService$SessionCreation.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/identity/service/IdentityService.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/identity/service/IdentityService.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/media/storage/MediaStorageConfig.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/media/storage/MediaStorageConfig.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/notifications/repository/NotificationRepository.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/notifications/repository/NotificationRepository.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/payments/operation/repository/OperationRepository.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/payments/operation/repository/OperationRepository.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/payments/psp/service/JawupayService.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/payments/psp/service/JawupayService.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/progress/service/TaskService.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/progress/service/TaskService.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/generated-sources/annotations/com/ccapp/identity/mapper/IdentityMapperImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/target/generated-sources/annotations/com/ccapp/identity/mapper/IdentityMapperImpl.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/generated-sources/annotations/com/ccapp/payments/subscription/mapper/SubscriptionPlanMapperImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/target/generated-sources/annotations/com/ccapp/payments/subscription/mapper/SubscriptionPlanMapperImpl.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/maven-status/maven-compiler-plugin/compile/default-compile/createdFiles.lst" beforeDir="false" afterPath="$PROJECT_DIR$/target/maven-status/maven-compiler-plugin/compile/default-compile/createdFiles.lst" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/maven-status/maven-compiler-plugin/compile/default-compile/inputFiles.lst" beforeDir="false" afterPath="$PROJECT_DIR$/target/maven-status/maven-compiler-plugin/compile/default-compile/inputFiles.lst" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/maven-status/maven-compiler-plugin/testCompile/default-testCompile/createdFiles.lst" beforeDir="false" afterPath="$PROJECT_DIR$/target/maven-status/maven-compiler-plugin/testCompile/default-testCompile/createdFiles.lst" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/maven-status/maven-compiler-plugin/testCompile/default-testCompile/inputFiles.lst" beforeDir="false" afterPath="$PROJECT_DIR$/target/maven-status/maven-compiler-plugin/testCompile/default-testCompile/inputFiles.lst" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/surefire-reports/TEST-com.ccapp.identity.service.RefreshTokenServiceTest.xml" beforeDir="false" afterPath="$PROJECT_DIR$/target/surefire-reports/TEST-com.ccapp.identity.service.RefreshTokenServiceTest.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/surefire-reports/TEST-com.ccapp.ledger.service.AccountingPostingServiceTest.xml" beforeDir="false" afterPath="$PROJECT_DIR$/target/surefire-reports/TEST-com.ccapp.ledger.service.AccountingPostingServiceTest.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/surefire-reports/TEST-com.ccapp.payments.operation.service.OperationServiceTest.xml" beforeDir="false" afterPath="$PROJECT_DIR$/target/surefire-reports/TEST-com.ccapp.payments.operation.service.OperationServiceTest.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/surefire-reports/com.ccapp.identity.service.RefreshTokenServiceTest.txt" beforeDir="false" afterPath="$PROJECT_DIR$/target/surefire-reports/com.ccapp.identity.service.RefreshTokenServiceTest.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/surefire-reports/com.ccapp.ledger.service.AccountingPostingServiceTest.txt" beforeDir="false" afterPath="$PROJECT_DIR$/target/surefire-reports/com.ccapp.ledger.service.AccountingPostingServiceTest.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/surefire-reports/com.ccapp.payments.operation.service.OperationServiceTest.txt" beforeDir="false" afterPath="$PROJECT_DIR$/target/surefire-reports/com.ccapp.payments.operation.service.OperationServiceTest.txt" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -79,7 +17,7 @@
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
   <component name="EmbeddingIndexingInfo">
-    <option name="cachedIndexableFilesCount" value="492" />
+    <option name="cachedIndexableFilesCount" value="524" />
   </component>
   <component name="FileTemplateManagerImpl">
     <option name="RECENT_TEMPLATES">
@@ -546,7 +484,47 @@
       <option name="project" value="LOCAL" />
       <updated>1773214146706</updated>
     </task>
-    <option name="localTasksCounter" value="44" />
+    <task id="LOCAL-00044" summary="Refact">
+      <option name="closed" value="true" />
+      <created>1773248158165</created>
+      <option name="number" value="00044" />
+      <option name="presentableId" value="LOCAL-00044" />
+      <option name="project" value="LOCAL" />
+      <updated>1773248158166</updated>
+    </task>
+    <task id="LOCAL-00045" summary="Correction de la configuration firebase">
+      <option name="closed" value="true" />
+      <created>1773265272409</created>
+      <option name="number" value="00045" />
+      <option name="presentableId" value="LOCAL-00045" />
+      <option name="project" value="LOCAL" />
+      <updated>1773265272409</updated>
+    </task>
+    <task id="LOCAL-00046" summary="Correction de la configuration firebase">
+      <option name="closed" value="true" />
+      <created>1773265784930</created>
+      <option name="number" value="00046" />
+      <option name="presentableId" value="LOCAL-00046" />
+      <option name="project" value="LOCAL" />
+      <updated>1773265784931</updated>
+    </task>
+    <task id="LOCAL-00047" summary="Firebase location">
+      <option name="closed" value="true" />
+      <created>1773266805186</created>
+      <option name="number" value="00047" />
+      <option name="presentableId" value="LOCAL-00047" />
+      <option name="project" value="LOCAL" />
+      <updated>1773266805186</updated>
+    </task>
+    <task id="LOCAL-00048" summary="Reajustement firebase">
+      <option name="closed" value="true" />
+      <created>1773267952307</created>
+      <option name="number" value="00048" />
+      <option name="presentableId" value="LOCAL-00048" />
+      <option name="project" value="LOCAL" />
+      <updated>1773267952307</updated>
+    </task>
+    <option name="localTasksCounter" value="49" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -561,10 +539,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="Configuration gitlab-ci et docker-compose" />
-    <MESSAGE value="Configuration gitlab-ci et docker-compose -Revue" />
-    <MESSAGE value="Revue des configs docker et gitlab-ci" />
-    <MESSAGE value="Revue du pom" />
     <MESSAGE value="Revue des properties" />
     <MESSAGE value="Revue du properties dev" />
     <MESSAGE value="Revue du docker-compose-dev.yaml" />
@@ -586,7 +560,11 @@
     <MESSAGE value="Ajout de logs" />
     <MESSAGE value="Firebase" />
     <MESSAGE value="Firebase config" />
-    <option name="LAST_COMMIT_MESSAGE" value="Firebase config" />
+    <MESSAGE value="Refact" />
+    <MESSAGE value="Correction de la configuration firebase" />
+    <MESSAGE value="Firebase location" />
+    <MESSAGE value="Reajustement firebase" />
+    <option name="LAST_COMMIT_MESSAGE" value="Reajustement firebase" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />
