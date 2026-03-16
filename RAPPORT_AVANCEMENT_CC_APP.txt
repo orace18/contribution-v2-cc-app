@@ -201,6 +201,7 @@ Date: 2026-03-12
   - MlmCommissionServiceTest
   - ChatMessageServiceIntegrationTest
 
+
 15) RESTANT / A SAVOIR
 - La suite de tests complete du projet n'a pas ete lancee integralement sur ce cycle.
 - Le contenu ci-dessus couvre la tache de hardening demandee sans changer l'architecture modulaire monolithe.
