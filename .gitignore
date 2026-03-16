@@ -4,3 +4,4 @@ src/main/resources/firebase/*.json
 !.env.example
 logs/
 secrets/
+target/
