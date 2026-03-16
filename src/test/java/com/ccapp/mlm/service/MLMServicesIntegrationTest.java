@@ -32,7 +32,7 @@ import static org.mockito.Mockito.when;
         "spring.flyway.enabled=false",
         "spring.jpa.hibernate.ddl-auto=create-drop"
 })
-@Import({MLMPlacementService.class, MLMQueryService.class})
+@Import({MLMPlacementService.class, MLMQueryService.class, AutoPlacementService.class, MlmPlacementAuditService.class})
 class MLMServicesIntegrationTest {
 
     @Autowired

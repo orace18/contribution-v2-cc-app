@@ -11,6 +11,7 @@ import com.ccapp.mlm.repository.projection.MlmWeeklyLegVolumeProjection;
 import com.ccapp.payments.commission.domain.entity.MlmCommission;
 import com.ccapp.payments.commission.domain.enums.CommissionType;
 import com.ccapp.payments.commission.repository.MlmCommissionRepository;
+import com.ccapp.payments.commission.service.CommissionEventRateLimiter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -46,6 +47,7 @@ public class WeeklyGroupBonusService {
     private final MlmMemberGradeRepository mlmMemberGradeRepository;
     private final MlmCommissionRepository mlmCommissionRepository;
     private final FinancialAuditService financialAuditService;
+    private final CommissionEventRateLimiter commissionEventRateLimiter;
 
     @Value("${mlm.group-bonus.currency:XOF}")
     private String groupBonusCurrency;
@@ -55,6 +57,9 @@ public class WeeklyGroupBonusService {
 
     @Value("${mlm.monitoring.commission-spike.threshold:10000}")
     private BigDecimal commissionSpikeThreshold;
+
+    @Value("${commission.generation.max-per-minute:2000}")
+    private int commissionGenerationMaxPerMinute;
 
     @Transactional
     public WeeklyGroupBonusProcessingResult processCurrentWeek() {
@@ -138,6 +143,9 @@ public class WeeklyGroupBonusService {
     }
 
     private boolean createGroupBonusCommissionIfAbsent(UUID memberId, int weekId, BigDecimal amount) {
+        if (!commissionEventRateLimiter.allow("group_bonus:" + weekId, commissionGenerationMaxPerMinute)) {
+            throw new IllegalStateException("Commission generation rate limit exceeded for weekly group bonus");
+        }
         try {
             MlmCommission saved = mlmCommissionRepository.save(MlmCommission.builder()
                     .operationId(null)

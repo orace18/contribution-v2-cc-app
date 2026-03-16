@@ -143,12 +143,14 @@ class MobileHomeServiceIntegrationTest {
                 .circle(circle)
                 .accountHolderId(accountHolderId)
                 .role(CircleMemberRole.MEMBER)
+                .financialMember(true)
                 .joinedAt(OffsetDateTime.now())
                 .build());
         circleMemberRepository.save(CircleMember.builder()
                 .circle(circle)
                 .accountHolderId(coachId)
                 .role(CircleMemberRole.COACH)
+                .financialMember(false)
                 .joinedAt(OffsetDateTime.now())
                 .build());
 
@@ -193,7 +195,7 @@ class MobileHomeServiceIntegrationTest {
         assertEquals(LoanStatus.ACTIVE, response.activeLoans().get(0).status());
         assertNotNull(response.circleSummary());
         assertEquals("Alpha Circle", response.circleSummary().name());
-        assertEquals(2L, response.circleSummary().membersCount());
+        assertEquals(1L, response.circleSummary().membersCount());
         assertEquals(1, response.communityHighlights().size());
         assertEquals(1L, response.unreadMessages());
         assertEquals(1L, response.notifications().total());

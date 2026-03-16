@@ -10,5 +10,7 @@ import java.util.UUID;
 public interface CommissionPayoutItemRepository extends JpaRepository<CommissionPayoutItem, UUID> {
     Optional<CommissionPayoutItem> findByBatchIdAndAccountHolderId(UUID batchId, UUID accountHolderId);
 
+    Optional<CommissionPayoutItem> findByCommissionId(UUID commissionId);
+
     List<CommissionPayoutItem> findByBatchIdOrderByCreatedAtAsc(UUID batchId);
 }

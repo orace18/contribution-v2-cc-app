@@ -1,0 +1,515 @@
+POINT GLOBAL DES FONCTIONNALITES IMPLEMENTEES - CC APP BACKEND MONOLITHIC
+Date du point: 2026-03-15
+Source du point: analyse du code source (src/main/java, migrations, config, tests, CI/CD)
+
+====================================================================
+1) PHOTO GLOBALE DU PROJET
+====================================================================
+- Type d'application: backend fintech monolithe modulaire Spring Boot.
+- Stack principale:
+  - Java 21
+  - Spring Boot 3.5.11
+  - Spring Web, Security, Data JPA, Validation, WebSocket, Actuator
+  - PostgreSQL + Flyway
+  - Firebase Admin SDK (auth)
+  - AWS SDK S3 (utilise pour MinIO/object storage)
+  - OpenAPI/Swagger (profil dev)
+- Volumetrie code (src/main/java):
+  - 583 classes Java
+  - 41 controllers
+  - 76 services
+  - 76 repositories
+  - 77 entites
+  - 155 DTOs
+  - 15 classes d'evenements
+  - 5 classes de scheduler
+- Base de donnees:
+  - 33 migrations Flyway (V1 a V34, hors V12)
+
+====================================================================
+2) SECURITE ET AUTHENTIFICATION IMPLEMENTEES
+====================================================================
+- Securite stateless (Spring Security) avec filtres:
+  - Auth admin JWT pour /api/admin/**
+  - API key interne (X-API-KEY) pour /internal/**
+  - Auth Firebase ID token pour les endpoints users
+- Endpoints publics autorises:
+  - /actuator/health
+  - /actuator/info
+  - /public/countries
+  - /public/activity-sectors
+  - /public/income-brackets
+  - /psp/jawupay/callback (POST)
+  - Swagger/OpenAPI en dev
+- CORS configurable via app.cors.allowed-origins.
+- Validation des secrets obligatoires au demarrage (RequiredSecretsValidator).
+
+====================================================================
+3) MODULE IDENTITY (ONBOARDING, SESSION, DELEGATION)
+====================================================================
+Fonctionnalites implementees:
+- Synchronisation identity avec Firebase (creation user/appUser/accountHolder si besoin).
+- Onboarding multi-etapes:
+  - step-1: infos perso + pays + telephone
+  - step-2: secteur, experience, revenu, description projet
+  - step-3: capital disponible + consentements
+- Statut onboarding detaille et progression calculee.
+- Gestion devices/sessions:
+  - enregistrement device
+  - rotation refresh token
+  - revoke session
+  - blocage device
+- Blocage compte user (etat BLOCKED + revocation sessions actives).
+- Lien compte assiste -> compte standard (IdentityDelegationService).
+
+API identity exposees:
+- /identity/sync
+- /identity/onboarding (POST + GET + PATCH step-1/2/3)
+- /identity/me
+- /identity/devices
+- /identity/devices/{deviceId}/block
+- /identity/sessions/refresh
+- /identity/sessions/{sessionId}/revoke
+- /internal/identity/users/{userId}/block
+- /api/mobile/identity/link-account
+
+====================================================================
+4) COUNTRY DOMAIN ET CONTEXTE PAYS
+====================================================================
+- Catalogue pays actif/configure/fallback.
+- Separation country selectionne vs service country.
+- Fallback international (INT) si pays non configure.
+- Resolution service country + currency par account holder.
+
+API exposees:
+- /public/countries
+- /api/admin/countries (+ activate/configure/create)
+
+====================================================================
+5) CIRCLES, CIRCLE FINANCE ET CIRCLE SOCIAL
+====================================================================
+Circles coeur:
+- Creation cercle avec hierarchy MLM (coach + advisors G1/G2 selon ancetres).
+- Join cercle (controle pays service, unicite, capacite).
+- Gestion membres, participants, my-circle.
+- Creation membres assistes dans cercle (limites, delegation manager, verif telephone optionnelle).
+- Circle invites:
+  - token invitation
+  - QR/deep-link
+  - envoi WhatsApp
+  - join via token
+
+Circle finance:
+- Cycles financiers de cercle.
+- Contributions initialisees par cycle.
+- Loans de cercle (coach validation, regles membres financiers).
+- Remboursement loan de cercle et cloture en REPAID.
+
+Circle social:
+- Log activites (member joined, loan granted/repaid, contribution paid, etc.)
+- Calcul progression cercle.
+- Calcul score global cercle.
+- Listeners evenementiels idempotents pour activites.
+
+APIs principales:
+- /circles
+- /circles/{circleId}/cycles
+- /circles/{circleId}/loans
+- /loans/{loanId}/repayments (circle loan)
+- /circles/{circleId}/invites (+ QR + send-whatsapp + join token)
+- /api/mobile/circles/{circleId}/assisted-members
+
+====================================================================
+6) CREDIT / LOAN ENGINE
+====================================================================
+- Moteur de scoring credit base sur facteurs:
+  - rms
+  - score cercle global
+  - progression user
+  - activite/training
+- Stockage CreditEligibility + montant maximum eligible.
+- Creation loan avec controles:
+  - policy credit admin presente
+  - coherence pays service/currency
+  - cercle actif et membre financier
+  - limites membres financiers
+- Generation echeancier remboursement.
+- Disbursement loan (operation + ecriture comptable).
+- Repayment workflow:
+  - validation montant/prochaine echeance
+  - marquage LATE auto
+  - ecritures comptables
+  - evenement LoanRepaidEvent a la cloture
+
+APIs:
+- /credit/eligibility/{accountHolderId}
+- /loans (create)
+- /loans/me
+- /loans/{loanId}/repay
+
+====================================================================
+7) CAPITAL ENGINE
+====================================================================
+- Gestion funds (creation/listing).
+- Allocation capital pool par cercle/pays.
+- Validation policies seed capital.
+- Funding loan depuis pool:
+  - validations pool/circle/country/currency
+  - update usedAmount
+  - disbursement loan via LoanService
+
+APIs:
+- /capital/funds
+- /capital/pools
+- /capital/loans/{loanId}/fund
+- Admin equivalents: /api/admin/capital/**
+
+====================================================================
+8) AGENT OFFLINE LAYER
+====================================================================
+- Agent profiles + permissions + statut actif/inactif/suspended.
+- Assisted sessions (agent -> account holder).
+- Offline transactions:
+  - enregistrement local PENDING_SYNC
+  - sync batch -> posting comptable selon type
+  - statuts SYNCED/FAILED
+- Emission notifications AGENT_ACTION.
+- Emission CircleContributionEvent sur contribution offline.
+
+APIs:
+- /agents
+- /agents/sessions
+- /agents/offline-transactions
+- /agents/offline-transactions/sync
+
+====================================================================
+9) PAYMENTS / SUBSCRIPTION / PSP
+====================================================================
+Subscription:
+- Liste plans par service country.
+- Initiation abonnement:
+  - creation operation INITIATED (idempotency key)
+  - appel client Jawupay
+  - affectation pspReference
+
+PSP callback Jawupay:
+- Endpoint public /psp/jawupay/callback
+- Verifications:
+  - rate limiting IP
+  - replay protection (nonce + fenetre timestamp)
+  - signature HMAC
+- Si callback SUCCESS/CONFIRMED:
+  - confirmation operation
+  - posting comptable
+  - calcul commissions MLM subscription
+
+Important:
+- JawupayClientImpl actuel est un adaptateur mock (genere pspReference/checkoutUrl de test).
+
+====================================================================
+10) LEDGER ET RECONCILIATION
+====================================================================
+- Double-entry accounting avec controle d'equilibre debit/credit.
+- Posting par type operation:
+  - SUBSCRIPTION
+  - ADJUSTMENT
+  - LOAN_DISBURSEMENT
+  - LOAN_REPAYMENT
+  - COMMISSION_PAYOUT (traitement dedie)
+- Snapshots soldes par accountCode/currency.
+- Reconciliation module:
+  - import batch PSP
+  - matching operations
+  - posting adjustments si ecart
+  - settlement summary
+
+APIs:
+- /reconciliation/import
+- /reconciliation/settlement-summary
+
+====================================================================
+11) MLM (PLACEMENT, VOLUME LEDGER, BONUS, ANALYTICS)
+====================================================================
+Placement et arbre:
+- Placement MLM avec auto-placement BFS (max 5 enfants directs).
+- Auto-placement avec garde max scan nodes.
+- Audit de placement.
+
+Volume ledger:
+- Alimentation volume upline lors order DELIVERED.
+- Idempotence (verification + contraintes DB).
+- Rebuild ledger jobs (admin request + scheduler).
+
+Weekly group bonus:
+- Calcul hebdo binaire:
+  - smallest leg
+  - carryover par leg
+  - cap par grade
+  - taux par grade
+- Protection double run via table de job runs.
+- Monitoring hooks + logs structure.
+
+Commissions et payouts:
+- Generation commissions (SUBSCRIPTION et GROUP_BONUS).
+- Spike detection configurable.
+- Batch payout hebdo:
+  - taxe
+  - operation payout
+  - posting comptable
+  - marquage PAID
+  - audit financier
+
+Analytics:
+- member metrics
+- weekly snapshots
+- network health admin
+- dashboard mobile MLM
+
+APIs:
+- /mlm/placements
+- /mlm/{accountHolderId}/upline
+- /mlm/{accountHolderId}/downline
+- /mlm/{accountHolderId}/team-size
+- /mlm/{accountHolderId}/levels/{level}/members
+- /api/mobile/mlm/dashboard
+- /api/admin/mlm/network-health
+- /api/admin/commissions
+- /api/admin/commission-payouts
+- /api/admin/weekly-volume
+- /api/admin/mlm/rebuild-ledger
+
+====================================================================
+12) SHOP / MARKETPLACE
+====================================================================
+- Produits marketplace (CRUD partiel: create/list/get).
+- Checkout multi-items avec:
+  - total amount
+  - commission platform
+  - merchant amount
+  - mlmVolume
+- Cycle de statut commande (CREATED/PAID/SHIPPED/DELIVERED/CANCELLED/REFUNDED).
+- Publication ShopOrderDeliveredEvent sur transition DELIVERED.
+- Workflow refund commande DELIVERED:
+  - ShopOrderRefundedEvent
+  - adjustments MLM/commission
+  - suppression volume ledger associe
+  - audit financier
+
+APIs:
+- /shop/products
+- /shop/orders/checkout
+- /shop/orders/mine
+- /shop/orders/{orderId}
+- /shop/orders/{orderId}/status
+- /shop/orders/{orderId}/refund
+
+====================================================================
+13) NOTIFICATIONS (MULTI-CHANNEL)
+====================================================================
+- Entites notification + tentatives + templates.
+- NotificationService:
+  - create
+  - send
+  - send multi-channel
+  - lecture par user/accountHolder
+- Dispatcher multi-provider:
+  - IN_APP
+  - EMAIL
+  - PUSH
+  - SMS
+- Integrations messaging:
+  - Africa's Talking (SMS/WhatsApp) conditionnel
+  - fallback LoggingPhoneMessageGateway si integration desactivee
+- Scheduler subscription expiration reminders (D-7, D-3, D-1, D0, D+3).
+- Listeners d'evenements:
+  - LoanRepaid
+  - MessageSent
+  - NotificationRequested
+  - CommissionGenerated
+  - PostCreated
+
+APIs:
+- /notifications
+- /notifications/{notificationId}/send
+- /notifications/multi-channel
+- /notifications/me
+- /notifications/account-holders/{accountHolderId}
+
+====================================================================
+14) MEDIA / KYC / OBJECT STORAGE
+====================================================================
+- Media upload flow:
+  - generation URL pre-sign upload
+  - confirmation upload (verif object storage)
+  - generation URL download
+- Buckets separes (public/private/kyc).
+- Mapping media -> domaine:
+  - PROFILE_PHOTO -> user profile
+  - KYC_* -> kyc_documents
+- Soumission KYC avec verification documents minimaux.
+- Enforcement delegation + meme service country pour actions deleguees.
+
+APIs:
+- /api/media/upload-url
+- /api/media/confirm
+- /api/media/{id}
+- /api/media/{id}/download-url
+- /api/mobile/kyc/submit
+
+====================================================================
+15) CHAT TEMPS REEL
+====================================================================
+- WebSocket STOMP (/ws/chat).
+- Conversations/messages persistes.
+- Statuts message: SENT/DELIVERED/READ.
+- Delivery status + read receipts idempotents.
+- Diffusion realtime sur topics conversation/user.
+
+APIs:
+- /chat/messages (send/list)
+- /chat/messages/{messageId}/delivered
+- /chat/messages/{messageId}/read
+
+====================================================================
+16) COMMUNITY / PROGRESS / MOBILE HOME
+====================================================================
+Community:
+- Creation posts.
+- Feature/unfeature (limite posts featured).
+- Feed mobile (featured + non-featured).
+
+Progression user:
+- Gestion tasks (TaskType, completion).
+- Recalcul % progression et next task.
+- Emission notifications TASK_COMPLETED.
+
+Mobile Home:
+- Endpoint agrege avec:
+  - statut membership (subscription active/expired)
+  - score RMS
+  - loans actifs
+  - resume cercle
+  - highlights community
+  - unread chat count
+  - resume notifications
+
+APIs:
+- /api/mobile/community/feed
+- /progress/me
+- /tasks/me
+- /tasks/{taskType}/complete
+- /api/mobile/home
+
+====================================================================
+17) ADMIN BACK OFFICE
+====================================================================
+Auth admin:
+- login password + challenge token
+- setup/verify TOTP 2FA
+- invitation accept
+- JWT admin access
+
+Fonctions admin:
+- Dashboard global
+- Users: list/detail/block/unblock
+- Loans: list/detail/approve/reject
+- Circles: list/detail/suspend
+- Community posts: create/feature/unfeature
+- Countries config + activation + configuration
+- Subscription plans admin + policies (credit/seed capital)
+- Treasury:
+  - comptes snapshot
+  - transfer
+  - cashout
+- Invitations admin:
+  - create/list/resend/revoke
+  - expire job periodique
+- Monitoring MLM/commissions/payouts/weekly volume
+- Rebuild ledger MLM via endpoint admin
+
+APIs prefix:
+- /api/admin/**
+
+====================================================================
+18) SYSTEME EVENEMENTIEL INTERNE
+====================================================================
+- DomainEvent + publisher Spring.
+- Listener idempotence via checkpoint table (event_listener_checkpoints).
+- Utilise entre modules pour:
+  - social circle
+  - notifications
+  - MLM
+  - shop
+  - credit
+  - financial audit
+
+====================================================================
+19) JOBS SCHEDULES IMPLEMENTES
+====================================================================
+- WeeklyGroupBonusJob (cron configurable, dimanche soir par defaut).
+- MlmWeeklySnapshotJob (cron hebdo).
+- MlmLedgerRebuildJob (cron periodique, traite jobs pending).
+- SubscriptionExpirationJob (toutes les 6h par defaut).
+- AdminInvitationExpiryJob (fixed delay).
+
+====================================================================
+20) OBSERVABILITE
+====================================================================
+- Hooks Micrometer exposes dans PlatformMonitoringHooks pour:
+  - commissions calculees
+  - jobs weekly bonus
+  - payout batches
+  - checkout/delivery marketplace
+  - ecritures volume ledger
+  - placements MLM
+- Logs structures sur services critiques (MLM, payouts, shop, ledger).
+
+====================================================================
+21) TESTS AUTOMATISES PRESENTS
+====================================================================
+- 38 classes de test dans src/test/java.
+- Couvre notamment:
+  - Identity onboarding/refresh token
+  - Phone verification
+  - Circle/circle finance/invites
+  - Chat
+  - Offline transactions
+  - Credit repayment workflow
+  - MLM services (volume, bonus, rebuild, analytics, autoplacement, refund adjust)
+  - Commission payout processing
+  - Financial audit listener
+  - Admin auth/monitoring
+  - PSP callback regression
+  - Shop order integration
+  - IdempotentEventListenerExecutor
+- D'apres les rapports existants (target/surefire-reports):
+  - tests=84
+  - failures=0
+  - errors=0
+  - skipped=0
+
+====================================================================
+22) INFRA / DEVOPS IMPLEMENTES
+====================================================================
+- Docker compose dev/prod avec profils Spring correspondants.
+- Variables d'env pour DB, secrets, Firebase, MinIO, messaging.
+- CI GitLab:
+  - stages info/security/build/tag/push/deploy
+  - scans security (trivy deps/image + gitleaks)
+  - build Maven
+  - push image registry
+  - deploy docker compose distant
+
+====================================================================
+23) POINTS DE VIGILANCE (ETAT ACTUEL)
+====================================================================
+- Certains adaptateurs externes sont en mode stub/simule:
+  - JawupayClientImpl (initiation payment mock)
+  - providers notification email/push/sms (reponse queued/simulee)
+- L'integration SMS/WhatsApp reelle existe via Africa's Talking quand activee.
+- Des fichiers de credentials Firebase sont presents dans resources (a gerer strictement selon l'environnement et la politique securite).
+
+====================================================================
+24) RESUME EXECUTIF
+====================================================================
+Le backend couvre deja un perimetre tres large: identity, delegation, circles, credit, capital, marketplace, MLM complet (volume/bonus/payout/analytics), ledger double entree, notifications multi-canal, media/KYC, chat realtime, home mobile, admin back-office, jobs schedules, observabilite et CI/CD.

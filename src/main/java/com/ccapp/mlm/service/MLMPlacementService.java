@@ -31,6 +31,8 @@ public class MLMPlacementService {
     private final MlmRelationshipRepository mlmRelationshipRepository;
     private final AccountHolderService accountHolderService;
     private final AccessControlService accessControlService;
+    private final AutoPlacementService autoPlacementService;
+    private final MlmPlacementAuditService mlmPlacementAuditService;
     private final DomainEventPublisher domainEventPublisher;
 
     @Transactional
@@ -51,10 +53,7 @@ public class MLMPlacementService {
             throw new ConflictException("Account holder already has a sponsor");
         }
 
-        UUID placementParentId = mlmRelationshipRepository
-                .findPlacementParentCandidate(sponsorAccountHolderId, MAX_DIRECT_CHILDREN)
-                .map(UUID::fromString)
-                .orElseThrow(() -> new BusinessException("Sponsor has no available leg"));
+        UUID placementParentId = autoPlacementService.resolvePlacementParent(sponsorAccountHolderId, MAX_DIRECT_CHILDREN);
 
         List<MlmRelationship> ancestors = mlmRelationshipRepository.findAncestors(placementParentId);
         if (ancestors.isEmpty()) {
@@ -87,6 +86,16 @@ public class MLMPlacementService {
         long directChildren = mlmRelationshipRepository.countByAncestorIdAndLevel(placementParentId, 1);
         long sponsorTeamSize = mlmRelationshipRepository.countTeamSize(sponsorAccountHolderId);
         PlatformMonitoringHooks.onMlmPlacementCreated();
+        mlmPlacementAuditService.record(
+                accountHolderId,
+                sponsorAccountHolderId,
+                placementParentId,
+                actorUserId,
+                java.util.Map.of(
+                        "directChildren", String.valueOf(directChildren),
+                        "sponsorTeamSize", String.valueOf(sponsorTeamSize)
+                )
+        );
         log.info("mlm_placement_created accountHolderId={} sponsorId={} placementParentId={} directChildren={} sponsorTeamSize={}",
                 accountHolderId, sponsorAccountHolderId, placementParentId, directChildren, sponsorTeamSize);
 

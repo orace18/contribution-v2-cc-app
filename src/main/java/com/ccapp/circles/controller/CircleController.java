@@ -43,6 +43,7 @@ public class CircleController {
     @Operation(summary = "Creer un cercle")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Succes - cercle cree", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Regle metier invalide (MEMBER_NOT_ACTIVE, SPONSOR_NOT_FOUND, cercle complet)", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
             @ApiResponse(responseCode = "401", description = "Non authentifie", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
             @ApiResponse(responseCode = "404", description = "Utilisateur introuvable", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
             @ApiResponse(responseCode = "409", description = "Utilisateur deja dans un cercle actif", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
@@ -88,6 +89,17 @@ public class CircleController {
     })
     public ResponseEntity<CommonResponse<List<CircleMemberResponse>>> listMembers(@PathVariable UUID circleId) {
         return ResponseEntity.ok(CommonResponse.success("Circle members", circleService.listMembers(circleId)));
+    }
+
+    @GetMapping("/{circleId}/participants")
+    @Operation(summary = "Lister les participants d'un cercle (membres, coach, advisors)")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Succes", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Non authentifie", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Cercle introuvable", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
+    })
+    public ResponseEntity<CommonResponse<CircleParticipantsResponse>> participants(@PathVariable UUID circleId) {
+        return ResponseEntity.ok(CommonResponse.success("Circle participants", circleService.getParticipants(circleId)));
     }
 
     @GetMapping("/{circleId}/activity")

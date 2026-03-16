@@ -3,6 +3,7 @@ package com.ccapp.shop.controller;
 import com.ccapp.common.api.CommonResponse;
 import com.ccapp.common.security.SecurityUtils;
 import com.ccapp.shop.dto.CheckoutRequest;
+import com.ccapp.shop.dto.RefundShopOrderRequest;
 import com.ccapp.shop.dto.ShopOrderResponse;
 import com.ccapp.shop.dto.UpdateShopOrderStatusRequest;
 import com.ccapp.shop.service.ShopOrderService;
@@ -66,6 +67,16 @@ public class ShopOrderController {
         return ResponseEntity.ok(CommonResponse.success(
                 "Shop order status updated",
                 shopOrderService.updateStatus(orderId, request.status())
+        ));
+    }
+
+    @PostMapping("/{orderId}/refund")
+    @Operation(summary = "Refund a delivered order")
+    public ResponseEntity<CommonResponse<ShopOrderResponse>> refund(@PathVariable UUID orderId,
+                                                                    @Valid @RequestBody(required = false) RefundShopOrderRequest request) {
+        return ResponseEntity.ok(CommonResponse.success(
+                "Shop order refunded",
+                shopOrderService.refundDeliveredOrder(orderId, request)
         ));
     }
 }

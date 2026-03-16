@@ -3,6 +3,8 @@ package com.ccapp.circles.dto;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
+import java.util.UUID;
+
 public record CreateAssistedMemberRequest(
         @NotBlank(message = "fullName is required")
         @Size(max = 240, message = "fullName max size is 240")
@@ -22,6 +24,8 @@ public record CreateAssistedMemberRequest(
 
         @NotBlank(message = "projectDescription is required")
         @Size(max = 1000, message = "projectDescription max size is 1000")
-        String projectDescription
+        String projectDescription,
+
+        UUID phoneVerificationId
 ) {
 }

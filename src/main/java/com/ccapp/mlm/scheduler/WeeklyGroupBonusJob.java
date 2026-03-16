@@ -31,9 +31,24 @@ public class WeeklyGroupBonusJob {
 
     @Scheduled(cron = "${mlm.group-bonus.cron:0 55 23 * * SUN}", zone = "${mlm.group-bonus.zone:Africa/Porto-Novo}")
     public void run() {
+        int weekId = currentWeekId();
         OffsetDateTime startedAt = OffsetDateTime.now();
+        MlmWeeklyBonusJobRun run = mlmWeeklyBonusJobRunRepository.findByWeekId(weekId)
+                .orElseGet(() -> MlmWeeklyBonusJobRun.builder().weekId(weekId).build());
+        if (run.getStatus() == WeeklyBonusJobRunStatus.SUCCESS) {
+            log.info("weekly_group_bonus_job_skipped weekId={} reason=already_successful", weekId);
+            return;
+        }
+        if (run.getStatus() == WeeklyBonusJobRunStatus.RUNNING
+                && run.getStartedAt() != null
+                && run.getStartedAt().isAfter(OffsetDateTime.now().minusHours(6))) {
+            log.info("weekly_group_bonus_job_skipped weekId={} reason=already_running", weekId);
+            return;
+        }
+        saveRun(weekId, WeeklyBonusJobRunStatus.RUNNING, startedAt, startedAt, 0, 0, 0, null);
+
         try {
-            WeeklyGroupBonusProcessingResult result = weeklyGroupBonusService.processCurrentWeek();
+            WeeklyGroupBonusProcessingResult result = weeklyGroupBonusService.processWeek(weekId);
             OffsetDateTime finishedAt = OffsetDateTime.now();
             saveRun(result.weekId(), WeeklyBonusJobRunStatus.SUCCESS, startedAt, finishedAt,
                     result.membersProcessed(), result.commissionsCreated(), result.carryoversStored(), null);
@@ -51,8 +66,7 @@ public class WeeklyGroupBonusJob {
                     Duration.between(startedAt, finishedAt).toMillis());
         } catch (RuntimeException ex) {
             OffsetDateTime finishedAt = OffsetDateTime.now();
-            int fallbackWeekId = currentWeekId();
-            saveRun(fallbackWeekId, WeeklyBonusJobRunStatus.FAILED, startedAt, finishedAt, 0, 0, 0, truncate(ex.getMessage()));
+            saveRun(weekId, WeeklyBonusJobRunStatus.FAILED, startedAt, finishedAt, 0, 0, 0, truncate(ex.getMessage()));
             PlatformMonitoringHooks.onWeeklyBonusJob(
                     WeeklyBonusJobRunStatus.FAILED.name(),
                     0,
@@ -60,7 +74,7 @@ public class WeeklyGroupBonusJob {
                     Duration.between(startedAt, finishedAt)
             );
             log.error("weekly_group_bonus_job_failed weekId={} durationMs={} error={}",
-                    fallbackWeekId,
+                    weekId,
                     Duration.between(startedAt, finishedAt).toMillis(),
                     ex.getMessage(),
                     ex);

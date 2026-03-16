@@ -147,6 +147,51 @@ class MlmVolumeLedgerIntegrationTest {
         assertEquals(1, mlmVolumeLedgerRepository.count());
     }
 
+    @Test
+    void onDelivered_withDifferentEventIdsForSameOrder_shouldStillBeIdempotent() {
+        UUID a = createAccountHolder("A", "Root");
+        UUID b = createAccountHolder("B", "Buyer");
+        OffsetDateTime now = OffsetDateTime.now();
+
+        seedRelationship(a, a, 0, now.minusMinutes(3));
+        seedRelationship(b, b, 0, now.minusMinutes(3));
+        seedRelationship(a, b, 1, now.minusMinutes(2));
+
+        ShopOrder order = shopOrderRepository.save(ShopOrder.builder()
+                .buyerId(b)
+                .status(ShopOrderStatus.DELIVERED)
+                .totalAmount(new BigDecimal("7000.0000"))
+                .currency("XOF")
+                .paymentMethod("CARD")
+                .deliveryAddressId(UUID.randomUUID())
+                .build());
+
+        listener.on(new ShopOrderDeliveredEvent(
+                UUID.randomUUID(),
+                now,
+                order.getId(),
+                b,
+                new BigDecimal("7000.0000"),
+                "XOF",
+                new BigDecimal("5600.0000"),
+                new BigDecimal("1400.0000"),
+                new BigDecimal("3.5000")
+        ));
+        listener.on(new ShopOrderDeliveredEvent(
+                UUID.randomUUID(),
+                now.plusSeconds(2),
+                order.getId(),
+                b,
+                new BigDecimal("7000.0000"),
+                "XOF",
+                new BigDecimal("5600.0000"),
+                new BigDecimal("1400.0000"),
+                new BigDecimal("3.5000")
+        ));
+
+        assertEquals(1, mlmVolumeLedgerRepository.count());
+    }
+
     @BeforeEach
     void setUp() {
         doAnswer(invocation -> {

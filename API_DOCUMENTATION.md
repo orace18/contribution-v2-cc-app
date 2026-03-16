@@ -443,13 +443,21 @@ Date de mise a jour: 2026-03-07
 - Body:
 ```json
 {
-  "name": "Circle Abidjan 01"
+  "name": "Les Batisseurs",
+  "creatorRole": "MEMBER"
 }
 ```
 - Succes `200` (`CircleResponse`)
 - Regle metier:
+  - `creatorRole` obligatoire (`MEMBER|COACH`).
+  - le createur doit etre un membre actif CC App + MLM actif, sinon `MEMBER_NOT_ACTIVE`.
+  - le coach est derive automatiquement du sponsor MLM (generation 1 du createur).
+  - les advisors sont auto-ajoutes depuis la hierarchie MLM:
+    - generation 2 -> `ADVISOR_G1`
+    - generation 3 -> `ADVISOR_G2`
   - le pays du cercle est derive de `account_holders.service_country_code`.
 - Echec:
+  - `400`: `MEMBER_NOT_ACTIVE`, `SPONSOR_NOT_FOUND`, payload invalide
   - `401`: non authentifie
   - `404`: user introuvable
   - `409`: utilisateur deja dans un cercle actif
@@ -483,6 +491,17 @@ Date de mise a jour: 2026-03-07
 ### GET `/circles/{circleId}/members`
 - Auth: Bearer
 - Succes `200` (`List<CircleMemberResponse>`)
+- Echec:
+  - `401`: non authentifie
+  - `404`: cercle introuvable
+
+### GET `/circles/{circleId}/participants`
+- Auth: Bearer
+- Succes `200` (`CircleParticipantsResponse`)
+- `data` contient:
+  - `members` (participants financiers, role `MEMBER`)
+  - `coach` (role `COACH`)
+  - `advisors` (roles `ADVISOR_G1|ADVISOR_G2`)
 - Echec:
   - `401`: non authentifie
   - `404`: cercle introuvable

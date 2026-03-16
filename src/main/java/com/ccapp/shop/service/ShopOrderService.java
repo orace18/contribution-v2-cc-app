@@ -12,10 +12,12 @@ import com.ccapp.shop.domain.entity.ShopProduct;
 import com.ccapp.shop.domain.enums.ShopOrderStatus;
 import com.ccapp.shop.dto.CheckoutItemRequest;
 import com.ccapp.shop.dto.CheckoutRequest;
+import com.ccapp.shop.dto.RefundShopOrderRequest;
 import com.ccapp.shop.dto.ShopCommissionPoolResponse;
 import com.ccapp.shop.dto.ShopOrderItemResponse;
 import com.ccapp.shop.dto.ShopOrderResponse;
 import com.ccapp.shop.event.ShopOrderDeliveredEvent;
+import com.ccapp.shop.event.ShopOrderRefundedEvent;
 import com.ccapp.shop.repository.ShopCommissionPoolRepository;
 import com.ccapp.shop.repository.ShopOrderItemRepository;
 import com.ccapp.shop.repository.ShopOrderRepository;
@@ -172,6 +174,35 @@ public class ShopOrderService {
         return toResponse(saved);
     }
 
+    @Transactional
+    public ShopOrderResponse refundDeliveredOrder(UUID orderId, RefundShopOrderRequest request) {
+        ShopOrder order = findOrder(orderId);
+        if (order.getStatus() != ShopOrderStatus.DELIVERED) {
+            throw new BusinessException("Only delivered orders can be refunded");
+        }
+        ShopCommissionPool pool = shopCommissionPoolRepository.findByOrderId(order.getId())
+                .orElseThrow(() -> new NotFoundException("Commission pool not found for refunded order"));
+
+        order.setStatus(ShopOrderStatus.REFUNDED);
+        ShopOrder saved = shopOrderRepository.save(order);
+        String reason = request == null || request.reason() == null || request.reason().isBlank()
+                ? "N/A"
+                : request.reason().trim();
+        domainEventPublisher.publish(ShopOrderRefundedEvent.create(
+                saved.getId(),
+                saved.getBuyerId(),
+                saved.getTotalAmount(),
+                saved.getCurrency(),
+                pool.getMerchantAmount(),
+                pool.getPlatformCommission(),
+                pool.getMlmVolume(),
+                reason
+        ));
+        log.info("marketplace_order_refunded orderId={} buyerId={} reason={} merchantAmount={} platformCommission={} mlmVolume={}",
+                saved.getId(), saved.getBuyerId(), reason, pool.getMerchantAmount(), pool.getPlatformCommission(), pool.getMlmVolume());
+        return toResponse(saved);
+    }
+
     @Transactional(readOnly = true)
     public ShopOrder findOrder(UUID orderId) {
         return shopOrderRepository.findById(orderId)
@@ -183,7 +214,7 @@ public class ShopOrderService {
             case CREATED -> to == ShopOrderStatus.PAID || to == ShopOrderStatus.CANCELLED;
             case PAID -> to == ShopOrderStatus.SHIPPED || to == ShopOrderStatus.DELIVERED || to == ShopOrderStatus.CANCELLED;
             case SHIPPED -> to == ShopOrderStatus.DELIVERED || to == ShopOrderStatus.CANCELLED;
-            case DELIVERED, CANCELLED -> false;
+            case DELIVERED, CANCELLED, REFUNDED -> false;
         };
     }
 

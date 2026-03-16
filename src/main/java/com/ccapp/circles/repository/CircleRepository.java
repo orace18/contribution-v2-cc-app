@@ -26,6 +26,7 @@ public interface CircleRepository extends JpaRepository<Circle, UUID> {
                   select 1 from CircleMember cm
                   where cm.circle = c
                     and cm.accountHolderId = :accountHolderId
+                    and cm.financialMember = true
               )
             """)
     boolean existsActiveCircleForUser(UUID accountHolderId);
@@ -37,6 +38,7 @@ public interface CircleRepository extends JpaRepository<Circle, UUID> {
                   select 1 from CircleMember cm
                   where cm.circle = c
                     and cm.accountHolderId = :accountHolderId
+                    and cm.financialMember = true
               )
             order by c.createdAt desc
             """)

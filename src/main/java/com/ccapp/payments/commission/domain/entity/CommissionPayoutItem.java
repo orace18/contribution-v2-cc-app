@@ -29,11 +29,12 @@ import java.util.UUID;
 @AllArgsConstructor
 @Entity
 @Table(name = "commission_payout_items",
-        uniqueConstraints = @UniqueConstraint(name = "uk_commission_payout_items_batch_account_holder",
-                columnNames = {"batch_id", "account_holder_id"}),
+        uniqueConstraints = @UniqueConstraint(name = "uk_commission_payout_items_commission_id",
+                columnNames = {"commission_id"}),
         indexes = {
                 @Index(name = "idx_commission_payout_items_batch", columnList = "batch_id"),
-                @Index(name = "idx_commission_payout_items_status", columnList = "status")
+                @Index(name = "idx_commission_payout_items_status", columnList = "status"),
+                @Index(name = "idx_commission_payout_items_commission_id", columnList = "commission_id")
         })
 public class CommissionPayoutItem {
 
@@ -46,6 +47,9 @@ public class CommissionPayoutItem {
 
     @Column(name = "account_holder_id", nullable = false)
     private UUID accountHolderId;
+
+    @Column(name = "commission_id")
+    private UUID commissionId;
 
     @Column(name = "gross_amount", nullable = false, precision = 19, scale = 4)
     private BigDecimal grossAmount;

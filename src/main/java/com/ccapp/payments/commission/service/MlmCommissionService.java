@@ -1,6 +1,7 @@
 package com.ccapp.payments.commission.service;
 
 import com.ccapp.common.events.DomainEventPublisher;
+import com.ccapp.common.exception.BusinessException;
 import com.ccapp.financial.audit.service.FinancialAuditService;
 import com.ccapp.observability.PlatformMonitoringHooks;
 import com.ccapp.payments.commission.domain.entity.MlmCommission;
@@ -30,6 +31,7 @@ public class MlmCommissionService {
     private final MlmCommissionRepository mlmCommissionRepository;
     private final DomainEventPublisher domainEventPublisher;
     private final FinancialAuditService financialAuditService;
+    private final CommissionEventRateLimiter commissionEventRateLimiter;
 
     @Value("${mlm.commission.rate-percent:5.0}")
     private BigDecimal commissionRatePercent;
@@ -37,10 +39,18 @@ public class MlmCommissionService {
     @Value("${mlm.monitoring.commission-spike.threshold:10000}")
     private BigDecimal commissionSpikeThreshold;
 
+    @Value("${commission.generation.max-per-minute:2000}")
+    private int commissionGenerationMaxPerMinute;
+
     @Transactional
     public Optional<MlmCommission> calculateForOperation(Operation operation) {
         if (operation == null || operation.getType() != OperationType.SUBSCRIPTION) {
             return Optional.empty();
+        }
+
+        String rateKey = "subscription:" + operation.getAccountHolderId();
+        if (!commissionEventRateLimiter.allow(rateKey, commissionGenerationMaxPerMinute)) {
+            throw new BusinessException("Commission generation rate limit exceeded");
         }
 
         Optional<MlmCommission> existing = mlmCommissionRepository.findByOperationId(operation.getId());

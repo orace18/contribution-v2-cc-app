@@ -4,6 +4,7 @@ import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
 import com.ccapp.identity.account_holder.domain.enums.AccountType;
 import com.ccapp.identity.account_holder.repository.AccountHolderRepository;
 import com.ccapp.financial.audit.service.FinancialAuditService;
+import com.ccapp.payments.commission.service.CommissionEventRateLimiter;
 import com.ccapp.mlm.domain.entity.MlmLegCarryover;
 import com.ccapp.mlm.domain.entity.MlmMemberGradeProfile;
 import com.ccapp.mlm.domain.entity.MlmVolumeLedger;
@@ -36,7 +37,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
         "spring.flyway.enabled=false",
         "spring.jpa.hibernate.ddl-auto=create-drop"
 })
-@Import({WeeklyGroupBonusService.class, FinancialAuditService.class})
+@Import({WeeklyGroupBonusService.class, FinancialAuditService.class, CommissionEventRateLimiter.class})
 class WeeklyGroupBonusServiceIntegrationTest {
 
     @Autowired

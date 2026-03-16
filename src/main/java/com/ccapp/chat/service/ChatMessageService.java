@@ -2,13 +2,18 @@ package com.ccapp.chat.service;
 
 import com.ccapp.chat.domain.entity.ChatConversation;
 import com.ccapp.chat.domain.entity.ChatMessage;
+import com.ccapp.chat.domain.entity.ChatMessageDeliveryStatus;
+import com.ccapp.chat.domain.entity.ChatReadReceipt;
 import com.ccapp.chat.domain.enums.ChatMessageStatus;
+import com.ccapp.chat.dto.ChatRealtimeEvent;
 import com.ccapp.chat.dto.ChatMessageResponse;
 import com.ccapp.chat.dto.ChatMessagesPageResponse;
 import com.ccapp.chat.dto.SendChatMessageRequest;
 import com.ccapp.chat.event.ChatMessageStatusUpdatedEvent;
 import com.ccapp.chat.repository.ChatConversationRepository;
+import com.ccapp.chat.repository.ChatMessageDeliveryStatusRepository;
 import com.ccapp.chat.repository.ChatMessageRepository;
+import com.ccapp.chat.repository.ChatReadReceiptRepository;
 import com.ccapp.common.events.DomainEventPublisher;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.common.exception.NotFoundException;
@@ -32,9 +37,14 @@ public class ChatMessageService {
 
     private static final int DEFAULT_PAGE_SIZE = 20;
     private static final int MAX_PAGE_SIZE = 100;
+    private static final String EVENT_MESSAGE_SENT = "chat.message.sent";
+    private static final String EVENT_MESSAGE_DELIVERED = "chat.message.delivered";
+    private static final String EVENT_MESSAGE_READ = "chat.message.read";
 
     private final ChatMessageRepository chatMessageRepository;
     private final ChatConversationRepository chatConversationRepository;
+    private final ChatMessageDeliveryStatusRepository chatMessageDeliveryStatusRepository;
+    private final ChatReadReceiptRepository chatReadReceiptRepository;
     private final AccountHolderService accountHolderService;
     private final AccessControlService accessControlService;
     private final DomainEventPublisher domainEventPublisher;
@@ -102,13 +112,14 @@ public class ChatMessageService {
         message.setMessageStatus(ChatMessageStatus.DELIVERED);
         message.setDeliveredAt(now);
         ChatMessage saved = chatMessageRepository.save(message);
+        upsertDeliveryStatus(saved.getId(), saved.getRecipientAccountHolderId(), ChatMessageStatus.DELIVERED);
         domainEventPublisher.publish(ChatMessageStatusUpdatedEvent.create(
                 saved.getId(),
                 saved.getConversationId(),
                 saved.getMessageStatus(),
                 saved.getRecipientAccountHolderId()
         ));
-        publishRealtime(saved);
+        publishRealtime(EVENT_MESSAGE_DELIVERED, saved);
         return toResponse(saved);
     }
 
@@ -131,13 +142,15 @@ public class ChatMessageService {
         }
         message.setReadAt(now);
         ChatMessage saved = chatMessageRepository.save(message);
+        upsertDeliveryStatus(saved.getId(), saved.getRecipientAccountHolderId(), ChatMessageStatus.READ);
+        upsertReadReceipt(saved.getId(), saved.getRecipientAccountHolderId(), now);
         domainEventPublisher.publish(ChatMessageStatusUpdatedEvent.create(
                 saved.getId(),
                 saved.getConversationId(),
                 saved.getMessageStatus(),
                 saved.getRecipientAccountHolderId()
         ));
-        publishRealtime(saved);
+        publishRealtime(EVENT_MESSAGE_READ, saved);
         return toResponse(saved);
     }
 
@@ -161,7 +174,8 @@ public class ChatMessageService {
                 saved.getRecipientAccountHolderId(),
                 saved.getChannel()
         ));
-        publishRealtime(saved);
+        upsertDeliveryStatus(saved.getId(), saved.getRecipientAccountHolderId(), ChatMessageStatus.SENT);
+        publishRealtime(EVENT_MESSAGE_SENT, saved);
 
         return toResponse(saved);
     }
@@ -205,15 +219,48 @@ public class ChatMessageService {
         return Math.min(limit, MAX_PAGE_SIZE);
     }
 
-    private void publishRealtime(ChatMessage message) {
+    private void publishRealtime(String eventType, ChatMessage message) {
+        ChatMessageResponse payload = toResponse(message);
+        ChatRealtimeEvent realtimeEvent = new ChatRealtimeEvent(eventType, payload);
+        messagingTemplate.convertAndSend(
+                "/topic/chat/events/conversations/" + message.getConversationId(),
+                realtimeEvent
+        );
+        messagingTemplate.convertAndSend(
+                "/topic/chat/events/users/" + message.getRecipientAccountHolderId(),
+                realtimeEvent
+        );
+
         messagingTemplate.convertAndSend(
                 "/topic/chat/conversations/" + message.getConversationId(),
-                toResponse(message)
+                payload
         );
         messagingTemplate.convertAndSend(
                 "/topic/chat/users/" + message.getRecipientAccountHolderId(),
-                toResponse(message)
+                payload
         );
+    }
+
+    private void upsertDeliveryStatus(UUID messageId, UUID recipientAccountHolderId, ChatMessageStatus status) {
+        ChatMessageDeliveryStatus deliveryStatus = chatMessageDeliveryStatusRepository
+                .findByMessageIdAndRecipientAccountHolderId(messageId, recipientAccountHolderId)
+                .orElseGet(() -> ChatMessageDeliveryStatus.builder()
+                        .messageId(messageId)
+                        .recipientAccountHolderId(recipientAccountHolderId)
+                        .build());
+        deliveryStatus.setStatus(status);
+        chatMessageDeliveryStatusRepository.save(deliveryStatus);
+    }
+
+    private void upsertReadReceipt(UUID messageId, UUID readerAccountHolderId, OffsetDateTime readAt) {
+        ChatReadReceipt readReceipt = chatReadReceiptRepository
+                .findByMessageIdAndReaderAccountHolderId(messageId, readerAccountHolderId)
+                .orElseGet(() -> ChatReadReceipt.builder()
+                        .messageId(messageId)
+                        .readerAccountHolderId(readerAccountHolderId)
+                        .build());
+        readReceipt.setReadAt(readAt);
+        chatReadReceiptRepository.save(readReceipt);
     }
 
     private String normalizeChannel(String channel) {

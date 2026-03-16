@@ -22,6 +22,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -35,6 +36,8 @@ class MlmCommissionServiceTest {
     private DomainEventPublisher domainEventPublisher;
     @Mock
     private FinancialAuditService financialAuditService;
+    @Mock
+    private CommissionEventRateLimiter commissionEventRateLimiter;
 
     @InjectMocks
     private MlmCommissionService mlmCommissionService;
@@ -43,6 +46,8 @@ class MlmCommissionServiceTest {
     void setUp() {
         ReflectionTestUtils.setField(mlmCommissionService, "commissionRatePercent", new BigDecimal("5.0"));
         ReflectionTestUtils.setField(mlmCommissionService, "commissionSpikeThreshold", new BigDecimal("10000"));
+        ReflectionTestUtils.setField(mlmCommissionService, "commissionGenerationMaxPerMinute", 2000);
+        when(commissionEventRateLimiter.allow(any(), anyInt())).thenReturn(true);
     }
 
     @Test

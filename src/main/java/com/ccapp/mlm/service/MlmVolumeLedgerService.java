@@ -9,6 +9,7 @@ import com.ccapp.mlm.repository.MlmVolumeLedgerRepository;
 import com.ccapp.shop.event.ShopOrderDeliveredEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -50,6 +51,9 @@ public class MlmVolumeLedgerService {
                                   UUID sourceOrderId,
                                   BigDecimal volumeCv,
                                   OffsetDateTime occurredAt) {
+        if (sourceMemberId == null || sourceOrderId == null) {
+            return 0;
+        }
         if (volumeCv == null || volumeCv.signum() <= 0) {
             return 0;
         }
@@ -85,10 +89,28 @@ public class MlmVolumeLedgerService {
         if (toInsert.isEmpty()) {
             return 0;
         }
-        mlmVolumeLedgerRepository.saveAll(toInsert);
+        try {
+            mlmVolumeLedgerRepository.saveAll(toInsert);
+        } catch (DataIntegrityViolationException ex) {
+            log.info("mlm_volume_ledger_idempotent_conflict sourceOrderId={} sourceMemberId={}",
+                    sourceOrderId, sourceMemberId);
+            return 0;
+        }
         log.info("mlm_volume_ledger_upserted sourceOrderId={} sourceMemberId={} weekId={} entries={} volumeCv={}",
                 sourceOrderId, sourceMemberId, weekId, toInsert.size(), volumeCv);
         return toInsert.size();
+    }
+
+    @Transactional
+    public int rebuildForDeliveredOrder(UUID sourceMemberId,
+                                        UUID sourceOrderId,
+                                        BigDecimal volumeCv,
+                                        OffsetDateTime occurredAt) {
+        if (sourceOrderId == null) {
+            return 0;
+        }
+        mlmVolumeLedgerRepository.deleteBySourceOrderId(sourceOrderId);
+        return recordUplineVolume(sourceMemberId, sourceOrderId, volumeCv, occurredAt);
     }
 
     private int resolveLegPosition(UUID ancestorId, UUID sourceMemberId) {

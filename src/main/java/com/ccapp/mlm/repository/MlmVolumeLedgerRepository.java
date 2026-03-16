@@ -5,7 +5,9 @@ import com.ccapp.mlm.repository.projection.MlmWeeklyLegVolumeProjection;
 import com.ccapp.mlm.repository.projection.MlmWeeklyVolumeSummaryProjection;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -23,6 +25,13 @@ public interface MlmVolumeLedgerRepository extends JpaRepository<MlmVolumeLedger
     Set<UUID> findAccountHolderIdsBySourceOrderId(UUID sourceOrderId);
 
     List<MlmVolumeLedger> findBySourceOrderIdOrderByAccountHolderIdAsc(UUID sourceOrderId);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            delete from MlmVolumeLedger l
+            where l.sourceOrderId = :sourceOrderId
+            """)
+    int deleteBySourceOrderId(@Param("sourceOrderId") UUID sourceOrderId);
 
     @Query("""
             select l.accountHolderId as accountHolderId,

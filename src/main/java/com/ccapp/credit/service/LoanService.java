@@ -45,6 +45,9 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class LoanService {
 
+    private static final long MIN_FINANCIAL_MEMBERS_PER_CIRCLE = 3;
+    private static final long MAX_FINANCIAL_MEMBERS_PER_CIRCLE = 5;
+
     private final LoanRepository loanRepository;
     private final RepaymentScheduleRepository repaymentScheduleRepository;
     private final AccountHolderService accountHolderService;
@@ -77,8 +80,12 @@ public class LoanService {
         if (!serviceCountryCode.equalsIgnoreCase(circle.getCountryCode())) {
             throw new BusinessException("Circle country must match account holder service country");
         }
-        if (!circleMemberRepository.existsByCircle_IdAndAccountHolderId(request.circleId(), accountHolderId)) {
+        if (!circleMemberRepository.existsByCircle_IdAndAccountHolderIdAndFinancialMemberTrue(request.circleId(), accountHolderId)) {
             throw new BusinessException("Account holder is not a member of this circle");
+        }
+        long financialMembersCount = circleMemberRepository.countByCircle_IdAndFinancialMemberTrue(request.circleId());
+        if (financialMembersCount < MIN_FINANCIAL_MEMBERS_PER_CIRCLE || financialMembersCount > MAX_FINANCIAL_MEMBERS_PER_CIRCLE) {
+            throw new BusinessException("Circle must have between 3 and 5 financial members");
         }
         if (!countryContext.currency().equalsIgnoreCase(request.currency())) {
             throw new BusinessException("Loan currency must match account holder country currency");

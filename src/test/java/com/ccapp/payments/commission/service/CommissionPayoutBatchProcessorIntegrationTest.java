@@ -161,6 +161,26 @@ class CommissionPayoutBatchProcessorIntegrationTest {
                 .count());
     }
 
+    @Test
+    void processWeek_shouldCreateOnePayoutItemPerCommission() {
+        int weekId = 202613;
+        UUID firstAccountHolderId = createAccountHolder("Multi", "CommissionA");
+        UUID secondAccountHolderId = createAccountHolder("Multi", "CommissionB");
+        createActiveWallet(firstAccountHolderId);
+        createActiveWallet(secondAccountHolderId);
+        createPendingGroupBonusCommission(firstAccountHolderId, weekId, new BigDecimal("100.0000"));
+        createPendingGroupBonusCommission(secondAccountHolderId, weekId, new BigDecimal("50.0000"));
+
+        CommissionPayoutProcessingResult result = payoutBatchProcessor.processWeek(weekId);
+
+        assertEquals(CommissionPayoutBatchStatus.COMPLETED, result.status());
+        assertEquals(2, result.paidItems());
+        CommissionPayoutBatch batch = payoutBatchRepository.findByWeekId(weekId).orElseThrow();
+        List<CommissionPayoutItem> items = payoutItemRepository.findByBatchIdOrderByCreatedAtAsc(batch.getId());
+        assertEquals(2, items.size());
+        assertEquals(2, items.stream().map(CommissionPayoutItem::getCommissionId).distinct().count());
+    }
+
     private UUID createAccountHolder(String firstName, String lastName) {
         AccountHolder saved = accountHolderRepository.save(AccountHolder.builder()
                 .id(UUID.randomUUID())

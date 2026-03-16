@@ -66,7 +66,7 @@ public class AdminCircleManagementService {
     }
 
     private AdminCircleSummaryResponse toSummary(Circle circle) {
-        long membersCount = circleMemberRepository.countByCircle_Id(circle.getId());
+        long membersCount = circleMemberRepository.countByCircle_IdAndFinancialMemberTrue(circle.getId());
         return new AdminCircleSummaryResponse(
                 circle.getId(),
                 circle.getName(),

@@ -31,10 +31,8 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.OffsetDateTime;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -70,35 +68,29 @@ public class CommissionPayoutBatchProcessor {
         List<MlmCommission> pendingWeekCommissions = mlmCommissionRepository
                 .findByWeekIdAndCommissionTypeAndStatusOrderByBeneficiaryAccountHolderIdAsc(
                         weekId, CommissionType.GROUP_BONUS, CommissionStatus.PENDING);
-        Set<UUID> accountHolderIds = pendingWeekCommissions.stream()
-                .map(MlmCommission::getBeneficiaryAccountHolderId)
-                .collect(LinkedHashSet::new, Set::add, Set::addAll);
 
         int paidItems = 0;
         int failedItems = 0;
-        for (UUID accountHolderId : accountHolderIds) {
-            List<MlmCommission> payableCommissions = mlmCommissionRepository
-                    .findByWeekIdAndCommissionTypeAndBeneficiaryAccountHolderIdAndStatusOrderByCreatedAtAsc(
-                            weekId, CommissionType.GROUP_BONUS, accountHolderId, CommissionStatus.PENDING);
-            if (payableCommissions.isEmpty()) {
+        for (MlmCommission commission : pendingWeekCommissions) {
+            if (commission.getStatus() != CommissionStatus.PENDING) {
                 continue;
             }
 
-            CommissionPayoutItem item = resolveOrCreatePayoutItem(batch.getId(), accountHolderId, payableCommissions);
+            CommissionPayoutItem item = resolveOrCreatePayoutItem(batch.getId(), commission);
             if (item.getStatus() == CommissionPayoutItemStatus.PAID) {
                 continue;
             }
 
             try {
-                processSingleItem(batch, item, payableCommissions);
+                processSingleItem(batch, item, commission);
                 paidItems++;
             } catch (RuntimeException ex) {
                 failedItems++;
                 item.setStatus(CommissionPayoutItemStatus.FAILED);
                 item.setFailureReason(truncateFailureReason(ex.getMessage()));
                 payoutItemRepository.save(item);
-                log.warn("Commission payout item failed batchId={} itemId={} accountHolderId={}",
-                        batch.getId(), item.getId(), accountHolderId, ex);
+                log.warn("Commission payout item failed batchId={} itemId={} commissionId={} accountHolderId={}",
+                        batch.getId(), item.getId(), commission.getId(), commission.getBeneficiaryAccountHolderId(), ex);
             }
         }
 
@@ -126,28 +118,27 @@ public class CommissionPayoutBatchProcessor {
                 });
     }
 
-    private CommissionPayoutItem resolveOrCreatePayoutItem(UUID batchId,
-                                                           UUID accountHolderId,
-                                                           List<MlmCommission> payableCommissions) {
-        BigDecimal grossAmount = payableCommissions.stream()
-                .map(MlmCommission::getAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add)
-                .setScale(SCALE, RoundingMode.HALF_UP);
+    private CommissionPayoutItem resolveOrCreatePayoutItem(UUID batchId, MlmCommission commission) {
+        BigDecimal grossAmount = commission.getAmount().setScale(SCALE, RoundingMode.HALF_UP);
         BigDecimal taxAmount = grossAmount
                 .multiply(taxRatePercent)
                 .divide(BigDecimal.valueOf(100), SCALE, RoundingMode.HALF_UP);
         BigDecimal netAmount = grossAmount.subtract(taxAmount).setScale(SCALE, RoundingMode.HALF_UP);
 
-        CommissionPayoutItem item = payoutItemRepository.findByBatchIdAndAccountHolderId(batchId, accountHolderId)
+        CommissionPayoutItem item = payoutItemRepository.findByCommissionId(commission.getId())
                 .orElseGet(() -> CommissionPayoutItem.builder()
                         .batchId(batchId)
-                        .accountHolderId(accountHolderId)
+                        .accountHolderId(commission.getBeneficiaryAccountHolderId())
+                        .commissionId(commission.getId())
                         .build());
 
         if (item.getStatus() == CommissionPayoutItemStatus.PAID) {
             return item;
         }
 
+        item.setBatchId(batchId);
+        item.setAccountHolderId(commission.getBeneficiaryAccountHolderId());
+        item.setCommissionId(commission.getId());
         item.setGrossAmount(grossAmount);
         item.setTaxAmount(taxAmount);
         item.setNetAmount(netAmount);
@@ -158,18 +149,19 @@ public class CommissionPayoutBatchProcessor {
         try {
             return payoutItemRepository.save(item);
         } catch (DataIntegrityViolationException ex) {
-            return payoutItemRepository.findByBatchIdAndAccountHolderId(batchId, accountHolderId)
+            return payoutItemRepository.findByCommissionId(commission.getId())
                     .orElseThrow(() -> ex);
         }
     }
 
     private void processSingleItem(CommissionPayoutBatch batch,
                                    CommissionPayoutItem item,
-                                   List<MlmCommission> payableCommissions) {
+                                   MlmCommission commission) {
+        verifyPayoutIntegrity(item, commission);
         requireActiveWallet(item.getAccountHolderId());
-        String currency = resolveSingleCurrency(payableCommissions);
+        String currency = commission.getCurrency();
 
-        Operation payoutOperation = resolveOrCreateConfirmedPayoutOperation(batch, item, currency);
+        Operation payoutOperation = resolveOrCreateConfirmedPayoutOperation(batch, item, commission, currency);
         accountingPostingService.postCommissionPayout(
                 payoutOperation,
                 item.getAccountHolderId(),
@@ -178,13 +170,11 @@ public class CommissionPayoutBatchProcessor {
         );
 
         OffsetDateTime paidAt = OffsetDateTime.now();
-        for (MlmCommission commission : payableCommissions) {
-            commission.setStatus(CommissionStatus.PAID);
-            commission.setPaidAt(paidAt);
-            commission.setPayoutBatchId(batch.getId());
-            commission.setPayoutItemId(item.getId());
-        }
-        mlmCommissionRepository.saveAll(payableCommissions);
+        commission.setStatus(CommissionStatus.PAID);
+        commission.setPaidAt(paidAt);
+        commission.setPayoutBatchId(batch.getId());
+        commission.setPayoutItemId(item.getId());
+        mlmCommissionRepository.save(commission);
 
         item.setStatus(CommissionPayoutItemStatus.PAID);
         item.setFailureReason(null);
@@ -196,6 +186,7 @@ public class CommissionPayoutBatchProcessor {
                 item.getAccountHolderId(),
                 item.getGrossAmount(),
                 Map.of(
+                        "commissionId", String.valueOf(item.getCommissionId()),
                         "batchId", batch.getId().toString(),
                         "weekId", String.valueOf(batch.getWeekId()),
                         "taxAmount", item.getTaxAmount().toPlainString(),
@@ -209,6 +200,7 @@ public class CommissionPayoutBatchProcessor {
                 item.getAccountHolderId(),
                 item.getNetAmount(),
                 Map.of(
+                        "commissionId", String.valueOf(item.getCommissionId()),
                         "source", "COMMISSION_PAYOUT",
                         "batchId", batch.getId().toString(),
                         "payoutItemId", item.getId().toString(),
@@ -225,6 +217,27 @@ public class CommissionPayoutBatchProcessor {
                 item.getNetAmount());
     }
 
+    private void verifyPayoutIntegrity(CommissionPayoutItem item, MlmCommission commission) {
+        if (commission.getStatus() != CommissionStatus.PENDING) {
+            throw new BusinessException("Commission is not payable");
+        }
+        if (commission.getPayoutItemId() != null && !commission.getPayoutItemId().equals(item.getId())) {
+            throw new BusinessException("Commission already linked to another payout item");
+        }
+        if (item.getGrossAmount() == null || item.getGrossAmount().compareTo(commission.getAmount()) != 0) {
+            throw new BusinessException("Payout gross amount mismatch");
+        }
+        if (item.getTaxAmount() == null || item.getTaxAmount().signum() < 0) {
+            throw new BusinessException("Invalid payout tax amount");
+        }
+        if (item.getNetAmount() == null || item.getNetAmount().signum() < 0) {
+            throw new BusinessException("Invalid payout net amount");
+        }
+        if (item.getGrossAmount().compareTo(item.getTaxAmount().add(item.getNetAmount())) != 0) {
+            throw new BusinessException("Invalid payout split");
+        }
+    }
+
     private void requireActiveWallet(UUID accountHolderId) {
         Wallet wallet = walletRepository.findFirstByAccountHolderIdAndStatusOrderByCreatedAtDesc(accountHolderId, "ACTIVE")
                 .orElseThrow(() -> new BusinessException("Active wallet not found for account holder"));
@@ -233,17 +246,9 @@ public class CommissionPayoutBatchProcessor {
         }
     }
 
-    private String resolveSingleCurrency(List<MlmCommission> commissions) {
-        String currency = commissions.getFirst().getCurrency();
-        boolean invalid = commissions.stream().anyMatch(commission -> !currency.equals(commission.getCurrency()));
-        if (invalid) {
-            throw new BusinessException("Mixed currencies are not supported in payout item");
-        }
-        return currency;
-    }
-
     private Operation resolveOrCreateConfirmedPayoutOperation(CommissionPayoutBatch batch,
                                                               CommissionPayoutItem item,
+                                                              MlmCommission commission,
                                                               String currency) {
         if (item.getOperationId() != null) {
             Operation existing = operationService.getById(item.getOperationId());
@@ -260,7 +265,7 @@ public class CommissionPayoutBatchProcessor {
                 item.getGrossAmount(),
                 currency,
                 idempotencyKey,
-                "Commission payout week " + batch.getWeekId()
+                "Commission payout week " + batch.getWeekId() + " commission " + commission.getId()
         );
         Operation confirmed = operationService.confirmOperation(initiated.getId());
         item.setOperationId(confirmed.getId());
