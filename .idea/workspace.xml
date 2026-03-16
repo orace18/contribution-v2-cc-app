@@ -4,23 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Revue des migrations flyway">
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/admin/security/AdminJwtAuthenticationFilter.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/admin/security/AdminJwtAuthenticationFilter.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/chat/repository/ChatConversationRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/chat/repository/ChatConversationRepository.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/chat/repository/ChatMessageRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/chat/repository/ChatMessageRepository.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/chat/service/ChatMessageService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/chat/service/ChatMessageService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/controller/CircleController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/controller/CircleController.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/repository/CircleContributionRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/repository/CircleContributionRepository.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/repository/CircleLoanRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/repository/CircleLoanRepository.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/repository/CircleRepaymentRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/repository/CircleRepaymentRepository.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/repository/CircleRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/repository/CircleRepository.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/circlesocial/repository/CircleActivityRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/circlesocial/repository/CircleActivityRepository.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/config/SecurityConfig.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/config/SecurityConfig.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/config/security/FirebaseAuthenticationFilter.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/config/security/FirebaseAuthenticationFilter.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/app_user/repository/AppUserRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/app_user/repository/AppUserRepository.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/test/java/com/ccapp/chat/service/ChatMessageServiceIntegrationTest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/test/java/com/ccapp/chat/service/ChatMessageServiceIntegrationTest.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/test/java/com/ccapp/chat/service/ChatMessageServiceTest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/test/java/com/ccapp/chat/service/ChatMessageServiceTest.java" afterDir="false" />
-    </list>
+    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Ajout de fonctionnalités" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -99,24 +83,24 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.MCP Project settings loaded&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.restore.workspace.module&quot;: &quot;true&quot;,
-    &quot;Spring Boot.CcAppBackendApplication.executor&quot;: &quot;Run&quot;,
-    &quot;com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;dev&quot;,
-    &quot;junie.onboarding.icon.badge.shown&quot;: &quot;true&quot;,
-    &quot;kotlin-language-version-configured&quot;: &quot;true&quot;,
-    &quot;last_opened_file_path&quot;: &quot;/home/user/workspace/clubchretienV2/jawu-abonnement&quot;,
-    &quot;settings.editor.selected.configurable&quot;: &quot;preferences.pluginManager&quot;,
-    &quot;to.speed.mode.migration.done&quot;: &quot;true&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "RunOnceActivity.MCP Project settings loaded": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "RunOnceActivity.restore.workspace.module": "true",
+    "Spring Boot.CcAppBackendApplication.executor": "Run",
+    "com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1": "true",
+    "git-widget-placeholder": "dev",
+    "junie.onboarding.icon.badge.shown": "true",
+    "kotlin-language-version-configured": "true",
+    "last_opened_file_path": "/home/user/Documents/backoofice",
+    "settings.editor.selected.configurable": "preferences.pluginManager",
+    "to.speed.mode.migration.done": "true"
   }
-}</component>
+}]]></component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="$PROJECT_DIR$/src/main/resources/firebase" />
@@ -157,14 +141,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1772553173766</updated>
-    </task>
-    <task id="LOCAL-00008" summary="Configuration gitlab-ci et docker-compose">
-      <option name="closed" value="true" />
-      <created>1772641987707</created>
-      <option name="number" value="00008" />
-      <option name="presentableId" value="LOCAL-00008" />
-      <option name="project" value="LOCAL" />
-      <updated>1772641987707</updated>
     </task>
     <task id="LOCAL-00009" summary="Configuration gitlab-ci et docker-compose -Revue">
       <option name="closed" value="true" />
@@ -550,7 +526,15 @@
       <option name="project" value="LOCAL" />
       <updated>1773656970302</updated>
     </task>
-    <option name="localTasksCounter" value="57" />
+    <task id="LOCAL-00057" summary="Ajout de fonctionnalités">
+      <option name="closed" value="true" />
+      <created>1773673787607</created>
+      <option name="number" value="00057" />
+      <option name="presentableId" value="LOCAL-00057" />
+      <option name="project" value="LOCAL" />
+      <updated>1773673787607</updated>
+    </task>
+    <option name="localTasksCounter" value="58" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -565,7 +549,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="Ajout de MinIO pour les images" />
     <MESSAGE value="Config MinIO" />
     <MESSAGE value="Revue du base name" />
     <MESSAGE value="Refact de onboarding" />
@@ -590,7 +573,8 @@
     <MESSAGE value="Mise en place des base mlm" />
     <MESSAGE value="Mise en place des base mlm commissions" />
     <MESSAGE value="Revue des migrations flyway" />
-    <option name="LAST_COMMIT_MESSAGE" value="Revue des migrations flyway" />
+    <MESSAGE value="Ajout de fonctionnalités" />
+    <option name="LAST_COMMIT_MESSAGE" value="Ajout de fonctionnalités" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />
