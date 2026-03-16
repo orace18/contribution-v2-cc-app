@@ -4,90 +4,14 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Mise en place des base mlm commissions">
-      <change beforePath="$PROJECT_DIR$/.idea/compiler.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/compiler.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/API_MOBILE_FRONTEND_CONTRACT.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/RAPPORT_EXECUTIF_PROJET.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/context-chatgpt.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docker-compose.yml.old" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/resume-executif-projet.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/admin/controller/AdminMlmMonitoringController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/admin/controller/AdminMlmMonitoringController.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/chat/config/ChatWebSocketConfig.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/chat/config/ChatWebSocketConfig.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/chat/service/ChatMessageService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/chat/service/ChatMessageService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/mlm/domain/enums/WeeklyBonusJobRunStatus.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/mlm/domain/enums/WeeklyBonusJobRunStatus.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/mlm/repository/MlmVolumeLedgerRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/mlm/repository/MlmVolumeLedgerRepository.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/mlm/scheduler/WeeklyGroupBonusJob.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/mlm/scheduler/WeeklyGroupBonusJob.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/mlm/service/MLMPlacementService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/mlm/service/MLMPlacementService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/mlm/service/MlmVolumeLedgerService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/mlm/service/MlmVolumeLedgerService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/mlm/service/WeeklyGroupBonusService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/mlm/service/WeeklyGroupBonusService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/payments/commission/domain/entity/CommissionPayoutItem.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/payments/commission/domain/entity/CommissionPayoutItem.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/payments/commission/domain/enums/CommissionType.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/payments/commission/domain/enums/CommissionType.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/payments/commission/repository/CommissionPayoutItemRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/payments/commission/repository/CommissionPayoutItemRepository.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/payments/commission/service/CommissionPayoutBatchProcessor.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/payments/commission/service/CommissionPayoutBatchProcessor.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/payments/commission/service/MlmCommissionService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/payments/commission/service/MlmCommissionService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/shop/controller/ShopOrderController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/shop/controller/ShopOrderController.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/shop/domain/enums/ShopOrderStatus.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/shop/domain/enums/ShopOrderStatus.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/shop/repository/ShopOrderRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/shop/repository/ShopOrderRepository.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/shop/service/ShopOrderService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/shop/service/ShopOrderService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/resources/application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/application.properties" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/test/java/com/ccapp/mlm/service/MLMServicesIntegrationTest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/test/java/com/ccapp/mlm/service/MLMServicesIntegrationTest.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/test/java/com/ccapp/mlm/service/MlmVolumeLedgerIntegrationTest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/test/java/com/ccapp/mlm/service/MlmVolumeLedgerIntegrationTest.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/test/java/com/ccapp/mlm/service/WeeklyGroupBonusServiceIntegrationTest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/test/java/com/ccapp/mlm/service/WeeklyGroupBonusServiceIntegrationTest.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/test/java/com/ccapp/payments/commission/service/CommissionPayoutBatchProcessorIntegrationTest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/test/java/com/ccapp/payments/commission/service/CommissionPayoutBatchProcessorIntegrationTest.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/test/java/com/ccapp/payments/commission/service/MlmCommissionServiceTest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/test/java/com/ccapp/payments/commission/service/MlmCommissionServiceTest.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/application.properties" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/admin/controller/AdminMlmMonitoringController.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/admin/controller/AdminMlmMonitoringController.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/chat/config/ChatWebSocketConfig.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/chat/config/ChatWebSocketConfig.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/chat/service/ChatMessageService.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/chat/service/ChatMessageService.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/mlm/domain/enums/WeeklyBonusJobRunStatus.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/mlm/domain/enums/WeeklyBonusJobRunStatus.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/mlm/repository/MlmVolumeLedgerRepository.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/mlm/repository/MlmVolumeLedgerRepository.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/mlm/scheduler/WeeklyGroupBonusJob.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/mlm/scheduler/WeeklyGroupBonusJob.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/mlm/service/MLMPlacementService.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/mlm/service/MLMPlacementService.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/mlm/service/MlmVolumeLedgerService.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/mlm/service/MlmVolumeLedgerService.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/mlm/service/WeeklyGroupBonusService$BonusComputation.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/mlm/service/WeeklyGroupBonusService$BonusComputation.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/mlm/service/WeeklyGroupBonusService.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/mlm/service/WeeklyGroupBonusService.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/payments/commission/domain/entity/CommissionPayoutItem$CommissionPayoutItemBuilder.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/payments/commission/domain/entity/CommissionPayoutItem$CommissionPayoutItemBuilder.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/payments/commission/domain/entity/CommissionPayoutItem.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/payments/commission/domain/entity/CommissionPayoutItem.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/payments/commission/domain/enums/CommissionType.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/payments/commission/domain/enums/CommissionType.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/payments/commission/repository/CommissionPayoutItemRepository.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/payments/commission/repository/CommissionPayoutItemRepository.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/payments/commission/service/CommissionPayoutBatchProcessor.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/payments/commission/service/CommissionPayoutBatchProcessor.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/payments/commission/service/MlmCommissionService.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/payments/commission/service/MlmCommissionService.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/shop/controller/ShopOrderController.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/shop/controller/ShopOrderController.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/shop/domain/enums/ShopOrderStatus.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/shop/domain/enums/ShopOrderStatus.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/shop/repository/ShopOrderRepository.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/shop/repository/ShopOrderRepository.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/shop/service/ShopOrderService$1.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/shop/service/ShopOrderService$1.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/shop/service/ShopOrderService$CurrencyContext.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/shop/service/ShopOrderService$CurrencyContext.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/ccapp/shop/service/ShopOrderService.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/ccapp/shop/service/ShopOrderService.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/generated-sources/annotations/com/ccapp/identity/mapper/IdentityMapperImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/target/generated-sources/annotations/com/ccapp/identity/mapper/IdentityMapperImpl.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/generated-sources/annotations/com/ccapp/payments/subscription/mapper/SubscriptionPlanMapperImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/target/generated-sources/annotations/com/ccapp/payments/subscription/mapper/SubscriptionPlanMapperImpl.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/maven-status/maven-compiler-plugin/compile/default-compile/createdFiles.lst" beforeDir="false" afterPath="$PROJECT_DIR$/target/maven-status/maven-compiler-plugin/compile/default-compile/createdFiles.lst" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/maven-status/maven-compiler-plugin/compile/default-compile/inputFiles.lst" beforeDir="false" afterPath="$PROJECT_DIR$/target/maven-status/maven-compiler-plugin/compile/default-compile/inputFiles.lst" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/maven-status/maven-compiler-plugin/testCompile/default-testCompile/createdFiles.lst" beforeDir="false" afterPath="$PROJECT_DIR$/target/maven-status/maven-compiler-plugin/testCompile/default-testCompile/createdFiles.lst" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/maven-status/maven-compiler-plugin/testCompile/default-testCompile/inputFiles.lst" beforeDir="false" afterPath="$PROJECT_DIR$/target/maven-status/maven-compiler-plugin/testCompile/default-testCompile/inputFiles.lst" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/surefire-reports/TEST-com.ccapp.chat.service.ChatMessageServiceIntegrationTest.xml" beforeDir="false" afterPath="$PROJECT_DIR$/target/surefire-reports/TEST-com.ccapp.chat.service.ChatMessageServiceIntegrationTest.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/surefire-reports/TEST-com.ccapp.mlm.service.MlmVolumeLedgerIntegrationTest.xml" beforeDir="false" afterPath="$PROJECT_DIR$/target/surefire-reports/TEST-com.ccapp.mlm.service.MlmVolumeLedgerIntegrationTest.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/surefire-reports/TEST-com.ccapp.mlm.service.WeeklyGroupBonusServiceIntegrationTest.xml" beforeDir="false" afterPath="$PROJECT_DIR$/target/surefire-reports/TEST-com.ccapp.mlm.service.WeeklyGroupBonusServiceIntegrationTest.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/surefire-reports/TEST-com.ccapp.payments.commission.service.CommissionPayoutBatchProcessorIntegrationTest.xml" beforeDir="false" afterPath="$PROJECT_DIR$/target/surefire-reports/TEST-com.ccapp.payments.commission.service.CommissionPayoutBatchProcessorIntegrationTest.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/surefire-reports/TEST-com.ccapp.payments.commission.service.MlmCommissionServiceTest.xml" beforeDir="false" afterPath="$PROJECT_DIR$/target/surefire-reports/TEST-com.ccapp.payments.commission.service.MlmCommissionServiceTest.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/surefire-reports/com.ccapp.chat.service.ChatMessageServiceIntegrationTest.txt" beforeDir="false" afterPath="$PROJECT_DIR$/target/surefire-reports/com.ccapp.chat.service.ChatMessageServiceIntegrationTest.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/surefire-reports/com.ccapp.mlm.service.MlmVolumeLedgerIntegrationTest.txt" beforeDir="false" afterPath="$PROJECT_DIR$/target/surefire-reports/com.ccapp.mlm.service.MlmVolumeLedgerIntegrationTest.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/surefire-reports/com.ccapp.mlm.service.WeeklyGroupBonusServiceIntegrationTest.txt" beforeDir="false" afterPath="$PROJECT_DIR$/target/surefire-reports/com.ccapp.mlm.service.WeeklyGroupBonusServiceIntegrationTest.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/surefire-reports/com.ccapp.payments.commission.service.CommissionPayoutBatchProcessorIntegrationTest.txt" beforeDir="false" afterPath="$PROJECT_DIR$/target/surefire-reports/com.ccapp.payments.commission.service.CommissionPayoutBatchProcessorIntegrationTest.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/surefire-reports/com.ccapp.payments.commission.service.MlmCommissionServiceTest.txt" beforeDir="false" afterPath="$PROJECT_DIR$/target/surefire-reports/com.ccapp.payments.commission.service.MlmCommissionServiceTest.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/test-classes/com/ccapp/mlm/service/MLMServicesIntegrationTest.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/test-classes/com/ccapp/mlm/service/MLMServicesIntegrationTest.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/test-classes/com/ccapp/mlm/service/MlmVolumeLedgerIntegrationTest.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/test-classes/com/ccapp/mlm/service/MlmVolumeLedgerIntegrationTest.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/test-classes/com/ccapp/mlm/service/WeeklyGroupBonusServiceIntegrationTest.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/test-classes/com/ccapp/mlm/service/WeeklyGroupBonusServiceIntegrationTest.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/test-classes/com/ccapp/payments/commission/service/CommissionPayoutBatchProcessorIntegrationTest.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/test-classes/com/ccapp/payments/commission/service/CommissionPayoutBatchProcessorIntegrationTest.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/test-classes/com/ccapp/payments/commission/service/MlmCommissionServiceTest.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/test-classes/com/ccapp/payments/commission/service/MlmCommissionServiceTest.class" afterDir="false" />
-    </list>
+    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Mise en place des base mlm commissions" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
   <component name="EmbeddingIndexingInfo">
-    <option name="cachedIndexableFilesCount" value="612" />
+    <option name="cachedIndexableFilesCount" value="694" />
   </component>
   <component name="FileTemplateManagerImpl">
     <option name="RECENT_TEMPLATES">
@@ -159,24 +83,24 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "ModuleVcsDetector.initialDetectionPerformed": "true",
-    "RunOnceActivity.MCP Project settings loaded": "true",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
-    "RunOnceActivity.git.unshallow": "true",
-    "RunOnceActivity.restore.workspace.module": "true",
-    "Spring Boot.CcAppBackendApplication.executor": "Run",
-    "com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1": "true",
-    "git-widget-placeholder": "dev",
-    "junie.onboarding.icon.badge.shown": "true",
-    "kotlin-language-version-configured": "true",
-    "last_opened_file_path": "/home/user/workspace/clubchretienV2/jawu-abonnement",
-    "settings.editor.selected.configurable": "preferences.pluginManager",
-    "to.speed.mode.migration.done": "true"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.MCP Project settings loaded&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.restore.workspace.module&quot;: &quot;true&quot;,
+    &quot;Spring Boot.CcAppBackendApplication.executor&quot;: &quot;Run&quot;,
+    &quot;com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;dev&quot;,
+    &quot;junie.onboarding.icon.badge.shown&quot;: &quot;true&quot;,
+    &quot;kotlin-language-version-configured&quot;: &quot;true&quot;,
+    &quot;last_opened_file_path&quot;: &quot;/home/user/workspace/clubchretienV2/jawu-abonnement&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;preferences.pluginManager&quot;,
+    &quot;to.speed.mode.migration.done&quot;: &quot;true&quot;
   }
-}]]></component>
+}</component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="$PROJECT_DIR$/src/main/resources/firebase" />
