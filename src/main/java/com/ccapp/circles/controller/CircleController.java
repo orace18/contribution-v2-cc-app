@@ -7,8 +7,11 @@ import com.ccapp.circlesocial.dto.CircleScoreResponse;
 import com.ccapp.circlesocial.service.CircleActivityService;
 import com.ccapp.circlesocial.service.CircleProgressService;
 import com.ccapp.circlesocial.service.CircleScoreService;
+import com.ccapp.circles.domain.enums.CircleStatus;
+import com.ccapp.circles.service.CircleMobileQueryService;
 import com.ccapp.circles.service.CircleService;
 import com.ccapp.common.api.CommonResponse;
+import com.ccapp.common.api.PageResponse;
 import com.ccapp.common.security.SecurityUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -35,6 +38,7 @@ import java.util.UUID;
 public class CircleController {
 
     private final CircleService circleService;
+    private final CircleMobileQueryService circleMobileQueryService;
     private final CircleActivityService circleActivityService;
     private final CircleProgressService circleProgressService;
     private final CircleScoreService circleScoreService;
@@ -68,6 +72,20 @@ public class CircleController {
         return ResponseEntity.ok(CommonResponse.success("Circle joined", circleService.joinCircle(accountHolderId, circleId, request)));
     }
 
+    @GetMapping
+    @Operation(summary = "Lister les cercles de l'utilisateur authentifie")
+    public ResponseEntity<CommonResponse<PageResponse<CircleListItemResponse>>> listUserCircles(
+            @RequestParam(required = false) CircleStatus status,
+            @RequestParam(required = false) String search,
+            @RequestParam(defaultValue = "0") Integer page,
+            @RequestParam(defaultValue = "20") Integer size) {
+        UUID accountHolderId = SecurityUtils.currentAccountHolderId();
+        return ResponseEntity.ok(CommonResponse.success(
+                "User circles",
+                circleMobileQueryService.listUserCircles(accountHolderId, status, search, page, size)
+        ));
+    }
+
     @GetMapping("/my-circle")
     @Operation(summary = "Recuperer le cercle actif de l'utilisateur")
     @ApiResponses(value = {
@@ -89,6 +107,53 @@ public class CircleController {
     })
     public ResponseEntity<CommonResponse<List<CircleMemberResponse>>> listMembers(@PathVariable UUID circleId) {
         return ResponseEntity.ok(CommonResponse.success("Circle members", circleService.listMembers(circleId)));
+    }
+
+    @GetMapping("/{circleId}/members/{memberAccountHolderId}")
+    @Operation(summary = "Recuperer le profil d'un membre dans un cercle")
+    public ResponseEntity<CommonResponse<CircleMemberProfileResponse>> memberProfile(@PathVariable UUID circleId,
+                                                                                      @PathVariable UUID memberAccountHolderId) {
+        UUID requesterAccountHolderId = SecurityUtils.currentAccountHolderId();
+        return ResponseEntity.ok(CommonResponse.success(
+                "Circle member profile",
+                circleMobileQueryService.getMemberProfile(requesterAccountHolderId, circleId, memberAccountHolderId)
+        ));
+    }
+
+    @GetMapping("/{circleId}/members/{memberAccountHolderId}/financials")
+    @Operation(summary = "Recuperer les donnees financieres d'un membre dans un cercle")
+    public ResponseEntity<CommonResponse<CircleMemberFinancialsResponse>> memberFinancials(@PathVariable UUID circleId,
+                                                                                            @PathVariable UUID memberAccountHolderId) {
+        UUID requesterAccountHolderId = SecurityUtils.currentAccountHolderId();
+        return ResponseEntity.ok(CommonResponse.success(
+                "Circle member financials",
+                circleMobileQueryService.getMemberFinancials(requesterAccountHolderId, circleId, memberAccountHolderId)
+        ));
+    }
+
+    @GetMapping("/{circleId}/members/{memberAccountHolderId}/history")
+    @Operation(summary = "Recuperer l'historique d'un membre dans un cercle")
+    public ResponseEntity<CommonResponse<PageResponse<CircleMemberHistoryItemResponse>>> memberHistory(@PathVariable UUID circleId,
+                                                                                                         @PathVariable UUID memberAccountHolderId,
+                                                                                                         @RequestParam(defaultValue = "0") Integer page,
+                                                                                                         @RequestParam(defaultValue = "20") Integer size) {
+        UUID requesterAccountHolderId = SecurityUtils.currentAccountHolderId();
+        return ResponseEntity.ok(CommonResponse.success(
+                "Circle member history",
+                circleMobileQueryService.getMemberHistory(requesterAccountHolderId, circleId, memberAccountHolderId, page, size)
+        ));
+    }
+
+    @PostMapping("/{circleId}/members/{memberAccountHolderId}/interactions")
+    @Operation(summary = "Enregistrer une interaction communautaire sur un membre")
+    public ResponseEntity<CommonResponse<CircleMemberInteractionResponse>> interactWithMember(@PathVariable UUID circleId,
+                                                                                                @PathVariable UUID memberAccountHolderId,
+                                                                                                @Valid @RequestBody CircleMemberInteractionRequest request) {
+        UUID senderAccountHolderId = SecurityUtils.currentAccountHolderId();
+        return ResponseEntity.ok(CommonResponse.success(
+                "Circle member interaction created",
+                circleMobileQueryService.createInteraction(senderAccountHolderId, circleId, memberAccountHolderId, request.type())
+        ));
     }
 
     @GetMapping("/{circleId}/participants")

@@ -19,4 +19,6 @@ public interface CircleRepaymentRepository extends JpaRepository<CircleRepayment
               and cr.status = :status
             """)
     BigDecimal sumByLoanIdAndStatus(UUID loanId, CircleRepaymentStatus status);
+
+    List<CircleRepayment> findByLoan_Borrower_IdOrderByDueDateDesc(UUID borrowerMemberId);
 }

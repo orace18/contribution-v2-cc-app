@@ -1,0 +1,16 @@
+package com.ccapp.financing.dto;
+
+import com.ccapp.financing.domain.enums.FinancialPartnerStatus;
+import com.ccapp.financing.domain.enums.FinancialPartnerType;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+
+public record CreateFinancialPartnerRequest(
+        @NotBlank String name,
+        @NotNull FinancialPartnerType type,
+        @NotBlank @Size(min = 2, max = 3) String countryCode,
+        FinancialPartnerStatus status,
+        @Size(max = 512) String apiEndpoint
+) {
+}

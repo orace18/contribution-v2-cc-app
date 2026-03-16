@@ -22,4 +22,10 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, UUID> 
 
     long countByRecipientAccountHolderIdAndMessageStatusIn(UUID recipientAccountHolderId,
                                                            Collection<ChatMessageStatus> statuses);
+
+    Optional<ChatMessage> findTopByConversationIdOrderByCreatedAtDesc(UUID conversationId);
+
+    long countByConversationIdAndRecipientAccountHolderIdAndMessageStatusIn(UUID conversationId,
+                                                                             UUID recipientAccountHolderId,
+                                                                             Collection<ChatMessageStatus> statuses);
 }

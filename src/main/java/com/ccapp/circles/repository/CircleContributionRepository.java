@@ -11,4 +11,6 @@ public interface CircleContributionRepository extends JpaRepository<CircleContri
     long countByCycle_Id(UUID cycleId);
 
     List<CircleContribution> findByCycle_IdOrderByDueDateAsc(UUID cycleId);
+
+    List<CircleContribution> findByCycle_Circle_IdAndMember_IdOrderByDueDateDesc(UUID circleId, UUID memberId);
 }

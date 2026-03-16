@@ -4,7 +4,23 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Mise en place des base mlm commissions" />
+    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Revue des migrations flyway">
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/admin/security/AdminJwtAuthenticationFilter.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/admin/security/AdminJwtAuthenticationFilter.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/chat/repository/ChatConversationRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/chat/repository/ChatConversationRepository.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/chat/repository/ChatMessageRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/chat/repository/ChatMessageRepository.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/chat/service/ChatMessageService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/chat/service/ChatMessageService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/controller/CircleController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/controller/CircleController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/repository/CircleContributionRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/repository/CircleContributionRepository.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/repository/CircleLoanRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/repository/CircleLoanRepository.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/repository/CircleRepaymentRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/repository/CircleRepaymentRepository.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/repository/CircleRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/repository/CircleRepository.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/circlesocial/repository/CircleActivityRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/circlesocial/repository/CircleActivityRepository.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/config/SecurityConfig.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/config/SecurityConfig.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/config/security/FirebaseAuthenticationFilter.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/config/security/FirebaseAuthenticationFilter.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/app_user/repository/AppUserRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/app_user/repository/AppUserRepository.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/test/java/com/ccapp/chat/service/ChatMessageServiceIntegrationTest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/test/java/com/ccapp/chat/service/ChatMessageServiceIntegrationTest.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/test/java/com/ccapp/chat/service/ChatMessageServiceTest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/test/java/com/ccapp/chat/service/ChatMessageServiceTest.java" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -141,22 +157,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1772553173766</updated>
-    </task>
-    <task id="LOCAL-00006" summary="Mise a jour du code">
-      <option name="closed" value="true" />
-      <created>1772639466953</created>
-      <option name="number" value="00006" />
-      <option name="presentableId" value="LOCAL-00006" />
-      <option name="project" value="LOCAL" />
-      <updated>1772639466953</updated>
-    </task>
-    <task id="LOCAL-00007" summary="Mise a jour du code">
-      <option name="closed" value="true" />
-      <created>1772640107032</created>
-      <option name="number" value="00007" />
-      <option name="presentableId" value="LOCAL-00007" />
-      <option name="project" value="LOCAL" />
-      <updated>1772640107032</updated>
     </task>
     <task id="LOCAL-00008" summary="Configuration gitlab-ci et docker-compose">
       <option name="closed" value="true" />
@@ -534,7 +534,23 @@
       <option name="project" value="LOCAL" />
       <updated>1773312360938</updated>
     </task>
-    <option name="localTasksCounter" value="55" />
+    <task id="LOCAL-00055" summary="Revue des migrations flyway">
+      <option name="closed" value="true" />
+      <created>1773656352150</created>
+      <option name="number" value="00055" />
+      <option name="presentableId" value="LOCAL-00055" />
+      <option name="project" value="LOCAL" />
+      <updated>1773656352151</updated>
+    </task>
+    <task id="LOCAL-00056" summary="Revue des migrations flyway">
+      <option name="closed" value="true" />
+      <created>1773656970302</created>
+      <option name="number" value="00056" />
+      <option name="presentableId" value="LOCAL-00056" />
+      <option name="project" value="LOCAL" />
+      <updated>1773656970302</updated>
+    </task>
+    <option name="localTasksCounter" value="57" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -549,7 +565,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="justement onboarding" />
     <MESSAGE value="Ajout de MinIO pour les images" />
     <MESSAGE value="Config MinIO" />
     <MESSAGE value="Revue du base name" />
@@ -574,7 +589,8 @@
     <MESSAGE value="Revue du profil" />
     <MESSAGE value="Mise en place des base mlm" />
     <MESSAGE value="Mise en place des base mlm commissions" />
-    <option name="LAST_COMMIT_MESSAGE" value="Mise en place des base mlm commissions" />
+    <MESSAGE value="Revue des migrations flyway" />
+    <option name="LAST_COMMIT_MESSAGE" value="Revue des migrations flyway" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />

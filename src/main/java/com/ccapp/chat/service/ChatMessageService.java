@@ -45,6 +45,7 @@ public class ChatMessageService {
     private final ChatConversationRepository chatConversationRepository;
     private final ChatMessageDeliveryStatusRepository chatMessageDeliveryStatusRepository;
     private final ChatReadReceiptRepository chatReadReceiptRepository;
+    private final ChatConversationService chatConversationService;
     private final AccountHolderService accountHolderService;
     private final AccessControlService accessControlService;
     private final DomainEventPublisher domainEventPublisher;
@@ -56,7 +57,10 @@ public class ChatMessageService {
         accountHolderService.getById(senderAccountHolderId);
         accountHolderService.getById(request.recipientAccountHolderId());
 
-        ChatConversation conversation = resolveConversation(senderAccountHolderId, request.recipientAccountHolderId());
+        ChatConversation conversation = chatConversationService.resolveDirectConversation(
+                senderAccountHolderId,
+                request.recipientAccountHolderId()
+        );
         String normalizedClientMessageId = normalizeClientMessageId(request.clientMessageId());
         if (normalizedClientMessageId != null) {
             return chatMessageRepository.findBySenderAccountHolderIdAndClientMessageId(senderAccountHolderId, normalizedClientMessageId)
@@ -178,22 +182,6 @@ public class ChatMessageService {
         publishRealtime(EVENT_MESSAGE_SENT, saved);
 
         return toResponse(saved);
-    }
-
-    private ChatConversation resolveConversation(UUID senderAccountHolderId, UUID recipientAccountHolderId) {
-        UUID participantA = senderAccountHolderId.compareTo(recipientAccountHolderId) <= 0
-                ? senderAccountHolderId
-                : recipientAccountHolderId;
-        UUID participantB = participantA.equals(senderAccountHolderId)
-                ? recipientAccountHolderId
-                : senderAccountHolderId;
-
-        return chatConversationRepository
-                .findByParticipantAAccountHolderIdAndParticipantBAccountHolderId(participantA, participantB)
-                .orElseGet(() -> chatConversationRepository.save(ChatConversation.builder()
-                        .participantAAccountHolderId(participantA)
-                        .participantBAccountHolderId(participantB)
-                        .build()));
     }
 
     private ChatMessage ensureExistingMessageConversation(ChatMessage message, UUID conversationId) {

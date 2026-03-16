@@ -12,4 +12,6 @@ public interface AppUserRepository extends JpaRepository<AppUser, UUID> {
     Optional<AppUser> findByFirebaseUid(String firebaseUid);
 
     List<AppUser> findByAccountHolderId(UUID accountHolderId);
+
+    Optional<AppUser> findFirstByAccountHolderIdOrderByCreatedAtAsc(UUID accountHolderId);
 }

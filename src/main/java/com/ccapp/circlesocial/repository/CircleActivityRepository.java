@@ -23,4 +23,17 @@ public interface CircleActivityRepository extends JpaRepository<CircleActivity, 
               and ca.activityType = :activityType
             """)
     long countDistinctActorsByCircleIdAndActivityType(UUID circleId, ActivityType activityType);
+
+    @Query("""
+            select ca
+            from CircleActivity ca
+            where ca.circleId = :circleId
+              and (
+                  ca.actorUserId = :memberAccountHolderId
+                  or ca.referenceId = :memberAccountHolderId
+                  or (:memberId is not null and ca.referenceId = :memberId)
+              )
+            order by ca.createdAt desc
+            """)
+    List<CircleActivity> findMemberActivityHistory(UUID circleId, UUID memberAccountHolderId, UUID memberId);
 }

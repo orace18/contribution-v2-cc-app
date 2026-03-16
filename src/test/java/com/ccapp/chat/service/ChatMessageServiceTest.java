@@ -4,7 +4,9 @@ import com.ccapp.chat.domain.entity.ChatConversation;
 import com.ccapp.chat.domain.entity.ChatMessage;
 import com.ccapp.chat.dto.SendChatMessageRequest;
 import com.ccapp.chat.repository.ChatConversationRepository;
+import com.ccapp.chat.repository.ChatMessageDeliveryStatusRepository;
 import com.ccapp.chat.repository.ChatMessageRepository;
+import com.ccapp.chat.repository.ChatReadReceiptRepository;
 import com.ccapp.common.events.DomainEventPublisher;
 import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
 import com.ccapp.identity.account_holder.service.AccountHolderService;
@@ -37,6 +39,12 @@ class ChatMessageServiceTest {
     @Mock
     private ChatConversationRepository chatConversationRepository;
     @Mock
+    private ChatMessageDeliveryStatusRepository chatMessageDeliveryStatusRepository;
+    @Mock
+    private ChatReadReceiptRepository chatReadReceiptRepository;
+    @Mock
+    private ChatConversationService chatConversationService;
+    @Mock
     private AccountHolderService accountHolderService;
     @Mock
     private AccessControlService accessControlService;
@@ -62,12 +70,12 @@ class ChatMessageServiceTest {
                 "client-1"
         );
 
-        when(chatConversationRepository.findByParticipantAAccountHolderIdAndParticipantBAccountHolderId(any(), any()))
-                .thenReturn(Optional.of(ChatConversation.builder()
+        when(chatConversationService.resolveDirectConversation(senderId, recipientId))
+                .thenReturn(ChatConversation.builder()
                         .id(conversationId)
                         .participantAAccountHolderId(senderId)
                         .participantBAccountHolderId(recipientId)
-                        .build()));
+                        .build());
         doNothing().when(accessControlService).assertCanActOnAccountHolder(any(), any(), any());
         when(accountHolderService.getById(any())).thenReturn(new AccountHolder());
         when(chatMessageRepository.findBySenderAccountHolderIdAndClientMessageId(senderId, "client-1"))
@@ -77,6 +85,9 @@ class ChatMessageServiceTest {
             saved.setId(messageId);
             return saved;
         });
+        when(chatMessageDeliveryStatusRepository.findByMessageIdAndRecipientAccountHolderId(any(), any()))
+                .thenReturn(Optional.empty());
+        when(chatMessageDeliveryStatusRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         chatMessageService.sendMessage(actorUserId, senderId, request);
 
@@ -105,12 +116,12 @@ class ChatMessageServiceTest {
                 .clientMessageId("client-1")
                 .build();
 
-        when(chatConversationRepository.findByParticipantAAccountHolderIdAndParticipantBAccountHolderId(any(), any()))
-                .thenReturn(Optional.of(ChatConversation.builder()
+        when(chatConversationService.resolveDirectConversation(senderId, recipientId))
+                .thenReturn(ChatConversation.builder()
                         .id(conversationId)
                         .participantAAccountHolderId(senderId)
                         .participantBAccountHolderId(recipientId)
-                        .build()));
+                        .build());
         doNothing().when(accessControlService).assertCanActOnAccountHolder(any(), any(), any());
         when(accountHolderService.getById(any())).thenReturn(new AccountHolder());
         when(chatMessageRepository.findBySenderAccountHolderIdAndClientMessageId(senderId, "client-1"))

@@ -2,6 +2,7 @@ package com.ccapp.chat.service;
 
 import com.ccapp.chat.domain.entity.ChatMessage;
 import com.ccapp.chat.domain.enums.ChatMessageStatus;
+import com.ccapp.chat.dto.ChatMessageResponse;
 import com.ccapp.chat.dto.ChatRealtimeEvent;
 import com.ccapp.chat.dto.ChatMessagesPageResponse;
 import com.ccapp.chat.dto.SendChatMessageRequest;
@@ -38,7 +39,7 @@ import static org.mockito.Mockito.when;
         "spring.flyway.enabled=false",
         "spring.jpa.hibernate.ddl-auto=create-drop"
 })
-@Import(ChatMessageService.class)
+@Import({ChatMessageService.class, ChatConversationService.class})
 class ChatMessageServiceIntegrationTest {
 
     @Autowired
@@ -112,8 +113,8 @@ class ChatMessageServiceIntegrationTest {
 
         ChatMessage persisted = chatMessageRepository.findById(first.id()).orElseThrow();
         assertEquals(ChatMessageStatus.READ, persisted.getMessageStatus());
-        verify(messagingTemplate, atLeastOnce()).convertAndSend(contains("/topic/chat/conversations/"), any(ChatRealtimeEvent.class));
-        verify(messagingTemplate, atLeastOnce()).convertAndSend(eq("/topic/chat/conversations/" + first.conversationId()), any(ChatRealtimeEvent.class));
+        verify(messagingTemplate, atLeastOnce()).convertAndSend(contains("/topic/chat/events/conversations/"), any(ChatRealtimeEvent.class));
+        verify(messagingTemplate, atLeastOnce()).convertAndSend(eq("/topic/chat/conversations/" + first.conversationId()), any(ChatMessageResponse.class));
     }
 
     private UUID createAccountHolder(String firstName, String lastName) {

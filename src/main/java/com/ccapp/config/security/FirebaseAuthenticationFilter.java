@@ -37,7 +37,7 @@ public class FirebaseAuthenticationFilter extends OncePerRequestFilter {
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
         String path = request.getServletPath();
-        if (path.startsWith("/api/admin/")) {
+        if (path.startsWith("/api/admin/") || path.startsWith("/admin/")) {
             filterChain.doFilter(request, response);
             return;
         }
