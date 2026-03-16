@@ -4,6 +4,7 @@ import com.ccapp.payments.commission.domain.entity.CommissionAdjustment;
 import com.ccapp.payments.commission.domain.enums.CommissionAdjustmentType;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.List;
 import java.util.UUID;
 
 public interface CommissionAdjustmentRepository extends JpaRepository<CommissionAdjustment, UUID> {
@@ -12,4 +13,6 @@ public interface CommissionAdjustmentRepository extends JpaRepository<Commission
                                                                          CommissionAdjustmentType adjustmentType);
 
     boolean existsByReferenceOrderIdAndAdjustmentType(UUID referenceOrderId, CommissionAdjustmentType adjustmentType);
+
+    List<CommissionAdjustment> findByReferenceOrderIdOrderByCreatedAtAsc(UUID referenceOrderId);
 }

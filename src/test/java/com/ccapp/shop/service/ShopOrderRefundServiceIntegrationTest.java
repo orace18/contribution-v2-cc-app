@@ -110,7 +110,8 @@ class ShopOrderRefundServiceIntegrationTest {
                 order.getCurrency(),
                 new BigDecimal("900.0000"),
                 new BigDecimal("300.0000"),
-                new BigDecimal("120.0000")
+                new BigDecimal("120.0000"),
+                "Integration test refund"
         ));
 
         assertEquals(0, mlmVolumeLedgerRepository.count());

@@ -67,13 +67,6 @@ public interface MlmVolumeLedgerRepository extends JpaRepository<MlmVolumeLedger
             """)
     Set<UUID> findDistinctAccountHolderIdsByWeekId(int weekId);
 
-    @Modifying
-    @Query("""
-            delete from MlmVolumeLedger l
-            where l.sourceOrderId = :sourceOrderId
-            """)
-    int deleteBySourceOrderId(UUID sourceOrderId);
-
     @Query("""
             select coalesce(sum(l.volumeCv), 0)
             from MlmVolumeLedger l
