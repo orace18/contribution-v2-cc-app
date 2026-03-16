@@ -17,6 +17,8 @@ import java.util.UUID;
 
 public interface MlmVolumeLedgerRepository extends JpaRepository<MlmVolumeLedger, UUID> {
 
+    boolean existsBySourceOrderIdAndAccountHolderId(UUID sourceOrderId, UUID accountHolderId);
+
     @Query("""
             select l.accountHolderId
             from MlmVolumeLedger l
@@ -64,6 +66,13 @@ public interface MlmVolumeLedgerRepository extends JpaRepository<MlmVolumeLedger
             where l.weekId = :weekId
             """)
     Set<UUID> findDistinctAccountHolderIdsByWeekId(int weekId);
+
+    @Modifying
+    @Query("""
+            delete from MlmVolumeLedger l
+            where l.sourceOrderId = :sourceOrderId
+            """)
+    int deleteBySourceOrderId(UUID sourceOrderId);
 
     @Query("""
             select coalesce(sum(l.volumeCv), 0)

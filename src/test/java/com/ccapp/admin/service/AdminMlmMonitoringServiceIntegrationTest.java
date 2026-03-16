@@ -13,6 +13,7 @@ import com.ccapp.mlm.repository.MlmMemberMetricsRepository;
 import com.ccapp.mlm.repository.MlmVolumeLedgerRepository;
 import com.ccapp.mlm.repository.MlmWeeklyBonusJobRunRepository;
 import com.ccapp.mlm.repository.MlmWeeklySnapshotRepository;
+import com.ccapp.mlm.scheduler.MlmLedgerRebuildJob;
 import com.ccapp.mlm.service.MlmAnalyticsService;
 import com.ccapp.payments.commission.domain.entity.CommissionPayoutBatch;
 import com.ccapp.payments.commission.domain.entity.CommissionPayoutItem;
@@ -30,6 +31,7 @@ import com.ccapp.shop.repository.ShopOrderRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -71,6 +73,8 @@ class AdminMlmMonitoringServiceIntegrationTest {
     private CommissionPayoutBatchRepository commissionPayoutBatchRepository;
     @Autowired
     private CommissionPayoutItemRepository commissionPayoutItemRepository;
+    @MockBean
+    private MlmLedgerRebuildJob mlmLedgerRebuildJob;
 
     @Test
     void monitoringApis_shouldReturnHealthCommissionsPayoutsAndWeeklyVolume() {

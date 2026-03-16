@@ -128,9 +128,8 @@ class MlmVolumeLedgerIntegrationTest {
                 .deliveryAddressId(UUID.randomUUID())
                 .build());
 
-        UUID eventId = UUID.randomUUID();
-        ShopOrderDeliveredEvent event = new ShopOrderDeliveredEvent(
-                eventId,
+        ShopOrderDeliveredEvent firstEvent = new ShopOrderDeliveredEvent(
+                UUID.randomUUID(),
                 now,
                 order.getId(),
                 b,
@@ -140,9 +139,20 @@ class MlmVolumeLedgerIntegrationTest {
                 new BigDecimal("1000.0000"),
                 new BigDecimal("2.5000")
         );
+        ShopOrderDeliveredEvent duplicateEvent = new ShopOrderDeliveredEvent(
+                UUID.randomUUID(),
+                now.plusSeconds(2),
+                order.getId(),
+                b,
+                new BigDecimal("5000.0000"),
+                "XOF",
+                new BigDecimal("4000.0000"),
+                new BigDecimal("1000.0000"),
+                new BigDecimal("2.5000")
+        );
 
-        listener.on(event);
-        listener.on(event);
+        listener.on(firstEvent);
+        listener.on(duplicateEvent);
 
         assertEquals(1, mlmVolumeLedgerRepository.count());
     }

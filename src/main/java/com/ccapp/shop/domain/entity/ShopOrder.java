@@ -59,6 +59,9 @@ public class ShopOrder {
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
 
+    @Column(name = "refunded_at")
+    private OffsetDateTime refundedAt;
+
     @PrePersist
     protected void onCreate() {
         if (createdAt == null) {

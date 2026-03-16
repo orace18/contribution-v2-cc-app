@@ -2,6 +2,7 @@ package com.ccapp.chat.service;
 
 import com.ccapp.chat.domain.entity.ChatMessage;
 import com.ccapp.chat.domain.enums.ChatMessageStatus;
+import com.ccapp.chat.dto.ChatRealtimeEvent;
 import com.ccapp.chat.dto.ChatMessagesPageResponse;
 import com.ccapp.chat.dto.SendChatMessageRequest;
 import com.ccapp.chat.repository.ChatConversationRepository;
@@ -25,7 +26,11 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @DataJpaTest(properties = {
@@ -107,6 +112,8 @@ class ChatMessageServiceIntegrationTest {
 
         ChatMessage persisted = chatMessageRepository.findById(first.id()).orElseThrow();
         assertEquals(ChatMessageStatus.READ, persisted.getMessageStatus());
+        verify(messagingTemplate, atLeastOnce()).convertAndSend(contains("/topic/chat/conversations/"), any(ChatRealtimeEvent.class));
+        verify(messagingTemplate, atLeastOnce()).convertAndSend(eq("/topic/chat/conversations/" + first.conversationId()), any(ChatRealtimeEvent.class));
     }
 
     private UUID createAccountHolder(String firstName, String lastName) {
