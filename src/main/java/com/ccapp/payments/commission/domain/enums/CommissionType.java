@@ -2,5 +2,6 @@ package com.ccapp.payments.commission.domain.enums;
 
 public enum CommissionType {
     SUBSCRIPTION,
-    GROUP_BONUS
+    GROUP_BONUS,
+    REFUND_REVERSAL
 }

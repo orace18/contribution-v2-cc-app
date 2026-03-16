@@ -102,6 +102,7 @@ class CommissionPayoutBatchProcessorIntegrationTest {
         assertNotNull(item.getProcessedAt());
 
         MlmCommission commission = mlmCommissionRepository.findAll().getFirst();
+        assertEquals(commission.getId(), item.getCommissionId());
         assertEquals(CommissionStatus.PAID, commission.getStatus());
         assertNotNull(commission.getPaidAt());
         assertEquals(batch.getId(), commission.getPayoutBatchId());

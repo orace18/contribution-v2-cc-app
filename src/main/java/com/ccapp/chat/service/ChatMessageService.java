@@ -3,6 +3,7 @@ package com.ccapp.chat.service;
 import com.ccapp.chat.domain.entity.ChatConversation;
 import com.ccapp.chat.domain.entity.ChatMessage;
 import com.ccapp.chat.domain.enums.ChatMessageStatus;
+import com.ccapp.chat.dto.ChatRealtimeEvent;
 import com.ccapp.chat.dto.ChatMessageResponse;
 import com.ccapp.chat.dto.ChatMessagesPageResponse;
 import com.ccapp.chat.dto.SendChatMessageRequest;
@@ -32,6 +33,9 @@ public class ChatMessageService {
 
     private static final int DEFAULT_PAGE_SIZE = 20;
     private static final int MAX_PAGE_SIZE = 100;
+    private static final String EVENT_MESSAGE_SENT = "chat.message.sent";
+    private static final String EVENT_MESSAGE_DELIVERED = "chat.message.delivered";
+    private static final String EVENT_MESSAGE_READ = "chat.message.read";
 
     private final ChatMessageRepository chatMessageRepository;
     private final ChatConversationRepository chatConversationRepository;
@@ -70,10 +74,11 @@ public class ChatMessageService {
         assertParticipant(conversation, requesterAccountHolderId);
 
         int pageSize = normalizeLimit(limit);
+        OffsetDateTime beforeCursor = sanitizeBeforeCursor(before);
         var pageable = PageRequest.of(0, pageSize);
-        var page = before == null
+        var page = beforeCursor == null
                 ? chatMessageRepository.findByConversationIdOrderByCreatedAtDesc(conversationId, pageable)
-                : chatMessageRepository.findByConversationIdAndCreatedAtBeforeOrderByCreatedAtDesc(conversationId, before, pageable);
+                : chatMessageRepository.findByConversationIdAndCreatedAtBeforeOrderByCreatedAtDesc(conversationId, beforeCursor, pageable);
 
         OffsetDateTime nextBefore = page.hasNext() && !page.getContent().isEmpty()
                 ? page.getContent().get(page.getContent().size() - 1).getCreatedAt()
@@ -108,7 +113,7 @@ public class ChatMessageService {
                 saved.getMessageStatus(),
                 saved.getRecipientAccountHolderId()
         ));
-        publishRealtime(saved);
+        publishRealtime(saved, EVENT_MESSAGE_DELIVERED);
         return toResponse(saved);
     }
 
@@ -137,7 +142,7 @@ public class ChatMessageService {
                 saved.getMessageStatus(),
                 saved.getRecipientAccountHolderId()
         ));
-        publishRealtime(saved);
+        publishRealtime(saved, EVENT_MESSAGE_READ);
         return toResponse(saved);
     }
 
@@ -161,7 +166,7 @@ public class ChatMessageService {
                 saved.getRecipientAccountHolderId(),
                 saved.getChannel()
         ));
-        publishRealtime(saved);
+        publishRealtime(saved, EVENT_MESSAGE_SENT);
 
         return toResponse(saved);
     }
@@ -205,14 +210,31 @@ public class ChatMessageService {
         return Math.min(limit, MAX_PAGE_SIZE);
     }
 
-    private void publishRealtime(ChatMessage message) {
-        messagingTemplate.convertAndSend(
-                "/topic/chat/conversations/" + message.getConversationId(),
+    private OffsetDateTime sanitizeBeforeCursor(OffsetDateTime before) {
+        if (before == null) {
+            return null;
+        }
+        OffsetDateTime now = OffsetDateTime.now();
+        if (before.isAfter(now.plusMinutes(1))) {
+            throw new BusinessException("Invalid pagination cursor");
+        }
+        return before;
+    }
+
+    private void publishRealtime(ChatMessage message, String eventType) {
+        ChatRealtimeEvent event = new ChatRealtimeEvent(
+                eventType,
+                message.getConversationId(),
+                OffsetDateTime.now(),
                 toResponse(message)
         );
         messagingTemplate.convertAndSend(
+                "/topic/chat/conversations/" + message.getConversationId(),
+                event
+        );
+        messagingTemplate.convertAndSend(
                 "/topic/chat/users/" + message.getRecipientAccountHolderId(),
-                toResponse(message)
+                event
         );
     }
 

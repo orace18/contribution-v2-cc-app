@@ -1,0 +1,150 @@
+RAPPORT D'AVANCEMENT CC APP BACKEND
+Date: 2026-03-12
+
+1) CONFIGURATION ET DEMARRAGE
+- Ajout/normalisation de valeurs de fallback dans application.properties pour les secrets requis au boot:
+  - admin.jwt.secret
+  - admin.bootstrap.password
+  - psp.jawupay.hmac-secret
+  - security.internal-api-key
+  - partner.api.key
+  - media.storage.access-key
+  - media.storage.secret-key
+  - spring.mail.password
+  - spring.activemq.password
+- Ajout de la configuration MinIO via variables d'environnement (fallbacks inclus).
+- CORS mis a jour pour autoriser le front:
+  - https://back-office-cc-app.vercel.app
+
+2) MARKETPLACE BACKEND
+- Tables marketplace implementees (migration V25):
+  - shop_products
+  - shop_orders
+  - shop_order_items
+  - shop_commission_pool
+- Flux checkout / commande / changement de statut implemente.
+- Regle metier respectee: les flux MLM sont declenches uniquement a DELIVERED.
+- Evenement declenche:
+  - ShopOrderDeliveredEvent
+
+3) MLM VOLUME LEDGER (SCALABLE)
+- Migration V26 implementee:
+  - table mlm_volume_ledger
+  - indexes: account_holder_id, week_id, leg_position
+- Services/listeners implémentés:
+  - MlmVolumeLedgerService
+  - ShopOrderDeliveredMlmVolumeListener
+- Regle de performance appliquee:
+  - le calcul des volumes MLM se base sur mlm_volume_ledger (pas sur les orders)
+- Tests d'integration ajoutes pour idempotence et construction des volumes upline.
+
+4) WEEKLY GROUP BONUS ENGINE
+- Migration V27 implementee:
+  - table mlm_leg_carryover
+  - extension mlm_commissions (GROUP_BONUS, week_id, etc.)
+  - table mlm_member_grades
+- Service hebdomadaire implemente:
+  - WeeklyGroupBonusService
+  - algorithme binaire (smallest leg, rate, carryover, cap)
+- Job schedule:
+  - WeeklyGroupBonusJob (dimanche soir)
+- Idempotence hebdomadaire prise en charge.
+- Tests d'integration ajoutes.
+
+5) COMMISSION PAYOUT PROCESSING
+- Migration V28 implementee:
+  - commission_payout_batches
+  - commission_payout_items
+- Batch processor implemente:
+  - CommissionPayoutBatchProcessor
+- Workflow implemente:
+  1. identification commissions payables
+  2. retenue taxe 10%
+  3. ecritures comptables ledger
+  4. credit wallet utilisateur
+  5. passage commissions en PAID
+- Idempotence et audit de traitement supportes.
+- Tests d'integration ajoutes.
+
+6) ANALYTICS ET STABILITY LAYER
+- Migration V29 implementee:
+  - mlm_member_metrics
+  - mlm_weekly_snapshots
+  - financial_audit_log
+- Migration V30 ajoutee:
+  - mlm_weekly_bonus_job_runs (suivi execution du job weekly bonus)
+- Services/repositories analytics:
+  - MlmAnalyticsService
+  - MlmMemberMetricsRepository
+  - MlmWeeklySnapshotRepository
+  - MlmWeeklyBonusJobRunRepository
+- Snapshot hebdomadaire:
+  - MlmWeeklySnapshotJob
+
+7) API MOBILE ET ADMIN LIVREES
+- Mobile:
+  - GET /api/mobile/mlm/dashboard
+  - Controller: MobileMlmController
+  - Service: MobileMlmDashboardService
+- Admin monitoring:
+  - GET /api/admin/mlm/network-health
+  - GET /api/admin/commissions
+  - GET /api/admin/commission-payouts
+  - GET /api/admin/weekly-volume
+  - Controller: AdminMlmMonitoringController
+  - Service: AdminMlmMonitoringService
+
+8) OBSERVABILITE ET LOGS STRUCTURES
+- Hooks monitoring ajoutes:
+  - commission calculations
+  - weekly bonus jobs
+  - payout processing
+  - marketplace order pipeline
+  - ledger volume writes
+  - MLM placement events
+- Classe:
+  - PlatformMonitoringHooks
+- Logs structures ajoutes dans:
+  - MlmCommissionService
+  - WeeklyGroupBonusService
+  - CommissionPayoutBatchProcessor
+  - ShopOrderService
+  - MlmVolumeLedgerService
+  - MLMPlacementService
+  - AccountingPostingService
+
+9) AUDIT TRAILS FINANCIERS
+- Table:
+  - financial_audit_log
+- Service:
+  - FinancialAuditService
+- Evenements audites:
+  - COMMISSION_CREATED
+  - COMMISSION_PAYOUT
+  - MERCHANT_PAYOUT
+  - WALLET_CREDIT
+- Listener additionnel:
+  - ShopOrderDeliveredFinancialAuditListener
+
+10) PERFORMANCE GUARDS
+- Guard rails ajoutes:
+  - prevention des requetes MLM recursives trop lourdes (max level + max downline)
+  - verification usage volume ledger via network health
+  - verification execution weekly bonus via job run history
+  - detection des spikes commissions (seuil configurable)
+
+11) TESTS ET VALIDATION
+- Compilation validee:
+  - mvn -q -DskipTests compile
+- Tests cibles executes avec succes (incluant les nouveaux):
+  - MlmVolumeLedgerIntegrationTest
+  - WeeklyGroupBonusServiceIntegrationTest
+  - CommissionPayoutBatchProcessorIntegrationTest
+  - MlmAnalyticsServiceIntegrationTest
+  - AdminMlmMonitoringServiceIntegrationTest
+  - ShopOrderDeliveredFinancialAuditListenerIntegrationTest
+  - MlmCommissionServiceTest
+
+12) NOTE ETAT DEPOT
+- Le working tree contient encore des modifications/non-suivis (historique de travail en cours).
+- Aucun commit n'a ete fait automatiquement dans ce rapport.

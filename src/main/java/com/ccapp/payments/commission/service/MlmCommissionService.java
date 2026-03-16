@@ -1,6 +1,7 @@
 package com.ccapp.payments.commission.service;
 
 import com.ccapp.common.events.DomainEventPublisher;
+import com.ccapp.common.exception.BusinessException;
 import com.ccapp.financial.audit.service.FinancialAuditService;
 import com.ccapp.observability.PlatformMonitoringHooks;
 import com.ccapp.payments.commission.domain.entity.MlmCommission;
@@ -10,6 +11,7 @@ import com.ccapp.payments.commission.repository.MlmCommissionRepository;
 import com.ccapp.payments.event.CommissionGeneratedEvent;
 import com.ccapp.payments.operation.domain.entity.Operation;
 import com.ccapp.payments.operation.domain.enums.OperationType;
+import com.ccapp.payments.psp.service.SimpleRateLimiter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -30,12 +32,16 @@ public class MlmCommissionService {
     private final MlmCommissionRepository mlmCommissionRepository;
     private final DomainEventPublisher domainEventPublisher;
     private final FinancialAuditService financialAuditService;
+    private final SimpleRateLimiter simpleRateLimiter;
 
     @Value("${mlm.commission.rate-percent:5.0}")
     private BigDecimal commissionRatePercent;
 
     @Value("${mlm.monitoring.commission-spike.threshold:10000}")
     private BigDecimal commissionSpikeThreshold;
+
+    @Value("${mlm.commission.generation.max-events-per-minute:120}")
+    private int maxCommissionEventsPerMinute;
 
     @Transactional
     public Optional<MlmCommission> calculateForOperation(Operation operation) {
@@ -46,6 +52,11 @@ public class MlmCommissionService {
         Optional<MlmCommission> existing = mlmCommissionRepository.findByOperationId(operation.getId());
         if (existing.isPresent()) {
             return existing;
+        }
+
+        String rateKey = "mlm-commission:" + operation.getAccountHolderId();
+        if (!simpleRateLimiter.allow(rateKey, maxCommissionEventsPerMinute)) {
+            throw new BusinessException("Commission generation rate limit exceeded");
         }
 
         BigDecimal commissionAmount = operation.getAmount()
@@ -90,6 +101,16 @@ public class MlmCommissionService {
                     saved.getBeneficiaryAccountHolderId(),
                     saved.getAmount(),
                     commissionSpikeThreshold);
+            financialAuditService.record(
+                    "COMMISSION_SPIKE_DETECTED",
+                    saved.getId().toString(),
+                    saved.getBeneficiaryAccountHolderId(),
+                    saved.getAmount(),
+                    Map.of(
+                            "operationId", String.valueOf(saved.getOperationId()),
+                            "threshold", commissionSpikeThreshold.toPlainString()
+                    )
+            );
         }
 
         domainEventPublisher.publish(CommissionGeneratedEvent.create(

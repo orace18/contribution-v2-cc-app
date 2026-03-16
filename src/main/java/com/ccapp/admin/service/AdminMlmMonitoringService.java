@@ -3,9 +3,11 @@ package com.ccapp.admin.service;
 import com.ccapp.admin.dto.AdminCommissionPayoutBatchResponse;
 import com.ccapp.admin.dto.AdminCommissionPayoutItemResponse;
 import com.ccapp.admin.dto.AdminCommissionResponse;
+import com.ccapp.admin.dto.AdminMlmLedgerRebuildResponse;
 import com.ccapp.admin.dto.AdminMlmNetworkHealthResponse;
 import com.ccapp.admin.dto.AdminWeeklyVolumeResponse;
 import com.ccapp.mlm.domain.enums.WeeklyBonusJobRunStatus;
+import com.ccapp.mlm.scheduler.MlmLedgerRebuildJob;
 import com.ccapp.mlm.service.MlmAnalyticsService;
 import com.ccapp.mlm.repository.MlmMemberMetricsRepository;
 import com.ccapp.mlm.repository.MlmVolumeLedgerRepository;
@@ -41,6 +43,7 @@ public class AdminMlmMonitoringService {
     private final MlmCommissionRepository mlmCommissionRepository;
     private final CommissionPayoutBatchRepository commissionPayoutBatchRepository;
     private final CommissionPayoutItemRepository commissionPayoutItemRepository;
+    private final MlmLedgerRebuildJob mlmLedgerRebuildJob;
 
     @Value("${mlm.monitoring.weekly-bonus.max-stale-days:8}")
     private int weeklyBonusMaxStaleDays;
@@ -133,6 +136,18 @@ public class AdminMlmMonitoringService {
                         summary.getEntriesCount()
                 ))
                 .toList();
+    }
+
+    public AdminMlmLedgerRebuildResponse rebuildMlmLedger(Integer batchSize) {
+        var result = mlmLedgerRebuildJob.triggerManualRebuild(batchSize);
+        return new AdminMlmLedgerRebuildResponse(
+                result.batchSize(),
+                result.processedOrders(),
+                result.ordersWithCommissionPool(),
+                result.ledgerEntriesRebuilt(),
+                result.startedAt(),
+                result.finishedAt()
+        );
     }
 
     private int normalizePageSize(int size) {

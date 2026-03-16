@@ -1,6 +1,7 @@
 package com.ccapp.mlm.service;
 
 import com.ccapp.common.events.DomainEventPublisher;
+import com.ccapp.financial.audit.service.FinancialAuditService;
 import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
 import com.ccapp.identity.account_holder.repository.AccountHolderRepository;
 import com.ccapp.identity.account_holder.service.AccountHolderService;
@@ -32,7 +33,7 @@ import static org.mockito.Mockito.when;
         "spring.flyway.enabled=false",
         "spring.jpa.hibernate.ddl-auto=create-drop"
 })
-@Import({MLMPlacementService.class, MLMQueryService.class})
+@Import({MLMPlacementService.class, MLMQueryService.class, AutoPlacementService.class})
 class MLMServicesIntegrationTest {
 
     @Autowired
@@ -50,6 +51,8 @@ class MLMServicesIntegrationTest {
     private AccessControlService accessControlService;
     @MockBean
     private DomainEventPublisher domainEventPublisher;
+    @MockBean
+    private FinancialAuditService financialAuditService;
 
     @BeforeEach
     void setUp() {

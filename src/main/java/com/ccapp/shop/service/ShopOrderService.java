@@ -16,6 +16,7 @@ import com.ccapp.shop.dto.ShopCommissionPoolResponse;
 import com.ccapp.shop.dto.ShopOrderItemResponse;
 import com.ccapp.shop.dto.ShopOrderResponse;
 import com.ccapp.shop.event.ShopOrderDeliveredEvent;
+import com.ccapp.shop.event.ShopOrderRefundedEvent;
 import com.ccapp.shop.repository.ShopCommissionPoolRepository;
 import com.ccapp.shop.repository.ShopOrderItemRepository;
 import com.ccapp.shop.repository.ShopOrderRepository;
@@ -150,23 +151,40 @@ public class ShopOrderService {
         }
 
         order.setStatus(targetStatus);
+        if (targetStatus == ShopOrderStatus.REFUNDED) {
+            order.setRefundedAt(java.time.OffsetDateTime.now());
+        }
         ShopOrder saved = shopOrderRepository.save(order);
 
-        if (targetStatus == ShopOrderStatus.DELIVERED) {
+        if (targetStatus == ShopOrderStatus.DELIVERED || targetStatus == ShopOrderStatus.REFUNDED) {
             ShopCommissionPool pool = shopCommissionPoolRepository.findByOrderId(saved.getId())
-                    .orElseThrow(() -> new NotFoundException("Commission pool not found for delivered order"));
-            PlatformMonitoringHooks.onMarketplaceOrderDelivered(pool.getMlmVolume());
-            log.info("marketplace_order_delivered orderId={} buyerId={} merchantAmount={} platformCommission={} mlmVolume={}",
-                    saved.getId(), saved.getBuyerId(), pool.getMerchantAmount(), pool.getPlatformCommission(), pool.getMlmVolume());
-            domainEventPublisher.publish(ShopOrderDeliveredEvent.create(
-                    saved.getId(),
-                    saved.getBuyerId(),
-                    saved.getTotalAmount(),
-                    saved.getCurrency(),
-                    pool.getMerchantAmount(),
-                    pool.getPlatformCommission(),
-                    pool.getMlmVolume()
-            ));
+                    .orElseThrow(() -> new NotFoundException("Commission pool not found for finalized order"));
+            if (targetStatus == ShopOrderStatus.DELIVERED) {
+                PlatformMonitoringHooks.onMarketplaceOrderDelivered(pool.getMlmVolume());
+                log.info("marketplace_order_delivered orderId={} buyerId={} merchantAmount={} platformCommission={} mlmVolume={}",
+                        saved.getId(), saved.getBuyerId(), pool.getMerchantAmount(), pool.getPlatformCommission(), pool.getMlmVolume());
+                domainEventPublisher.publish(ShopOrderDeliveredEvent.create(
+                        saved.getId(),
+                        saved.getBuyerId(),
+                        saved.getTotalAmount(),
+                        saved.getCurrency(),
+                        pool.getMerchantAmount(),
+                        pool.getPlatformCommission(),
+                        pool.getMlmVolume()
+                ));
+            } else {
+                log.info("marketplace_order_refunded orderId={} buyerId={} merchantAmount={} platformCommission={} mlmVolume={}",
+                        saved.getId(), saved.getBuyerId(), pool.getMerchantAmount(), pool.getPlatformCommission(), pool.getMlmVolume());
+                domainEventPublisher.publish(ShopOrderRefundedEvent.create(
+                        saved.getId(),
+                        saved.getBuyerId(),
+                        saved.getTotalAmount(),
+                        saved.getCurrency(),
+                        pool.getMerchantAmount(),
+                        pool.getPlatformCommission(),
+                        pool.getMlmVolume()
+                ));
+            }
         }
 
         return toResponse(saved);
@@ -183,7 +201,8 @@ public class ShopOrderService {
             case CREATED -> to == ShopOrderStatus.PAID || to == ShopOrderStatus.CANCELLED;
             case PAID -> to == ShopOrderStatus.SHIPPED || to == ShopOrderStatus.DELIVERED || to == ShopOrderStatus.CANCELLED;
             case SHIPPED -> to == ShopOrderStatus.DELIVERED || to == ShopOrderStatus.CANCELLED;
-            case DELIVERED, CANCELLED -> false;
+            case DELIVERED -> to == ShopOrderStatus.REFUNDED;
+            case CANCELLED, REFUNDED -> false;
         };
     }
 

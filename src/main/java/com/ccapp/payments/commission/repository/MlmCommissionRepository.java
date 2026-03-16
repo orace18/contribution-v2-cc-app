@@ -18,6 +18,10 @@ import java.util.UUID;
 public interface MlmCommissionRepository extends JpaRepository<MlmCommission, UUID> {
     Optional<MlmCommission> findByOperationId(UUID operationId);
 
+    Optional<MlmCommission> findByBeneficiaryAccountHolderIdAndSourceAndCommissionType(UUID beneficiaryAccountHolderId,
+                                                                                         String source,
+                                                                                         CommissionType commissionType);
+
     Optional<MlmCommission> findByBeneficiaryAccountHolderIdAndCommissionTypeAndWeekId(UUID beneficiaryAccountHolderId,
                                                                                          CommissionType commissionType,
                                                                                          Integer weekId);

@@ -9,6 +9,8 @@ import com.ccapp.mlm.repository.MlmVolumeLedgerRepository;
 import com.ccapp.shop.event.ShopOrderDeliveredEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,6 +29,9 @@ public class MlmVolumeLedgerService {
 
     private final MlmRelationshipRepository mlmRelationshipRepository;
     private final MlmVolumeLedgerRepository mlmVolumeLedgerRepository;
+
+    @Value("${mlm.query.max-safe-depth:64}")
+    private int maxSafeDepth;
 
     @Transactional
     public int recordForDeliveredOrder(ShopOrderDeliveredEvent event) {
@@ -50,6 +55,23 @@ public class MlmVolumeLedgerService {
                                   UUID sourceOrderId,
                                   BigDecimal volumeCv,
                                   OffsetDateTime occurredAt) {
+        return recordUplineVolume(sourceMemberId, sourceOrderId, volumeCv, occurredAt, false);
+    }
+
+    @Transactional
+    public int rebuildForDeliveredOrder(UUID sourceMemberId,
+                                        UUID sourceOrderId,
+                                        BigDecimal volumeCv,
+                                        OffsetDateTime occurredAt) {
+        mlmVolumeLedgerRepository.deleteBySourceOrderId(sourceOrderId);
+        return recordUplineVolume(sourceMemberId, sourceOrderId, volumeCv, occurredAt, true);
+    }
+
+    private int recordUplineVolume(UUID sourceMemberId,
+                                   UUID sourceOrderId,
+                                   BigDecimal volumeCv,
+                                   OffsetDateTime occurredAt,
+                                   boolean rebuilding) {
         if (volumeCv == null || volumeCv.signum() <= 0) {
             return 0;
         }
@@ -57,6 +79,9 @@ public class MlmVolumeLedgerService {
         List<MlmRelationship> ancestors = mlmRelationshipRepository.findAncestors(sourceMemberId);
         if (ancestors.isEmpty()) {
             throw new BusinessException("MLM tree not initialized for source member");
+        }
+        if (ancestors.size() > maxSafeDepth + 1) {
+            throw new BusinessException("MLM hierarchy depth exceeds configured safe threshold");
         }
 
         int weekId = toWeekId(occurredAt != null ? occurredAt : OffsetDateTime.now());
@@ -68,7 +93,9 @@ public class MlmVolumeLedgerService {
                 continue;
             }
             UUID uplineId = ancestor.getAncestorId();
-            if (existingForOrder.contains(uplineId)) {
+            boolean exists = existingForOrder.contains(uplineId)
+                    || mlmVolumeLedgerRepository.existsBySourceOrderIdAndAccountHolderId(sourceOrderId, uplineId);
+            if (exists && !rebuilding) {
                 continue;
             }
             int legPosition = resolveLegPosition(uplineId, sourceMemberId);
@@ -85,7 +112,16 @@ public class MlmVolumeLedgerService {
         if (toInsert.isEmpty()) {
             return 0;
         }
-        mlmVolumeLedgerRepository.saveAll(toInsert);
+        try {
+            mlmVolumeLedgerRepository.saveAll(toInsert);
+        } catch (DataIntegrityViolationException ex) {
+            log.debug("Duplicate MLM volume ledger rows skipped for sourceOrderId={}", sourceOrderId);
+            return (int) toInsert.stream()
+                    .filter(entry -> mlmVolumeLedgerRepository.existsBySourceOrderIdAndAccountHolderId(
+                            entry.getSourceOrderId(),
+                            entry.getAccountHolderId()))
+                    .count();
+        }
         log.info("mlm_volume_ledger_upserted sourceOrderId={} sourceMemberId={} weekId={} entries={} volumeCv={}",
                 sourceOrderId, sourceMemberId, weekId, toInsert.size(), volumeCv);
         return toInsert.size();

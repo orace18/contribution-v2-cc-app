@@ -5,6 +5,7 @@ import com.ccapp.mlm.repository.projection.MlmWeeklyLegVolumeProjection;
 import com.ccapp.mlm.repository.projection.MlmWeeklyVolumeSummaryProjection;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 
 import java.math.BigDecimal;
@@ -14,6 +15,8 @@ import java.util.Set;
 import java.util.UUID;
 
 public interface MlmVolumeLedgerRepository extends JpaRepository<MlmVolumeLedger, UUID> {
+
+    boolean existsBySourceOrderIdAndAccountHolderId(UUID sourceOrderId, UUID accountHolderId);
 
     @Query("""
             select l.accountHolderId
@@ -55,6 +58,13 @@ public interface MlmVolumeLedgerRepository extends JpaRepository<MlmVolumeLedger
             where l.weekId = :weekId
             """)
     Set<UUID> findDistinctAccountHolderIdsByWeekId(int weekId);
+
+    @Modifying
+    @Query("""
+            delete from MlmVolumeLedger l
+            where l.sourceOrderId = :sourceOrderId
+            """)
+    int deleteBySourceOrderId(UUID sourceOrderId);
 
     @Query("""
             select coalesce(sum(l.volumeCv), 0)

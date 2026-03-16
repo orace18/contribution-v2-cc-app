@@ -17,6 +17,7 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.temporal.IsoFields;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @Component
 @RequiredArgsConstructor
@@ -25,13 +26,28 @@ public class WeeklyGroupBonusJob {
 
     private final WeeklyGroupBonusService weeklyGroupBonusService;
     private final MlmWeeklyBonusJobRunRepository mlmWeeklyBonusJobRunRepository;
+    private final AtomicBoolean running = new AtomicBoolean(false);
 
     @Value("${mlm.group-bonus.zone:Africa/Porto-Novo}")
     private String groupBonusZone;
 
     @Scheduled(cron = "${mlm.group-bonus.cron:0 55 23 * * SUN}", zone = "${mlm.group-bonus.zone:Africa/Porto-Novo}")
     public void run() {
+        if (!running.compareAndSet(false, true)) {
+            log.warn("weekly_group_bonus_job_skipped reason=ALREADY_RUNNING");
+            return;
+        }
         OffsetDateTime startedAt = OffsetDateTime.now();
+        int weekId = currentWeekId();
+        if (mlmWeeklyBonusJobRunRepository.findByWeekId(weekId)
+                .filter(run -> run.getStatus() == WeeklyBonusJobRunStatus.PROCESSING
+                        || run.getStatus() == WeeklyBonusJobRunStatus.SUCCESS)
+                .isPresent()) {
+            log.info("weekly_group_bonus_job_skipped reason=ALREADY_PROCESSED weekId={}", weekId);
+            running.set(false);
+            return;
+        }
+        saveRun(weekId, WeeklyBonusJobRunStatus.PROCESSING, startedAt, startedAt, 0, 0, 0, null);
         try {
             WeeklyGroupBonusProcessingResult result = weeklyGroupBonusService.processCurrentWeek();
             OffsetDateTime finishedAt = OffsetDateTime.now();
@@ -65,6 +81,8 @@ public class WeeklyGroupBonusJob {
                     ex.getMessage(),
                     ex);
             throw ex;
+        } finally {
+            running.set(false);
         }
     }
 

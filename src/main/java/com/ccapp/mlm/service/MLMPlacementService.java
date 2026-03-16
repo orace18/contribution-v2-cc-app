@@ -3,6 +3,7 @@ package com.ccapp.mlm.service;
 import com.ccapp.common.events.DomainEventPublisher;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.common.exception.ConflictException;
+import com.ccapp.financial.audit.service.FinancialAuditService;
 import com.ccapp.identity.account_holder.service.AccountHolderService;
 import com.ccapp.identity.delegation.domain.enums.PermissionLevel;
 import com.ccapp.identity.delegation.service.AccessControlService;
@@ -19,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -26,12 +28,12 @@ import java.util.UUID;
 @Slf4j
 public class MLMPlacementService {
 
-    private static final int MAX_DIRECT_CHILDREN = 5;
-
     private final MlmRelationshipRepository mlmRelationshipRepository;
     private final AccountHolderService accountHolderService;
     private final AccessControlService accessControlService;
+    private final AutoPlacementService autoPlacementService;
     private final DomainEventPublisher domainEventPublisher;
+    private final FinancialAuditService financialAuditService;
 
     @Transactional
     public MlmPlacementResponse placeAccountHolder(UUID actorUserId,
@@ -51,10 +53,7 @@ public class MLMPlacementService {
             throw new ConflictException("Account holder already has a sponsor");
         }
 
-        UUID placementParentId = mlmRelationshipRepository
-                .findPlacementParentCandidate(sponsorAccountHolderId, MAX_DIRECT_CHILDREN)
-                .map(UUID::fromString)
-                .orElseThrow(() -> new BusinessException("Sponsor has no available leg"));
+        UUID placementParentId = autoPlacementService.resolvePlacementParent(sponsorAccountHolderId);
 
         List<MlmRelationship> ancestors = mlmRelationshipRepository.findAncestors(placementParentId);
         if (ancestors.isEmpty()) {
@@ -87,6 +86,18 @@ public class MLMPlacementService {
         long directChildren = mlmRelationshipRepository.countByAncestorIdAndLevel(placementParentId, 1);
         long sponsorTeamSize = mlmRelationshipRepository.countTeamSize(sponsorAccountHolderId);
         PlatformMonitoringHooks.onMlmPlacementCreated();
+        financialAuditService.record(
+                "MLM_PLACEMENT",
+                accountHolderId.toString(),
+                accountHolderId,
+                null,
+                Map.of(
+                        "sponsorAccountHolderId", sponsorAccountHolderId.toString(),
+                        "placementParentId", placementParentId.toString(),
+                        "directChildrenAfterPlacement", String.valueOf(directChildren),
+                        "sponsorTeamSize", String.valueOf(sponsorTeamSize)
+                )
+        );
         log.info("mlm_placement_created accountHolderId={} sponsorId={} placementParentId={} directChildren={} sponsorTeamSize={}",
                 accountHolderId, sponsorAccountHolderId, placementParentId, directChildren, sponsorTeamSize);
 

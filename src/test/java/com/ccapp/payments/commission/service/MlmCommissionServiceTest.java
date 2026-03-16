@@ -7,6 +7,7 @@ import com.ccapp.payments.commission.repository.MlmCommissionRepository;
 import com.ccapp.payments.event.CommissionGeneratedEvent;
 import com.ccapp.payments.operation.domain.entity.Operation;
 import com.ccapp.payments.operation.domain.enums.OperationType;
+import com.ccapp.payments.psp.service.SimpleRateLimiter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -22,6 +23,8 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -35,6 +38,8 @@ class MlmCommissionServiceTest {
     private DomainEventPublisher domainEventPublisher;
     @Mock
     private FinancialAuditService financialAuditService;
+    @Mock
+    private SimpleRateLimiter simpleRateLimiter;
 
     @InjectMocks
     private MlmCommissionService mlmCommissionService;
@@ -43,6 +48,7 @@ class MlmCommissionServiceTest {
     void setUp() {
         ReflectionTestUtils.setField(mlmCommissionService, "commissionRatePercent", new BigDecimal("5.0"));
         ReflectionTestUtils.setField(mlmCommissionService, "commissionSpikeThreshold", new BigDecimal("10000"));
+        ReflectionTestUtils.setField(mlmCommissionService, "maxCommissionEventsPerMinute", 100);
     }
 
     @Test
@@ -58,6 +64,7 @@ class MlmCommissionServiceTest {
                 .build();
 
         when(mlmCommissionRepository.findByOperationId(operationId)).thenReturn(Optional.empty());
+        when(simpleRateLimiter.allow(anyString(), anyInt())).thenReturn(true);
         when(mlmCommissionRepository.save(any(MlmCommission.class))).thenAnswer(invocation -> {
             MlmCommission commission = invocation.getArgument(0);
             commission.setId(UUID.randomUUID());

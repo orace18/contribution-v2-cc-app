@@ -3,6 +3,7 @@ package com.ccapp.admin.controller;
 import com.ccapp.admin.audit.AdminAuditService;
 import com.ccapp.admin.dto.AdminCommissionPayoutBatchResponse;
 import com.ccapp.admin.dto.AdminCommissionResponse;
+import com.ccapp.admin.dto.AdminMlmLedgerRebuildResponse;
 import com.ccapp.admin.dto.AdminMlmNetworkHealthResponse;
 import com.ccapp.admin.dto.AdminWeeklyVolumeResponse;
 import com.ccapp.admin.security.AdminSecurityUtils;
@@ -13,6 +14,7 @@ import com.ccapp.payments.commission.domain.enums.CommissionType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -64,5 +66,18 @@ public class AdminMlmMonitoringController {
         List<AdminWeeklyVolumeResponse> response = adminMlmMonitoringService.listWeeklyVolume(limit);
         adminAuditService.logAction(AdminSecurityUtils.currentAdminUserId(), "LIST_WEEKLY_VOLUME", "MLM_VOLUME_LEDGER", null, "count=" + response.size());
         return ResponseEntity.ok(CommonResponse.success("Weekly volume", response));
+    }
+
+    @PostMapping("/mlm/rebuild-ledger")
+    public ResponseEntity<CommonResponse<AdminMlmLedgerRebuildResponse>> rebuildLedger(@RequestParam(required = false) Integer batchSize) {
+        AdminMlmLedgerRebuildResponse response = adminMlmMonitoringService.rebuildMlmLedger(batchSize);
+        adminAuditService.logAction(
+                AdminSecurityUtils.currentAdminUserId(),
+                "REBUILD_MLM_LEDGER",
+                "MLM_VOLUME_LEDGER",
+                null,
+                response
+        );
+        return ResponseEntity.ok(CommonResponse.success("MLM ledger rebuild completed", response));
     }
 }
