@@ -59,6 +59,35 @@ class OperationServiceTest {
     }
 
     @Test
+    void createInitiatedOperation_shouldThrowConflict_whenIdempotencyKeyReusedWithDifferentSignature() {
+        UUID accountHolderId = UUID.randomUUID();
+        String idem = "idem-key-conflict";
+        Operation existing = Operation.builder()
+                .id(UUID.randomUUID())
+                .accountHolderId(accountHolderId)
+                .actorUserId(accountHolderId)
+                .type(OperationType.SUBSCRIPTION)
+                .status(OperationStatus.INITIATED)
+                .amount(new BigDecimal("19.99"))
+                .currency("USD")
+                .idempotencyKey(idem)
+                .build();
+
+        when(operationRepository.findByIdempotencyKey(idem)).thenReturn(Optional.of(existing));
+
+        assertThrows(ConflictException.class, () -> operationService.createInitiatedOperation(
+                accountHolderId,
+                accountHolderId,
+                OperationType.LOAN_REPAYMENT,
+                new BigDecimal("19.99"),
+                "USD",
+                idem,
+                "Loan repayment"
+        ));
+        verify(operationRepository, never()).save(any(Operation.class));
+    }
+
+    @Test
     void confirmByPspReference_shouldConfirmOperation_whenPayloadMatches() {
         String pspRef = "PSP-123";
         Operation operation = Operation.builder()

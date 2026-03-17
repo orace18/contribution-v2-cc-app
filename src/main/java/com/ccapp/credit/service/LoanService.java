@@ -11,6 +11,8 @@ import com.ccapp.common.events.DomainEventPublisher;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.common.exception.NotFoundException;
 import com.ccapp.country.dto.CountryContext;
+import com.ccapp.country.config.domain.enums.CountryConfigType;
+import com.ccapp.country.config.service.CountryConfigurationEngineService;
 import com.ccapp.country.service.CountryContextService;
 import com.ccapp.credit.domain.entity.Loan;
 import com.ccapp.credit.domain.entity.RepaymentSchedule;
@@ -56,6 +58,7 @@ public class LoanService {
     private final AccessControlService accessControlService;
     private final CreditScoringService creditScoringService;
     private final CountryContextService countryContextService;
+    private final CountryConfigurationEngineService countryConfigurationEngineService;
     private final AdminPolicyRepository adminPolicyRepository;
     private final OperationService operationService;
     private final AccountingPostingService accountingPostingService;
@@ -154,9 +157,13 @@ public class LoanService {
     }
 
     private void ensureCreditPolicyConfigured(String countryCode) {
-        boolean hasPolicy = adminPolicyRepository.findFirstByPolicyTypeAndCountryCodeOrderByCreatedAtDesc(AdminPolicyType.CREDIT_POLICY, countryCode).isPresent()
+        boolean hasVersionedRiskConfig = countryConfigurationEngineService.hasEffectiveConfiguration(
+                countryCode,
+                CountryConfigType.RISK_CONFIG
+        );
+        boolean hasLegacyPolicy = adminPolicyRepository.findFirstByPolicyTypeAndCountryCodeOrderByCreatedAtDesc(AdminPolicyType.CREDIT_POLICY, countryCode).isPresent()
                 || adminPolicyRepository.findFirstByPolicyTypeAndCountryCodeIsNullOrderByCreatedAtDesc(AdminPolicyType.CREDIT_POLICY).isPresent();
-        if (!hasPolicy) {
+        if (!hasVersionedRiskConfig && !hasLegacyPolicy) {
             throw new BusinessException("Credit policy not configured for country");
         }
     }
