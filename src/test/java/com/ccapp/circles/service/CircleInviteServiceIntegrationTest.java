@@ -9,11 +9,14 @@ import com.ccapp.circles.dto.*;
 import com.ccapp.circles.repository.CircleInviteRepository;
 import com.ccapp.circles.repository.CircleMemberRepository;
 import com.ccapp.circles.repository.CircleRepository;
+import com.ccapp.config.TestJacksonAndCachingConfig;
+import com.ccapp.country.config.service.CountryConfigResolver;
 import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
 import com.ccapp.identity.account_holder.domain.enums.AccountType;
 import com.ccapp.identity.account_holder.repository.AccountHolderRepository;
 import com.ccapp.notifications.dispatcher.PhoneMessageDispatchResult;
 import com.ccapp.notifications.dispatcher.PhoneMessageGateway;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -37,7 +40,7 @@ import static org.mockito.Mockito.when;
         "spring.flyway.enabled=false",
         "spring.jpa.hibernate.ddl-auto=create-drop"
 })
-@Import(CircleInviteService.class)
+@Import({CircleInviteService.class, TestJacksonAndCachingConfig.class})
 class CircleInviteServiceIntegrationTest {
 
     @Autowired
@@ -55,11 +58,22 @@ class CircleInviteServiceIntegrationTest {
     private CircleService circleService;
     @MockBean
     private PhoneMessageGateway phoneMessageGateway;
+    @MockBean
+    private CountryConfigResolver countryConfigResolver;
 
     @BeforeEach
     void setUp() {
         when(phoneMessageGateway.sendWhatsApp(any(), any()))
                 .thenReturn(new PhoneMessageDispatchResult(true, "whatsapp:accepted"));
+        when(countryConfigResolver.resolveActiveConfig(any(), any())).thenAnswer(invocation -> new CountryConfigResolver.ResolvedConfig(
+                invocation.getArgument(0),
+                invocation.getArgument(1),
+                null,
+                "{}",
+                CountryConfigResolver.ConfigSource.EMPTY
+        ));
+        when(countryConfigResolver.payloadAsObjectNode(any(CountryConfigResolver.ResolvedConfig.class)))
+                .thenReturn(JsonNodeFactory.instance.objectNode());
     }
 
     @Test

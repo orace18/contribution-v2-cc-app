@@ -6,6 +6,9 @@ import com.ccapp.circles.dto.*;
 import com.ccapp.circles.repository.*;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.common.exception.NotFoundException;
+import com.ccapp.country.config.domain.enums.CountryConfigType;
+import com.ccapp.country.config.service.CountryConfigResolver;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,8 +25,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class CircleFinanceService {
 
-    private static final long MIN_FINANCIAL_MEMBERS = 3;
-    private static final long MAX_FINANCIAL_MEMBERS = 5;
+    private static final long DEFAULT_MIN_FINANCIAL_MEMBERS = 3;
+    private static final long DEFAULT_MAX_FINANCIAL_MEMBERS = 5;
     private static final Set<CircleLoanStatus> ACTIVE_LOAN_STATUSES = EnumSet.of(
             CircleLoanStatus.REQUESTED,
             CircleLoanStatus.APPROVED,
@@ -36,6 +39,7 @@ public class CircleFinanceService {
     private final CircleContributionRepository circleContributionRepository;
     private final CircleLoanRepository circleLoanRepository;
     private final CircleRepaymentRepository circleRepaymentRepository;
+    private final CountryConfigResolver countryConfigResolver;
 
     @Transactional
     public CircleCycleResponse createCycle(UUID actorAccountHolderId, UUID circleId, CreateCircleCycleRequest request) {
@@ -47,7 +51,7 @@ public class CircleFinanceService {
         if (request.endDate().isBefore(request.startDate())) {
             throw new BusinessException("INVALID_CYCLE_DATES");
         }
-        ensureFinancialMembersCountValid(circleId);
+        ensureFinancialMembersCountValid(circle);
         if (circleCycleRepository.existsByCircle_IdAndStatus(circleId, CircleCycleStatus.ACTIVE)) {
             throw new BusinessException("ACTIVE_CYCLE_ALREADY_EXISTS");
         }
@@ -96,7 +100,7 @@ public class CircleFinanceService {
         if (!circle.getCoachId().equals(actorAccountHolderId)) {
             throw new BusinessException("COACH_VALIDATION_REQUIRED");
         }
-        ensureFinancialMembersCountValid(circleId);
+        ensureFinancialMembersCountValid(circle);
 
         CircleCycle activeCycle = circleCycleRepository.findByCircle_IdAndStatus(circleId, CircleCycleStatus.ACTIVE)
                 .orElseThrow(() -> new BusinessException("ACTIVE_CYCLE_NOT_FOUND"));
@@ -170,11 +174,37 @@ public class CircleFinanceService {
         return toRepaymentResponse(repayment, loan.getStatus());
     }
 
-    private void ensureFinancialMembersCountValid(UUID circleId) {
-        long financialMembersCount = circleMemberRepository.countByCircle_IdAndFinancialMemberTrue(circleId);
-        if (financialMembersCount < MIN_FINANCIAL_MEMBERS || financialMembersCount > MAX_FINANCIAL_MEMBERS) {
+    private void ensureFinancialMembersCountValid(Circle circle) {
+        CircleMemberBounds bounds = resolveCircleMemberBounds(circle.getCountryCode());
+        long financialMembersCount = circleMemberRepository.countByCircle_IdAndFinancialMemberTrue(circle.getId());
+        if (financialMembersCount < bounds.minFinancialMembers() || financialMembersCount > bounds.maxFinancialMembers()) {
             throw new BusinessException("CIRCLE_MEMBERS_COUNT_INVALID");
         }
+    }
+
+    private CircleMemberBounds resolveCircleMemberBounds(String countryCode) {
+        CountryConfigResolver.ResolvedConfig config = countryConfigResolver.resolveActiveConfig(
+                countryCode,
+                CountryConfigType.CIRCLE_CONFIG
+        );
+        ObjectNode payload = countryConfigResolver.payloadAsObjectNode(config);
+        long min = longField(payload, "minMembers", DEFAULT_MIN_FINANCIAL_MEMBERS);
+        long max = longField(payload, "maxMembers", DEFAULT_MAX_FINANCIAL_MEMBERS);
+        if (max < min) {
+            throw new BusinessException("circle_config.maxMembers must be >= minMembers");
+        }
+        return new CircleMemberBounds(min, max);
+    }
+
+    private long longField(ObjectNode payload, String fieldName, long defaultValue) {
+        if (payload == null || !payload.has(fieldName) || payload.get(fieldName).isNull()) {
+            return defaultValue;
+        }
+        if (!payload.get(fieldName).canConvertToLong()) {
+            throw new BusinessException(fieldName + " must be an integer");
+        }
+        long value = payload.get(fieldName).longValue();
+        return value > 0 ? value : defaultValue;
     }
 
     private CircleCycleResponse toCycleResponse(CircleCycle cycle) {
@@ -212,5 +242,8 @@ public class CircleFinanceService {
                 repayment.getStatus(),
                 loanStatus
         );
+    }
+
+    private record CircleMemberBounds(long minFinancialMembers, long maxFinancialMembers) {
     }
 }

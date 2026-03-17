@@ -2,6 +2,8 @@ package com.ccapp.circles.service;
 
 import com.ccapp.circles.domain.entity.Circle;
 import com.ccapp.circles.domain.entity.CircleMember;
+import com.ccapp.country.config.domain.enums.CountryConfigType;
+import com.ccapp.country.config.service.CountryConfigResolver;
 import com.ccapp.country.dto.CountryContext;
 import com.ccapp.country.service.CountryContextService;
 import com.ccapp.circlesocial.domain.enums.ActivityType;
@@ -31,6 +33,9 @@ import com.ccapp.identity.repository.UserRepository;
 import com.ccapp.identity.verification.service.PhoneVerificationService;
 import com.ccapp.mlm.domain.entity.MlmRelationship;
 import com.ccapp.mlm.repository.MlmRelationshipRepository;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -51,8 +56,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class CircleService {
 
-    private static final long MAX_FINANCIAL_MEMBERS_PER_CIRCLE = 5;
-    private static final long MAX_ASSISTED_MEMBERS_PER_CIRCLE = 2;
+    private static final long DEFAULT_MAX_FINANCIAL_MEMBERS_PER_CIRCLE = 5;
+    private static final long DEFAULT_MAX_ASSISTED_MEMBERS_PER_CIRCLE = 2;
     private static final String CROSS_COUNTRY_CIRCLE_NOT_ALLOWED = "CROSS_COUNTRY_CIRCLE_NOT_ALLOWED";
     private static final String TOO_MANY_ASSISTED_MEMBERS = "TOO_MANY_ASSISTED_MEMBERS";
     private static final String MEMBER_NOT_ACTIVE = "MEMBER_NOT_ACTIVE";
@@ -69,6 +74,8 @@ public class CircleService {
     private final DelegationService delegationService;
     private final DelegatedActionService delegatedActionService;
     private final PhoneVerificationService phoneVerificationService;
+    private final CountryConfigResolver countryConfigResolver;
+    private final ObjectMapper objectMapper;
 
     @Value("${circles.assisted-member.require-phone-verification:false}")
     private boolean requirePhoneVerification;
@@ -78,6 +85,7 @@ public class CircleService {
         ensureCreatorCanCreateCircle(accountHolderId);
         MlmHierarchy hierarchy = resolveMlmHierarchy(accountHolderId);
         String accountHolderCountry = resolveAccountHolderCountry(accountHolderId);
+        CircleConfigLimits limits = resolveCircleConfigLimits(accountHolderCountry);
         if (circleRepository.existsActiveCircleForUser(accountHolderId)) {
             throw new ConflictException("User already belongs to an active circle");
         }
@@ -86,6 +94,8 @@ public class CircleService {
                 .name(request.name().trim())
                 .coachId(hierarchy.coachAccountHolderId())
                 .countryCode(accountHolderCountry)
+                .configSnapshot(buildCircleConfigSnapshot(accountHolderCountry, limits.resolvedConfig()))
+                .configVersion(limits.resolvedConfig().version())
                 .status(CircleStatus.ACTIVE)
                 .build());
 
@@ -141,8 +151,9 @@ public class CircleService {
             throw new ConflictException("User already belongs to an active circle");
         }
 
+        CircleConfigLimits limits = resolveCircleConfigLimits(circle.getCountryCode());
         long membersCount = circleMemberRepository.countByCircle_IdAndFinancialMemberTrue(circleId);
-        if (membersCount >= MAX_FINANCIAL_MEMBERS_PER_CIRCLE) {
+        if (membersCount >= limits.maxFinancialMembers()) {
             throw new BusinessException("Circle reached maximum members");
         }
 
@@ -242,12 +253,13 @@ public class CircleService {
             throw new BusinessException(CROSS_COUNTRY_CIRCLE_NOT_ALLOWED);
         }
 
+        CircleConfigLimits limits = resolveCircleConfigLimits(circle.getCountryCode());
         long assistedCount = circleMemberRepository.countAssistedMembersByCircleId(circleId);
-        if (assistedCount >= MAX_ASSISTED_MEMBERS_PER_CIRCLE) {
+        if (assistedCount >= limits.maxAssistedMembers()) {
             throw new BusinessException(TOO_MANY_ASSISTED_MEMBERS);
         }
         long membersCount = circleMemberRepository.countByCircle_IdAndFinancialMemberTrue(circleId);
-        if (membersCount >= MAX_FINANCIAL_MEMBERS_PER_CIRCLE) {
+        if (membersCount >= limits.maxFinancialMembers()) {
             throw new BusinessException("Circle reached maximum members");
         }
 
@@ -442,6 +454,45 @@ public class CircleService {
         String firstName = parts[0];
         String lastName = normalized.substring(firstName.length()).trim();
         return new NameParts(firstName, lastName);
+    }
+
+    private CircleConfigLimits resolveCircleConfigLimits(String countryCode) {
+        CountryConfigResolver.ResolvedConfig resolved = countryConfigResolver.resolveActiveConfig(
+                countryCode,
+                CountryConfigType.CIRCLE_CONFIG
+        );
+        ObjectNode payload = countryConfigResolver.payloadAsObjectNode(resolved);
+        long maxFinancialMembers = longField(payload, "maxMembers", DEFAULT_MAX_FINANCIAL_MEMBERS_PER_CIRCLE);
+        long maxAssistedMembers = longField(payload, "maxAssistedMembers", DEFAULT_MAX_ASSISTED_MEMBERS_PER_CIRCLE);
+        return new CircleConfigLimits(maxFinancialMembers, maxAssistedMembers, resolved);
+    }
+
+    private long longField(ObjectNode payload, String fieldName, long defaultValue) {
+        if (payload == null || !payload.has(fieldName) || payload.get(fieldName).isNull()) {
+            return defaultValue;
+        }
+        if (!payload.get(fieldName).canConvertToLong()) {
+            throw new BusinessException(fieldName + " must be an integer");
+        }
+        long value = payload.get(fieldName).longValue();
+        return value > 0 ? value : defaultValue;
+    }
+
+    private String buildCircleConfigSnapshot(String countryCode, CountryConfigResolver.ResolvedConfig circleConfig) {
+        ObjectNode root = objectMapper.createObjectNode();
+        root.put("countryCode", countryCode);
+        root.put("circleConfigVersion", circleConfig.version());
+        root.set("circle", countryConfigResolver.payloadAsObjectNode(circleConfig));
+        try {
+            return objectMapper.writeValueAsString(root);
+        } catch (JsonProcessingException ex) {
+            throw new BusinessException("Unable to serialize circle configuration snapshot");
+        }
+    }
+
+    private record CircleConfigLimits(long maxFinancialMembers,
+                                      long maxAssistedMembers,
+                                      CountryConfigResolver.ResolvedConfig resolvedConfig) {
     }
 
     private record NameParts(String firstName, String lastName) {

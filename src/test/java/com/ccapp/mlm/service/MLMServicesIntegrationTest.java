@@ -1,6 +1,9 @@
 package com.ccapp.mlm.service;
 
 import com.ccapp.common.events.DomainEventPublisher;
+import com.ccapp.country.config.service.CountryConfigResolver;
+import com.ccapp.country.dto.CountryContext;
+import com.ccapp.country.service.CountryContextService;
 import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
 import com.ccapp.identity.account_holder.repository.AccountHolderRepository;
 import com.ccapp.identity.account_holder.service.AccountHolderService;
@@ -8,6 +11,7 @@ import com.ccapp.identity.account_holder.domain.enums.AccountType;
 import com.ccapp.identity.delegation.service.AccessControlService;
 import com.ccapp.mlm.dto.MlmPlacementResponse;
 import com.ccapp.mlm.repository.MlmRelationshipRepository;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -50,6 +54,10 @@ class MLMServicesIntegrationTest {
     private AccessControlService accessControlService;
     @MockBean
     private DomainEventPublisher domainEventPublisher;
+    @MockBean
+    private CountryContextService countryContextService;
+    @MockBean
+    private CountryConfigResolver countryConfigResolver;
 
     @BeforeEach
     void setUp() {
@@ -58,6 +66,16 @@ class MLMServicesIntegrationTest {
             UUID id = invocation.getArgument(0);
             return accountHolderRepository.findById(id).orElseThrow();
         });
+        when(countryContextService.resolve(any())).thenReturn(new CountryContext("BJ", "BJ", "XOF"));
+        when(countryConfigResolver.resolveActiveConfig(any(), any())).thenAnswer(invocation -> new CountryConfigResolver.ResolvedConfig(
+                invocation.getArgument(0),
+                invocation.getArgument(1),
+                null,
+                "{}",
+                CountryConfigResolver.ConfigSource.EMPTY
+        ));
+        when(countryConfigResolver.payloadAsObjectNode(any(CountryConfigResolver.ResolvedConfig.class)))
+                .thenReturn(JsonNodeFactory.instance.objectNode());
     }
 
     @Test

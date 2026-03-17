@@ -3,6 +3,10 @@ package com.ccapp.mlm.service;
 import com.ccapp.common.events.DomainEventPublisher;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.common.exception.ConflictException;
+import com.ccapp.country.config.domain.enums.CountryConfigType;
+import com.ccapp.country.config.service.CountryConfigResolver;
+import com.ccapp.country.dto.CountryContext;
+import com.ccapp.country.service.CountryContextService;
 import com.ccapp.identity.account_holder.service.AccountHolderService;
 import com.ccapp.identity.delegation.domain.enums.PermissionLevel;
 import com.ccapp.identity.delegation.service.AccessControlService;
@@ -26,7 +30,7 @@ import java.util.UUID;
 @Slf4j
 public class MLMPlacementService {
 
-    private static final int MAX_DIRECT_CHILDREN = 5;
+    private static final int DEFAULT_MAX_DIRECT_CHILDREN = 5;
 
     private final MlmRelationshipRepository mlmRelationshipRepository;
     private final AccountHolderService accountHolderService;
@@ -34,6 +38,8 @@ public class MLMPlacementService {
     private final AutoPlacementService autoPlacementService;
     private final MlmPlacementAuditService mlmPlacementAuditService;
     private final DomainEventPublisher domainEventPublisher;
+    private final CountryContextService countryContextService;
+    private final CountryConfigResolver countryConfigResolver;
 
     @Transactional
     public MlmPlacementResponse placeAccountHolder(UUID actorUserId,
@@ -53,7 +59,8 @@ public class MLMPlacementService {
             throw new ConflictException("Account holder already has a sponsor");
         }
 
-        UUID placementParentId = autoPlacementService.resolvePlacementParent(sponsorAccountHolderId, MAX_DIRECT_CHILDREN);
+        int maxDirectChildren = resolveMaxDirectChildren(accountHolderId);
+        UUID placementParentId = autoPlacementService.resolvePlacementParent(sponsorAccountHolderId, maxDirectChildren);
 
         List<MlmRelationship> ancestors = mlmRelationshipRepository.findAncestors(placementParentId);
         if (ancestors.isEmpty()) {
@@ -119,5 +126,22 @@ public class MLMPlacementService {
                 .level(0)
                 .createdAt(OffsetDateTime.now())
                 .build());
+    }
+
+    private int resolveMaxDirectChildren(UUID accountHolderId) {
+        CountryContext countryContext = countryContextService.resolve(accountHolderId);
+        CountryConfigResolver.ResolvedConfig mlmConfig = countryConfigResolver.resolveActiveConfig(
+                countryContext.serviceCountryCode(),
+                CountryConfigType.MLM_CONFIG
+        );
+        var payload = countryConfigResolver.payloadAsObjectNode(mlmConfig);
+        if (!payload.has("maxDirectChildren") || payload.get("maxDirectChildren").isNull()) {
+            return DEFAULT_MAX_DIRECT_CHILDREN;
+        }
+        if (!payload.get("maxDirectChildren").canConvertToInt()) {
+            throw new BusinessException("mlm_config.maxDirectChildren must be an integer");
+        }
+        int value = payload.get("maxDirectChildren").asInt();
+        return value > 0 ? value : DEFAULT_MAX_DIRECT_CHILDREN;
     }
 }

@@ -5,6 +5,8 @@ import com.ccapp.common.api.PageResponse;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.common.exception.NotFoundException;
 import com.ccapp.common.exception.UnauthorizedException;
+import com.ccapp.country.config.domain.enums.CountryConfigType;
+import com.ccapp.country.config.service.CountryConfigResolver;
 import com.ccapp.country.dto.CountryContext;
 import com.ccapp.country.service.CountryContextService;
 import com.ccapp.financing.domain.entity.FinancingOffer;
@@ -27,6 +29,9 @@ import com.ccapp.ledger.service.AccountingPostingService;
 import com.ccapp.payments.operation.domain.entity.Operation;
 import com.ccapp.payments.operation.domain.enums.OperationType;
 import com.ccapp.payments.operation.service.OperationService;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -62,6 +67,8 @@ public class FinancingApplicationService {
     private final PartnerReportingService partnerReportingService;
     private final OperationService operationService;
     private final AccountingPostingService accountingPostingService;
+    private final CountryConfigResolver countryConfigResolver;
+    private final ObjectMapper objectMapper;
 
     @Transactional
     public LoanApplicationResponse createApplication(UUID actorUserId,
@@ -75,6 +82,16 @@ public class FinancingApplicationService {
             throw new BusinessException("Offer is not active");
         }
         validateRequestedAmount(request.requestedAmount(), offer);
+        CountryContext countryContext = countryContextService.resolve(requesterAccountHolderId);
+        CountryConfigResolver.ResolvedConfig financingConfig = countryConfigResolver.resolveActiveConfig(
+                countryContext.serviceCountryCode(),
+                CountryConfigType.FINANCING_CONFIG
+        );
+        CountryConfigResolver.ResolvedConfig riskConfig = countryConfigResolver.resolveActiveConfig(
+                countryContext.serviceCountryCode(),
+                CountryConfigType.RISK_CONFIG
+        );
+        validateCountryLevelFinancingConstraints(request.requestedAmount(), financingConfig, riskConfig);
 
         String currency = resolveCreationCurrency(offer, requesterAccountHolderId);
         if (request.circleId() != null && !circleMemberRepository.existsByCircle_IdAndAccountHolderId(request.circleId(), requesterAccountHolderId)) {
@@ -87,6 +104,8 @@ public class FinancingApplicationService {
                 .circleId(request.circleId())
                 .requestedAmount(request.requestedAmount())
                 .status(LoanApplicationStatus.SUBMITTED)
+                .configSnapshot(buildApplicationConfigSnapshot(countryContext.serviceCountryCode(), financingConfig, riskConfig))
+                .configVersion(financingConfig.version())
                 .build());
 
         partnerLedgerService.recordEntry(
@@ -279,9 +298,59 @@ public class FinancingApplicationService {
         }
     }
 
+    private void validateCountryLevelFinancingConstraints(BigDecimal requestedAmount,
+                                                          CountryConfigResolver.ResolvedConfig financingConfig,
+                                                          CountryConfigResolver.ResolvedConfig riskConfig) {
+        ObjectNode financingPayload = countryConfigResolver.payloadAsObjectNode(financingConfig);
+        ObjectNode riskPayload = countryConfigResolver.payloadAsObjectNode(riskConfig);
+
+        BigDecimal minAmount = decimalField(financingPayload, "minAmount");
+        BigDecimal maxAmount = decimalField(financingPayload, "maxAmount");
+        BigDecimal maxExposure = decimalField(riskPayload, "maxExposure");
+
+        if (minAmount != null && requestedAmount.compareTo(minAmount) < 0) {
+            throw new BusinessException("Requested amount is below country financing minimum");
+        }
+        if (maxAmount != null && requestedAmount.compareTo(maxAmount) > 0) {
+            throw new BusinessException("Requested amount exceeds country financing maximum");
+        }
+        if (maxExposure != null && requestedAmount.compareTo(maxExposure) > 0) {
+            throw new BusinessException("Requested amount exceeds country risk exposure");
+        }
+    }
+
     private FinancingOffer loadOffer(UUID offerId) {
         return financingOfferRepository.findById(offerId)
                 .orElseThrow(() -> new NotFoundException("Financing offer not found"));
+    }
+
+    private String buildApplicationConfigSnapshot(String countryCode,
+                                                  CountryConfigResolver.ResolvedConfig financingConfig,
+                                                  CountryConfigResolver.ResolvedConfig riskConfig) {
+        ObjectNode root = objectMapper.createObjectNode();
+        root.put("countryCode", countryCode);
+        root.put("financingConfigVersion", financingConfig.version());
+        root.put("riskConfigVersion", riskConfig.version());
+        root.set("financing", countryConfigResolver.payloadAsObjectNode(financingConfig));
+        root.set("risk", countryConfigResolver.payloadAsObjectNode(riskConfig));
+        try {
+            return objectMapper.writeValueAsString(root);
+        } catch (JsonProcessingException ex) {
+            throw new BusinessException("Unable to serialize loan application configuration snapshot");
+        }
+    }
+
+    private BigDecimal decimalField(ObjectNode payload, String fieldName) {
+        if (payload == null) {
+            return null;
+        }
+        if (!payload.has(fieldName) || payload.get(fieldName).isNull()) {
+            return null;
+        }
+        if (!payload.get(fieldName).isNumber()) {
+            throw new BusinessException(fieldName + " must be numeric");
+        }
+        return payload.get(fieldName).decimalValue();
     }
 
     private String resolveCreationCurrency(FinancingOffer offer, UUID accountHolderId) {

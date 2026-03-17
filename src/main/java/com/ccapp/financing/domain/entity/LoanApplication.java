@@ -60,6 +60,12 @@ public class LoanApplication {
     @Column(name = "partner_reference", length = 128)
     private String partnerReference;
 
+    @Column(name = "config_snapshot", columnDefinition = "TEXT")
+    private String configSnapshot;
+
+    @Column(name = "config_version")
+    private Integer configVersion;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
 

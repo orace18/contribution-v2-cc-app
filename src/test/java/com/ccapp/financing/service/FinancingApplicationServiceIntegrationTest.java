@@ -1,9 +1,12 @@
 package com.ccapp.financing.service;
 
 import com.ccapp.common.api.PageResponse;
+import com.ccapp.config.TestJacksonAndCachingConfig;
+import com.ccapp.country.config.service.CountryConfigResolver;
 import com.ccapp.country.dto.CountryContext;
 import com.ccapp.financing.domain.entity.FinancialPartner;
 import com.ccapp.financing.domain.entity.FinancingOffer;
+import com.ccapp.financing.domain.entity.LoanApplication;
 import com.ccapp.financing.domain.entity.PartnerLedgerAccount;
 import com.ccapp.financing.domain.enums.FinancialPartnerStatus;
 import com.ccapp.financing.domain.enums.FinancialPartnerType;
@@ -14,6 +17,7 @@ import com.ccapp.financing.dto.CreateLoanApplicationRequest;
 import com.ccapp.financing.dto.LoanApplicationResponse;
 import com.ccapp.financing.repository.FinancialPartnerRepository;
 import com.ccapp.financing.repository.FinancingOfferRepository;
+import com.ccapp.financing.repository.LoanApplicationRepository;
 import com.ccapp.financing.repository.PartnerLedgerAccountRepository;
 import com.ccapp.financing.repository.PartnerLedgerEntryRepository;
 import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
@@ -21,6 +25,7 @@ import com.ccapp.identity.account_holder.service.AccountHolderService;
 import com.ccapp.identity.delegation.service.AccessControlService;
 import com.ccapp.ledger.service.AccountingPostingService;
 import com.ccapp.payments.operation.service.OperationService;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,7 +47,7 @@ import static org.mockito.Mockito.when;
         "spring.flyway.enabled=false",
         "spring.jpa.hibernate.ddl-auto=create-drop"
 })
-@Import({FinancingApplicationService.class, PartnerLedgerService.class, PartnerReportingService.class})
+@Import({FinancingApplicationService.class, PartnerLedgerService.class, PartnerReportingService.class, TestJacksonAndCachingConfig.class})
 class FinancingApplicationServiceIntegrationTest {
 
     @Autowired
@@ -51,6 +56,8 @@ class FinancingApplicationServiceIntegrationTest {
     private FinancialPartnerRepository financialPartnerRepository;
     @Autowired
     private FinancingOfferRepository financingOfferRepository;
+    @Autowired
+    private LoanApplicationRepository loanApplicationRepository;
     @Autowired
     private PartnerLedgerEntryRepository partnerLedgerEntryRepository;
     @Autowired
@@ -68,6 +75,8 @@ class FinancingApplicationServiceIntegrationTest {
     private OperationService operationService;
     @MockBean
     private AccountingPostingService accountingPostingService;
+    @MockBean
+    private CountryConfigResolver countryConfigResolver;
 
     private UUID accountHolderId;
     private FinancingOffer offer;
@@ -84,6 +93,15 @@ class FinancingApplicationServiceIntegrationTest {
         when(accessControlService.canActOnAccountHolder(any(), any(), any())).thenReturn(true);
         when(countryContextService.resolve(any())).thenReturn(new CountryContext("BJ", "BJ", "XOF"));
         when(partnerBackofficeAccessService.canAccessPartner(any(), any())).thenReturn(false);
+        when(countryConfigResolver.resolveActiveConfig(any(), any())).thenAnswer(invocation -> new CountryConfigResolver.ResolvedConfig(
+                invocation.getArgument(0),
+                invocation.getArgument(1),
+                1,
+                "{}",
+                CountryConfigResolver.ConfigSource.EMPTY
+        ));
+        when(countryConfigResolver.payloadAsObjectNode(any(CountryConfigResolver.ResolvedConfig.class)))
+                .thenReturn(JsonNodeFactory.instance.objectNode());
 
         FinancialPartner partner = financialPartnerRepository.save(FinancialPartner.builder()
                 .name("Partner One")
@@ -145,5 +163,9 @@ class FinancingApplicationServiceIntegrationTest {
                 created.id()
         );
         assertEquals(created.id(), loaded.id());
+
+        LoanApplication persisted = loanApplicationRepository.findById(created.id()).orElseThrow();
+        assertNotNull(persisted.getConfigSnapshot());
+        assertEquals(1, persisted.getConfigVersion());
     }
 }

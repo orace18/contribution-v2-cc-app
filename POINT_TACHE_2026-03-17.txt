@@ -1,0 +1,61 @@
+POINT D'AVANCEMENT - CC APP
+Date: 17 mars 2026
+
+1) Objectif traite
+- Refactor backend + backoffice pour rendre le Country Configuration Engine exploitable en operations.
+- Suppression de l'UX JSON brute cote backoffice.
+- Ajout d'un domaine platform_config separe de country_config.
+
+2) Realisations backend
+- Country Config:
+  - POST /admin/country-config/{countryCode}/initialize
+  - GET  /admin/country-config/{countryCode}/full
+  - GET  /admin/country-config/{countryCode}/{configType}/versions
+  - POST /admin/country-config/{countryCode}/{configType}/activate
+- Versioning ameliore:
+  - historique complet des versions
+  - activation d'une version (creation d'une nouvelle version active)
+  - support de date d'effet future
+- Validation metier renforcee:
+  - MLM, Membership, Accounting, Financing, Payment, Circle, Risk, Feature Flags
+- Audit:
+  - logs admin ajoutes pour snapshot/full/initialize/versions/activate/upsert
+- Nouveau domaine platform_config:
+  - GET /admin/platform-config
+  - PUT /admin/platform-config/{configType}
+  - Types: global_mlm_fallback, global_feature_flags, system_limits
+- Migration:
+  - V39__platform_configuration_engine.sql
+
+3) Realisations backoffice
+- Country Setup:
+  - pays filtres sur configured = true
+  - action "Create new country configuration" (initialize)
+  - formulaires structures par type (pas de JSON editor expose)
+  - historique des versions
+  - comparaison de versions
+  - activation de version
+- Platform Setup:
+  - Global config
+  - Feature flags globaux
+  - System limits
+- Contrats front alignes avec backend (country + platform config).
+
+4) Validation technique
+- Backend tests executes:
+  - CountryConfigurationEngineServiceIntegrationTest
+  - PlatformConfigurationServiceIntegrationTest
+  - OperationServiceTest
+  - Resultat: BUILD SUCCESS
+- Backoffice:
+  - npm run build
+  - Resultat: SUCCESS
+
+5) Etat global de la tache
+- Statut: IMPLEMENTATION PRINCIPALE TERMINEE
+- APIs et UX operationnelles en place.
+- Refactor fait de maniere incrementale sans casser les routes existantes deja exposees.
+
+6) Prochaine etape recommandee
+- Faire une passe QA fonctionnelle metier avec users operations (UAT),
+- puis decouper en commits propres (backend/backoffice) pour revue et merge.

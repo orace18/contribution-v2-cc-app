@@ -3,11 +3,13 @@ package com.ccapp.payments.psp.service;
 import com.ccapp.ledger.service.AccountingPostingService;
 import com.ccapp.payments.commission.service.MlmCommissionService;
 import com.ccapp.payments.operation.domain.entity.Operation;
+import com.ccapp.payments.operation.domain.enums.OperationType;
 import com.ccapp.payments.operation.service.OperationService;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.payments.psp.domain.entity.PspCallbackEvent;
 import com.ccapp.payments.psp.dto.JawupayCallbackRequest;
 import com.ccapp.payments.psp.repository.PspCallbackEventRepository;
+import com.ccapp.payments.subscription.service.MembershipService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -30,6 +32,7 @@ public class JawupayService {
     private final OperationService operationService;
     private final AccountingPostingService accountingPostingService;
     private final MlmCommissionService mlmCommissionService;
+    private final MembershipService membershipService;
     private final PspCallbackEventRepository callbackEventRepository;
     private final SimpleRateLimiter simpleRateLimiter;
 
@@ -63,6 +66,9 @@ public class JawupayService {
         if ("SUCCESS".equals(callbackStatus) || "CONFIRMED".equals(callbackStatus)) {
             Operation confirmedOperation = operationService.confirmByPspReference(
                     request.pspReference(), request.amount(), request.currency());
+            if (confirmedOperation.getType() == OperationType.SUBSCRIPTION) {
+                membershipService.activateForConfirmedOperation(confirmedOperation);
+            }
             accountingPostingService.postConfirmedOperation(confirmedOperation.getId());
             mlmCommissionService.calculateForOperation(confirmedOperation);
         }

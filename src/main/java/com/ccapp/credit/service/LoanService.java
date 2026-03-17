@@ -12,7 +12,7 @@ import com.ccapp.common.exception.BusinessException;
 import com.ccapp.common.exception.NotFoundException;
 import com.ccapp.country.dto.CountryContext;
 import com.ccapp.country.config.domain.enums.CountryConfigType;
-import com.ccapp.country.config.service.CountryConfigurationEngineService;
+import com.ccapp.country.config.service.CountryConfigResolver;
 import com.ccapp.country.service.CountryContextService;
 import com.ccapp.credit.domain.entity.Loan;
 import com.ccapp.credit.domain.entity.RepaymentSchedule;
@@ -31,6 +31,7 @@ import com.ccapp.ledger.service.AccountingPostingService;
 import com.ccapp.payments.operation.domain.entity.Operation;
 import com.ccapp.payments.operation.domain.enums.OperationType;
 import com.ccapp.payments.operation.service.OperationService;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -47,8 +48,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class LoanService {
 
-    private static final long MIN_FINANCIAL_MEMBERS_PER_CIRCLE = 3;
-    private static final long MAX_FINANCIAL_MEMBERS_PER_CIRCLE = 5;
+    private static final long DEFAULT_MIN_FINANCIAL_MEMBERS_PER_CIRCLE = 3;
+    private static final long DEFAULT_MAX_FINANCIAL_MEMBERS_PER_CIRCLE = 5;
 
     private final LoanRepository loanRepository;
     private final RepaymentScheduleRepository repaymentScheduleRepository;
@@ -58,7 +59,7 @@ public class LoanService {
     private final AccessControlService accessControlService;
     private final CreditScoringService creditScoringService;
     private final CountryContextService countryContextService;
-    private final CountryConfigurationEngineService countryConfigurationEngineService;
+    private final CountryConfigResolver countryConfigResolver;
     private final AdminPolicyRepository adminPolicyRepository;
     private final OperationService operationService;
     private final AccountingPostingService accountingPostingService;
@@ -86,9 +87,10 @@ public class LoanService {
         if (!circleMemberRepository.existsByCircle_IdAndAccountHolderIdAndFinancialMemberTrue(request.circleId(), accountHolderId)) {
             throw new BusinessException("Account holder is not a member of this circle");
         }
+        CircleMemberBounds bounds = resolveCircleMemberBounds(serviceCountryCode);
         long financialMembersCount = circleMemberRepository.countByCircle_IdAndFinancialMemberTrue(request.circleId());
-        if (financialMembersCount < MIN_FINANCIAL_MEMBERS_PER_CIRCLE || financialMembersCount > MAX_FINANCIAL_MEMBERS_PER_CIRCLE) {
-            throw new BusinessException("Circle must have between 3 and 5 financial members");
+        if (financialMembersCount < bounds.minFinancialMembers() || financialMembersCount > bounds.maxFinancialMembers()) {
+            throw new BusinessException("Circle members count is outside configured limits");
         }
         if (!countryContext.currency().equalsIgnoreCase(request.currency())) {
             throw new BusinessException("Loan currency must match account holder country currency");
@@ -157,15 +159,40 @@ public class LoanService {
     }
 
     private void ensureCreditPolicyConfigured(String countryCode) {
-        boolean hasVersionedRiskConfig = countryConfigurationEngineService.hasEffectiveConfiguration(
+        boolean hasVersionedRiskConfig = countryConfigResolver.resolveActiveConfig(
                 countryCode,
                 CountryConfigType.RISK_CONFIG
-        );
+        ).source() != CountryConfigResolver.ConfigSource.EMPTY;
         boolean hasLegacyPolicy = adminPolicyRepository.findFirstByPolicyTypeAndCountryCodeOrderByCreatedAtDesc(AdminPolicyType.CREDIT_POLICY, countryCode).isPresent()
                 || adminPolicyRepository.findFirstByPolicyTypeAndCountryCodeIsNullOrderByCreatedAtDesc(AdminPolicyType.CREDIT_POLICY).isPresent();
         if (!hasVersionedRiskConfig && !hasLegacyPolicy) {
             throw new BusinessException("Credit policy not configured for country");
         }
+    }
+
+    private CircleMemberBounds resolveCircleMemberBounds(String countryCode) {
+        CountryConfigResolver.ResolvedConfig config = countryConfigResolver.resolveActiveConfig(
+                countryCode,
+                CountryConfigType.CIRCLE_CONFIG
+        );
+        ObjectNode payload = countryConfigResolver.payloadAsObjectNode(config);
+        long min = longField(payload, "minMembers", DEFAULT_MIN_FINANCIAL_MEMBERS_PER_CIRCLE);
+        long max = longField(payload, "maxMembers", DEFAULT_MAX_FINANCIAL_MEMBERS_PER_CIRCLE);
+        if (max < min) {
+            throw new BusinessException("circle_config.maxMembers must be >= minMembers");
+        }
+        return new CircleMemberBounds(min, max);
+    }
+
+    private long longField(ObjectNode payload, String fieldName, long defaultValue) {
+        if (payload == null || !payload.has(fieldName) || payload.get(fieldName).isNull()) {
+            return defaultValue;
+        }
+        if (!payload.get(fieldName).canConvertToLong()) {
+            throw new BusinessException(fieldName + " must be an integer");
+        }
+        long value = payload.get(fieldName).asLong();
+        return value > 0 ? value : defaultValue;
     }
 
     private List<RepaymentSchedule> createRepaymentSchedule(Loan loan) {
@@ -242,5 +269,8 @@ public class LoanService {
                 loan.getCreatedAt(),
                 scheduleResponses
         );
+    }
+
+    private record CircleMemberBounds(long minFinancialMembers, long maxFinancialMembers) {
     }
 }

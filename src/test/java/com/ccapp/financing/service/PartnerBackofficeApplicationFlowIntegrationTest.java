@@ -1,5 +1,7 @@
 package com.ccapp.financing.service;
 
+import com.ccapp.config.TestJacksonAndCachingConfig;
+import com.ccapp.country.config.service.CountryConfigResolver;
 import com.ccapp.country.dto.CountryContext;
 import com.ccapp.financing.domain.entity.FinancialPartner;
 import com.ccapp.financing.domain.entity.FinancingOffer;
@@ -24,6 +26,7 @@ import com.ccapp.ledger.service.AccountingPostingService;
 import com.ccapp.payments.operation.domain.entity.Operation;
 import com.ccapp.payments.operation.domain.enums.OperationStatus;
 import com.ccapp.payments.operation.service.OperationService;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -47,7 +50,7 @@ import static org.mockito.Mockito.when;
         "spring.flyway.enabled=false",
         "spring.jpa.hibernate.ddl-auto=create-drop"
 })
-@Import({FinancingApplicationService.class, PartnerLedgerService.class, PartnerReportingService.class})
+@Import({FinancingApplicationService.class, PartnerLedgerService.class, PartnerReportingService.class, TestJacksonAndCachingConfig.class})
 class PartnerBackofficeApplicationFlowIntegrationTest {
 
     @Autowired
@@ -75,6 +78,8 @@ class PartnerBackofficeApplicationFlowIntegrationTest {
     private OperationService operationService;
     @MockBean
     private AccountingPostingService accountingPostingService;
+    @MockBean
+    private CountryConfigResolver countryConfigResolver;
 
     private FinancingOffer offer;
     private LoanApplication application;
@@ -91,6 +96,15 @@ class PartnerBackofficeApplicationFlowIntegrationTest {
         when(countryContextService.resolve(any())).thenReturn(new CountryContext("BJ", "BJ", "XOF"));
         doNothing().when(partnerBackofficeAccessService).assertHasAnyRole(any(), any(), any());
         when(partnerBackofficeAccessService.canAccessPartner(any(), any())).thenReturn(true);
+        when(countryConfigResolver.resolveActiveConfig(any(), any())).thenAnswer(invocation -> new CountryConfigResolver.ResolvedConfig(
+                invocation.getArgument(0),
+                invocation.getArgument(1),
+                null,
+                "{}",
+                CountryConfigResolver.ConfigSource.EMPTY
+        ));
+        when(countryConfigResolver.payloadAsObjectNode(any(CountryConfigResolver.ResolvedConfig.class)))
+                .thenReturn(JsonNodeFactory.instance.objectNode());
 
         when(operationService.createInitiatedOperation(any(), any(), any(), any(), any(), any(), any()))
                 .thenAnswer(invocation -> Operation.builder()

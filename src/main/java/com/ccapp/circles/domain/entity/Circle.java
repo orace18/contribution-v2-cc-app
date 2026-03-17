@@ -31,6 +31,12 @@ public class Circle extends AuditableEntity {
     @Column(name = "country_code", nullable = false, length = 3)
     private String countryCode;
 
+    @Column(name = "config_snapshot", columnDefinition = "TEXT")
+    private String configSnapshot;
+
+    @Column(name = "config_version")
+    private Integer configVersion;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 16)
     private CircleStatus status;

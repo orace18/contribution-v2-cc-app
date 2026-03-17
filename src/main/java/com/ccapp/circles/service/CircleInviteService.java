@@ -10,8 +10,11 @@ import com.ccapp.circles.repository.CircleMemberRepository;
 import com.ccapp.circles.repository.CircleRepository;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.common.exception.NotFoundException;
+import com.ccapp.country.config.domain.enums.CountryConfigType;
+import com.ccapp.country.config.service.CountryConfigResolver;
 import com.ccapp.notifications.dispatcher.PhoneMessageDispatchResult;
 import com.ccapp.notifications.dispatcher.PhoneMessageGateway;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -26,7 +29,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class CircleInviteService {
 
-    private static final int MAX_FINANCIAL_MEMBERS = 5;
+    private static final int DEFAULT_MAX_FINANCIAL_MEMBERS = 5;
     private static final SecureRandom TOKEN_RANDOM = new SecureRandom();
     private static final String CIRCLE_INVITE_EXPIRED = "CIRCLE_INVITE_EXPIRED";
     private static final String CIRCLE_INVITE_EXHAUSTED = "CIRCLE_INVITE_EXHAUSTED";
@@ -36,6 +39,7 @@ public class CircleInviteService {
     private final CircleInviteRepository circleInviteRepository;
     private final CircleService circleService;
     private final PhoneMessageGateway phoneMessageGateway;
+    private final CountryConfigResolver countryConfigResolver;
 
     @Value("${circles.invite.default-expiration-hours:72}")
     private int defaultExpirationHours;
@@ -156,7 +160,10 @@ public class CircleInviteService {
 
     private int remainingFinancialSlots(UUID circleId) {
         long count = circleMemberRepository.countByCircle_IdAndFinancialMemberTrue(circleId);
-        return Math.max(0, MAX_FINANCIAL_MEMBERS - (int) count);
+        Circle circle = circleRepository.findById(circleId)
+                .orElseThrow(() -> new NotFoundException("Circle not found"));
+        int maxFinancialMembers = resolveMaxFinancialMembers(circle.getCountryCode());
+        return Math.max(0, maxFinancialMembers - (int) count);
     }
 
     private void ensureInviteIsUsable(CircleInvite invite) {
@@ -209,5 +216,21 @@ public class CircleInviteService {
             throw new BusinessException("PHONE_NUMBER_INVALID");
         }
         return normalized;
+    }
+
+    private int resolveMaxFinancialMembers(String countryCode) {
+        CountryConfigResolver.ResolvedConfig circleConfig = countryConfigResolver.resolveActiveConfig(
+                countryCode,
+                CountryConfigType.CIRCLE_CONFIG
+        );
+        ObjectNode payload = countryConfigResolver.payloadAsObjectNode(circleConfig);
+        if (!payload.has("maxMembers") || payload.get("maxMembers").isNull()) {
+            return DEFAULT_MAX_FINANCIAL_MEMBERS;
+        }
+        if (!payload.get("maxMembers").canConvertToInt()) {
+            throw new BusinessException("circle_config.maxMembers must be an integer");
+        }
+        int value = payload.get("maxMembers").intValue();
+        return value > 0 ? value : DEFAULT_MAX_FINANCIAL_MEMBERS;
     }
 }

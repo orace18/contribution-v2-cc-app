@@ -7,8 +7,11 @@ import com.ccapp.circles.dto.CircleParticipantsResponse;
 import com.ccapp.circles.dto.CircleResponse;
 import com.ccapp.circles.dto.CreateCircleRequest;
 import com.ccapp.circles.repository.CircleMemberRepository;
+import com.ccapp.circles.repository.CircleRepository;
 import com.ccapp.common.events.DomainEventPublisher;
 import com.ccapp.common.exception.BusinessException;
+import com.ccapp.config.TestJacksonAndCachingConfig;
+import com.ccapp.country.config.service.CountryConfigResolver;
 import com.ccapp.country.dto.CountryContext;
 import com.ccapp.country.service.CountryContextService;
 import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
@@ -26,6 +29,7 @@ import com.ccapp.identity.repository.UserRepository;
 import com.ccapp.identity.verification.service.PhoneVerificationService;
 import com.ccapp.mlm.domain.entity.MlmRelationship;
 import com.ccapp.mlm.repository.MlmRelationshipRepository;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -49,13 +53,15 @@ import static org.mockito.Mockito.when;
         "spring.flyway.enabled=false",
         "spring.jpa.hibernate.ddl-auto=create-drop"
 })
-@Import(CircleService.class)
+@Import({CircleService.class, TestJacksonAndCachingConfig.class})
 class CircleServiceIntegrationTest {
 
     @Autowired
     private CircleService circleService;
     @Autowired
     private CircleMemberRepository circleMemberRepository;
+    @Autowired
+    private CircleRepository circleRepository;
     @Autowired
     private AccountHolderRepository accountHolderRepository;
     @Autowired
@@ -75,10 +81,21 @@ class CircleServiceIntegrationTest {
     private DelegatedActionService delegatedActionService;
     @MockBean
     private PhoneVerificationService phoneVerificationService;
+    @MockBean
+    private CountryConfigResolver countryConfigResolver;
 
     @BeforeEach
     void setUp() {
         when(countryContextService.resolve(any())).thenAnswer(invocation -> new CountryContext("BJ", "BJ", "XOF"));
+        when(countryConfigResolver.resolveActiveConfig(any(), any())).thenAnswer(invocation -> new CountryConfigResolver.ResolvedConfig(
+                invocation.getArgument(0),
+                invocation.getArgument(1),
+                1,
+                "{}",
+                CountryConfigResolver.ConfigSource.EMPTY
+        ));
+        when(countryConfigResolver.payloadAsObjectNode(any(CountryConfigResolver.ResolvedConfig.class)))
+                .thenReturn(JsonNodeFactory.instance.objectNode());
     }
 
     @Test
@@ -125,6 +142,10 @@ class CircleServiceIntegrationTest {
         assertNotNull(grouped.coach());
         assertEquals(sponsorId, grouped.coach().accountHolderId());
         assertEquals(2, grouped.advisors().size());
+
+        var persistedCircle = circleRepository.findById(response.id()).orElseThrow();
+        assertNotNull(persistedCircle.getConfigSnapshot());
+        assertEquals(1, persistedCircle.getConfigVersion());
     }
 
     @Test

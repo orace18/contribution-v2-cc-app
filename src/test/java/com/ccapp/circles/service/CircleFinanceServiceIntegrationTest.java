@@ -8,12 +8,17 @@ import com.ccapp.circles.domain.enums.CircleStatus;
 import com.ccapp.circles.dto.*;
 import com.ccapp.circles.repository.*;
 import com.ccapp.common.exception.BusinessException;
+import com.ccapp.config.TestJacksonAndCachingConfig;
+import com.ccapp.country.config.service.CountryConfigResolver;
 import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
 import com.ccapp.identity.account_holder.domain.enums.AccountType;
 import com.ccapp.identity.account_holder.repository.AccountHolderRepository;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 
 import java.math.BigDecimal;
@@ -22,13 +27,15 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
 
 @DataJpaTest(properties = {
         "spring.profiles.active=test",
         "spring.flyway.enabled=false",
         "spring.jpa.hibernate.ddl-auto=create-drop"
 })
-@Import(CircleFinanceService.class)
+@Import({CircleFinanceService.class, TestJacksonAndCachingConfig.class})
 class CircleFinanceServiceIntegrationTest {
 
     @Autowired
@@ -45,6 +52,21 @@ class CircleFinanceServiceIntegrationTest {
     private CircleLoanRepository circleLoanRepository;
     @Autowired
     private AccountHolderRepository accountHolderRepository;
+    @MockBean
+    private CountryConfigResolver countryConfigResolver;
+
+    @BeforeEach
+    void setUp() {
+        when(countryConfigResolver.resolveActiveConfig(any(), any())).thenAnswer(invocation -> new CountryConfigResolver.ResolvedConfig(
+                invocation.getArgument(0),
+                invocation.getArgument(1),
+                null,
+                "{}",
+                CountryConfigResolver.ConfigSource.EMPTY
+        ));
+        when(countryConfigResolver.payloadAsObjectNode(any(CountryConfigResolver.ResolvedConfig.class)))
+                .thenReturn(JsonNodeFactory.instance.objectNode());
+    }
 
     @Test
     void createCycle_shouldCreateActiveCycleAndContributions() {
