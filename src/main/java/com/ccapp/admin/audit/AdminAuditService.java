@@ -38,6 +38,7 @@ public class AdminAuditService {
                 .payload(toJson(payload))
                 .timestamp(OffsetDateTime.now())
                 .ipAddress(resolveIpAddress())
+                .deviceInfo(resolveDeviceInfo())
                 .build());
     }
 
@@ -69,5 +70,18 @@ public class AdminAuditService {
             return realIp.trim();
         }
         return request.getRemoteAddr();
+    }
+
+    private String resolveDeviceInfo() {
+        ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+        if (attributes == null) {
+            return null;
+        }
+        HttpServletRequest request = attributes.getRequest();
+        String userAgent = request.getHeader("User-Agent");
+        if (userAgent == null || userAgent.isBlank()) {
+            return null;
+        }
+        return userAgent.length() > 255 ? userAgent.substring(0, 255) : userAgent;
     }
 }

@@ -185,13 +185,16 @@ public class CircleFinanceService {
     private CircleMemberBounds resolveCircleMemberBounds(String countryCode) {
         CountryConfigResolver.ResolvedConfig config = countryConfigResolver.resolveActiveConfig(
                 countryCode,
-                CountryConfigType.CIRCLE_CONFIG
+                CountryConfigType.GENERAL
         );
         ObjectNode payload = countryConfigResolver.payloadAsObjectNode(config);
-        long min = longField(payload, "minMembers", DEFAULT_MIN_FINANCIAL_MEMBERS);
-        long max = longField(payload, "maxMembers", DEFAULT_MAX_FINANCIAL_MEMBERS);
+        ObjectNode circlePayload = payload.has("circle") && payload.get("circle").isObject()
+                ? (ObjectNode) payload.get("circle")
+                : payload;
+        long min = longField(circlePayload, "minMembers", DEFAULT_MIN_FINANCIAL_MEMBERS);
+        long max = longField(circlePayload, "maxMembers", DEFAULT_MAX_FINANCIAL_MEMBERS);
         if (max < min) {
-            throw new BusinessException("circle_config.maxMembers must be >= minMembers");
+            throw new BusinessException("general.circle.maxMembers must be >= minMembers");
         }
         return new CircleMemberBounds(min, max);
     }

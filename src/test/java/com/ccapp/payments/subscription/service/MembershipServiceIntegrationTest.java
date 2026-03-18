@@ -4,6 +4,7 @@ import com.ccapp.config.TestJacksonAndCachingConfig;
 import com.ccapp.country.config.domain.enums.CountryConfigType;
 import com.ccapp.country.config.dto.UpsertCountryConfigRequest;
 import com.ccapp.country.config.service.CountryConfigResolver;
+import com.ccapp.country.config.service.CountryConfigReadinessService;
 import com.ccapp.country.config.service.CountryConfigurationEngineService;
 import com.ccapp.country.domain.entity.Country;
 import com.ccapp.country.repository.CountryRepository;
@@ -41,6 +42,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 @Import({
         MembershipService.class,
         CountryConfigResolver.class,
+        CountryConfigReadinessService.class,
         CountryConfigurationEngineService.class,
         PlatformConfigurationService.class,
         TestJacksonAndCachingConfig.class
@@ -88,7 +90,7 @@ class MembershipServiceIntegrationTest {
         membershipPayload.set("plans", plans);
         countryConfigurationEngineService.upsertCountryConfiguration(
                 "BJ",
-                CountryConfigType.MEMBERSHIP_CONFIG,
+                CountryConfigType.MEMBERSHIP,
                 new UpsertCountryConfigRequest(membershipPayload, OffsetDateTime.now()),
                 UUID.randomUUID()
         );
@@ -98,7 +100,7 @@ class MembershipServiceIntegrationTest {
         paymentPayload.set("methods", objectMapper.createArrayNode().add("JAWUPAY"));
         countryConfigurationEngineService.upsertCountryConfiguration(
                 "BJ",
-                CountryConfigType.PAYMENT_CONFIG,
+                CountryConfigType.PAYMENT,
                 new UpsertCountryConfigRequest(paymentPayload, OffsetDateTime.now()),
                 UUID.randomUUID()
         );

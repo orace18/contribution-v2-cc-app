@@ -3,6 +3,7 @@ package com.ccapp.country.config.service;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.country.config.dto.ActivateCountryConfigVersionRequest;
 import com.ccapp.country.config.dto.CountryConfigFullResponse;
+import com.ccapp.country.config.domain.enums.CountryChartAccountStatus;
 import com.ccapp.country.config.domain.entity.CountryConfigVersion;
 import com.ccapp.country.config.domain.enums.CountryConfigType;
 import com.ccapp.country.config.dto.CountryConfigSnapshotItemResponse;
@@ -10,6 +11,7 @@ import com.ccapp.country.config.dto.CountryConfigSnapshotResponse;
 import com.ccapp.country.config.dto.CountryConfigVersionResponse;
 import com.ccapp.country.config.dto.CountryConfigVersionHistoryItemResponse;
 import com.ccapp.country.config.dto.UpsertCountryConfigRequest;
+import com.ccapp.country.config.repository.CountryChartAccountRepository;
 import com.ccapp.country.domain.entity.Country;
 import com.ccapp.country.config.repository.CountryConfigVersionRepository;
 import com.ccapp.country.repository.CountryRepository;
@@ -24,6 +26,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.OffsetDateTime;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -40,9 +43,12 @@ import java.util.UUID;
 public class CountryConfigurationEngineService {
 
     private static final int MAX_PAYLOAD_CHARS = 50_000;
+    private static final BigDecimal ONE_HUNDRED = new BigDecimal("100");
 
     private final CountryConfigVersionRepository countryConfigVersionRepository;
+    private final CountryChartAccountRepository countryChartAccountRepository;
     private final CountryRepository countryRepository;
+    private final CountryConfigReadinessService countryConfigReadinessService;
     private final ObjectMapper objectMapper;
 
     @Transactional(readOnly = true)
@@ -71,14 +77,13 @@ public class CountryConfigurationEngineService {
         CountryConfigSnapshotResponse snapshot = getCountryConfiguration(countryCode, asOf);
 
         return new CountryConfigFullResponse(
-                payloadOf(snapshot, CountryConfigType.ACCOUNTING_CONFIG),
-                payloadOf(snapshot, CountryConfigType.MLM_CONFIG),
-                payloadOf(snapshot, CountryConfigType.MEMBERSHIP_CONFIG),
-                payloadOf(snapshot, CountryConfigType.FINANCING_CONFIG),
-                payloadOf(snapshot, CountryConfigType.PAYMENT_CONFIG),
-                payloadOf(snapshot, CountryConfigType.CIRCLE_CONFIG),
-                payloadOf(snapshot, CountryConfigType.RISK_CONFIG),
-                payloadOf(snapshot, CountryConfigType.FEATURE_FLAGS)
+                payloadOf(snapshot, CountryConfigType.GENERAL),
+                payloadOf(snapshot, CountryConfigType.MEMBERSHIP),
+                payloadOf(snapshot, CountryConfigType.MLM_LIMITS),
+                payloadOf(snapshot, CountryConfigType.GUARANTEE),
+                payloadOf(snapshot, CountryConfigType.FINANCING),
+                payloadOf(snapshot, CountryConfigType.ACCOUNTING),
+                payloadOf(snapshot, CountryConfigType.PAYMENT)
         );
     }
 
@@ -277,106 +282,208 @@ public class CountryConfigurationEngineService {
         }
 
         switch (configType) {
-            case FEATURE_FLAGS -> validateFeatureFlags(objectPayload);
-            case MLM_CONFIG -> validateMlmConfig(objectPayload);
-            case MEMBERSHIP_CONFIG -> validateMembershipConfig(objectPayload);
-            case ACCOUNTING_CONFIG -> validateAccountingConfig(objectPayload);
-            case FINANCING_CONFIG -> validateFinancingConfig(objectPayload);
-            case PAYMENT_CONFIG -> validatePaymentConfig(objectPayload);
-            case CIRCLE_CONFIG -> validateCircleConfig(objectPayload);
-            case RISK_CONFIG -> validateRiskConfig(objectPayload);
-            default -> {
-            }
+            case GENERAL -> validateGeneralConfig(objectPayload);
+            case MEMBERSHIP -> validateMembershipConfig(objectPayload);
+            case MLM_LIMITS -> validateMlmLimitsConfig(objectPayload);
+            case GUARANTEE -> validateGuaranteeConfig(objectPayload);
+            case FINANCING -> validateFinancingConfig(objectPayload);
+            case ACCOUNTING -> validateAccountingConfig(objectPayload);
+            case PAYMENT -> validatePaymentConfig(objectPayload);
         }
 
         return objectPayload;
     }
 
-    private void validateFeatureFlags(ObjectNode payload) {
-        payload.properties().forEach(entry -> {
-            if (!entry.getValue().isBoolean()) {
-                throw new BusinessException("feature_flags values must be boolean");
-            }
-        });
-    }
+    private void validateGeneralConfig(ObjectNode payload) {
+        optionalPercentageField(payload, "taxRate", "general.taxRate");
+        optionalPercentageField(payload, "marketplaceDefaultCommission", "general.marketplaceDefaultCommission");
 
-    private void validateMlmConfig(ObjectNode payload) {
-        int generations = requiredIntField(payload, "generations", 1, 20);
-        JsonNode ratesNode = payload.get("commissionRates");
-        if (ratesNode == null || !ratesNode.isArray() || ratesNode.isEmpty()) {
-            throw new BusinessException("mlm_config.commissionRates must be a non-empty array");
+        ObjectNode circle = payload.has("circle") && payload.get("circle").isObject()
+                ? (ObjectNode) payload.get("circle")
+                : payload;
+        Integer minMembers = optionalIntField(circle, "minMembers");
+        Integer maxMembers = optionalIntField(circle, "maxMembers");
+        Integer maxAssistedMembers = optionalIntField(circle, "maxAssistedMembers");
+        if (minMembers != null && minMembers < 1) {
+            throw new BusinessException("general.circle.minMembers must be >= 1");
         }
-        Set<Integer> declaredGenerations = new HashSet<>();
-        ratesNode.forEach(rateNode -> {
-            if (!rateNode.isObject()) {
-                throw new BusinessException("mlm_config.commissionRates entries must be objects");
-            }
-            ObjectNode rate = (ObjectNode) rateNode;
-            int generation = requiredIntField(rate, "generation", 1, generations);
-            if (!declaredGenerations.add(generation)) {
-                throw new BusinessException("mlm_config.commissionRates has duplicate generation " + generation);
-            }
-            requiredDecimalField(rate, "rate", BigDecimal.ZERO, BigDecimal.ONE);
-        });
+        if (maxMembers != null && maxMembers < 1) {
+            throw new BusinessException("general.circle.maxMembers must be >= 1");
+        }
+        if (minMembers != null && maxMembers != null && maxMembers < minMembers) {
+            throw new BusinessException("general.circle.maxMembers must be >= minMembers");
+        }
+        if (maxAssistedMembers != null && maxAssistedMembers < 0) {
+            throw new BusinessException("general.circle.maxAssistedMembers must be >= 0");
+        }
 
-        JsonNode capsNode = payload.get("caps");
-        if (capsNode == null || !capsNode.isObject()) {
-            throw new BusinessException("mlm_config.caps must be an object");
-        }
-        ObjectNode caps = (ObjectNode) capsNode;
-        BigDecimal daily = requiredNonNegativeDecimal(caps, "daily");
-        BigDecimal monthly = requiredNonNegativeDecimal(caps, "monthly");
-        if (monthly.compareTo(daily) < 0) {
-            throw new BusinessException("mlm_config.caps.monthly must be >= caps.daily");
+        JsonNode featureFlagsNode = payload.get("features");
+        if (featureFlagsNode != null && !featureFlagsNode.isNull()) {
+            if (!featureFlagsNode.isObject()) {
+                throw new BusinessException("general.features must be an object");
+            }
+            ObjectNode featureFlags = (ObjectNode) featureFlagsNode;
+            featureFlags.properties().forEach(entry -> {
+                if (!entry.getValue().isBoolean()) {
+                    throw new BusinessException("general.features values must be boolean");
+                }
+            });
         }
     }
 
     private void validateMembershipConfig(ObjectNode payload) {
         JsonNode plansNode = payload.get("plans");
         if (plansNode == null || !plansNode.isArray() || plansNode.isEmpty()) {
-            throw new BusinessException("membership_config.plans must be a non-empty array");
+            throw new BusinessException("membership.plans must be a non-empty array");
         }
+        Set<String> tiers = new HashSet<>();
         plansNode.forEach(planNode -> {
             if (!planNode.isObject()) {
-                throw new BusinessException("membership_config.plans entries must be objects");
+                throw new BusinessException("membership.plans entries must be objects");
             }
             ObjectNode plan = (ObjectNode) planNode;
-            requiredTextField(plan, "name");
+            String code = optionalTextField(plan, "code");
+            String name = requiredTextField(plan, "name");
+            String tier = optionalTextField(plan, "tier");
+            String normalizedTier = tier != null ? tier : (code != null ? code : name);
+            if (!tiers.add(normalizedTier.trim().toUpperCase(Locale.ROOT))) {
+                throw new BusinessException("membership.plans contains duplicate tier/code: " + normalizedTier);
+            }
             JsonNode pricingNode = plan.get("pricing");
             if (pricingNode == null || !pricingNode.isObject()) {
-                throw new BusinessException("membership_config.plan.pricing must be an object");
+                throw new BusinessException("membership.plans.pricing must be an object");
             }
             ObjectNode pricing = (ObjectNode) pricingNode;
-            requiredNonNegativeDecimal(pricing, "amount");
+            BigDecimal amount = requiredPositiveDecimal(pricing, "amount");
+            if (amount.compareTo(BigDecimal.ZERO) <= 0) {
+                throw new BusinessException("membership plan pricing amount must be positive");
+            }
             String currency = requiredTextField(pricing, "currency");
             if (currency.length() != 3) {
-                throw new BusinessException("membership_config.plan.pricing.currency must be a 3-letter code");
+                throw new BusinessException("membership.plans.pricing.currency must be a 3-letter code");
             }
 
             JsonNode benefitsNode = plan.get("benefits");
             if (benefitsNode == null || !benefitsNode.isArray() || benefitsNode.isEmpty()) {
-                throw new BusinessException("membership_config.plan.benefits must be a non-empty array");
+                throw new BusinessException("membership.plans.benefits must be a non-empty array");
             }
             benefitsNode.forEach(benefitNode -> {
                 if (!benefitNode.isTextual() || benefitNode.asText().isBlank()) {
-                    throw new BusinessException("membership_config.plan.benefits values must be non-empty strings");
+                    throw new BusinessException("membership.plans.benefits values must be non-empty strings");
                 }
             });
         });
     }
 
-    private void validateAccountingConfig(ObjectNode payload) {
-        JsonNode preallocationAccountsNode = payload.get("preallocationAccounts");
-        if (preallocationAccountsNode == null || !preallocationAccountsNode.isObject()) {
-            throw new BusinessException("accounting_config.preallocationAccounts must be an object");
+    private void validateMlmLimitsConfig(ObjectNode payload) {
+        Integer maxDirectChildren = optionalIntField(payload, "maxDirectChildren");
+        if (maxDirectChildren != null && maxDirectChildren < 1) {
+            throw new BusinessException("mlm_limits.maxDirectChildren must be >= 1");
         }
-        ObjectNode accounts = (ObjectNode) preallocationAccountsNode;
+
+        BigDecimal weeklyCap = optionalDecimalField(payload, "weeklyCap");
+        if (weeklyCap != null && weeklyCap.compareTo(BigDecimal.ZERO) < 0) {
+            throw new BusinessException("mlm_limits.weeklyCap must be >= 0");
+        }
+
+        JsonNode weeklyCapsByTierNode = payload.get("weeklyCapsByTier");
+        if (weeklyCapsByTierNode != null && !weeklyCapsByTierNode.isNull()) {
+            if (!weeklyCapsByTierNode.isArray() || weeklyCapsByTierNode.isEmpty()) {
+                throw new BusinessException("mlm_limits.weeklyCapsByTier must be a non-empty array");
+            }
+            Set<String> tiers = new HashSet<>();
+            weeklyCapsByTierNode.forEach(item -> {
+                if (!item.isObject()) {
+                    throw new BusinessException("mlm_limits.weeklyCapsByTier entries must be objects");
+                }
+                ObjectNode entry = (ObjectNode) item;
+                String tier = requiredTextField(entry, "tier").trim().toUpperCase(Locale.ROOT);
+                if (!tiers.add(tier)) {
+                    throw new BusinessException("mlm_limits.weeklyCapsByTier duplicate tier: " + tier);
+                }
+                BigDecimal tierCap = requiredNonNegativeDecimal(entry, "cap");
+                if (tierCap.compareTo(BigDecimal.ZERO) < 0) {
+                    throw new BusinessException("mlm_limits.weeklyCapsByTier.cap must be >= 0");
+                }
+            });
+        }
+
+        JsonNode baseRatesOverrideNode = payload.get("baseRatesOverride");
+        if (baseRatesOverrideNode != null && !baseRatesOverrideNode.isNull()) {
+            if (!baseRatesOverrideNode.isObject()) {
+                throw new BusinessException("mlm_limits.baseRatesOverride must be an object");
+            }
+            ObjectNode baseRatesOverride = (ObjectNode) baseRatesOverrideNode;
+            optionalPercentageField(baseRatesOverride, "unilevel", "mlm_limits.baseRatesOverride.unilevel");
+            optionalPercentageField(baseRatesOverride, "binary", "mlm_limits.baseRatesOverride.binary");
+        }
+
+        JsonNode legacyCommissionRatesNode = payload.get("commissionRates");
+        if (legacyCommissionRatesNode != null && !legacyCommissionRatesNode.isNull()) {
+            if (!legacyCommissionRatesNode.isArray()) {
+                throw new BusinessException("mlm_limits.commissionRates must be an array");
+            }
+            legacyCommissionRatesNode.forEach(rateNode -> {
+                if (!rateNode.isObject()) {
+                    throw new BusinessException("mlm_limits.commissionRates entries must be objects");
+                }
+                ObjectNode rate = (ObjectNode) rateNode;
+                BigDecimal rateValue = requiredDecimalField(rate, "rate", BigDecimal.ZERO, ONE_HUNDRED);
+                if (rateValue.compareTo(ONE_HUNDRED) > 0) {
+                    throw new BusinessException("MLM rates must be <= 100");
+                }
+            });
+        }
+    }
+
+    private void validateGuaranteeConfig(ObjectNode payload) {
+        BigDecimal globalMaxExposure = optionalDecimalField(payload, "globalMaxExposure");
+        if (globalMaxExposure != null && globalMaxExposure.compareTo(BigDecimal.ZERO) < 0) {
+            throw new BusinessException("guarantee.globalMaxExposure must be >= 0");
+        }
+
+        JsonNode limitsByTierNode = payload.get("limitsByTier");
+        if (limitsByTierNode == null || limitsByTierNode.isNull()) {
+            return;
+        }
+        if (!limitsByTierNode.isArray() || limitsByTierNode.isEmpty()) {
+            throw new BusinessException("guarantee.limitsByTier must be a non-empty array");
+        }
+
+        Set<String> declaredTiers = new HashSet<>();
+        limitsByTierNode.forEach(limitNode -> {
+            if (!limitNode.isObject()) {
+                throw new BusinessException("guarantee.limitsByTier entries must be objects");
+            }
+            ObjectNode limit = (ObjectNode) limitNode;
+            String tier = requiredTextField(limit, "tier").trim().toUpperCase(Locale.ROOT);
+            if (!declaredTiers.add(tier)) {
+                throw new BusinessException("guarantee.limitsByTier duplicate tier: " + tier);
+            }
+            requiredPositiveDecimal(limit, "maxAmount");
+            BigDecimal maxExposure = optionalDecimalField(limit, "maxExposure");
+            if (maxExposure != null && maxExposure.compareTo(BigDecimal.ZERO) < 0) {
+                throw new BusinessException("guarantee.limitsByTier.maxExposure must be >= 0");
+            }
+        });
+    }
+
+    private void validateAccountingConfig(ObjectNode payload) {
+        JsonNode accountsNode = payload.has("accounts") ? payload.get("accounts") : payload.get("preallocationAccounts");
+        if (accountsNode == null || !accountsNode.isObject()) {
+            throw new BusinessException("accounting.accounts must be an object");
+        }
+        ObjectNode accounts = (ObjectNode) accountsNode;
         if (accounts.isEmpty()) {
-            throw new BusinessException("accounting_config.preallocationAccounts cannot be empty");
+            throw new BusinessException("accounting.accounts cannot be empty");
         }
         accounts.properties().forEach(entry -> {
             if (!entry.getValue().isTextual() || entry.getValue().asText().isBlank()) {
-                throw new BusinessException("accounting_config.preallocationAccounts values must be non-empty strings");
+                throw new BusinessException("accounting.accounts values must be non-empty strings");
+            }
+            String accountCode = entry.getValue().asText().trim().toUpperCase(Locale.ROOT);
+            if (!accountCode.matches("[A-Z0-9._-]{3,64}")) {
+                throw new BusinessException("Invalid accounting account code: " + entry.getKey());
             }
         });
     }
@@ -385,65 +492,68 @@ public class CountryConfigurationEngineService {
         BigDecimal minAmount = optionalDecimalField(payload, "minAmount");
         BigDecimal maxAmount = optionalDecimalField(payload, "maxAmount");
         if (minAmount != null && minAmount.compareTo(BigDecimal.ZERO) < 0) {
-            throw new BusinessException("financing_config.minAmount must be >= 0");
+            throw new BusinessException("financing.minAmount must be >= 0");
         }
         if (maxAmount != null && maxAmount.compareTo(BigDecimal.ZERO) < 0) {
-            throw new BusinessException("financing_config.maxAmount must be >= 0");
+            throw new BusinessException("financing.maxAmount must be >= 0");
         }
         if (minAmount != null && maxAmount != null && maxAmount.compareTo(minAmount) < 0) {
-            throw new BusinessException("financing_config.maxAmount must be >= minAmount");
+            throw new BusinessException("financing.maxAmount must be >= minAmount");
         }
         BigDecimal maxInterestRate = optionalDecimalField(payload, "maxInterestRate");
-        if (maxInterestRate != null && (maxInterestRate.compareTo(BigDecimal.ZERO) < 0
-                || maxInterestRate.compareTo(new BigDecimal("100")) > 0)) {
-            throw new BusinessException("financing_config.maxInterestRate must be between 0 and 100");
+        if (maxInterestRate != null && (maxInterestRate.compareTo(BigDecimal.ZERO) < 0 || maxInterestRate.compareTo(ONE_HUNDRED) > 0)) {
+            throw new BusinessException("financing.maxInterestRate must be between 0 and 100");
         }
+
+        JsonNode offersNode = payload.get("offers");
+        if (offersNode == null || offersNode.isNull()) {
+            return;
+        }
+        if (!offersNode.isArray() || offersNode.isEmpty()) {
+            throw new BusinessException("financing.offers must be a non-empty array");
+        }
+        offersNode.forEach(offerNode -> {
+            if (!offerNode.isObject()) {
+                throw new BusinessException("financing.offers entries must be objects");
+            }
+            ObjectNode offer = (ObjectNode) offerNode;
+            requiredTextField(offer, "code");
+            BigDecimal offerMin = requiredNonNegativeDecimal(offer, "minAmount");
+            BigDecimal offerMax = requiredNonNegativeDecimal(offer, "maxAmount");
+            if (offerMax.compareTo(offerMin) < 0) {
+                throw new BusinessException("financing.offers.maxAmount must be >= minAmount");
+            }
+            BigDecimal offerRate = optionalDecimalField(offer, "maxInterestRate");
+            if (offerRate != null && (offerRate.compareTo(BigDecimal.ZERO) < 0 || offerRate.compareTo(ONE_HUNDRED) > 0)) {
+                throw new BusinessException("financing.offers.maxInterestRate must be between 0 and 100");
+            }
+            ensureStringArray(offer, "eligibleTiers", "financing.offers.eligibleTiers must be an array of non-empty strings");
+        });
     }
 
     private void validatePaymentConfig(ObjectNode payload) {
         Integer settlementWindowHours = optionalIntField(payload, "settlementWindowHours");
         if (settlementWindowHours != null && settlementWindowHours < 0) {
-            throw new BusinessException("payment_config.settlementWindowHours must be >= 0");
+            throw new BusinessException("payment.settlementWindowHours must be >= 0");
         }
         BigDecimal feeRate = optionalDecimalField(payload, "feeRate");
         if (feeRate != null && (feeRate.compareTo(BigDecimal.ZERO) < 0 || feeRate.compareTo(BigDecimal.ONE) > 0)) {
-            throw new BusinessException("payment_config.feeRate must be between 0 and 1");
+            throw new BusinessException("payment.feeRate must be between 0 and 1");
         }
-        ensureStringArray(payload, "methods", "payment_config.methods must be an array of non-empty strings");
-        ensureStringArray(payload, "allowedMethods", "payment_config.allowedMethods must be an array of non-empty strings");
-        ensureStringArray(payload, "pspMethods", "payment_config.pspMethods must be an array of non-empty strings");
-    }
+        ensureStringArray(payload, "methods", "payment.methods must be an array of non-empty strings");
+        ensureStringArray(payload, "allowedMethods", "payment.allowedMethods must be an array of non-empty strings");
+        ensureStringArray(payload, "pspMethods", "payment.pspMethods must be an array of non-empty strings");
 
-    private void validateCircleConfig(ObjectNode payload) {
-        Integer minMembers = optionalIntField(payload, "minMembers");
-        Integer maxMembers = optionalIntField(payload, "maxMembers");
-        Integer maxAssistedMembers = optionalIntField(payload, "maxAssistedMembers");
-        if (minMembers != null && minMembers < 1) {
-            throw new BusinessException("circle_config.minMembers must be >= 1");
-        }
-        if (maxMembers != null && maxMembers < 1) {
-            throw new BusinessException("circle_config.maxMembers must be >= 1");
-        }
-        if (maxMembers != null && maxMembers > 5) {
-            throw new BusinessException("circle_config.maxMembers must be <= 5");
-        }
-        if (minMembers != null && maxMembers != null && maxMembers < minMembers) {
-            throw new BusinessException("circle_config.maxMembers must be >= minMembers");
-        }
-        if (maxAssistedMembers != null && maxAssistedMembers < 0) {
-            throw new BusinessException("circle_config.maxAssistedMembers must be >= 0");
-        }
-    }
-
-    private void validateRiskConfig(ObjectNode payload) {
-        BigDecimal maxExposure = optionalDecimalField(payload, "maxExposure");
-        if (maxExposure != null && maxExposure.compareTo(BigDecimal.ZERO) < 0) {
-            throw new BusinessException("risk_config.maxExposure must be >= 0");
-        }
-        BigDecimal maxDefaultRate = optionalDecimalField(payload, "maxDefaultRate");
-        if (maxDefaultRate != null && (maxDefaultRate.compareTo(BigDecimal.ZERO) < 0
-                || maxDefaultRate.compareTo(BigDecimal.ONE) > 0)) {
-            throw new BusinessException("risk_config.maxDefaultRate must be between 0 and 1");
+        JsonNode pspNode = payload.get("psp");
+        if (pspNode != null && !pspNode.isNull()) {
+            if (!pspNode.isObject()) {
+                throw new BusinessException("payment.psp must be an object");
+            }
+            ObjectNode psp = (ObjectNode) pspNode;
+            if (psp.has("provider")) {
+                requiredTextField(psp, "provider");
+            }
+            ensureStringArray(psp, "methods", "payment.psp.methods must be an array of non-empty strings");
         }
     }
 
@@ -451,6 +561,17 @@ public class CountryConfigurationEngineService {
         JsonNode value = payload.get(fieldName);
         if (value == null || !value.isTextual() || value.asText().isBlank()) {
             throw new BusinessException(fieldName + " is required and must be a non-empty string");
+        }
+        return value.asText().trim();
+    }
+
+    private String optionalTextField(ObjectNode payload, String fieldName) {
+        JsonNode value = payload.get(fieldName);
+        if (value == null || value.isNull()) {
+            return null;
+        }
+        if (!value.isTextual() || value.asText().isBlank()) {
+            throw new BusinessException(fieldName + " must be a non-empty string");
         }
         return value.asText().trim();
     }
@@ -478,6 +599,18 @@ public class CountryConfigurationEngineService {
         BigDecimal decimal = value.decimalValue();
         if (decimal.compareTo(minInclusive) < 0 || decimal.compareTo(maxInclusive) > 0) {
             throw new BusinessException(fieldName + " must be between " + minInclusive + " and " + maxInclusive);
+        }
+        return decimal;
+    }
+
+    private BigDecimal requiredPositiveDecimal(ObjectNode payload, String fieldName) {
+        JsonNode value = payload.get(fieldName);
+        if (value == null || !value.isNumber()) {
+            throw new BusinessException(fieldName + " is required and must be numeric");
+        }
+        BigDecimal decimal = value.decimalValue();
+        if (decimal.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BusinessException(fieldName + " must be > 0");
         }
         return decimal;
     }
@@ -516,6 +649,17 @@ public class CountryConfigurationEngineService {
         return value.decimalValue();
     }
 
+    private BigDecimal optionalPercentageField(ObjectNode payload, String fieldName, String errorPrefix) {
+        BigDecimal value = optionalDecimalField(payload, fieldName);
+        if (value == null) {
+            return null;
+        }
+        if (value.compareTo(BigDecimal.ZERO) < 0 || value.compareTo(ONE_HUNDRED) > 0) {
+            throw new BusinessException(errorPrefix + " must be between 0 and 100");
+        }
+        return value;
+    }
+
     private String normalizeCountryCode(String countryCode) {
         if (countryCode == null || countryCode.isBlank()) {
             throw new BusinessException("Country code is required");
@@ -536,11 +680,14 @@ public class CountryConfigurationEngineService {
             payloadByType.put(type, resolvePayloadForValidation(countryCode, type, targetType, targetPayload, effectiveDate));
         }
 
-        validateMlmMembershipAlignment(payloadByType.get(CountryConfigType.MLM_CONFIG),
-                payloadByType.get(CountryConfigType.MEMBERSHIP_CONFIG));
-        validateFinancingRiskAlignment(payloadByType.get(CountryConfigType.FINANCING_CONFIG),
-                payloadByType.get(CountryConfigType.RISK_CONFIG));
-        validatePaymentMethodsAgainstPspConfig(payloadByType.get(CountryConfigType.PAYMENT_CONFIG));
+        validateMlmMembershipAlignment(payloadByType.get(CountryConfigType.MLM_LIMITS),
+                payloadByType.get(CountryConfigType.MEMBERSHIP));
+        validateGuaranteeMembershipAlignment(payloadByType.get(CountryConfigType.GUARANTEE),
+                payloadByType.get(CountryConfigType.MEMBERSHIP));
+        validateGuaranteeFinancingAlignment(payloadByType.get(CountryConfigType.GUARANTEE),
+                payloadByType.get(CountryConfigType.FINANCING));
+        validateAccountingAccountsExist(countryCode, payloadByType.get(CountryConfigType.ACCOUNTING));
+        validatePaymentMethodsAgainstPspConfig(payloadByType.get(CountryConfigType.PAYMENT));
     }
 
     private ObjectNode resolvePayloadForValidation(String countryCode,
@@ -565,29 +712,95 @@ public class CountryConfigurationEngineService {
     }
 
     private void validateMlmMembershipAlignment(ObjectNode mlmConfig, ObjectNode membershipConfig) {
-        JsonNode generationsNode = mlmConfig.get("generations");
-        JsonNode commissionRatesNode = mlmConfig.get("commissionRates");
-        boolean mlmConfigured = (generationsNode != null && generationsNode.isNumber())
-                || (commissionRatesNode != null && commissionRatesNode.isArray() && !commissionRatesNode.isEmpty());
-        if (!mlmConfigured) {
+        Set<String> cappedTiers = readTierSet(mlmConfig, "weeklyCapsByTier");
+        if (cappedTiers.isEmpty()) {
             return;
         }
 
-        JsonNode plansNode = membershipConfig.get("plans");
-        if (plansNode == null || !plansNode.isArray() || plansNode.isEmpty()) {
-            throw new BusinessException("membership_config.plans must be configured before enabling mlm_config");
+        Set<String> membershipTiers = readMembershipTierSet(membershipConfig);
+        if (membershipTiers.isEmpty()) {
+            throw new BusinessException("membership.plans must be configured before tier-based mlm_limits");
+        }
+        if (!membershipTiers.containsAll(cappedTiers) || !cappedTiers.containsAll(membershipTiers)) {
+            throw new BusinessException("MLM caps must align with membership tiers");
         }
     }
 
-    private void validateFinancingRiskAlignment(ObjectNode financingConfig, ObjectNode riskConfig) {
-        BigDecimal financingMaxAmount = optionalDecimalField(financingConfig, "maxAmount");
-        BigDecimal riskMaxExposure = optionalDecimalField(riskConfig, "maxExposure");
-        if (financingMaxAmount == null || riskMaxExposure == null) {
+    private void validateGuaranteeMembershipAlignment(ObjectNode guaranteeConfig, ObjectNode membershipConfig) {
+        Set<String> guaranteeTiers = readTierSet(guaranteeConfig, "limitsByTier");
+        if (guaranteeTiers.isEmpty()) {
             return;
         }
-        if (financingMaxAmount.compareTo(riskMaxExposure) > 0) {
-            throw new BusinessException("financing_config.maxAmount must be <= risk_config.maxExposure");
+
+        Set<String> membershipTiers = readMembershipTierSet(membershipConfig);
+        if (membershipTiers.isEmpty()) {
+            throw new BusinessException("membership.plans must be configured before tier-based guarantee limits");
         }
+        if (!membershipTiers.containsAll(guaranteeTiers) || !guaranteeTiers.containsAll(membershipTiers)) {
+            throw new BusinessException("Guarantee configuration must align with membership tiers");
+        }
+    }
+
+    private void validateGuaranteeFinancingAlignment(ObjectNode guaranteeConfig, ObjectNode financingConfig) {
+        BigDecimal financingMaxAmount = optionalDecimalField(financingConfig, "maxAmount");
+        BigDecimal offersMaxAmount = resolveMaxFinancingOfferAmount(financingConfig);
+        if (financingMaxAmount == null || (offersMaxAmount != null && offersMaxAmount.compareTo(financingMaxAmount) > 0)) {
+            financingMaxAmount = offersMaxAmount;
+        }
+        if (financingMaxAmount == null) {
+            return;
+        }
+
+        BigDecimal globalMaxExposure = optionalDecimalField(guaranteeConfig, "globalMaxExposure");
+        if (globalMaxExposure != null && globalMaxExposure.compareTo(financingMaxAmount) > 0) {
+            throw new BusinessException("Guarantee must align with financing rules");
+        }
+
+        JsonNode limitsByTierNode = guaranteeConfig.get("limitsByTier");
+        if (limitsByTierNode == null || !limitsByTierNode.isArray()) {
+            return;
+        }
+        for (JsonNode limitNode : limitsByTierNode) {
+            if (!limitNode.isObject()) {
+                continue;
+            }
+            ObjectNode limit = (ObjectNode) limitNode;
+            BigDecimal maxAmount = optionalDecimalField(limit, "maxAmount");
+            if (maxAmount != null && maxAmount.compareTo(financingMaxAmount) > 0) {
+                throw new BusinessException("Guarantee maxAmount must be <= financing maxAmount");
+            }
+            BigDecimal maxExposure = optionalDecimalField(limit, "maxExposure");
+            if (maxExposure != null && maxExposure.compareTo(financingMaxAmount) > 0) {
+                throw new BusinessException("Guarantee maxExposure must be <= financing maxAmount");
+            }
+        }
+    }
+
+    private void validateAccountingAccountsExist(String countryCode, ObjectNode accountingConfig) {
+        JsonNode accountsNode = accountingConfig.has("accounts")
+                ? accountingConfig.get("accounts")
+                : accountingConfig.get("preallocationAccounts");
+        if (accountsNode == null || !accountsNode.isObject()) {
+            return;
+        }
+        ObjectNode accounts = (ObjectNode) accountsNode;
+        if (accounts.isEmpty()) {
+            return;
+        }
+        accounts.properties().forEach(entry -> {
+            String accountCode = entry.getValue().asText("").trim().toUpperCase(Locale.ROOT);
+            if (accountCode.isBlank() || !accountCode.matches("[A-Z0-9._-]{3,64}")) {
+                throw new BusinessException("accounting accounts exist and valid");
+            }
+            boolean exists = countryChartAccountRepository.existsByCountryCodeAndAccountCodeAndStatus(
+                    countryCode,
+                    accountCode,
+                    CountryChartAccountStatus.ACTIVE
+            );
+            if (!exists) {
+                throw new BusinessException("accounting accounts exist and valid");
+            }
+        });
     }
 
     private void validatePaymentMethodsAgainstPspConfig(ObjectNode paymentConfig) {
@@ -600,11 +813,14 @@ public class CountryConfigurationEngineService {
         }
 
         Set<String> pspMethods = readStringSet(paymentConfig, "pspMethods");
+        if (pspMethods.isEmpty() && paymentConfig.has("psp") && paymentConfig.get("psp").isObject()) {
+            pspMethods = readStringSet((ObjectNode) paymentConfig.get("psp"), "methods");
+        }
         if (pspMethods.isEmpty()) {
-            throw new BusinessException("payment_config.pspMethods must be configured when payment methods are defined");
+            throw new BusinessException("payment.psp methods must be configured when payment methods are defined");
         }
         if (!pspMethods.containsAll(methods)) {
-            throw new BusinessException("payment_config methods must exist in country PSP config");
+            throw new BusinessException("payment methods must exist in country PSP config");
         }
     }
 
@@ -638,6 +854,70 @@ public class CountryConfigurationEngineService {
         return values;
     }
 
+    private Set<String> readTierSet(ObjectNode payload, String fieldName) {
+        JsonNode node = payload.get(fieldName);
+        Set<String> values = new HashSet<>();
+        if (node == null || !node.isArray()) {
+            return values;
+        }
+        node.forEach(item -> {
+            if (!item.isObject()) {
+                return;
+            }
+            ObjectNode entry = (ObjectNode) item;
+            JsonNode tierNode = entry.get("tier");
+            if (tierNode == null || !tierNode.isTextual() || tierNode.asText().isBlank()) {
+                throw new BusinessException(fieldName + ".tier is required");
+            }
+            values.add(tierNode.asText().trim().toUpperCase(Locale.ROOT));
+        });
+        return values;
+    }
+
+    private Set<String> readMembershipTierSet(ObjectNode membershipConfig) {
+        JsonNode plans = membershipConfig.get("plans");
+        Set<String> tiers = new HashSet<>();
+        if (plans == null || !plans.isArray()) {
+            return tiers;
+        }
+        plans.forEach(planNode -> {
+            if (!planNode.isObject()) {
+                return;
+            }
+            ObjectNode plan = (ObjectNode) planNode;
+            String tier = optionalTextField(plan, "tier");
+            String code = optionalTextField(plan, "code");
+            String name = optionalTextField(plan, "name");
+            String selected = tier != null ? tier : (code != null ? code : name);
+            if (selected != null && !selected.isBlank()) {
+                tiers.add(selected.trim().toUpperCase(Locale.ROOT));
+            }
+        });
+        return tiers;
+    }
+
+    private BigDecimal resolveMaxFinancingOfferAmount(ObjectNode financingConfig) {
+        JsonNode offersNode = financingConfig.get("offers");
+        if (offersNode == null || !offersNode.isArray()) {
+            return null;
+        }
+        BigDecimal max = null;
+        for (JsonNode offerNode : offersNode) {
+            if (!offerNode.isObject()) {
+                continue;
+            }
+            JsonNode maxAmountNode = offerNode.get("maxAmount");
+            if (maxAmountNode == null || !maxAmountNode.isNumber()) {
+                continue;
+            }
+            BigDecimal candidate = maxAmountNode.decimalValue();
+            if (max == null || candidate.compareTo(max) > 0) {
+                max = candidate;
+            }
+        }
+        return max;
+    }
+
     private ObjectNode toObjectNode(JsonNode payload) {
         if (payload != null && payload.isObject()) {
             return (ObjectNode) payload;
@@ -654,9 +934,10 @@ public class CountryConfigurationEngineService {
     private void markCountryConfigured(String countryCode) {
         Country country = countryRepository.findByCode(countryCode)
                 .orElseThrow(() -> new BusinessException("Country not found"));
+        boolean configured = countryConfigReadinessService.evaluateReadiness(countryCode).configured();
         boolean changed = false;
-        if (!country.isConfigured()) {
-            country.setConfigured(true);
+        if (country.isConfigured() != configured) {
+            country.setConfigured(configured);
             changed = true;
         }
         if (!country.isActive()) {

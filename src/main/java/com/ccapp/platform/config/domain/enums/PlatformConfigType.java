@@ -6,9 +6,9 @@ import com.fasterxml.jackson.annotation.JsonValue;
 import java.util.Locale;
 
 public enum PlatformConfigType {
-    GLOBAL_MLM_FALLBACK("global_mlm_fallback"),
-    GLOBAL_FEATURE_FLAGS("global_feature_flags"),
-    SYSTEM_LIMITS("system_limits");
+    GLOBAL_GENERAL("global_general"),
+    GLOBAL_MLM_BASE_RATES("global_mlm_base_rates"),
+    GLOBAL_ALLOCATION("global_allocation");
 
     private final String externalName;
 
@@ -30,6 +30,11 @@ public enum PlatformConfigType {
         String normalized = rawValue.trim()
                 .toLowerCase(Locale.ROOT)
                 .replace('-', '_');
+        normalized = switch (normalized) {
+            case "global_mlm_fallback" -> "global_mlm_base_rates";
+            case "global_feature_flags", "system_limits" -> "global_general";
+            default -> normalized;
+        };
 
         for (PlatformConfigType type : values()) {
             if (type.externalName.equals(normalized)

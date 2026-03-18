@@ -459,11 +459,14 @@ public class CircleService {
     private CircleConfigLimits resolveCircleConfigLimits(String countryCode) {
         CountryConfigResolver.ResolvedConfig resolved = countryConfigResolver.resolveActiveConfig(
                 countryCode,
-                CountryConfigType.CIRCLE_CONFIG
+                CountryConfigType.GENERAL
         );
         ObjectNode payload = countryConfigResolver.payloadAsObjectNode(resolved);
-        long maxFinancialMembers = longField(payload, "maxMembers", DEFAULT_MAX_FINANCIAL_MEMBERS_PER_CIRCLE);
-        long maxAssistedMembers = longField(payload, "maxAssistedMembers", DEFAULT_MAX_ASSISTED_MEMBERS_PER_CIRCLE);
+        ObjectNode circlePayload = payload.has("circle") && payload.get("circle").isObject()
+                ? (ObjectNode) payload.get("circle")
+                : payload;
+        long maxFinancialMembers = longField(circlePayload, "maxMembers", DEFAULT_MAX_FINANCIAL_MEMBERS_PER_CIRCLE);
+        long maxAssistedMembers = longField(circlePayload, "maxAssistedMembers", DEFAULT_MAX_ASSISTED_MEMBERS_PER_CIRCLE);
         return new CircleConfigLimits(maxFinancialMembers, maxAssistedMembers, resolved);
     }
 

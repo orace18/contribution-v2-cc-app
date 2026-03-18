@@ -3,13 +3,12 @@ package com.ccapp.country.config.dto;
 import com.fasterxml.jackson.databind.JsonNode;
 
 public record CountryConfigFullResponse(
-        JsonNode accounting,
-        JsonNode mlm,
+        JsonNode general,
         JsonNode membership,
+        JsonNode mlmLimits,
+        JsonNode guarantee,
         JsonNode financing,
-        JsonNode payment,
-        JsonNode circle,
-        JsonNode risk,
-        JsonNode features
+        JsonNode accounting,
+        JsonNode payment
 ) {
 }

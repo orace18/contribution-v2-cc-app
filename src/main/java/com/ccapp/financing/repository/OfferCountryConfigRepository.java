@@ -13,5 +13,7 @@ public interface OfferCountryConfigRepository extends JpaRepository<OfferCountry
 
     Optional<OfferCountryConfig> findByOfferIdAndCountryCode(UUID offerId, String countryCode);
 
+    List<OfferCountryConfig> findByCountryCodeAndEnabledTrueOrderByCreatedAtDesc(String countryCode);
+
     void deleteByOfferId(UUID offerId);
 }

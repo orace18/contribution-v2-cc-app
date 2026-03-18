@@ -30,6 +30,7 @@ import com.ccapp.payments.operation.domain.entity.Operation;
 import com.ccapp.payments.operation.domain.enums.OperationType;
 import com.ccapp.payments.operation.service.OperationService;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
@@ -85,13 +86,13 @@ public class FinancingApplicationService {
         CountryContext countryContext = countryContextService.resolve(requesterAccountHolderId);
         CountryConfigResolver.ResolvedConfig financingConfig = countryConfigResolver.resolveActiveConfig(
                 countryContext.serviceCountryCode(),
-                CountryConfigType.FINANCING_CONFIG
+                CountryConfigType.FINANCING
         );
-        CountryConfigResolver.ResolvedConfig riskConfig = countryConfigResolver.resolveActiveConfig(
+        CountryConfigResolver.ResolvedConfig guaranteeConfig = countryConfigResolver.resolveActiveConfig(
                 countryContext.serviceCountryCode(),
-                CountryConfigType.RISK_CONFIG
+                CountryConfigType.GUARANTEE
         );
-        validateCountryLevelFinancingConstraints(request.requestedAmount(), financingConfig, riskConfig);
+        validateCountryLevelFinancingConstraints(request.requestedAmount(), financingConfig, guaranteeConfig);
 
         String currency = resolveCreationCurrency(offer, requesterAccountHolderId);
         if (request.circleId() != null && !circleMemberRepository.existsByCircle_IdAndAccountHolderId(request.circleId(), requesterAccountHolderId)) {
@@ -104,7 +105,7 @@ public class FinancingApplicationService {
                 .circleId(request.circleId())
                 .requestedAmount(request.requestedAmount())
                 .status(LoanApplicationStatus.SUBMITTED)
-                .configSnapshot(buildApplicationConfigSnapshot(countryContext.serviceCountryCode(), financingConfig, riskConfig))
+                .configSnapshot(buildApplicationConfigSnapshot(countryContext.serviceCountryCode(), financingConfig, guaranteeConfig))
                 .configVersion(financingConfig.version())
                 .build());
 
@@ -300,13 +301,19 @@ public class FinancingApplicationService {
 
     private void validateCountryLevelFinancingConstraints(BigDecimal requestedAmount,
                                                           CountryConfigResolver.ResolvedConfig financingConfig,
-                                                          CountryConfigResolver.ResolvedConfig riskConfig) {
+                                                          CountryConfigResolver.ResolvedConfig guaranteeConfig) {
         ObjectNode financingPayload = countryConfigResolver.payloadAsObjectNode(financingConfig);
-        ObjectNode riskPayload = countryConfigResolver.payloadAsObjectNode(riskConfig);
+        ObjectNode guaranteePayload = countryConfigResolver.payloadAsObjectNode(guaranteeConfig);
 
         BigDecimal minAmount = decimalField(financingPayload, "minAmount");
         BigDecimal maxAmount = decimalField(financingPayload, "maxAmount");
-        BigDecimal maxExposure = decimalField(riskPayload, "maxExposure");
+        BigDecimal maxExposure = decimalField(guaranteePayload, "globalMaxExposure");
+        if (maxExposure == null) {
+            maxExposure = maxTierGuaranteeAmount(guaranteePayload, "maxAmount");
+        }
+        if (maxExposure == null) {
+            maxExposure = maxTierGuaranteeAmount(guaranteePayload, "maxExposure");
+        }
 
         if (minAmount != null && requestedAmount.compareTo(minAmount) < 0) {
             throw new BusinessException("Requested amount is below country financing minimum");
@@ -315,7 +322,7 @@ public class FinancingApplicationService {
             throw new BusinessException("Requested amount exceeds country financing maximum");
         }
         if (maxExposure != null && requestedAmount.compareTo(maxExposure) > 0) {
-            throw new BusinessException("Requested amount exceeds country risk exposure");
+            throw new BusinessException("Requested amount exceeds country guarantee limit");
         }
     }
 
@@ -326,18 +333,43 @@ public class FinancingApplicationService {
 
     private String buildApplicationConfigSnapshot(String countryCode,
                                                   CountryConfigResolver.ResolvedConfig financingConfig,
-                                                  CountryConfigResolver.ResolvedConfig riskConfig) {
+                                                  CountryConfigResolver.ResolvedConfig guaranteeConfig) {
         ObjectNode root = objectMapper.createObjectNode();
         root.put("countryCode", countryCode);
         root.put("financingConfigVersion", financingConfig.version());
-        root.put("riskConfigVersion", riskConfig.version());
+        root.put("guaranteeConfigVersion", guaranteeConfig.version());
         root.set("financing", countryConfigResolver.payloadAsObjectNode(financingConfig));
-        root.set("risk", countryConfigResolver.payloadAsObjectNode(riskConfig));
+        root.set("guarantee", countryConfigResolver.payloadAsObjectNode(guaranteeConfig));
         try {
             return objectMapper.writeValueAsString(root);
         } catch (JsonProcessingException ex) {
             throw new BusinessException("Unable to serialize loan application configuration snapshot");
         }
+    }
+
+    private BigDecimal maxTierGuaranteeAmount(ObjectNode guaranteePayload, String fieldName) {
+        if (guaranteePayload == null) {
+            return null;
+        }
+        JsonNode limitsByTierNode = guaranteePayload.get("limitsByTier");
+        if (limitsByTierNode == null || !limitsByTierNode.isArray()) {
+            return null;
+        }
+        BigDecimal max = null;
+        for (JsonNode limitNode : limitsByTierNode) {
+            if (!limitNode.isObject()) {
+                continue;
+            }
+            JsonNode value = limitNode.get(fieldName);
+            if (value == null || !value.isNumber()) {
+                continue;
+            }
+            BigDecimal amount = value.decimalValue();
+            if (max == null || amount.compareTo(max) > 0) {
+                max = amount;
+            }
+        }
+        return max;
     }
 
     private BigDecimal decimalField(ObjectNode payload, String fieldName) {

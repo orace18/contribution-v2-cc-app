@@ -68,11 +68,11 @@ public class SubscriptionService {
         }
         CountryConfigResolver.ResolvedConfig membershipConfig = countryConfigResolver.resolveActiveConfig(
                 countryContext.serviceCountryCode(),
-                CountryConfigType.MEMBERSHIP_CONFIG
+                CountryConfigType.MEMBERSHIP
         );
         CountryConfigResolver.ResolvedConfig paymentConfig = countryConfigResolver.resolveActiveConfig(
                 countryContext.serviceCountryCode(),
-                CountryConfigType.PAYMENT_CONFIG
+                CountryConfigType.PAYMENT
         );
         assertPlanAllowedByConfiguration(plan, membershipConfig);
         assertPaymentConfigurationIsUsable(paymentConfig);

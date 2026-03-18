@@ -2,6 +2,9 @@ package com.ccapp.country.config.service;
 
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.config.TestJacksonAndCachingConfig;
+import com.ccapp.country.config.domain.entity.CountryChartAccount;
+import com.ccapp.country.config.domain.enums.CountryChartAccountStatus;
+import com.ccapp.country.config.domain.enums.CountryChartAccountType;
 import com.ccapp.country.config.domain.enums.CountryConfigType;
 import com.ccapp.country.config.dto.ActivateCountryConfigVersionRequest;
 import com.ccapp.country.config.dto.CountryConfigFullResponse;
@@ -9,6 +12,7 @@ import com.ccapp.country.config.dto.CountryConfigSnapshotResponse;
 import com.ccapp.country.config.dto.CountryConfigVersionHistoryItemResponse;
 import com.ccapp.country.config.dto.CountryConfigVersionResponse;
 import com.ccapp.country.config.dto.UpsertCountryConfigRequest;
+import com.ccapp.country.config.repository.CountryChartAccountRepository;
 import com.ccapp.country.domain.entity.Country;
 import com.ccapp.country.repository.CountryRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -20,6 +24,7 @@ import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.Import;
 
 import java.time.OffsetDateTime;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
@@ -32,44 +37,41 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
         "spring.flyway.enabled=false",
         "spring.jpa.hibernate.ddl-auto=create-drop"
 })
-@Import({CountryConfigurationEngineService.class, TestJacksonAndCachingConfig.class})
+@Import({
+        CountryConfigurationEngineService.class,
+        CountryConfigReadinessService.class,
+        CountryConfigResolver.class,
+        TestJacksonAndCachingConfig.class
+})
 class CountryConfigurationEngineServiceIntegrationTest {
 
     @Autowired
     private CountryConfigurationEngineService countryConfigurationEngineService;
     @Autowired
     private CountryRepository countryRepository;
+    @Autowired
+    private CountryChartAccountRepository countryChartAccountRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Test
-    void upsertAndSnapshot_shouldVersionConfigsAndResolveByEffectiveDate() {
-        countryRepository.save(Country.builder()
-                .id(UUID.randomUUID())
-                .code("BJ")
-                .name("Benin")
-                .currency("XOF")
-                .active(true)
-                .configured(true)
-                .fallback(false)
-                .build());
+    void upsertAndSnapshot_shouldVersionGuaranteeConfigByEffectiveDate() {
+        saveCountry("BJ", "Benin");
 
         ObjectNode firstPayload = objectMapper.createObjectNode()
-                .put("maxLoanAmount", 1000)
-                .put("minimumScore", 55);
+                .put("globalMaxExposure", 1000);
         CountryConfigVersionResponse version1 = countryConfigurationEngineService.upsertCountryConfiguration(
                 "bj",
-                CountryConfigType.RISK_CONFIG,
+                CountryConfigType.GUARANTEE,
                 new UpsertCountryConfigRequest(firstPayload, OffsetDateTime.now().minusDays(1)),
                 UUID.randomUUID()
         );
         assertEquals(1, version1.version());
 
         ObjectNode secondPayload = objectMapper.createObjectNode()
-                .put("maxLoanAmount", 2500)
-                .put("minimumScore", 60);
+                .put("globalMaxExposure", 2500);
         CountryConfigVersionResponse version2 = countryConfigurationEngineService.upsertCountryConfiguration(
                 "BJ",
-                CountryConfigType.RISK_CONFIG,
+                CountryConfigType.GUARANTEE,
                 new UpsertCountryConfigRequest(secondPayload, OffsetDateTime.now().plusDays(2)),
                 UUID.randomUUID()
         );
@@ -77,45 +79,65 @@ class CountryConfigurationEngineServiceIntegrationTest {
 
         CountryConfigSnapshotResponse snapshotNow = countryConfigurationEngineService
                 .getCountryConfiguration("BJ", OffsetDateTime.now());
-        var riskNow = snapshotNow.configs().stream()
-                .filter(item -> item.configType() == CountryConfigType.RISK_CONFIG)
+        var guaranteeNow = snapshotNow.configs().stream()
+                .filter(item -> item.configType() == CountryConfigType.GUARANTEE)
                 .findFirst()
                 .orElseThrow();
-        assertEquals(1, riskNow.version());
-        assertEquals(1000, riskNow.payload().get("maxLoanAmount").asInt());
+        assertEquals(1, guaranteeNow.version());
+        assertEquals(1000, guaranteeNow.payload().get("globalMaxExposure").asInt());
 
         CountryConfigSnapshotResponse snapshotFuture = countryConfigurationEngineService
                 .getCountryConfiguration("BJ", OffsetDateTime.now().plusDays(3));
-        var riskFuture = snapshotFuture.configs().stream()
-                .filter(item -> item.configType() == CountryConfigType.RISK_CONFIG)
+        var guaranteeFuture = snapshotFuture.configs().stream()
+                .filter(item -> item.configType() == CountryConfigType.GUARANTEE)
                 .findFirst()
                 .orElseThrow();
-        assertEquals(2, riskFuture.version());
-        assertEquals(2500, riskFuture.payload().get("maxLoanAmount").asInt());
+        assertEquals(2, guaranteeFuture.version());
+        assertEquals(2500, guaranteeFuture.payload().get("globalMaxExposure").asInt());
 
-        assertTrue(countryConfigurationEngineService.hasEffectiveConfiguration("BJ", CountryConfigType.RISK_CONFIG));
+        assertTrue(countryConfigurationEngineService.hasEffectiveConfiguration("BJ", CountryConfigType.GUARANTEE));
     }
 
     @Test
-    void upsertFeatureFlags_shouldRejectNonBooleanFlags() {
-        countryRepository.save(Country.builder()
-                .id(UUID.randomUUID())
-                .code("CI")
-                .name("Cote d'Ivoire")
-                .currency("XOF")
-                .active(true)
-                .configured(true)
-                .fallback(false)
-                .build());
+    void upsertGeneral_shouldRejectNonBooleanFeatureFlags() {
+        saveCountry("CI", "Cote d'Ivoire");
 
-        ObjectNode invalidFeatureFlags = objectMapper.createObjectNode()
-                .put("chat_enabled", true)
-                .put("max_partners", 20);
+        ObjectNode invalidGeneral = objectMapper.createObjectNode();
+        ObjectNode features = objectMapper.createObjectNode();
+        features.put("chatEnabled", true);
+        features.put("maxPartners", 20);
+        invalidGeneral.set("features", features);
 
         assertThrows(BusinessException.class, () -> countryConfigurationEngineService.upsertCountryConfiguration(
                 "CI",
-                CountryConfigType.FEATURE_FLAGS,
-                new UpsertCountryConfigRequest(invalidFeatureFlags, OffsetDateTime.now()),
+                CountryConfigType.GENERAL,
+                new UpsertCountryConfigRequest(invalidGeneral, OffsetDateTime.now()),
+                UUID.randomUUID()
+        ));
+    }
+
+    @Test
+    void upsertMembership_shouldRejectNonPositivePricing() {
+        saveCountry("GN", "Guinea");
+
+        ObjectNode membershipPayload = objectMapper.createObjectNode();
+        ArrayNode plans = objectMapper.createArrayNode();
+        ObjectNode plan = objectMapper.createObjectNode();
+        plan.put("code", "BASIC");
+        plan.put("name", "Basic");
+        plan.put("tier", "BASIC");
+        ObjectNode pricing = objectMapper.createObjectNode();
+        pricing.put("amount", 0);
+        pricing.put("currency", "XOF");
+        plan.set("pricing", pricing);
+        plan.set("benefits", objectMapper.createArrayNode().add("Community"));
+        plans.add(plan);
+        membershipPayload.set("plans", plans);
+
+        assertThrows(BusinessException.class, () -> countryConfigurationEngineService.upsertCountryConfiguration(
+                "GN",
+                CountryConfigType.MEMBERSHIP,
+                new UpsertCountryConfigRequest(membershipPayload, OffsetDateTime.now()),
                 UUID.randomUUID()
         ));
     }
@@ -139,64 +161,60 @@ class CountryConfigurationEngineServiceIntegrationTest {
 
         Country updatedCountry = countryRepository.findByCode("SN").orElseThrow();
         assertTrue(updatedCountry.isActive());
-        assertTrue(updatedCountry.isConfigured());
+        assertEquals(false, updatedCountry.isConfigured());
 
-        ObjectNode riskPayloadV2 = objectMapper.createObjectNode()
-                .put("maxExposure", 100000)
-                .put("maxDefaultRate", 0.2);
-        CountryConfigVersionResponse riskV2 = countryConfigurationEngineService.upsertCountryConfiguration(
+        ObjectNode guaranteePayloadV2 = objectMapper.createObjectNode()
+                .put("globalMaxExposure", 100000);
+        CountryConfigVersionResponse guaranteeV2 = countryConfigurationEngineService.upsertCountryConfiguration(
                 "SN",
-                CountryConfigType.RISK_CONFIG,
-                new UpsertCountryConfigRequest(riskPayloadV2, OffsetDateTime.now().plusDays(2)),
+                CountryConfigType.GUARANTEE,
+                new UpsertCountryConfigRequest(guaranteePayloadV2, OffsetDateTime.now().plusDays(2)),
                 UUID.randomUUID()
         );
 
-        ObjectNode riskPayloadV3 = objectMapper.createObjectNode()
-                .put("maxExposure", 50000)
-                .put("maxDefaultRate", 0.1);
-        CountryConfigVersionResponse riskV3 = countryConfigurationEngineService.upsertCountryConfiguration(
+        ObjectNode guaranteePayloadV3 = objectMapper.createObjectNode()
+                .put("globalMaxExposure", 50000);
+        CountryConfigVersionResponse guaranteeV3 = countryConfigurationEngineService.upsertCountryConfiguration(
                 "SN",
-                CountryConfigType.RISK_CONFIG,
-                new UpsertCountryConfigRequest(riskPayloadV3, OffsetDateTime.now().plusDays(4)),
+                CountryConfigType.GUARANTEE,
+                new UpsertCountryConfigRequest(guaranteePayloadV3, OffsetDateTime.now().plusDays(4)),
                 UUID.randomUUID()
         );
-        assertTrue(riskV3.version() > riskV2.version());
+        assertTrue(guaranteeV3.version() > guaranteeV2.version());
 
         CountryConfigVersionResponse activated = countryConfigurationEngineService.activateCountryConfigurationVersion(
                 "SN",
-                CountryConfigType.RISK_CONFIG,
-                new ActivateCountryConfigVersionRequest(riskV2.version(), OffsetDateTime.now()),
+                CountryConfigType.GUARANTEE,
+                new ActivateCountryConfigVersionRequest(guaranteeV2.version(), OffsetDateTime.now()),
                 UUID.randomUUID()
         );
-        assertEquals(riskPayloadV2.get("maxExposure").asInt(), activated.payload().get("maxExposure").asInt());
+        assertEquals(guaranteePayloadV2.get("globalMaxExposure").asInt(), activated.payload().get("globalMaxExposure").asInt());
 
         List<CountryConfigVersionHistoryItemResponse> versions = countryConfigurationEngineService
-                .listCountryConfigurationVersions("SN", CountryConfigType.RISK_CONFIG);
+                .listCountryConfigurationVersions("SN", CountryConfigType.GUARANTEE);
         assertTrue(versions.size() >= 4);
         assertTrue(versions.stream().anyMatch(CountryConfigVersionHistoryItemResponse::active));
     }
 
     @Test
     void fullConfig_shouldReturnAggregatedPayloadsByDomain() {
-        countryRepository.save(Country.builder()
-                .id(UUID.randomUUID())
-                .code("TG")
-                .name("Togo")
-                .currency("XOF")
-                .active(true)
-                .configured(true)
-                .fallback(false)
-                .build());
+        saveCountry("TG", "Togo");
 
         ObjectNode accountingPayload = objectMapper.createObjectNode();
-        ObjectNode preallocation = objectMapper.createObjectNode();
-        preallocation.put("loanDisbursement", "ACC-1100");
-        preallocation.put("fees", "ACC-2100");
-        accountingPayload.set("preallocationAccounts", preallocation);
+        ObjectNode accounts = objectMapper.createObjectNode();
+        accounts.put("loanDisbursement", "ACC-1100");
+        accounts.put("fees", "ACC-2100");
+        accounts.put("reserves", "ACC-3100");
+        accounts.put("penalties", "ACC-4100");
+        accountingPayload.set("accounts", accounts);
+        saveChartAccount("TG", "ACC-1100", "Loan Disbursement");
+        saveChartAccount("TG", "ACC-2100", "Fees");
+        saveChartAccount("TG", "ACC-3100", "Reserves");
+        saveChartAccount("TG", "ACC-4100", "Penalties");
 
         countryConfigurationEngineService.upsertCountryConfiguration(
                 "TG",
-                CountryConfigType.ACCOUNTING_CONFIG,
+                CountryConfigType.ACCOUNTING,
                 new UpsertCountryConfigRequest(accountingPayload, OffsetDateTime.now()),
                 UUID.randomUUID()
         );
@@ -204,7 +222,9 @@ class CountryConfigurationEngineServiceIntegrationTest {
         ObjectNode membershipPayload = objectMapper.createObjectNode();
         ArrayNode plans = objectMapper.createArrayNode();
         ObjectNode basicPlan = objectMapper.createObjectNode();
+        basicPlan.put("code", "BASIC");
         basicPlan.put("name", "Basic");
+        basicPlan.put("tier", "BASIC");
         ObjectNode pricing = objectMapper.createObjectNode();
         pricing.put("amount", 2000);
         pricing.put("currency", "XOF");
@@ -215,14 +235,38 @@ class CountryConfigurationEngineServiceIntegrationTest {
 
         countryConfigurationEngineService.upsertCountryConfiguration(
                 "TG",
-                CountryConfigType.MEMBERSHIP_CONFIG,
+                CountryConfigType.MEMBERSHIP,
                 new UpsertCountryConfigRequest(membershipPayload, OffsetDateTime.now()),
                 UUID.randomUUID()
         );
 
         CountryConfigFullResponse full = countryConfigurationEngineService.getFullCountryConfiguration("TG", OffsetDateTime.now());
-        assertEquals("ACC-1100", full.accounting().get("preallocationAccounts").get("loanDisbursement").asText());
+        assertEquals("ACC-1100", full.accounting().get("accounts").get("loanDisbursement").asText());
         assertEquals("Basic", full.membership().get("plans").get(0).get("name").asText());
-        assertTrue(full.features().isObject());
+        assertTrue(full.general().isObject());
+    }
+
+    private void saveCountry(String code, String name) {
+        countryRepository.save(Country.builder()
+                .id(UUID.randomUUID())
+                .code(code)
+                .name(name)
+                .currency("XOF")
+                .active(true)
+                .configured(true)
+                .fallback(false)
+                .build());
+    }
+
+    private void saveChartAccount(String countryCode, String accountCode, String accountName) {
+        countryChartAccountRepository.save(CountryChartAccount.builder()
+                .countryCode(countryCode)
+                .accountCode(accountCode)
+                .accountName(accountName)
+                .accountType(CountryChartAccountType.ASSET)
+                .currency("XOF")
+                .openingBalance(BigDecimal.ZERO)
+                .status(CountryChartAccountStatus.ACTIVE)
+                .build());
     }
 }

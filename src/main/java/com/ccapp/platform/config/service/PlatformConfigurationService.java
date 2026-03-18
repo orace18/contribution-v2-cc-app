@@ -20,6 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.OffsetDateTime;
 import java.util.Arrays;
 import java.util.UUID;
@@ -29,6 +30,7 @@ import java.util.UUID;
 public class PlatformConfigurationService {
 
     private static final int MAX_PAYLOAD_CHARS = 50_000;
+    private static final BigDecimal ONE_HUNDRED = new BigDecimal("100");
 
     private final PlatformConfigVersionRepository platformConfigVersionRepository;
     private final ObjectMapper objectMapper;
@@ -113,37 +115,78 @@ public class PlatformConfigurationService {
 
         ObjectNode objectPayload = (ObjectNode) payload;
         switch (configType) {
-            case GLOBAL_FEATURE_FLAGS -> objectPayload.properties().forEach(entry -> {
-                if (!entry.getValue().isBoolean()) {
-                    throw new BusinessException("global_feature_flags values must be boolean");
-                }
-            });
-            case SYSTEM_LIMITS -> objectPayload.properties().forEach(entry -> {
-                JsonNode value = entry.getValue();
-                if (!value.isNumber() || value.decimalValue().compareTo(BigDecimal.ZERO) < 0) {
-                    throw new BusinessException("system_limits values must be non-negative numbers");
-                }
-            });
-            case GLOBAL_MLM_FALLBACK -> {
-                JsonNode generations = objectPayload.get("generations");
-                if (generations == null || !generations.canConvertToInt() || generations.intValue() < 1) {
-                    throw new BusinessException("global_mlm_fallback.generations must be >= 1");
-                }
-                JsonNode caps = objectPayload.get("caps");
-                if (caps == null || !caps.isObject()) {
-                    throw new BusinessException("global_mlm_fallback.caps must be an object");
-                }
-                ObjectNode capsNode = (ObjectNode) caps;
-                JsonNode monthly = capsNode.get("monthly");
-                if (monthly == null || !monthly.isNumber() || monthly.decimalValue().compareTo(BigDecimal.ZERO) < 0) {
-                    throw new BusinessException("global_mlm_fallback.caps.monthly must be >= 0");
-                }
-            }
-            default -> {
-            }
+            case GLOBAL_GENERAL -> validateGlobalGeneralConfig(objectPayload);
+            case GLOBAL_MLM_BASE_RATES -> validateGlobalMlmBaseRates(objectPayload);
+            case GLOBAL_ALLOCATION -> validateGlobalAllocationConfig(objectPayload);
         }
 
         return objectPayload;
+    }
+
+    private void validateGlobalGeneralConfig(ObjectNode payload) {
+        optionalPercentageField(payload, "marketplaceDefaultCommission", "global_general.marketplaceDefaultCommission");
+        optionalPercentageField(payload, "taxRate", "global_general.taxRate");
+    }
+
+    private void validateGlobalMlmBaseRates(ObjectNode payload) {
+        requiredPercentageField(payload, "unilevel", "global_mlm_base_rates.unilevel");
+        requiredPercentageField(payload, "binary", "global_mlm_base_rates.binary");
+    }
+
+    private void validateGlobalAllocationConfig(ObjectNode payload) {
+        JsonNode percentagesNode = payload.has("percentages") ? payload.get("percentages") : payload;
+        if (!percentagesNode.isObject()) {
+            throw new BusinessException("global_allocation.percentages must be an object");
+        }
+        ObjectNode percentages = (ObjectNode) percentagesNode;
+        if (percentages.isEmpty()) {
+            throw new BusinessException("global_allocation.percentages must not be empty");
+        }
+
+        BigDecimal total = BigDecimal.ZERO;
+        for (var fields = percentages.fields(); fields.hasNext(); ) {
+            var field = fields.next();
+            JsonNode value = field.getValue();
+            if (!value.isNumber()) {
+                throw new BusinessException("global_allocation percentages must be numeric");
+            }
+            BigDecimal decimal = value.decimalValue();
+            if (decimal.compareTo(BigDecimal.ZERO) < 0 || decimal.compareTo(ONE_HUNDRED) > 0) {
+                throw new BusinessException("global_allocation percentages must be between 0 and 100");
+            }
+            total = total.add(decimal);
+        }
+
+        if (total.setScale(4, RoundingMode.HALF_UP).compareTo(ONE_HUNDRED.setScale(4, RoundingMode.HALF_UP)) != 0) {
+            throw new BusinessException("allocation percentages must sum to 100%");
+        }
+    }
+
+    private BigDecimal optionalPercentageField(ObjectNode payload, String fieldName, String errorPrefix) {
+        JsonNode value = payload.get(fieldName);
+        if (value == null || value.isNull()) {
+            return null;
+        }
+        if (!value.isNumber()) {
+            throw new BusinessException(errorPrefix + " must be numeric");
+        }
+        BigDecimal decimal = value.decimalValue();
+        if (decimal.compareTo(BigDecimal.ZERO) < 0 || decimal.compareTo(ONE_HUNDRED) > 0) {
+            throw new BusinessException(errorPrefix + " must be between 0 and 100");
+        }
+        return decimal;
+    }
+
+    private BigDecimal requiredPercentageField(ObjectNode payload, String fieldName, String errorPrefix) {
+        JsonNode value = payload.get(fieldName);
+        if (value == null || value.isNull() || !value.isNumber()) {
+            throw new BusinessException(errorPrefix + " is required and must be numeric");
+        }
+        BigDecimal decimal = value.decimalValue();
+        if (decimal.compareTo(BigDecimal.ZERO) < 0 || decimal.compareTo(ONE_HUNDRED) > 0) {
+            throw new BusinessException(errorPrefix + " must be between 0 and 100");
+        }
+        return decimal;
     }
 
     private String writePayload(JsonNode payload) {

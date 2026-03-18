@@ -43,6 +43,9 @@ public class AdminAuditLog {
     @Column(name = "ip_address", length = 64)
     private String ipAddress;
 
+    @Column(name = "device_info", length = 255)
+    private String deviceInfo;
+
     @PrePersist
     protected void onCreate() {
         if (id == null) {

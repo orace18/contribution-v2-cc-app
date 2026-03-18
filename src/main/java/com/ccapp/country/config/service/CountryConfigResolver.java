@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.io.Serializable;
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Locale;
 
 @Service
@@ -49,37 +50,41 @@ public class CountryConfigResolver {
                 )
                 .orElse(null);
 
+        ObjectNode mergedPayload = objectMapper.createObjectNode();
+        Integer resolvedVersion = null;
+        boolean hasPlatformDefaults = false;
+
+        for (PlatformConfigType fallbackType : mapFallbackTypes(configType)) {
+            ResolvedPlatformConfig platformConfig = resolveActivePlatformConfig(fallbackType);
+            if (platformConfig.version() != null) {
+                hasPlatformDefaults = true;
+                deepMergeInto(mergedPayload, readObjectPayload(platformConfig.payload()));
+                resolvedVersion = maxVersion(resolvedVersion, platformConfig.version());
+            }
+        }
+
         if (countryConfig != null) {
+            deepMergeInto(mergedPayload, readObjectPayload(countryConfig.getPayload()));
             return new ResolvedConfig(
                     normalizedCountryCode,
                     configType,
                     countryConfig.getVersion(),
-                    countryConfig.getPayload(),
-                    ConfigSource.COUNTRY
+                    writePayload(mergedPayload),
+                    hasPlatformDefaults ? ConfigSource.MERGED : ConfigSource.COUNTRY
             );
         }
 
-        PlatformConfigType fallbackType = mapFallbackType(configType);
-        if (fallbackType != null) {
-            ResolvedPlatformConfig platformConfig = resolveActivePlatformConfig(fallbackType);
-            if (platformConfig.version() != null) {
-                return new ResolvedConfig(
-                        normalizedCountryCode,
-                        configType,
-                        platformConfig.version(),
-                        platformConfig.payload(),
-                        ConfigSource.PLATFORM
-                );
-            }
+        if (hasPlatformDefaults) {
+            return new ResolvedConfig(
+                    normalizedCountryCode,
+                    configType,
+                    resolvedVersion,
+                    writePayload(mergedPayload),
+                    ConfigSource.PLATFORM
+            );
         }
 
-        return new ResolvedConfig(
-                normalizedCountryCode,
-                configType,
-                null,
-                EMPTY_JSON_OBJECT,
-                ConfigSource.EMPTY
-        );
+        return new ResolvedConfig(normalizedCountryCode, configType, null, EMPTY_JSON_OBJECT, ConfigSource.EMPTY);
     }
 
     @Cacheable(
@@ -114,17 +119,11 @@ public class CountryConfigResolver {
         return readObjectPayload(resolvedConfig.payload());
     }
 
-    private PlatformConfigType mapFallbackType(CountryConfigType configType) {
+    private List<PlatformConfigType> mapFallbackTypes(CountryConfigType configType) {
         return switch (configType) {
-            case MLM_CONFIG -> PlatformConfigType.GLOBAL_MLM_FALLBACK;
-            case FEATURE_FLAGS -> PlatformConfigType.GLOBAL_FEATURE_FLAGS;
-            case ACCOUNTING_CONFIG,
-                 MEMBERSHIP_CONFIG,
-                 FINANCING_CONFIG,
-                 PAYMENT_CONFIG,
-                 CIRCLE_CONFIG,
-                 RISK_CONFIG,
-                 KYC_CONFIG -> PlatformConfigType.SYSTEM_LIMITS;
+            case GENERAL -> List.of(PlatformConfigType.GLOBAL_GENERAL, PlatformConfigType.GLOBAL_ALLOCATION);
+            case MLM_LIMITS -> List.of(PlatformConfigType.GLOBAL_MLM_BASE_RATES);
+            case MEMBERSHIP, GUARANTEE, FINANCING, ACCOUNTING, PAYMENT -> List.of();
         };
     }
 
@@ -146,8 +145,40 @@ public class CountryConfigResolver {
         }
     }
 
+    private void deepMergeInto(ObjectNode target, ObjectNode override) {
+        override.fields().forEachRemaining(entry -> {
+            String field = entry.getKey();
+            JsonNode overrideValue = entry.getValue();
+            JsonNode existingValue = target.get(field);
+            if (existingValue != null && existingValue.isObject() && overrideValue.isObject()) {
+                deepMergeInto((ObjectNode) existingValue, (ObjectNode) overrideValue);
+                return;
+            }
+            target.set(field, overrideValue.deepCopy());
+        });
+    }
+
+    private String writePayload(ObjectNode payload) {
+        try {
+            return objectMapper.writeValueAsString(payload);
+        } catch (JsonProcessingException ex) {
+            return EMPTY_JSON_OBJECT;
+        }
+    }
+
+    private Integer maxVersion(Integer current, Integer candidate) {
+        if (candidate == null) {
+            return current;
+        }
+        if (current == null || candidate > current) {
+            return candidate;
+        }
+        return current;
+    }
+
     public enum ConfigSource {
         COUNTRY,
+        MERGED,
         PLATFORM,
         EMPTY
     }

@@ -56,11 +56,11 @@ public class MembershipService {
 
         CountryConfigResolver.ResolvedConfig membershipConfig = countryConfigResolver.resolveActiveConfig(
                 membership.getCountryCode(),
-                CountryConfigType.MEMBERSHIP_CONFIG
+                CountryConfigType.MEMBERSHIP
         );
         CountryConfigResolver.ResolvedConfig paymentConfig = countryConfigResolver.resolveActiveConfig(
                 membership.getCountryCode(),
-                CountryConfigType.PAYMENT_CONFIG
+                CountryConfigType.PAYMENT
         );
 
         OffsetDateTime now = OffsetDateTime.now();

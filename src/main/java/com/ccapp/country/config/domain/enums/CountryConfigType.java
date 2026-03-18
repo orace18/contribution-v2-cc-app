@@ -6,15 +6,13 @@ import com.fasterxml.jackson.annotation.JsonValue;
 import java.util.Locale;
 
 public enum CountryConfigType {
-    ACCOUNTING_CONFIG("accounting_config"),
-    MLM_CONFIG("mlm_config"),
-    MEMBERSHIP_CONFIG("membership_config"),
-    FINANCING_CONFIG("financing_config"),
-    PAYMENT_CONFIG("payment_config"),
-    CIRCLE_CONFIG("circle_config"),
-    RISK_CONFIG("risk_config"),
-    KYC_CONFIG("kyc_config"),
-    FEATURE_FLAGS("feature_flags");
+    GENERAL("general"),
+    MEMBERSHIP("membership"),
+    MLM_LIMITS("mlm_limits"),
+    GUARANTEE("guarantee"),
+    FINANCING("financing"),
+    ACCOUNTING("accounting"),
+    PAYMENT("payment");
 
     private final String externalName;
 
@@ -36,6 +34,16 @@ public enum CountryConfigType {
         String normalized = rawValue.trim()
                 .toLowerCase(Locale.ROOT)
                 .replace('-', '_');
+        normalized = switch (normalized) {
+            case "accounting_config" -> "accounting";
+            case "mlm_config" -> "mlm_limits";
+            case "membership_config" -> "membership";
+            case "financing_config" -> "financing";
+            case "payment_config" -> "payment";
+            case "circle_config", "feature_flags", "kyc_config" -> "general";
+            case "risk_config" -> "guarantee";
+            default -> normalized;
+        };
         for (CountryConfigType type : values()) {
             if (type.externalName.equals(normalized)
                     || type.name().toLowerCase(Locale.ROOT).equals(normalized)) {

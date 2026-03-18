@@ -14,6 +14,8 @@ public interface AccountBalanceSnapshotRepository extends JpaRepository<AccountB
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<AccountBalanceSnapshot> findByAccountCodeAndCurrency(String accountCode, String currency);
 
+    Optional<AccountBalanceSnapshot> findFirstByAccountCodeAndCurrency(String accountCode, String currency);
+
     List<AccountBalanceSnapshot> findByCurrencyOrderByAccountCodeAsc(String currency);
 
     List<AccountBalanceSnapshot> findAllByOrderByAccountCodeAsc();

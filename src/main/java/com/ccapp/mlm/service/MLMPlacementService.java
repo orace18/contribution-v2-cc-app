@@ -132,14 +132,14 @@ public class MLMPlacementService {
         CountryContext countryContext = countryContextService.resolve(accountHolderId);
         CountryConfigResolver.ResolvedConfig mlmConfig = countryConfigResolver.resolveActiveConfig(
                 countryContext.serviceCountryCode(),
-                CountryConfigType.MLM_CONFIG
+                CountryConfigType.MLM_LIMITS
         );
         var payload = countryConfigResolver.payloadAsObjectNode(mlmConfig);
         if (!payload.has("maxDirectChildren") || payload.get("maxDirectChildren").isNull()) {
             return DEFAULT_MAX_DIRECT_CHILDREN;
         }
         if (!payload.get("maxDirectChildren").canConvertToInt()) {
-            throw new BusinessException("mlm_config.maxDirectChildren must be an integer");
+            throw new BusinessException("mlm_limits.maxDirectChildren must be an integer");
         }
         int value = payload.get("maxDirectChildren").asInt();
         return value > 0 ? value : DEFAULT_MAX_DIRECT_CHILDREN;

@@ -18,4 +18,8 @@ public interface AdminUserRepository extends JpaRepository<AdminUser, UUID> {
     List<AdminUser> findByStatusOrderByCreatedAtDesc(AdminUserStatus status);
 
     List<AdminUser> findAllByOrderByCreatedAtDesc();
+
+    boolean existsByCountryIdAndStatusAndRoleIn(UUID countryId,
+                                                AdminUserStatus status,
+                                                List<AdminRole> roles);
 }

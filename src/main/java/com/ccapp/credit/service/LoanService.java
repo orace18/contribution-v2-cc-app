@@ -159,27 +159,30 @@ public class LoanService {
     }
 
     private void ensureCreditPolicyConfigured(String countryCode) {
-        boolean hasVersionedRiskConfig = countryConfigResolver.resolveActiveConfig(
+        boolean hasVersionedGuaranteeConfig = countryConfigResolver.resolveActiveConfig(
                 countryCode,
-                CountryConfigType.RISK_CONFIG
+                CountryConfigType.GUARANTEE
         ).source() != CountryConfigResolver.ConfigSource.EMPTY;
         boolean hasLegacyPolicy = adminPolicyRepository.findFirstByPolicyTypeAndCountryCodeOrderByCreatedAtDesc(AdminPolicyType.CREDIT_POLICY, countryCode).isPresent()
                 || adminPolicyRepository.findFirstByPolicyTypeAndCountryCodeIsNullOrderByCreatedAtDesc(AdminPolicyType.CREDIT_POLICY).isPresent();
-        if (!hasVersionedRiskConfig && !hasLegacyPolicy) {
-            throw new BusinessException("Credit policy not configured for country");
+        if (!hasVersionedGuaranteeConfig && !hasLegacyPolicy) {
+            throw new BusinessException("Guarantee policy not configured for country");
         }
     }
 
     private CircleMemberBounds resolveCircleMemberBounds(String countryCode) {
         CountryConfigResolver.ResolvedConfig config = countryConfigResolver.resolveActiveConfig(
                 countryCode,
-                CountryConfigType.CIRCLE_CONFIG
+                CountryConfigType.GENERAL
         );
         ObjectNode payload = countryConfigResolver.payloadAsObjectNode(config);
-        long min = longField(payload, "minMembers", DEFAULT_MIN_FINANCIAL_MEMBERS_PER_CIRCLE);
-        long max = longField(payload, "maxMembers", DEFAULT_MAX_FINANCIAL_MEMBERS_PER_CIRCLE);
+        ObjectNode circlePayload = payload.has("circle") && payload.get("circle").isObject()
+                ? (ObjectNode) payload.get("circle")
+                : payload;
+        long min = longField(circlePayload, "minMembers", DEFAULT_MIN_FINANCIAL_MEMBERS_PER_CIRCLE);
+        long max = longField(circlePayload, "maxMembers", DEFAULT_MAX_FINANCIAL_MEMBERS_PER_CIRCLE);
         if (max < min) {
-            throw new BusinessException("circle_config.maxMembers must be >= minMembers");
+            throw new BusinessException("general.circle.maxMembers must be >= minMembers");
         }
         return new CircleMemberBounds(min, max);
     }

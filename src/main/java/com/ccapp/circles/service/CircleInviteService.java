@@ -221,16 +221,19 @@ public class CircleInviteService {
     private int resolveMaxFinancialMembers(String countryCode) {
         CountryConfigResolver.ResolvedConfig circleConfig = countryConfigResolver.resolveActiveConfig(
                 countryCode,
-                CountryConfigType.CIRCLE_CONFIG
+                CountryConfigType.GENERAL
         );
         ObjectNode payload = countryConfigResolver.payloadAsObjectNode(circleConfig);
-        if (!payload.has("maxMembers") || payload.get("maxMembers").isNull()) {
+        ObjectNode circlePayload = payload.has("circle") && payload.get("circle").isObject()
+                ? (ObjectNode) payload.get("circle")
+                : payload;
+        if (!circlePayload.has("maxMembers") || circlePayload.get("maxMembers").isNull()) {
             return DEFAULT_MAX_FINANCIAL_MEMBERS;
         }
-        if (!payload.get("maxMembers").canConvertToInt()) {
-            throw new BusinessException("circle_config.maxMembers must be an integer");
+        if (!circlePayload.get("maxMembers").canConvertToInt()) {
+            throw new BusinessException("general.circle.maxMembers must be an integer");
         }
-        int value = payload.get("maxMembers").intValue();
+        int value = circlePayload.get("maxMembers").intValue();
         return value > 0 ? value : DEFAULT_MAX_FINANCIAL_MEMBERS;
     }
 }

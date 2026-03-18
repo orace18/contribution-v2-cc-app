@@ -1,0 +1,129 @@
+package com.ccapp.country.config.service;
+
+import com.ccapp.config.TestJacksonAndCachingConfig;
+import com.ccapp.country.config.domain.entity.CountryChartAccount;
+import com.ccapp.country.config.domain.enums.CountryChartAccountStatus;
+import com.ccapp.country.config.domain.enums.CountryChartAccountType;
+import com.ccapp.country.config.dto.CountryChartAccountHistoryResponse;
+import com.ccapp.country.config.dto.CountryChartAccountSummaryResponse;
+import com.ccapp.country.config.repository.CountryChartAccountRepository;
+import com.ccapp.country.domain.entity.Country;
+import com.ccapp.country.repository.CountryRepository;
+import com.ccapp.ledger.domain.entity.AccountBalanceSnapshot;
+import com.ccapp.ledger.domain.entity.AccountingEvent;
+import com.ccapp.ledger.domain.entity.LedgerEntry;
+import com.ccapp.ledger.domain.enums.AccountingEventType;
+import com.ccapp.ledger.domain.enums.LedgerEntryType;
+import com.ccapp.ledger.repository.AccountBalanceSnapshotRepository;
+import com.ccapp.ledger.repository.AccountingEventRepository;
+import com.ccapp.ledger.repository.LedgerEntryRepository;
+import com.ccapp.payments.operation.domain.entity.Operation;
+import com.ccapp.payments.operation.domain.enums.OperationStatus;
+import com.ccapp.payments.operation.domain.enums.OperationType;
+import com.ccapp.payments.operation.repository.OperationRepository;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.context.annotation.Import;
+
+import java.math.BigDecimal;
+import java.time.OffsetDateTime;
+import java.util.List;
+import java.util.UUID;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+
+@DataJpaTest(properties = {
+        "spring.profiles.active=test",
+        "spring.flyway.enabled=false",
+        "spring.jpa.hibernate.ddl-auto=create-drop"
+})
+@Import({CountryChartOfAccountsService.class, TestJacksonAndCachingConfig.class})
+class CountryChartOfAccountsServiceIntegrationTest {
+
+    @Autowired
+    private CountryChartOfAccountsService countryChartOfAccountsService;
+    @Autowired
+    private CountryRepository countryRepository;
+    @Autowired
+    private CountryChartAccountRepository countryChartAccountRepository;
+    @Autowired
+    private AccountBalanceSnapshotRepository accountBalanceSnapshotRepository;
+    @Autowired
+    private OperationRepository operationRepository;
+    @Autowired
+    private AccountingEventRepository accountingEventRepository;
+    @Autowired
+    private LedgerEntryRepository ledgerEntryRepository;
+
+    @Test
+    void listAndHistory_shouldExposeBusinessReadableAccountDataAndMovements() {
+        countryRepository.save(Country.builder()
+                .id(UUID.randomUUID())
+                .code("BJ")
+                .name("Benin")
+                .currency("XOF")
+                .active(true)
+                .configured(false)
+                .fallback(false)
+                .build());
+
+        CountryChartAccount account = countryChartAccountRepository.save(CountryChartAccount.builder()
+                .countryCode("BJ")
+                .accountCode("ACC-COMMISSION")
+                .accountName("Commission Pool")
+                .accountType(CountryChartAccountType.REVENUE)
+                .currency("XOF")
+                .openingBalance(new BigDecimal("1000.0000"))
+                .status(CountryChartAccountStatus.ACTIVE)
+                .build());
+
+        accountBalanceSnapshotRepository.save(AccountBalanceSnapshot.builder()
+                .accountCode("ACC-COMMISSION")
+                .currency("XOF")
+                .balance(new BigDecimal("2500.0000"))
+                .build());
+
+        Operation operation = operationRepository.save(Operation.builder()
+                .accountHolderId(UUID.randomUUID())
+                .actorUserId(UUID.randomUUID())
+                .type(OperationType.SUBSCRIPTION)
+                .status(OperationStatus.CONFIRMED)
+                .amount(new BigDecimal("1500.0000"))
+                .currency("XOF")
+                .idempotencyKey("chart-history-" + UUID.randomUUID())
+                .description("Commission movement")
+                .build());
+        AccountingEvent event = accountingEventRepository.save(AccountingEvent.builder()
+                .operation(operation)
+                .eventType(AccountingEventType.OPERATION_CONFIRMED)
+                .currency("XOF")
+                .totalDebit(new BigDecimal("1500.0000"))
+                .totalCredit(new BigDecimal("1500.0000"))
+                .postedAt(OffsetDateTime.now())
+                .build());
+        ledgerEntryRepository.save(LedgerEntry.builder()
+                .event(event)
+                .lineNo(1)
+                .accountCode("ACC-COMMISSION")
+                .entryType(LedgerEntryType.CREDIT)
+                .amount(new BigDecimal("1500.0000"))
+                .currency("XOF")
+                .description("Commission collected")
+                .build());
+
+        List<CountryChartAccountSummaryResponse> summaries = countryChartOfAccountsService.listCountryAccounts("BJ");
+        assertEquals(1, summaries.size());
+        assertEquals("ACC-COMMISSION", summaries.get(0).accountCode());
+        assertEquals("Commission Pool", summaries.get(0).accountName());
+        assertEquals(new BigDecimal("2500.0000"), summaries.get(0).currentBalance());
+
+        CountryChartAccountHistoryResponse history = countryChartOfAccountsService.getCountryAccountHistory("BJ", account.getId());
+        assertNotNull(history.account());
+        assertEquals(new BigDecimal("1000.0000"), history.account().openingBalance());
+        assertEquals(new BigDecimal("2500.0000"), history.account().currentBalance());
+        assertEquals(1, history.movements().size());
+        assertEquals(LedgerEntryType.CREDIT, history.movements().get(0).entryType());
+    }
+}
