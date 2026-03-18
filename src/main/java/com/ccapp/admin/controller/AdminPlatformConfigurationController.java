@@ -7,9 +7,11 @@ import com.ccapp.common.api.CommonResponse;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.platform.config.dto.SecureUpsertPlatformConfigRequest;
 import com.ccapp.platform.config.domain.enums.PlatformConfigType;
+import com.ccapp.platform.config.dto.PlatformConfigReadinessResponse;
 import com.ccapp.platform.config.dto.PlatformConfigSnapshotResponse;
 import com.ccapp.platform.config.dto.PlatformConfigVersionResponse;
 import com.ccapp.platform.config.dto.UpsertPlatformConfigRequest;
+import com.ccapp.platform.config.service.PlatformConfigReadinessService;
 import com.ccapp.platform.config.service.PlatformConfigurationService;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -38,6 +40,7 @@ import java.util.UUID;
 public class AdminPlatformConfigurationController {
 
     private final PlatformConfigurationService platformConfigurationService;
+    private final PlatformConfigReadinessService platformConfigReadinessService;
     private final AdminConfigMutationSecurityService adminConfigMutationSecurityService;
     private final AdminAuditService adminAuditService;
 
@@ -53,6 +56,20 @@ public class AdminPlatformConfigurationController {
                 "asOf=" + response.asOf()
         );
         return ResponseEntity.ok(CommonResponse.success("Platform configuration", response));
+    }
+
+    @GetMapping("/readiness")
+    public ResponseEntity<CommonResponse<PlatformConfigReadinessResponse>> getPlatformReadiness(
+            @RequestParam(required = false) OffsetDateTime asOf) {
+        PlatformConfigReadinessResponse response = platformConfigReadinessService.evaluateReadiness(asOf);
+        adminAuditService.logAction(
+                AdminSecurityUtils.currentAdminUserId(),
+                "GET_PLATFORM_CONFIG_READINESS",
+                "PLATFORM_CONFIG",
+                null,
+                "ready=" + response.ready() + ",score=" + response.score()
+        );
+        return ResponseEntity.ok(CommonResponse.success("Platform readiness", response));
     }
 
     @PutMapping("/{configType}")

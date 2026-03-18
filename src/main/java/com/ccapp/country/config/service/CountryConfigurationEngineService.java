@@ -1,5 +1,7 @@
 package com.ccapp.country.config.service;
 
+import com.ccapp.admin.service.ConfigAuditMetadataService;
+import com.ccapp.common.dto.ConfigAuditMetadataResponse;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.country.config.dto.ActivateCountryConfigVersionRequest;
 import com.ccapp.country.config.dto.CountryConfigFullResponse;
@@ -44,11 +46,13 @@ public class CountryConfigurationEngineService {
 
     private static final int MAX_PAYLOAD_CHARS = 50_000;
     private static final BigDecimal ONE_HUNDRED = new BigDecimal("100");
+    private static final String COUNTRY_CONFIG_ENTITY_TYPE = "COUNTRY_CONFIG";
 
     private final CountryConfigVersionRepository countryConfigVersionRepository;
     private final CountryChartAccountRepository countryChartAccountRepository;
     private final CountryRepository countryRepository;
     private final CountryConfigReadinessService countryConfigReadinessService;
+    private final ConfigAuditMetadataService configAuditMetadataService;
     private final ObjectMapper objectMapper;
 
     @Transactional(readOnly = true)
@@ -65,7 +69,7 @@ public class CountryConfigurationEngineService {
                                 asOfDate
                         )
                         .map(this::toSnapshotItem)
-                        .orElse(new CountryConfigSnapshotItemResponse(configType, null, null, null))
+                        .orElse(new CountryConfigSnapshotItemResponse(configType, null, null, null, emptyAudit("DRAFT")))
                 )
                 .toList();
 
@@ -150,14 +154,27 @@ public class CountryConfigurationEngineService {
 
         return countryConfigVersionRepository.findByCountryCodeAndConfigTypeOrderByVersionDesc(normalizedCountryCode, configType)
                 .stream()
-                .map(entity -> new CountryConfigVersionHistoryItemResponse(
-                        entity.getVersion(),
-                        entity.getEffectiveDate(),
-                        readPayload(entity.getPayload()),
-                        Objects.equals(entity.getVersion(), activeVersion),
-                        entity.getCreatedByAdminUserId(),
-                        entity.getCreatedAt()
-                ))
+                .map(entity -> {
+                    boolean isActive = Objects.equals(entity.getVersion(), activeVersion);
+                    ConfigAuditMetadataResponse audit = configAuditMetadataService.build(
+                            COUNTRY_CONFIG_ENTITY_TYPE,
+                            entity.getId(),
+                            entity.getVersion(),
+                            isActive ? "ACTIVE" : "INACTIVE",
+                            entity.getEffectiveDate(),
+                            entity.getCreatedAt(),
+                            entity.getCreatedByAdminUserId()
+                    );
+                    return new CountryConfigVersionHistoryItemResponse(
+                            entity.getVersion(),
+                            entity.getEffectiveDate(),
+                            readPayload(entity.getPayload()),
+                            isActive,
+                            entity.getCreatedByAdminUserId(),
+                            entity.getCreatedAt(),
+                            audit
+                    );
+                })
                 .toList();
     }
 
@@ -239,15 +256,34 @@ public class CountryConfigurationEngineService {
     }
 
     private CountryConfigSnapshotItemResponse toSnapshotItem(CountryConfigVersion entity) {
+        ConfigAuditMetadataResponse audit = configAuditMetadataService.build(
+                COUNTRY_CONFIG_ENTITY_TYPE,
+                entity.getId(),
+                entity.getVersion(),
+                "ACTIVE",
+                entity.getEffectiveDate(),
+                entity.getCreatedAt(),
+                entity.getCreatedByAdminUserId()
+        );
         return new CountryConfigSnapshotItemResponse(
                 entity.getConfigType(),
                 entity.getVersion(),
                 entity.getEffectiveDate(),
-                readPayload(entity.getPayload())
+                readPayload(entity.getPayload()),
+                audit
         );
     }
 
     private CountryConfigVersionResponse toVersionResponse(CountryConfigVersion entity) {
+        ConfigAuditMetadataResponse audit = configAuditMetadataService.build(
+                COUNTRY_CONFIG_ENTITY_TYPE,
+                entity.getId(),
+                entity.getVersion(),
+                resolveStatus(entity),
+                entity.getEffectiveDate(),
+                entity.getCreatedAt(),
+                entity.getCreatedByAdminUserId()
+        );
         return new CountryConfigVersionResponse(
                 entity.getId(),
                 entity.getCountryCode(),
@@ -256,7 +292,39 @@ public class CountryConfigurationEngineService {
                 entity.getEffectiveDate(),
                 readPayload(entity.getPayload()),
                 entity.getCreatedByAdminUserId(),
-                entity.getCreatedAt()
+                entity.getCreatedAt(),
+                audit
+        );
+    }
+
+    private String resolveStatus(CountryConfigVersion entity) {
+        Integer activeVersion = countryConfigVersionRepository
+                .findFirstByCountryCodeAndConfigTypeAndEffectiveDateLessThanEqualOrderByEffectiveDateDescVersionDesc(
+                        entity.getCountryCode(),
+                        entity.getConfigType(),
+                        OffsetDateTime.now()
+                )
+                .map(CountryConfigVersion::getVersion)
+                .orElse(null);
+        if (activeVersion != null && activeVersion.equals(entity.getVersion())) {
+            return "ACTIVE";
+        }
+        return entity.getEffectiveDate() != null && entity.getEffectiveDate().isAfter(OffsetDateTime.now())
+                ? "SCHEDULED"
+                : "INACTIVE";
+    }
+
+    private ConfigAuditMetadataResponse emptyAudit(String status) {
+        return new ConfigAuditMetadataResponse(
+                null,
+                status,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
         );
     }
 

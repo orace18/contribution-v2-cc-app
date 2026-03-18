@@ -1,5 +1,6 @@
 package com.ccapp.payments.subscription.service;
 
+import com.ccapp.admin.service.ConfigAuditMetadataService;
 import com.ccapp.config.TestJacksonAndCachingConfig;
 import com.ccapp.country.config.domain.enums.CountryConfigType;
 import com.ccapp.country.config.dto.UpsertCountryConfigRequest;
@@ -45,6 +46,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
         CountryConfigReadinessService.class,
         CountryConfigurationEngineService.class,
         PlatformConfigurationService.class,
+        ConfigAuditMetadataService.class,
         TestJacksonAndCachingConfig.class
 })
 class MembershipServiceIntegrationTest {

@@ -1,5 +1,6 @@
 package com.ccapp.platform.config.dto;
 
+import com.ccapp.common.dto.ConfigAuditMetadataResponse;
 import com.ccapp.platform.config.domain.enums.PlatformConfigType;
 import com.fasterxml.jackson.databind.JsonNode;
 
@@ -9,6 +10,7 @@ public record PlatformConfigSnapshotItemResponse(
         PlatformConfigType configType,
         Integer version,
         OffsetDateTime effectiveDate,
-        JsonNode payload
+        JsonNode payload,
+        ConfigAuditMetadataResponse audit
 ) {
 }

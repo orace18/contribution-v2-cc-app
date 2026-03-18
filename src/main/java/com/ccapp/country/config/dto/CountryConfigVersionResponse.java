@@ -1,5 +1,6 @@
 package com.ccapp.country.config.dto;
 
+import com.ccapp.common.dto.ConfigAuditMetadataResponse;
 import com.ccapp.country.config.domain.enums.CountryConfigType;
 import com.fasterxml.jackson.databind.JsonNode;
 
@@ -14,6 +15,7 @@ public record CountryConfigVersionResponse(
         OffsetDateTime effectiveDate,
         JsonNode payload,
         UUID createdByAdminUserId,
-        OffsetDateTime createdAt
+        OffsetDateTime createdAt,
+        ConfigAuditMetadataResponse audit
 ) {
 }

@@ -1,5 +1,6 @@
 package com.ccapp.country.config.service;
 
+import com.ccapp.admin.service.ConfigAuditMetadataService;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.config.TestJacksonAndCachingConfig;
 import com.ccapp.country.config.domain.entity.CountryChartAccount;
@@ -41,6 +42,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
         CountryConfigurationEngineService.class,
         CountryConfigReadinessService.class,
         CountryConfigResolver.class,
+        ConfigAuditMetadataService.class,
         TestJacksonAndCachingConfig.class
 })
 class CountryConfigurationEngineServiceIntegrationTest {

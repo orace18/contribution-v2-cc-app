@@ -1,0 +1,114 @@
+POINT FINAL QA/POLISH - COUNTRY & PLATFORM CONFIGURATION ENGINE
+Date: 18 mars 2026
+
+1) OBJECTIF DE CETTE PHASE
+- Finaliser la cohérence country/platform.
+- Compléter l'audit metadata sur platform config.
+- Étendre readiness à la plateforme.
+- Aligner UX et validation production-grade.
+
+2) BACKEND - LIVRAISONS EFFECTIVES
+
+2.1 Platform config audit completion
+- GET /admin/platform-config enrichi avec métadonnées d'audit sur chaque config:
+  - version
+  - status
+  - effectiveDate
+  - createdAt
+  - createdBy
+  - lastModifiedAt
+  - lastModifiedBy
+  - approvedBy
+  - reasonForChange
+- Les données sont alimentées à partir du log d'audit de mutation.
+
+2.2 Unification du modèle d'audit
+- Même structure d'audit appliquée aux réponses country_config et platform_config.
+- Alignement effectué sur:
+  - CountryConfigSnapshotItemResponse
+  - CountryConfigVersionResponse
+  - CountryConfigVersionHistoryItemResponse
+  - PlatformConfigSnapshotItemResponse
+  - PlatformConfigVersionResponse
+
+2.3 Readiness plateforme
+- Nouvel endpoint:
+  GET /admin/platform-config/readiness
+- Vérifications implémentées:
+  - global MLM config valid
+  - allocation = 100%
+  - system limits defined
+  - feature flags valid
+- Format réponse:
+  {
+    "ready": boolean,
+    "score": number,
+    "missing": [...]
+  }
+
+2.4 Audit logs plateforme
+- Mutation plateforme continue d'exiger:
+  - re-auth
+  - 2FA
+  - reasonForChange
+- Vérification ajoutée qu'un audit log est bien créé sur update.
+
+3) BACKOFFICE - LIVRAISONS EFFECTIVES
+
+3.1 Platform Setup display fix
+- Affichage des métadonnées plateforme:
+  - version
+  - effective date
+  - last modified by
+  - last modified at
+  - approved by
+  - reason for change
+- Le fallback "N/A" hardcodé de "last modified by" a été supprimé au profit des données backend quand disponibles.
+
+3.2 Readiness plateforme dans UI
+- Consommation de GET /admin/platform-config/readiness.
+- Affichage score + statut READY/PARTIAL + missing checks.
+
+3.3 UX consistency conservée
+- Mode read-only first.
+- Edit explicite.
+- Save via modal sécurisé:
+  - review changes
+  - password
+  - 2FA
+  - reason for change + confirm
+- Règles appliquées country et platform.
+
+4) TESTS AJOUTÉS / ÉTENDUS
+
+4.1 Nouveaux tests
+- PlatformConfigReadinessServiceIntegrationTest
+- AdminPlatformConfigurationControllerIntegrationTest
+
+4.2 Tests étendus
+- PlatformConfigurationServiceIntegrationTest
+  - audit metadata présent dans snapshot plateforme
+- CountryConfigResolverIntegrationTest
+  - fallback plateforme maintenu si champ country absent
+
+5) VALIDATION EXÉCUTÉE
+
+- Backend compile:
+  mvn -q -DskipTests compile
+  RESULTAT: OK
+
+- Backend tests ciblés:
+  mvn -q -Dtest=PlatformConfigurationServiceIntegrationTest,PlatformConfigReadinessServiceIntegrationTest,AdminPlatformConfigurationControllerIntegrationTest,CountryConfigResolverIntegrationTest,CountryConfigurationEngineServiceIntegrationTest,CountryConfigReadinessServiceIntegrationTest,MembershipServiceIntegrationTest test
+  RESULTAT: OK
+
+- Backoffice build:
+  npm run -s build
+  RESULTAT: OK
+
+6) DELIVERABLES DEMANDÉS - STATUT
+- Updated platform_config APIs: DONE
+- Unified audit model: DONE
+- Readiness endpoint for platform: DONE
+- Backoffice UI fix: DONE
+- Integration tests: DONE
+

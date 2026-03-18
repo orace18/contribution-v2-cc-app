@@ -1,5 +1,6 @@
 package com.ccapp.country.config.service;
 
+import com.ccapp.admin.service.ConfigAuditMetadataService;
 import com.ccapp.admin.domain.entity.AdminUser;
 import com.ccapp.admin.domain.enums.AdminRole;
 import com.ccapp.admin.domain.enums.AdminUserStatus;
@@ -41,6 +42,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
         CountryConfigResolver.class,
         CountryConfigurationEngineService.class,
         PlatformConfigurationService.class,
+        ConfigAuditMetadataService.class,
         TestJacksonAndCachingConfig.class
 })
 class CountryConfigReadinessServiceIntegrationTest {

@@ -1,5 +1,7 @@
 package com.ccapp.platform.config.service;
 
+import com.ccapp.admin.service.ConfigAuditMetadataService;
+import com.ccapp.common.dto.ConfigAuditMetadataResponse;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.platform.config.domain.entity.PlatformConfigVersion;
 import com.ccapp.platform.config.domain.enums.PlatformConfigType;
@@ -31,8 +33,10 @@ public class PlatformConfigurationService {
 
     private static final int MAX_PAYLOAD_CHARS = 50_000;
     private static final BigDecimal ONE_HUNDRED = new BigDecimal("100");
+    private static final String PLATFORM_CONFIG_ENTITY_TYPE = "PLATFORM_CONFIG";
 
     private final PlatformConfigVersionRepository platformConfigVersionRepository;
+    private final ConfigAuditMetadataService configAuditMetadataService;
     private final ObjectMapper objectMapper;
 
     @Transactional(readOnly = true)
@@ -42,7 +46,13 @@ public class PlatformConfigurationService {
                 .map(configType -> platformConfigVersionRepository
                         .findFirstByConfigTypeAndEffectiveDateLessThanEqualOrderByEffectiveDateDescVersionDesc(configType, asOfDate)
                         .map(this::toSnapshotItem)
-                        .orElse(new PlatformConfigSnapshotItemResponse(configType, null, null, null))
+                        .orElse(new PlatformConfigSnapshotItemResponse(
+                                configType,
+                                null,
+                                null,
+                                null,
+                                emptyAudit("DRAFT")
+                        ))
                 )
                 .toList();
         return new PlatformConfigSnapshotResponse(asOfDate, configs);
@@ -77,15 +87,34 @@ public class PlatformConfigurationService {
     }
 
     private PlatformConfigSnapshotItemResponse toSnapshotItem(PlatformConfigVersion entity) {
+        ConfigAuditMetadataResponse audit = configAuditMetadataService.build(
+                PLATFORM_CONFIG_ENTITY_TYPE,
+                entity.getId(),
+                entity.getVersion(),
+                "ACTIVE",
+                entity.getEffectiveDate(),
+                entity.getCreatedAt(),
+                entity.getCreatedByAdminUserId()
+        );
         return new PlatformConfigSnapshotItemResponse(
                 entity.getConfigType(),
                 entity.getVersion(),
                 entity.getEffectiveDate(),
-                readPayload(entity.getPayload())
+                readPayload(entity.getPayload()),
+                audit
         );
     }
 
     private PlatformConfigVersionResponse toVersionResponse(PlatformConfigVersion entity) {
+        ConfigAuditMetadataResponse audit = configAuditMetadataService.build(
+                PLATFORM_CONFIG_ENTITY_TYPE,
+                entity.getId(),
+                entity.getVersion(),
+                resolveStatus(entity),
+                entity.getEffectiveDate(),
+                entity.getCreatedAt(),
+                entity.getCreatedByAdminUserId()
+        );
         return new PlatformConfigVersionResponse(
                 entity.getId(),
                 entity.getConfigType(),
@@ -93,7 +122,38 @@ public class PlatformConfigurationService {
                 entity.getEffectiveDate(),
                 readPayload(entity.getPayload()),
                 entity.getCreatedByAdminUserId(),
-                entity.getCreatedAt()
+                entity.getCreatedAt(),
+                audit
+        );
+    }
+
+    private String resolveStatus(PlatformConfigVersion entity) {
+        Integer activeVersion = platformConfigVersionRepository
+                .findFirstByConfigTypeAndEffectiveDateLessThanEqualOrderByEffectiveDateDescVersionDesc(
+                        entity.getConfigType(),
+                        OffsetDateTime.now()
+                )
+                .map(PlatformConfigVersion::getVersion)
+                .orElse(null);
+        if (activeVersion != null && activeVersion.equals(entity.getVersion())) {
+            return "ACTIVE";
+        }
+        return entity.getEffectiveDate() != null && entity.getEffectiveDate().isAfter(OffsetDateTime.now())
+                ? "SCHEDULED"
+                : "INACTIVE";
+    }
+
+    private ConfigAuditMetadataResponse emptyAudit(String status) {
+        return new ConfigAuditMetadataResponse(
+                null,
+                status,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
         );
     }
 

@@ -1,5 +1,6 @@
 package com.ccapp.country.config.service;
 
+import com.ccapp.admin.service.ConfigAuditMetadataService;
 import com.ccapp.config.TestJacksonAndCachingConfig;
 import com.ccapp.country.config.domain.enums.CountryConfigType;
 import com.ccapp.country.config.dto.UpsertCountryConfigRequest;
@@ -31,6 +32,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
         CountryConfigReadinessService.class,
         PlatformConfigurationService.class,
         CountryConfigResolver.class,
+        ConfigAuditMetadataService.class,
         TestJacksonAndCachingConfig.class
 })
 class CountryConfigResolverIntegrationTest {
@@ -126,5 +128,33 @@ class CountryConfigResolverIntegrationTest {
         assertEquals(12, payload.get("unilevel").asInt());
         assertEquals(8, payload.get("binary").asInt());
         assertEquals(1000, payload.get("weeklyCap").asInt());
+    }
+
+    @Test
+    void resolveActiveConfig_shouldKeepPlatformFallbackWhenCountryGeneralHasPartialFields() {
+        ObjectNode platformGeneral = objectMapper.createObjectNode();
+        platformGeneral.put("taxRate", 18);
+        platformGeneral.put("marketplaceDefaultCommission", 5);
+        platformConfigurationService.upsertPlatformConfiguration(
+                PlatformConfigType.GLOBAL_GENERAL,
+                new UpsertPlatformConfigRequest(platformGeneral, OffsetDateTime.now()),
+                UUID.randomUUID()
+        );
+
+        ObjectNode countryGeneralOverride = objectMapper.createObjectNode();
+        countryGeneralOverride.put("taxRate", 20);
+        countryConfigurationEngineService.upsertCountryConfiguration(
+                "BJ",
+                CountryConfigType.GENERAL,
+                new UpsertCountryConfigRequest(countryGeneralOverride, OffsetDateTime.now()),
+                UUID.randomUUID()
+        );
+
+        CountryConfigResolver.ResolvedConfig resolved = countryConfigResolver.resolveActiveConfig("BJ", CountryConfigType.GENERAL);
+        ObjectNode payload = countryConfigResolver.payloadAsObjectNode(resolved);
+
+        assertEquals(CountryConfigResolver.ConfigSource.MERGED, resolved.source());
+        assertEquals(20, payload.get("taxRate").asInt());
+        assertEquals(5, payload.get("marketplaceDefaultCommission").asInt());
     }
 }
