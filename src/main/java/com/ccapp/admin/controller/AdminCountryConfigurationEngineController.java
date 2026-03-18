@@ -1,7 +1,10 @@
 package com.ccapp.admin.controller;
 
 import com.ccapp.admin.audit.AdminAuditService;
+import com.ccapp.admin.dto.AdminCountryWorkspaceDetailResponse;
+import com.ccapp.admin.dto.AdminCountryWorkspaceListResponse;
 import com.ccapp.admin.service.AdminConfigMutationSecurityService;
+import com.ccapp.admin.service.AdminCountryWorkspaceService;
 import com.ccapp.admin.security.AdminSecurityUtils;
 import com.ccapp.common.api.CommonResponse;
 import com.ccapp.common.exception.BusinessException;
@@ -57,8 +60,41 @@ public class AdminCountryConfigurationEngineController {
     private final CountryConfigReadinessService countryConfigReadinessService;
     private final CountryChartOfAccountsService countryChartOfAccountsService;
     private final CountrySetupBootstrapService countrySetupBootstrapService;
+    private final AdminCountryWorkspaceService adminCountryWorkspaceService;
     private final AdminConfigMutationSecurityService adminConfigMutationSecurityService;
     private final AdminAuditService adminAuditService;
+
+    @GetMapping("/workspace/countries")
+    public ResponseEntity<CommonResponse<AdminCountryWorkspaceListResponse>> getCountriesWorkspace() {
+        AdminCountryWorkspaceListResponse response = adminCountryWorkspaceService.getCountriesOverview();
+        adminAuditService.logAction(
+                AdminSecurityUtils.currentAdminUserId(),
+                "LIST_COUNTRY_WORKSPACE_COUNTRIES",
+                "COUNTRY_CONFIG_WORKSPACE",
+                null,
+                Map.of(
+                        "configuredCount", response.configuredCountries().size(),
+                        "unconfiguredCount", response.unconfiguredCountries().size()
+                )
+        );
+        return ResponseEntity.ok(CommonResponse.success("Countries workspace", response));
+    }
+
+    @GetMapping("/workspace/countries/{countryCode}")
+    public ResponseEntity<CommonResponse<AdminCountryWorkspaceDetailResponse>> getCountryWorkspace(@PathVariable String countryCode) {
+        AdminCountryWorkspaceDetailResponse response = adminCountryWorkspaceService.getCountryWorkspace(countryCode);
+        adminAuditService.logAction(
+                AdminSecurityUtils.currentAdminUserId(),
+                "GET_COUNTRY_WORKSPACE",
+                "COUNTRY_CONFIG_WORKSPACE",
+                response.code(),
+                Map.of(
+                        "status", response.status(),
+                        "readinessPercentage", response.readinessPercentage()
+                )
+        );
+        return ResponseEntity.ok(CommonResponse.success("Country workspace", response));
+    }
 
     @GetMapping("/{countryCode}")
     public ResponseEntity<CommonResponse<CountryConfigSnapshotResponse>> getCountryConfig(
