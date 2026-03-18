@@ -4,43 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Revue des configs">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/API_DOCUMENTATION.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/ARCHITECTURE_IMPACT_REPORT_2026-03-11.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/ARCHITECTURE_REFACTOR_PLAN_2026-03-17.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/POINT_IMPLEMENTATION_PROJET.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/POINT_TACHE_2026-03-17.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/RAPPORT_AVANCEMENT_CC_APP.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/RAPPORT_FINANCING_PARTNER_ENGINE_2026-03-16.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/admin/audit/AdminAuditLog.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/admin/audit/AdminAuditLog.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/admin/audit/AdminAuditService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/admin/audit/AdminAuditService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/admin/controller/AdminCountryConfigurationEngineController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/admin/controller/AdminCountryConfigurationEngineController.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/admin/controller/AdminPlatformConfigurationController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/admin/controller/AdminPlatformConfigurationController.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/admin/repository/AdminUserRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/admin/repository/AdminUserRepository.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/admin/service/AdminCountryConfigService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/admin/service/AdminCountryConfigService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/service/CircleFinanceService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/service/CircleFinanceService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/service/CircleInviteService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/service/CircleInviteService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/service/CircleService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/service/CircleService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/country/config/domain/enums/CountryConfigType.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/country/config/domain/enums/CountryConfigType.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/country/config/dto/CountryConfigFullResponse.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/country/config/dto/CountryConfigFullResponse.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/country/config/service/CountryConfigResolver.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/country/config/service/CountryConfigResolver.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/country/config/service/CountryConfigurationEngineService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/country/config/service/CountryConfigurationEngineService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/credit/service/LoanService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/credit/service/LoanService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/financing/repository/OfferCountryConfigRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/financing/repository/OfferCountryConfigRepository.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/financing/service/FinancingApplicationService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/financing/service/FinancingApplicationService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/ledger/repository/AccountBalanceSnapshotRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/ledger/repository/AccountBalanceSnapshotRepository.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/ledger/repository/LedgerEntryRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/ledger/repository/LedgerEntryRepository.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/mlm/service/MLMPlacementService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/mlm/service/MLMPlacementService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/payments/subscription/service/MembershipService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/payments/subscription/service/MembershipService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/payments/subscription/service/SubscriptionService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/payments/subscription/service/SubscriptionService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/platform/config/domain/enums/PlatformConfigType.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/platform/config/domain/enums/PlatformConfigType.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/platform/config/service/PlatformConfigurationService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/platform/config/service/PlatformConfigurationService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/test/java/com/ccapp/country/config/service/CountryConfigResolverIntegrationTest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/test/java/com/ccapp/country/config/service/CountryConfigResolverIntegrationTest.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/test/java/com/ccapp/country/config/service/CountryConfigurationEngineServiceIntegrationTest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/test/java/com/ccapp/country/config/service/CountryConfigurationEngineServiceIntegrationTest.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/test/java/com/ccapp/payments/subscription/service/MembershipServiceIntegrationTest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/test/java/com/ccapp/payments/subscription/service/MembershipServiceIntegrationTest.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/test/java/com/ccapp/platform/config/service/PlatformConfigurationServiceIntegrationTest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/test/java/com/ccapp/platform/config/service/PlatformConfigurationServiceIntegrationTest.java" afterDir="false" />
-    </list>
+    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Refactoring configs pays" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -177,30 +141,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1772553173766</updated>
-    </task>
-    <task id="LOCAL-00010" summary="Configuration gitlab-ci et docker-compose -Revue">
-      <option name="closed" value="true" />
-      <created>1772696659359</created>
-      <option name="number" value="00010" />
-      <option name="presentableId" value="LOCAL-00010" />
-      <option name="project" value="LOCAL" />
-      <updated>1772696659359</updated>
-    </task>
-    <task id="LOCAL-00011" summary="Revue des configs docker et gitlab-ci">
-      <option name="closed" value="true" />
-      <created>1772698215097</created>
-      <option name="number" value="00011" />
-      <option name="presentableId" value="LOCAL-00011" />
-      <option name="project" value="LOCAL" />
-      <updated>1772698215097</updated>
-    </task>
-    <task id="LOCAL-00012" summary="Revue du pom">
-      <option name="closed" value="true" />
-      <created>1772698930531</created>
-      <option name="number" value="00012" />
-      <option name="presentableId" value="LOCAL-00012" />
-      <option name="project" value="LOCAL" />
-      <updated>1772698930531</updated>
     </task>
     <task id="LOCAL-00013" summary="Revue des properties">
       <option name="closed" value="true" />
@@ -570,7 +510,31 @@
       <option name="project" value="LOCAL" />
       <updated>1773762631389</updated>
     </task>
-    <option name="localTasksCounter" value="59" />
+    <task id="LOCAL-00059" summary="Revue des configs">
+      <option name="closed" value="true" />
+      <created>1773838409831</created>
+      <option name="number" value="00059" />
+      <option name="presentableId" value="LOCAL-00059" />
+      <option name="project" value="LOCAL" />
+      <updated>1773838409832</updated>
+    </task>
+    <task id="LOCAL-00060" summary="Refactoring configs">
+      <option name="closed" value="true" />
+      <created>1773841922271</created>
+      <option name="number" value="00060" />
+      <option name="presentableId" value="LOCAL-00060" />
+      <option name="project" value="LOCAL" />
+      <updated>1773841922271</updated>
+    </task>
+    <task id="LOCAL-00061" summary="Refactoring configs pays">
+      <option name="closed" value="true" />
+      <created>1773845111981</created>
+      <option name="number" value="00061" />
+      <option name="presentableId" value="LOCAL-00061" />
+      <option name="project" value="LOCAL" />
+      <updated>1773845111981</updated>
+    </task>
+    <option name="localTasksCounter" value="62" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -585,8 +549,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="Revue du base name" />
-    <MESSAGE value="Refact de onboarding" />
     <MESSAGE value="Configuration pays" />
     <MESSAGE value="Refact de pays" />
     <MESSAGE value="Refact de retour api" />
@@ -610,7 +572,9 @@
     <MESSAGE value="Revue des migrations flyway" />
     <MESSAGE value="Ajout de fonctionnalités" />
     <MESSAGE value="Revue des configs" />
-    <option name="LAST_COMMIT_MESSAGE" value="Revue des configs" />
+    <MESSAGE value="Refactoring configs" />
+    <MESSAGE value="Refactoring configs pays" />
+    <option name="LAST_COMMIT_MESSAGE" value="Refactoring configs pays" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />
