@@ -1,3 +1,6 @@
+DROP TABLE IF EXISTS tmp_flyway_v41_country_final;
+
+CREATE TEMP TABLE tmp_flyway_v41_country_final AS
 WITH RECURSIVE country_mapped AS (
     SELECT
         ccv.id AS legacy_id,
@@ -129,6 +132,17 @@ country_final AS (
         created_at
     FROM country_merged
 )
+SELECT
+    id,
+    country_code,
+    config_type,
+    version,
+    effective_date,
+    payload,
+    created_by_admin_user_id,
+    created_at
+FROM country_final;
+
 DELETE FROM country_config_versions;
 
 INSERT INTO country_config_versions (
@@ -150,8 +164,11 @@ SELECT
     payload,
     created_by_admin_user_id,
     created_at
-FROM country_final;
+FROM tmp_flyway_v41_country_final;
 
+DROP TABLE IF EXISTS tmp_flyway_v41_platform_final;
+
+CREATE TEMP TABLE tmp_flyway_v41_platform_final AS
 WITH RECURSIVE platform_mapped AS (
     SELECT
         pcv.id AS legacy_id,
@@ -253,6 +270,16 @@ platform_final AS (
         created_at
     FROM platform_merged
 )
+SELECT
+    id,
+    config_type,
+    version,
+    effective_date,
+    payload,
+    created_by_admin_user_id,
+    created_at
+FROM platform_final;
+
 DELETE FROM platform_config_versions;
 
 INSERT INTO platform_config_versions (
@@ -272,4 +299,7 @@ SELECT
     payload,
     created_by_admin_user_id,
     created_at
-FROM platform_final;
+FROM tmp_flyway_v41_platform_final;
+
+DROP TABLE IF EXISTS tmp_flyway_v41_country_final;
+DROP TABLE IF EXISTS tmp_flyway_v41_platform_final;
