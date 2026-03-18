@@ -5,6 +5,7 @@ import com.ccapp.common.exception.BusinessException;
 import com.ccapp.country.config.dto.CountryConfigFullResponse;
 import com.ccapp.country.config.repository.CountryChartAccountRepository;
 import com.ccapp.country.config.service.CountryConfigurationEngineService;
+import com.ccapp.country.config.service.CountrySetupBootstrapService;
 import com.ccapp.country.domain.entity.Country;
 import com.ccapp.country.repository.CountryRepository;
 import com.ccapp.financing.domain.enums.FinancialPartnerStatus;
@@ -16,6 +17,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,6 +33,7 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class AdminLookupService {
 
     private final CountryRepository countryRepository;
@@ -39,11 +42,15 @@ public class AdminLookupService {
     private final OfferCountryConfigRepository offerCountryConfigRepository;
     private final CountryChartAccountRepository countryChartAccountRepository;
     private final CountryConfigurationEngineService countryConfigurationEngineService;
+    private final CountrySetupBootstrapService countrySetupBootstrapService;
     private final ObjectMapper objectMapper;
 
-    @Transactional(readOnly = true)
+    @Transactional
     public List<LookupItemResponse> listCountries() {
-        return countryRepository.findAllByOrderByCodeAsc().stream()
+        countrySetupBootstrapService.ensureMasterCountriesSeededIfEmpty();
+        List<Country> countries = countryRepository.findAllByOrderByCodeAsc();
+        log.info("Country lookup loaded: totalMasterCountries={}", countries.size());
+        return countries.stream()
                 .map(country -> new LookupItemResponse(
                         country.getCode(),
                         country.getName(),

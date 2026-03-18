@@ -13,6 +13,7 @@ import com.ccapp.country.config.dto.CountryChartAccountSummaryResponse;
 import com.ccapp.country.config.dto.CountryConfigFullResponse;
 import com.ccapp.country.config.dto.CountryConfigReadinessResponse;
 import com.ccapp.country.config.dto.CountryConfigSnapshotResponse;
+import com.ccapp.country.config.dto.CountrySetupCountryResponse;
 import com.ccapp.country.config.dto.CountryConfigVersionResponse;
 import com.ccapp.country.config.dto.CountryConfigVersionHistoryItemResponse;
 import com.ccapp.country.config.dto.SecureActivateCountryConfigVersionRequest;
@@ -21,11 +22,13 @@ import com.ccapp.country.config.dto.UpsertCountryConfigRequest;
 import com.ccapp.country.config.service.CountryChartOfAccountsService;
 import com.ccapp.country.config.service.CountryConfigReadinessService;
 import com.ccapp.country.config.service.CountryConfigurationEngineService;
+import com.ccapp.country.config.service.CountrySetupBootstrapService;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -47,11 +50,13 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Tag(name = "Admin Country Config", description = "Versioned country configuration engine")
 @SecurityRequirement(name = "bearerAuth")
+@Slf4j
 public class AdminCountryConfigurationEngineController {
 
     private final CountryConfigurationEngineService countryConfigurationEngineService;
     private final CountryConfigReadinessService countryConfigReadinessService;
     private final CountryChartOfAccountsService countryChartOfAccountsService;
+    private final CountrySetupBootstrapService countrySetupBootstrapService;
     private final AdminConfigMutationSecurityService adminConfigMutationSecurityService;
     private final AdminAuditService adminAuditService;
 
@@ -85,9 +90,38 @@ public class AdminCountryConfigurationEngineController {
         return ResponseEntity.ok(CommonResponse.success("Full country configuration", response));
     }
 
+    @GetMapping("/configured-countries")
+    public ResponseEntity<CommonResponse<List<CountrySetupCountryResponse>>> listConfiguredCountries() {
+        List<CountrySetupCountryResponse> response = countrySetupBootstrapService.listConfiguredCountries();
+        adminAuditService.logAction(
+                AdminSecurityUtils.currentAdminUserId(),
+                "LIST_CONFIGURED_COUNTRIES",
+                "COUNTRY_CONFIG",
+                null,
+                "count=" + response.size()
+        );
+        return ResponseEntity.ok(CommonResponse.success("Configured countries", response));
+    }
+
+    @GetMapping("/unconfigured-countries")
+    public ResponseEntity<CommonResponse<List<CountrySetupCountryResponse>>> listUnconfiguredCountries() {
+        List<CountrySetupCountryResponse> response = countrySetupBootstrapService.listUnconfiguredCountries();
+        adminAuditService.logAction(
+                AdminSecurityUtils.currentAdminUserId(),
+                "LIST_UNCONFIGURED_COUNTRIES",
+                "COUNTRY_CONFIG",
+                null,
+                "count=" + response.size()
+        );
+        return ResponseEntity.ok(CommonResponse.success("Unconfigured countries", response));
+    }
+
     @PostMapping("/{countryCode}/initialize")
     public ResponseEntity<CommonResponse<CountryConfigSnapshotResponse>> initializeCountryConfig(@PathVariable String countryCode) {
         UUID adminUserId = AdminSecurityUtils.currentAdminUserId();
+        String normalizedCountryCode = countryCode == null ? "" : countryCode.trim().toUpperCase();
+        log.info("Country configuration initialize attempt: countryCode={}, adminUserId={}", normalizedCountryCode, adminUserId);
+
         CountryConfigSnapshotResponse response = countryConfigurationEngineService.initializeCountryConfiguration(countryCode, adminUserId);
         adminAuditService.logAction(
                 adminUserId,
