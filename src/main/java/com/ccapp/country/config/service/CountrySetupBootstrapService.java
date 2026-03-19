@@ -110,23 +110,24 @@ public class CountrySetupBootstrapService {
     }
 
     private void ensureOperationalCoreCountriesAvailable() {
-        List<Country> toUpsert = CORE_OPERATIONAL_COUNTRIES.stream()
-                .map(this::upsertOperationalCountry)
-                .toList();
-
-        long updatedCount = toUpsert.stream().filter(country -> country != null).count();
+        long updatedCount = CORE_OPERATIONAL_COUNTRIES.stream()
+                .filter(this::upsertOperationalCountry)
+                .count();
         if (updatedCount > 0) {
             log.warn("Country bootstrap fallback ensured operational countries: upsertedOrUpdated={}", updatedCount);
         }
     }
 
-    private Country upsertOperationalCountry(SeedCountry seedCountry) {
-        return countryRepository.findByCode(seedCountry.code())
-                .map(existing -> patchOperationalCountry(existing, seedCountry))
-                .orElseGet(() -> countryRepository.save(toCountryEntity(seedCountry)));
+    private boolean upsertOperationalCountry(SeedCountry seedCountry) {
+        Country existing = countryRepository.findByCode(seedCountry.code()).orElse(null);
+        if (existing != null) {
+            return patchOperationalCountry(existing, seedCountry);
+        }
+        countryRepository.save(toCountryEntity(seedCountry));
+        return true;
     }
 
-    private Country patchOperationalCountry(Country existing, SeedCountry seedCountry) {
+    private boolean patchOperationalCountry(Country existing, SeedCountry seedCountry) {
         boolean changed = false;
         if (!seedCountry.name().equals(existing.getName())) {
             existing.setName(seedCountry.name());
@@ -145,9 +146,9 @@ public class CountrySetupBootstrapService {
             changed = true;
         }
         if (changed) {
-            return countryRepository.save(existing);
+            countryRepository.save(existing);
         }
-        return null;
+        return changed;
     }
 
     private String normalizeCountryCode(String countryCode) {
