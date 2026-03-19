@@ -41,34 +41,33 @@ class CountrySetupBootstrapServiceIntegrationTest {
 
     @Test
     void shouldReturnAllActiveCountriesAsUnconfiguredWhenMasterExistsAndNoneInitialized() {
-        saveCountry("BJ", "Benin");
-        saveCountry("SN", "Senegal");
+        saveCountry("ML", "Mali");
+        saveCountry("NE", "Niger");
 
         List<CountrySetupCountryResponse> configured = countrySetupBootstrapService.listConfiguredCountries();
         List<CountrySetupCountryResponse> unconfigured = countrySetupBootstrapService.listUnconfiguredCountries();
 
         assertTrue(configured.isEmpty());
-        assertEquals(2, unconfigured.size());
-        assertTrue(unconfigured.stream().anyMatch(country -> country.code().equals("BJ")));
-        assertTrue(unconfigured.stream().anyMatch(country -> country.code().equals("SN")));
+        assertTrue(unconfigured.size() >= 2);
+        assertTrue(unconfigured.stream().anyMatch(country -> country.code().equals("ML")));
+        assertTrue(unconfigured.stream().anyMatch(country -> country.code().equals("NE")));
         assertTrue(unconfigured.stream().allMatch(country -> !country.configured()));
     }
 
     @Test
     void shouldSplitConfiguredAndUnconfiguredCountriesWhenSomeAreInitialized() {
-        saveCountry("BJ", "Benin");
-        saveCountry("SN", "Senegal");
-        countryConfigurationEngineService.initializeCountryConfiguration("BJ", UUID.randomUUID());
+        saveCountry("ML", "Mali");
+        saveCountry("NE", "Niger");
+        countryConfigurationEngineService.initializeCountryConfiguration("ML", UUID.randomUUID());
 
         List<CountrySetupCountryResponse> configured = countrySetupBootstrapService.listConfiguredCountries();
         List<CountrySetupCountryResponse> unconfigured = countrySetupBootstrapService.listUnconfiguredCountries();
 
         assertEquals(1, configured.size());
-        assertEquals("BJ", configured.get(0).code());
+        assertEquals("ML", configured.get(0).code());
         assertTrue(configured.get(0).configured());
-        assertEquals(1, unconfigured.size());
-        assertEquals("SN", unconfigured.get(0).code());
-        assertFalse(unconfigured.get(0).configured());
+        assertTrue(unconfigured.stream().anyMatch(country -> country.code().equals("NE")));
+        assertFalse(unconfigured.stream().anyMatch(country -> country.code().equals("ML")));
     }
 
     @Test
@@ -85,31 +84,53 @@ class CountrySetupBootstrapServiceIntegrationTest {
     }
 
     @Test
+    void shouldEnsureOperationalCountriesEvenWhenMasterTableIsNotEmpty() {
+        countryRepository.save(Country.builder()
+                .id(UUID.randomUUID())
+                .code("INT")
+                .name("International")
+                .currency("USD")
+                .active(true)
+                .configured(true)
+                .fallback(true)
+                .build());
+
+        List<CountrySetupCountryResponse> unconfigured = countrySetupBootstrapService.listUnconfiguredCountries();
+
+        assertTrue(unconfigured.stream().anyMatch(country -> country.code().equals("BJ")));
+        assertTrue(unconfigured.stream().anyMatch(country -> country.code().equals("CI")));
+        assertTrue(unconfigured.stream().anyMatch(country -> country.code().equals("SN")));
+        assertTrue(unconfigured.stream().anyMatch(country -> country.code().equals("GH")));
+        assertTrue(unconfigured.stream().anyMatch(country -> country.code().equals("TG")));
+    }
+
+    @Test
     void initializeShouldMoveCountryFromUnconfiguredToConfigured() {
-        saveCountry("CI", "Cote d'Ivoire");
+        saveCountry("CM", "Cameroon");
 
         List<CountrySetupCountryResponse> beforeConfigured = countrySetupBootstrapService.listConfiguredCountries();
         List<CountrySetupCountryResponse> beforeUnconfigured = countrySetupBootstrapService.listUnconfiguredCountries();
         assertTrue(beforeConfigured.isEmpty());
-        assertTrue(beforeUnconfigured.stream().anyMatch(country -> country.code().equals("CI")));
+        assertTrue(beforeUnconfigured.stream().anyMatch(country -> country.code().equals("CM")));
 
-        countryConfigurationEngineService.initializeCountryConfiguration("CI", UUID.randomUUID());
+        countryConfigurationEngineService.initializeCountryConfiguration("CM", UUID.randomUUID());
 
         List<CountrySetupCountryResponse> afterConfigured = countrySetupBootstrapService.listConfiguredCountries();
         List<CountrySetupCountryResponse> afterUnconfigured = countrySetupBootstrapService.listUnconfiguredCountries();
-        assertTrue(afterConfigured.stream().anyMatch(country -> country.code().equals("CI")));
-        assertFalse(afterUnconfigured.stream().anyMatch(country -> country.code().equals("CI")));
+        assertTrue(afterConfigured.stream().anyMatch(country -> country.code().equals("CM")));
+        assertFalse(afterUnconfigured.stream().anyMatch(country -> country.code().equals("CM")));
     }
 
     private void saveCountry(String code, String name) {
-        countryRepository.save(Country.builder()
+        Country country = countryRepository.findByCode(code).orElseGet(() -> Country.builder()
                 .id(UUID.randomUUID())
                 .code(code)
-                .name(name)
-                .currency("XOF")
-                .active(true)
-                .configured(false)
-                .fallback(false)
                 .build());
+        country.setName(name);
+        country.setCurrency("XOF");
+        country.setActive(true);
+        country.setConfigured(false);
+        country.setFallback(false);
+        countryRepository.saveAndFlush(country);
     }
 }

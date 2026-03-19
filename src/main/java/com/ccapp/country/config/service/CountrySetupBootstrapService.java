@@ -2,6 +2,7 @@ package com.ccapp.country.config.service;
 
 import com.ccapp.country.config.dto.CountrySetupCountryResponse;
 import com.ccapp.country.config.repository.CountryConfigVersionRepository;
+import com.ccapp.common.exception.BusinessException;
 import com.ccapp.country.domain.entity.Country;
 import com.ccapp.country.repository.CountryRepository;
 import lombok.RequiredArgsConstructor;
@@ -21,11 +22,20 @@ import java.util.stream.Collectors;
 @Slf4j
 public class CountrySetupBootstrapService {
 
+    private static final List<SeedCountry> CORE_OPERATIONAL_COUNTRIES = List.of(
+            new SeedCountry("BJ", "Benin", "XOF", false),
+            new SeedCountry("CI", "Cote d'Ivoire", "XOF", false),
+            new SeedCountry("GH", "Ghana", "GHS", false),
+            new SeedCountry("SN", "Senegal", "XOF", false),
+            new SeedCountry("TG", "Togo", "XOF", false)
+    );
+
     private static final List<SeedCountry> SAFE_DEFAULT_COUNTRIES = List.of(
             new SeedCountry("BJ", "Benin", "XOF", false),
             new SeedCountry("CI", "Cote d'Ivoire", "XOF", false),
             new SeedCountry("GH", "Ghana", "GHS", false),
             new SeedCountry("SN", "Senegal", "XOF", false),
+            new SeedCountry("TG", "Togo", "XOF", false),
             new SeedCountry("INT", "International", "USD", true)
     );
 
@@ -36,6 +46,7 @@ public class CountrySetupBootstrapService {
     public void ensureMasterCountriesSeededIfEmpty() {
         long totalMasterCountries = countryRepository.count();
         if (totalMasterCountries > 0) {
+            ensureOperationalCoreCountriesAvailable();
             return;
         }
 
@@ -47,6 +58,7 @@ public class CountrySetupBootstrapService {
                 "Country master table was empty. Seeded {} safe countries for bootstrap.",
                 seedCountries.size()
         );
+        ensureOperationalCoreCountriesAvailable();
     }
 
     @Transactional
@@ -71,24 +83,78 @@ public class CountrySetupBootstrapService {
                 .filter(code -> code != null && !code.isBlank())
                 .collect(Collectors.toSet());
 
+        if (activeCountries.isEmpty()) {
+            log.error("No active countries available after fallback seed. totalMasterCountries={}", totalMasterCountries);
+            throw new BusinessException("No active countries available");
+        }
+
         List<CountrySetupCountryResponse> configuredCountries = activeCountries.stream()
-                .filter(country -> initializedCountryCodes.contains(country.getCode()))
-                .map(country -> new CountrySetupCountryResponse(country.getCode(), country.getName(), true))
+                .filter(country -> initializedCountryCodes.contains(normalizeCountryCode(country.getCode())))
+                .map(country -> new CountrySetupCountryResponse(normalizeCountryCode(country.getCode()), country.getName(), true))
                 .toList();
 
         List<CountrySetupCountryResponse> unconfiguredCountries = activeCountries.stream()
-                .filter(country -> !initializedCountryCodes.contains(country.getCode()))
-                .map(country -> new CountrySetupCountryResponse(country.getCode(), country.getName(), false))
+                .filter(country -> !initializedCountryCodes.contains(normalizeCountryCode(country.getCode())))
+                .map(country -> new CountrySetupCountryResponse(normalizeCountryCode(country.getCode()), country.getName(), false))
                 .toList();
 
         log.info(
-                "Country setup bootstrap counts: totalMasterCountries={}, configuredCountriesCount={}, unconfiguredCountriesCount={}",
+                "Country setup bootstrap counts: totalCountriesInDb={}, activeCountriesCount={}, configuredCountriesCount={}, unconfiguredCountriesCount={}",
                 totalMasterCountries,
+                activeCountries.size(),
                 configuredCountries.size(),
                 unconfiguredCountries.size()
         );
 
         return new CountrySetupLists(configuredCountries, unconfiguredCountries);
+    }
+
+    private void ensureOperationalCoreCountriesAvailable() {
+        List<Country> toUpsert = CORE_OPERATIONAL_COUNTRIES.stream()
+                .map(this::upsertOperationalCountry)
+                .toList();
+
+        long updatedCount = toUpsert.stream().filter(country -> country != null).count();
+        if (updatedCount > 0) {
+            log.warn("Country bootstrap fallback ensured operational countries: upsertedOrUpdated={}", updatedCount);
+        }
+    }
+
+    private Country upsertOperationalCountry(SeedCountry seedCountry) {
+        return countryRepository.findByCode(seedCountry.code())
+                .map(existing -> patchOperationalCountry(existing, seedCountry))
+                .orElseGet(() -> countryRepository.save(toCountryEntity(seedCountry)));
+    }
+
+    private Country patchOperationalCountry(Country existing, SeedCountry seedCountry) {
+        boolean changed = false;
+        if (!seedCountry.name().equals(existing.getName())) {
+            existing.setName(seedCountry.name());
+            changed = true;
+        }
+        if (!seedCountry.currency().equals(existing.getCurrency())) {
+            existing.setCurrency(seedCountry.currency());
+            changed = true;
+        }
+        if (!existing.isActive()) {
+            existing.setActive(true);
+            changed = true;
+        }
+        if (existing.isFallback() != seedCountry.fallback()) {
+            existing.setFallback(seedCountry.fallback());
+            changed = true;
+        }
+        if (changed) {
+            return countryRepository.save(existing);
+        }
+        return null;
+    }
+
+    private String normalizeCountryCode(String countryCode) {
+        if (countryCode == null || countryCode.isBlank()) {
+            return "";
+        }
+        return countryCode.trim().toUpperCase(Locale.ROOT);
     }
 
     private Country toCountryEntity(SeedCountry seedCountry) {

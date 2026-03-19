@@ -3,6 +3,7 @@ package com.ccapp.admin.service;
 import com.ccapp.admin.dto.LookupItemResponse;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.country.config.dto.CountryConfigFullResponse;
+import com.ccapp.country.config.repository.CountryConfigVersionRepository;
 import com.ccapp.country.config.repository.CountryChartAccountRepository;
 import com.ccapp.country.config.service.CountryConfigurationEngineService;
 import com.ccapp.country.config.service.CountrySetupBootstrapService;
@@ -30,6 +31,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -41,6 +43,7 @@ public class AdminLookupService {
     private final FinancingOfferRepository financingOfferRepository;
     private final OfferCountryConfigRepository offerCountryConfigRepository;
     private final CountryChartAccountRepository countryChartAccountRepository;
+    private final CountryConfigVersionRepository countryConfigVersionRepository;
     private final CountryConfigurationEngineService countryConfigurationEngineService;
     private final CountrySetupBootstrapService countrySetupBootstrapService;
     private final ObjectMapper objectMapper;
@@ -48,9 +51,31 @@ public class AdminLookupService {
     @Transactional
     public List<LookupItemResponse> listCountries() {
         countrySetupBootstrapService.ensureMasterCountriesSeededIfEmpty();
-        List<Country> countries = countryRepository.findAllByOrderByCodeAsc();
-        log.info("Country lookup loaded: totalMasterCountries={}", countries.size());
-        return countries.stream()
+        long totalCountriesInDb = countryRepository.count();
+        List<Country> activeCountries = countryRepository.findByActiveTrueOrderByNameAsc();
+        Set<String> initializedCountryCodes = countryConfigVersionRepository.findDistinctCountryCodes().stream()
+                .map(code -> code == null ? null : code.trim().toUpperCase(Locale.ROOT))
+                .filter(code -> code != null && !code.isBlank())
+                .collect(Collectors.toSet());
+        long configuredCount = activeCountries.stream()
+                .map(country -> country.getCode() == null ? "" : country.getCode().trim().toUpperCase(Locale.ROOT))
+                .filter(initializedCountryCodes::contains)
+                .count();
+        long unconfiguredCount = activeCountries.size() - configuredCount;
+
+        log.info(
+                "Country lookup counts: totalCountriesInDb={}, activeCountriesCount={}, configuredCountriesCount={}, unconfiguredCountriesCount={}",
+                totalCountriesInDb,
+                activeCountries.size(),
+                configuredCount,
+                unconfiguredCount
+        );
+
+        if (activeCountries.isEmpty()) {
+            throw new BusinessException("No active countries available");
+        }
+
+        return activeCountries.stream()
                 .map(country -> new LookupItemResponse(
                         country.getCode(),
                         country.getName(),

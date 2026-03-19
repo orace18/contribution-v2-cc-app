@@ -48,7 +48,7 @@ public class AdminCountryWorkspaceService {
     private final CountryConfigurationEngineService countryConfigurationEngineService;
     private final CountrySetupBootstrapService countrySetupBootstrapService;
 
-    @Transactional(readOnly = true)
+    @Transactional
     public AdminCountryWorkspaceListResponse getCountriesOverview() {
         countrySetupBootstrapService.ensureMasterCountriesSeededIfEmpty();
 
@@ -86,7 +86,7 @@ public class AdminCountryWorkspaceService {
         return new AdminCountryWorkspaceListResponse(configuredCountries, unconfiguredCountries);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public AdminCountryWorkspaceDetailResponse getCountryWorkspace(String countryCode) {
         countrySetupBootstrapService.ensureMasterCountriesSeededIfEmpty();
 
