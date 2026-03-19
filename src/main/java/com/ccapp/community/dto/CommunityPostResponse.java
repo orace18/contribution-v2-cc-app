@@ -11,6 +11,9 @@ public record CommunityPostResponse(
         boolean featured,
         Integer featuredPriority,
         OffsetDateTime featuredAt,
+        long likesCount,
+        long commentsCount,
+        boolean likedByCurrentUser,
         OffsetDateTime createdAt
 ) {
 }

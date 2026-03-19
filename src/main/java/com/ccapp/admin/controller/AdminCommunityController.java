@@ -18,6 +18,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -28,6 +29,12 @@ import java.util.UUID;
 public class AdminCommunityController {
 
     private final CommunityAdminService communityAdminService;
+
+    @GetMapping
+    @Operation(summary = "List all community posts")
+    public ResponseEntity<CommonResponse<List<CommunityPostResponse>>> list() {
+        return ResponseEntity.ok(CommonResponse.success("Community posts", communityAdminService.listPosts()));
+    }
 
     @PostMapping
     @Operation(summary = "Create a community post")

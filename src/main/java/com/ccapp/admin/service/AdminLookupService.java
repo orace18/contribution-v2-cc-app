@@ -50,6 +50,11 @@ public class AdminLookupService {
 
     @Transactional
     public List<LookupItemResponse> listCountries() {
+        return listWorldCountries();
+    }
+
+    @Transactional
+    public List<LookupItemResponse> listWorldCountries() {
         countrySetupBootstrapService.ensureMasterCountriesSeededIfEmpty();
         long totalCountriesInDb = countryRepository.count();
         List<Country> activeCountries = countryRepository.findByActiveTrueOrderByNameAsc();
@@ -64,7 +69,7 @@ public class AdminLookupService {
         long unconfiguredCount = activeCountries.size() - configuredCount;
 
         log.info(
-                "Country lookup counts: totalCountriesInDb={}, activeCountriesCount={}, configuredCountriesCount={}, unconfiguredCountriesCount={}",
+                "World country lookup counts: totalCountriesInDb={}, activeCountriesCount={}, configuredCountriesCount={}, unconfiguredCountriesCount={}",
                 totalCountriesInDb,
                 activeCountries.size(),
                 configuredCount,

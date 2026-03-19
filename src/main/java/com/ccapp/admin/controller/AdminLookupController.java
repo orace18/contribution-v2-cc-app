@@ -24,6 +24,11 @@ public class AdminLookupController {
         return ResponseEntity.ok(CommonResponse.success("Countries", adminLookupService.listCountries()));
     }
 
+    @GetMapping("/world-countries")
+    public ResponseEntity<CommonResponse<List<LookupItemResponse>>> listWorldCountries() {
+        return ResponseEntity.ok(CommonResponse.success("World countries", adminLookupService.listWorldCountries()));
+    }
+
     @GetMapping("/partners")
     public ResponseEntity<CommonResponse<List<LookupItemResponse>>> listPartners(
             @RequestParam(required = false) String countryCode) {

@@ -18,6 +18,7 @@ import com.ccapp.config.TestJacksonAndCachingConfig;
 import com.ccapp.country.config.service.CountryChartOfAccountsService;
 import com.ccapp.country.config.service.CountryConfigReadinessService;
 import com.ccapp.country.config.service.CountryConfigurationEngineService;
+import com.ccapp.country.config.service.CountryConfigurationStatusService;
 import com.ccapp.country.config.service.CountrySetupBootstrapService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -64,6 +65,8 @@ class AdminCountryConfigurationEngineControllerIntegrationTest {
     private CountryChartOfAccountsService countryChartOfAccountsService;
     @MockBean
     private CountrySetupBootstrapService countrySetupBootstrapService;
+    @MockBean
+    private CountryConfigurationStatusService countryConfigurationStatusService;
     @MockBean
     private AdminCountryWorkspaceService adminCountryWorkspaceService;
     @MockBean
@@ -167,6 +170,28 @@ class AdminCountryConfigurationEngineControllerIntegrationTest {
                 "COUNTRY_CONFIG_WORKSPACE",
                 "BJ",
                 "GET_COUNTRY_WORKSPACE"
+        ));
+    }
+
+    @Test
+    void getConfigurationStatus_shouldReturnGroupedCountriesAndWriteAuditLog() {
+        var status = new com.ccapp.country.config.dto.CountryConfigurationStatusResponse(
+                List.of(new com.ccapp.country.config.dto.CountryConfigurationStatusCountryResponse("NE", "Niger", "NOT_CONFIGURED", 0)),
+                List.of(new com.ccapp.country.config.dto.CountryConfigurationStatusCountryResponse("BJ", "Benin", "DRAFT", 18)),
+                List.of(new com.ccapp.country.config.dto.CountryConfigurationStatusCountryResponse("GH", "Ghana", "READY", 100))
+        );
+        when(countryConfigurationStatusService.getConfigurationStatus()).thenReturn(status);
+
+        ResponseEntity<CommonResponse<com.ccapp.country.config.dto.CountryConfigurationStatusResponse>> response =
+                controller.getConfigurationStatus();
+
+        assertEquals(1, response.getBody().data().notConfigured().size());
+        assertEquals(1, response.getBody().data().draftOrPartial().size());
+        assertEquals(1, response.getBody().data().configured().size());
+        assertEquals(1L, adminAuditLogRepository.countByEntityTypeAndEntityIdAndAction(
+                "COUNTRY_CONFIG",
+                null,
+                "GET_COUNTRY_CONFIGURATION_STATUS"
         ));
     }
 }

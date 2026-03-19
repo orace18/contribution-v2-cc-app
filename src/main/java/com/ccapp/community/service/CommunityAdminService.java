@@ -8,11 +8,14 @@ import com.ccapp.community.dto.CommunityPostResponse;
 import com.ccapp.community.dto.CreateCommunityPostRequest;
 import com.ccapp.community.event.PostCreatedEvent;
 import com.ccapp.community.repository.CommunityPostRepository;
+import com.ccapp.community.repository.PostCommentRepository;
+import com.ccapp.community.repository.PostLikeRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -22,7 +25,18 @@ public class CommunityAdminService {
     private static final int MAX_FEATURED_POSTS = 5;
 
     private final CommunityPostRepository communityPostRepository;
+    private final PostLikeRepository postLikeRepository;
+    private final PostCommentRepository postCommentRepository;
     private final DomainEventPublisher domainEventPublisher;
+
+    @Transactional(readOnly = true)
+    public List<CommunityPostResponse> listPosts() {
+        return communityPostRepository.findAll().stream()
+                .filter(CommunityPost::isActive)
+                .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
+                .map(this::toResponse)
+                .toList();
+    }
 
     @Transactional
     public CommunityPostResponse create(CreateCommunityPostRequest request) {
@@ -78,6 +92,8 @@ public class CommunityAdminService {
     }
 
     private CommunityPostResponse toResponse(CommunityPost post) {
+        long likesCount = postLikeRepository.countByPostId(post.getId());
+        long commentsCount = postCommentRepository.countByPostId(post.getId());
         return new CommunityPostResponse(
                 post.getId(),
                 post.getTitle(),
@@ -86,6 +102,9 @@ public class CommunityAdminService {
                 post.isFeatured(),
                 post.getFeaturedPriority(),
                 post.getFeaturedAt(),
+                likesCount,
+                commentsCount,
+                false,
                 post.getCreatedAt()
         );
     }

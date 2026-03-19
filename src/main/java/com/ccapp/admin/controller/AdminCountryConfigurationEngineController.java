@@ -16,6 +16,7 @@ import com.ccapp.country.config.dto.CountryChartAccountSummaryResponse;
 import com.ccapp.country.config.dto.CountryConfigFullResponse;
 import com.ccapp.country.config.dto.CountryConfigReadinessResponse;
 import com.ccapp.country.config.dto.CountryConfigSnapshotResponse;
+import com.ccapp.country.config.dto.CountryConfigurationStatusResponse;
 import com.ccapp.country.config.dto.CountrySetupCountryResponse;
 import com.ccapp.country.config.dto.CountryConfigVersionResponse;
 import com.ccapp.country.config.dto.CountryConfigVersionHistoryItemResponse;
@@ -24,6 +25,7 @@ import com.ccapp.country.config.dto.SecureUpsertCountryConfigRequest;
 import com.ccapp.country.config.dto.UpsertCountryConfigRequest;
 import com.ccapp.country.config.service.CountryChartOfAccountsService;
 import com.ccapp.country.config.service.CountryConfigReadinessService;
+import com.ccapp.country.config.service.CountryConfigurationStatusService;
 import com.ccapp.country.config.service.CountryConfigurationEngineService;
 import com.ccapp.country.config.service.CountrySetupBootstrapService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -60,6 +62,7 @@ public class AdminCountryConfigurationEngineController {
     private final CountryConfigReadinessService countryConfigReadinessService;
     private final CountryChartOfAccountsService countryChartOfAccountsService;
     private final CountrySetupBootstrapService countrySetupBootstrapService;
+    private final CountryConfigurationStatusService countryConfigurationStatusService;
     private final AdminCountryWorkspaceService adminCountryWorkspaceService;
     private final AdminConfigMutationSecurityService adminConfigMutationSecurityService;
     private final AdminAuditService adminAuditService;
@@ -150,6 +153,23 @@ public class AdminCountryConfigurationEngineController {
                 "count=" + response.size()
         );
         return ResponseEntity.ok(CommonResponse.success("Unconfigured countries", response));
+    }
+
+    @GetMapping("/configuration-status")
+    public ResponseEntity<CommonResponse<CountryConfigurationStatusResponse>> getConfigurationStatus() {
+        CountryConfigurationStatusResponse response = countryConfigurationStatusService.getConfigurationStatus();
+        adminAuditService.logAction(
+                AdminSecurityUtils.currentAdminUserId(),
+                "GET_COUNTRY_CONFIGURATION_STATUS",
+                "COUNTRY_CONFIG",
+                null,
+                Map.of(
+                        "notConfiguredCount", response.notConfigured().size(),
+                        "draftOrPartialCount", response.draftOrPartial().size(),
+                        "configuredCount", response.configured().size()
+                )
+        );
+        return ResponseEntity.ok(CommonResponse.success("Country configuration status", response));
     }
 
     @PostMapping("/{countryCode}/initialize")
