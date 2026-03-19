@@ -80,6 +80,8 @@ public class AdminLookupService {
             throw new BusinessException("No active countries available");
         }
 
+        log.info("World countries count = {}", activeCountries.size());
+
         return activeCountries.stream()
                 .map(country -> new LookupItemResponse(
                         country.getCode(),
