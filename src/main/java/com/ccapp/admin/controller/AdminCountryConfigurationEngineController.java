@@ -86,6 +86,7 @@ public class AdminCountryConfigurationEngineController {
 
     @GetMapping("/workspace/countries/{countryCode}")
     public ResponseEntity<CommonResponse<AdminCountryWorkspaceDetailResponse>> getCountryWorkspace(@PathVariable String countryCode) {
+        AdminSecurityUtils.assertCountryAccess(countryCode);
         AdminCountryWorkspaceDetailResponse response = adminCountryWorkspaceService.getCountryWorkspace(countryCode);
         adminAuditService.logAction(
                 AdminSecurityUtils.currentAdminUserId(),
@@ -104,6 +105,7 @@ public class AdminCountryConfigurationEngineController {
     public ResponseEntity<CommonResponse<CountryConfigSnapshotResponse>> getCountryConfig(
             @PathVariable String countryCode,
             @RequestParam(required = false) OffsetDateTime asOf) {
+        AdminSecurityUtils.assertCountryAccess(countryCode);
         CountryConfigSnapshotResponse response = countryConfigurationEngineService.getCountryConfiguration(countryCode, asOf);
         adminAuditService.logAction(
                 AdminSecurityUtils.currentAdminUserId(),
@@ -119,6 +121,7 @@ public class AdminCountryConfigurationEngineController {
     public ResponseEntity<CommonResponse<CountryConfigFullResponse>> getCountryConfigFull(
             @PathVariable String countryCode,
             @RequestParam(required = false) OffsetDateTime asOf) {
+        AdminSecurityUtils.assertCountryAccess(countryCode);
         CountryConfigFullResponse response = countryConfigurationEngineService.getFullCountryConfiguration(countryCode, asOf);
         adminAuditService.logAction(
                 AdminSecurityUtils.currentAdminUserId(),
@@ -175,6 +178,7 @@ public class AdminCountryConfigurationEngineController {
 
     @PostMapping("/{countryCode}/initialize")
     public ResponseEntity<CommonResponse<CountryConfigSnapshotResponse>> initializeCountryConfig(@PathVariable String countryCode) {
+        AdminSecurityUtils.assertCountryAccess(countryCode);
         UUID adminUserId = AdminSecurityUtils.currentAdminUserId();
         String normalizedCountryCode = countryCode == null ? "" : countryCode.trim().toUpperCase();
         log.info("Country configuration initialize attempt: countryCode={}, adminUserId={}", normalizedCountryCode, adminUserId);
@@ -198,6 +202,7 @@ public class AdminCountryConfigurationEngineController {
             @PathVariable String countryCode,
             @PathVariable String configType,
             @Valid @RequestBody SecureUpsertCountryConfigRequest request) {
+        AdminSecurityUtils.assertCountryAccess(countryCode);
         CountryConfigType parsedConfigType = parseConfigType(configType);
         UUID adminUserId = AdminSecurityUtils.currentAdminUserId();
         AdminConfigMutationSecurityService.ConfigMutationApprovalContext approvalContext =
@@ -236,6 +241,7 @@ public class AdminCountryConfigurationEngineController {
     public ResponseEntity<CommonResponse<List<CountryConfigVersionHistoryItemResponse>>> listCountryConfigVersions(
             @PathVariable String countryCode,
             @PathVariable String configType) {
+        AdminSecurityUtils.assertCountryAccess(countryCode);
         CountryConfigType parsedConfigType = parseConfigType(configType);
         List<CountryConfigVersionHistoryItemResponse> response = countryConfigurationEngineService
                 .listCountryConfigurationVersions(countryCode, parsedConfigType);
@@ -254,6 +260,7 @@ public class AdminCountryConfigurationEngineController {
             @PathVariable String countryCode,
             @PathVariable String configType,
             @Valid @RequestBody SecureActivateCountryConfigVersionRequest request) {
+        AdminSecurityUtils.assertCountryAccess(countryCode);
         CountryConfigType parsedConfigType = parseConfigType(configType);
         UUID adminUserId = AdminSecurityUtils.currentAdminUserId();
         AdminConfigMutationSecurityService.ConfigMutationApprovalContext approvalContext =
@@ -290,6 +297,7 @@ public class AdminCountryConfigurationEngineController {
 
     @GetMapping("/{countryCode}/readiness")
     public ResponseEntity<CommonResponse<CountryConfigReadinessResponse>> getCountryReadiness(@PathVariable String countryCode) {
+        AdminSecurityUtils.assertCountryAccess(countryCode);
         CountryConfigReadinessResponse response = countryConfigReadinessService.refreshCountryConfiguredStatus(countryCode);
         adminAuditService.logAction(
                 AdminSecurityUtils.currentAdminUserId(),
@@ -303,6 +311,7 @@ public class AdminCountryConfigurationEngineController {
 
     @GetMapping("/{countryCode}/accounts")
     public ResponseEntity<CommonResponse<List<CountryChartAccountSummaryResponse>>> listCountryAccounts(@PathVariable String countryCode) {
+        AdminSecurityUtils.assertCountryAccess(countryCode);
         List<CountryChartAccountSummaryResponse> response = countryChartOfAccountsService.listCountryAccounts(countryCode);
         adminAuditService.logAction(
                 AdminSecurityUtils.currentAdminUserId(),
@@ -318,6 +327,7 @@ public class AdminCountryConfigurationEngineController {
     public ResponseEntity<CommonResponse<CountryChartAccountDetailsResponse>> createCountryAccount(
             @PathVariable String countryCode,
             @Valid @RequestBody CreateCountryChartAccountRequest request) {
+        AdminSecurityUtils.assertCountryAccess(countryCode);
         CountryChartAccountDetailsResponse response = countryChartOfAccountsService.createCountryAccount(countryCode, request);
         adminAuditService.logAction(
                 AdminSecurityUtils.currentAdminUserId(),
@@ -335,6 +345,7 @@ public class AdminCountryConfigurationEngineController {
 
     @PostMapping("/{countryCode}/accounts/auto-generate")
     public ResponseEntity<CommonResponse<List<CountryChartAccountSummaryResponse>>> autoGenerateCountryAccounts(@PathVariable String countryCode) {
+        AdminSecurityUtils.assertCountryAccess(countryCode);
         List<CountryChartAccountSummaryResponse> response = countryChartOfAccountsService.autoGenerateRequiredAccounts(countryCode);
         adminAuditService.logAction(
                 AdminSecurityUtils.currentAdminUserId(),
@@ -350,6 +361,7 @@ public class AdminCountryConfigurationEngineController {
     public ResponseEntity<CommonResponse<CountryChartAccountDetailsResponse>> getCountryAccount(
             @PathVariable String countryCode,
             @PathVariable UUID accountId) {
+        AdminSecurityUtils.assertCountryAccess(countryCode);
         CountryChartAccountDetailsResponse response = countryChartOfAccountsService.getCountryAccount(countryCode, accountId);
         adminAuditService.logAction(
                 AdminSecurityUtils.currentAdminUserId(),
@@ -365,6 +377,7 @@ public class AdminCountryConfigurationEngineController {
     public ResponseEntity<CommonResponse<CountryChartAccountHistoryResponse>> getCountryAccountHistory(
             @PathVariable String countryCode,
             @PathVariable UUID accountId) {
+        AdminSecurityUtils.assertCountryAccess(countryCode);
         CountryChartAccountHistoryResponse response = countryChartOfAccountsService.getCountryAccountHistory(countryCode, accountId);
         adminAuditService.logAction(
                 AdminSecurityUtils.currentAdminUserId(),

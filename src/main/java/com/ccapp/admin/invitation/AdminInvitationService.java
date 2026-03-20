@@ -3,12 +3,14 @@ package com.ccapp.admin.invitation;
 import com.ccapp.admin.domain.entity.AdminInvitation;
 import com.ccapp.admin.domain.entity.AdminUser;
 import com.ccapp.admin.domain.enums.AdminInvitationStatus;
+import com.ccapp.admin.dto.AdminAccountSummaryResponse;
 import com.ccapp.admin.dto.AdminInvitationResponse;
 import com.ccapp.admin.dto.CreateAdminInvitationRequest;
 import com.ccapp.admin.repository.AdminInvitationRepository;
 import com.ccapp.admin.repository.AdminUserRepository;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.common.exception.NotFoundException;
+import com.ccapp.country.repository.CountryRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -19,7 +21,9 @@ import java.time.OffsetDateTime;
 import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -28,6 +32,7 @@ public class AdminInvitationService {
     private final AdminInvitationRepository adminInvitationRepository;
     private final AdminUserRepository adminUserRepository;
     private final AdminInvitationNotifier adminInvitationNotifier;
+    private final CountryRepository countryRepository;
 
     @Value("${admin.invitation.default-expiration-hours:72}")
     private long defaultExpirationHours;
@@ -62,6 +67,26 @@ public class AdminInvitationService {
 
         adminInvitationNotifier.sendInvitation(invitation);
         return toResponse(invitation);
+    }
+
+    @Transactional(readOnly = true)
+    public List<AdminAccountSummaryResponse> listAdminAccounts() {
+        Map<UUID, String> countryCodeById = countryRepository.findAll().stream()
+                .collect(Collectors.toMap(c -> c.getId(), c -> c.getCode()));
+
+        return adminUserRepository.findAllByOrderByCreatedAtDesc().stream()
+                .map(user -> new AdminAccountSummaryResponse(
+                        user.getId(),
+                        user.getEmail(),
+                        user.getRole(),
+                        user.getCountryId(),
+                        user.getCountryId() != null ? countryCodeById.get(user.getCountryId()) : null,
+                        user.getStatus(),
+                        user.isTwoFactorEnabled(),
+                        user.getCreatedAt(),
+                        user.getActivatedAt()
+                ))
+                .toList();
     }
 
     @Transactional(readOnly = true)

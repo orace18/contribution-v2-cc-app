@@ -3,6 +3,7 @@ package com.ccapp.admin.security;
 import com.ccapp.admin.domain.entity.AdminUser;
 import com.ccapp.admin.domain.enums.AdminUserStatus;
 import com.ccapp.admin.repository.AdminUserRepository;
+import com.ccapp.country.repository.CountryRepository;
 import com.ccapp.common.api.CommonResponse;
 import com.ccapp.common.exception.UnauthorizedException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -30,6 +31,7 @@ public class AdminJwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final AdminJwtService adminJwtService;
     private final AdminUserRepository adminUserRepository;
+    private final CountryRepository countryRepository;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -69,11 +71,17 @@ public class AdminJwtAuthenticationFilter extends OncePerRequestFilter {
                 throw new UnauthorizedException("2FA not activated");
             }
 
+            String countryCode = adminUser.getCountryId() == null ? null
+                    : countryRepository.findById(adminUser.getCountryId())
+                            .map(c -> c.getCode())
+                            .orElse(null);
+
             AdminPrincipal principal = AdminPrincipal.builder()
                     .adminUserId(adminUser.getId())
                     .email(adminUser.getEmail())
                     .role(adminUser.getRole())
                     .countryId(adminUser.getCountryId())
+                    .countryCode(countryCode)
                     .build();
 
             UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(

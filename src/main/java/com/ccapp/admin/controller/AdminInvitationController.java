@@ -2,6 +2,7 @@ package com.ccapp.admin.controller;
 
 import com.ccapp.admin.audit.AdminAuditService;
 import com.ccapp.admin.domain.enums.AdminRole;
+import com.ccapp.admin.dto.AdminAccountSummaryResponse;
 import com.ccapp.admin.dto.AdminInvitationResponse;
 import com.ccapp.admin.dto.CreateAdminInvitationRequest;
 import com.ccapp.admin.invitation.AdminInvitationService;
@@ -23,6 +24,13 @@ public class AdminInvitationController {
 
     private final AdminInvitationService adminInvitationService;
     private final AdminAuditService adminAuditService;
+
+    @GetMapping("/admin-accounts")
+    public ResponseEntity<CommonResponse<List<AdminAccountSummaryResponse>>> listAdminAccounts() {
+        List<AdminAccountSummaryResponse> response = adminInvitationService.listAdminAccounts();
+        adminAuditService.logAction(AdminSecurityUtils.currentAdminUserId(), "LIST_ADMIN_ACCOUNTS", "ADMIN_USER", null, "count=" + response.size());
+        return ResponseEntity.ok(CommonResponse.success("Admin accounts", response));
+    }
 
     @PostMapping
     public ResponseEntity<CommonResponse<AdminInvitationResponse>> createInvitation(

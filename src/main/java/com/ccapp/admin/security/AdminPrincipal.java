@@ -10,6 +10,7 @@ public record AdminPrincipal(
         UUID adminUserId,
         String email,
         AdminRole role,
-        UUID countryId
+        UUID countryId,
+        String countryCode
 ) {
 }
