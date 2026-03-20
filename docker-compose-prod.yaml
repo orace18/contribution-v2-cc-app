@@ -25,7 +25,7 @@ services:
       - FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID:-}
       - FIREBASE_CREDENTIALS_PATH=${FIREBASE_CREDENTIALS_PATH:-classpath:firebase/firebase-service-account-prod.json}
       - PARTNER_API_KEY=${PARTNER_API_KEY:-partner-api-key-prod-change-me}
-      - MAIL_PASSWORD=${MAIL_PASSWORD:-mail-prod-change-me}
+      - MAIL_PASSWORD=${MAIL_PASSWORD:-bB9-6KZZ7UG9NxW}
       - SENTRY_DSN=${SENTRY_DSN}
       - ACTIVEMQ_USER=${ACTIVEMQ_USER}
       - ACTIVEMQ_PASSWORD=${ACTIVEMQ_PASSWORD:-activemq-prod-change-me}
