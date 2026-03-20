@@ -220,6 +220,7 @@ class AdminCountryConfigurationEngineControllerIntegrationTest {
                 BigDecimal.ZERO,
                 CountryChartAccountStatus.ACTIVE,
                 null,
+                null,
                 null
         );
         when(countryChartOfAccountsService.createCountryAccount("BJ",
@@ -256,6 +257,7 @@ class AdminCountryConfigurationEngineControllerIntegrationTest {
                         BigDecimal.ZERO,
                         CountryChartAccountStatus.ACTIVE,
                         null,
+                        null,
                         null
                 ),
                 new CountryChartAccountSummaryResponse(
@@ -270,6 +272,7 @@ class AdminCountryConfigurationEngineControllerIntegrationTest {
                         "XOF",
                         BigDecimal.ZERO,
                         CountryChartAccountStatus.ACTIVE,
+                        null,
                         null,
                         null
                 )
