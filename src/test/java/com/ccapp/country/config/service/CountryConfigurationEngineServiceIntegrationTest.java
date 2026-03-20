@@ -4,6 +4,7 @@ import com.ccapp.admin.service.ConfigAuditMetadataService;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.config.TestJacksonAndCachingConfig;
 import com.ccapp.country.config.domain.entity.CountryChartAccount;
+import com.ccapp.country.config.domain.enums.CountryAccountGroup;
 import com.ccapp.country.config.domain.enums.CountryChartAccountStatus;
 import com.ccapp.country.config.domain.enums.CountryChartAccountType;
 import com.ccapp.country.config.domain.enums.CountryConfigType;
@@ -39,6 +40,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
         "spring.jpa.hibernate.ddl-auto=create-drop"
 })
 @Import({
+        CountryChartOfAccountsService.class,
         CountryConfigurationEngineService.class,
         CountryConfigReadinessService.class,
         CountryConfigResolver.class,
@@ -160,6 +162,9 @@ class CountryConfigurationEngineServiceIntegrationTest {
                 .initializeCountryConfiguration("SN", UUID.randomUUID());
         assertEquals("SN", initialized.countryCode());
         assertEquals(CountryConfigType.values().length, initialized.configs().size());
+        assertEquals(4L, countryChartAccountRepository.findByCountryCodeOrderByAccountCodeAsc("SN").stream()
+                .filter(account -> CountryAccountGroup.defaultInitializationGroups().contains(account.getAccountGroup()))
+                .count());
 
         Country updatedCountry = countryRepository.findByCode("SN").orElseThrow();
         assertTrue(updatedCountry.isActive());

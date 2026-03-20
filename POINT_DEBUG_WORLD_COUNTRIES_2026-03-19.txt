@@ -1,0 +1,101 @@
+POINT DEBUG - WORLD COUNTRIES LOAD
+Date: 2026-03-19
+
+Contexte
+- Erreur UI: "Unable to load available countries for configuration"
+- Objectif: vérifier uniquement pourquoi la source "New Country" ne charge pas.
+
+================================================
+1) BACKEND ENDPOINT CHECK
+================================================
+
+Endpoint vérifié:
+- GET /admin/lookups/world-countries
+
+Contrôleur:
+- src/main/java/com/ccapp/admin/controller/AdminLookupController.java
+- Mapping présent: @GetMapping("/world-countries")
+
+Service:
+- src/main/java/com/ccapp/admin/service/AdminLookupService.java
+- Méthode: listWorldCountries()
+
+Log demandé ajouté:
+- log.info("World countries count = {}", activeCountries.size());
+
+================================================
+2) DATABASE / MASTER COUNTRIES CHECK
+================================================
+
+Source master vérifiée via Flyway:
+- src/main/resources/db/migration/V19__seed_countries.sql
+
+Résultat:
+- Dataset ISO2 complet présent (249 entrées dans le seed principal)
+- Donc la base n’est pas censée être limitée à BJ/CI/GH/SN.
+
+Règle d’exécution Flyway:
+- flyway.enabled=true dans application.properties / application-dev.properties / application-prod.properties
+
+================================================
+3) FRONTEND CALL CHECK
+================================================
+
+Service front vérifié:
+- src/app/features/country-config/services/lookups.service.ts
+- URL utilisée: /admin/lookups/world-countries
+
+Auth/header:
+- src/app/core/interceptors/auth.interceptor.ts
+- Authorization Bearer injecté si token présent
+
+Fix appliqué (ciblé):
+- Normalisation du base URL pour éviter les doubles slashs:
+  - baseUrl = environment.apiBaseUrl.replace(/\/+$/, '')
+  - URL finale: `${baseUrl}${request.url}`
+
+================================================
+4) VALIDATION EXECUTEE
+================================================
+
+Backend:
+- mvn -Dtest=AdminLookupControllerIntegrationTest test
+- Résultat: BUILD SUCCESS
+
+Frontend:
+- npm run build
+- Résultat: build OK (warnings CSS existants non bloquants)
+
+================================================
+5) ETAT ACTUEL / CAUSE PROBABLE
+================================================
+
+Le code est en place et compile.
+La cause la plus probable de l’erreur UI restante est runtime:
+- status HTTP 401/403/500
+- token admin absent/expiré
+- environnement pointant vers une base sans données actives
+- ou API gateway/contexte qui ne route pas correctement.
+
+================================================
+6) CHECKS RUNTIME A FAIRE (OBLIGATOIRES COTE ENV)
+================================================
+
+Network (navigateur):
+- Requête: GET /admin/lookups/world-countries
+- Vérifier: status code, payload, message backend
+
+Logs backend attendus:
+- "World countries count = X"
+- "World country lookup counts: ..."
+
+SQL à exécuter:
+- SELECT COUNT(*) FROM countries;
+- SELECT COUNT(*) FROM countries WHERE active = true;
+- SELECT code, name, active FROM countries ORDER BY code LIMIT 20;
+
+Interprétation:
+- si active=0 => problème data/seed sur l’environnement
+- si status 401/403 => problème auth/rôle
+- si status 500 => problème backend runtime (stack trace)
+

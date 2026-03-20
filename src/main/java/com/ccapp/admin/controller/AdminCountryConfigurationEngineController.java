@@ -20,6 +20,7 @@ import com.ccapp.country.config.dto.CountryConfigurationStatusResponse;
 import com.ccapp.country.config.dto.CountrySetupCountryResponse;
 import com.ccapp.country.config.dto.CountryConfigVersionResponse;
 import com.ccapp.country.config.dto.CountryConfigVersionHistoryItemResponse;
+import com.ccapp.country.config.dto.CreateCountryChartAccountRequest;
 import com.ccapp.country.config.dto.SecureActivateCountryConfigVersionRequest;
 import com.ccapp.country.config.dto.SecureUpsertCountryConfigRequest;
 import com.ccapp.country.config.dto.UpsertCountryConfigRequest;
@@ -184,7 +185,10 @@ public class AdminCountryConfigurationEngineController {
                 "INITIALIZE_COUNTRY_CONFIG",
                 "COUNTRY_CONFIG",
                 countryCode,
-                "initialized=true"
+                Map.of(
+                        "initialized", true,
+                        "defaultAccountsCreated", true
+                )
         );
         return ResponseEntity.ok(CommonResponse.success("Country configuration initialized", response));
     }
@@ -308,6 +312,38 @@ public class AdminCountryConfigurationEngineController {
                 "count=" + response.size()
         );
         return ResponseEntity.ok(CommonResponse.success("Country chart of accounts", response));
+    }
+
+    @PostMapping("/{countryCode}/accounts")
+    public ResponseEntity<CommonResponse<CountryChartAccountDetailsResponse>> createCountryAccount(
+            @PathVariable String countryCode,
+            @Valid @RequestBody CreateCountryChartAccountRequest request) {
+        CountryChartAccountDetailsResponse response = countryChartOfAccountsService.createCountryAccount(countryCode, request);
+        adminAuditService.logAction(
+                AdminSecurityUtils.currentAdminUserId(),
+                "CREATE_COUNTRY_CHART_ACCOUNT",
+                "COUNTRY_ACCOUNT",
+                response.id().toString(),
+                Map.of(
+                        "countryCode", response.countryCode(),
+                        "group", response.groupId().name(),
+                        "accountNumber", response.accountNumber()
+                )
+        );
+        return ResponseEntity.ok(CommonResponse.success("Country account created", response));
+    }
+
+    @PostMapping("/{countryCode}/accounts/auto-generate")
+    public ResponseEntity<CommonResponse<List<CountryChartAccountSummaryResponse>>> autoGenerateCountryAccounts(@PathVariable String countryCode) {
+        List<CountryChartAccountSummaryResponse> response = countryChartOfAccountsService.autoGenerateRequiredAccounts(countryCode);
+        adminAuditService.logAction(
+                AdminSecurityUtils.currentAdminUserId(),
+                "AUTO_GENERATE_COUNTRY_CHART_ACCOUNTS",
+                "COUNTRY_ACCOUNT",
+                countryCode,
+                "count=" + response.size()
+        );
+        return ResponseEntity.ok(CommonResponse.success("Country accounts generated", response));
     }
 
     @GetMapping("/{countryCode}/accounts/{accountId}")

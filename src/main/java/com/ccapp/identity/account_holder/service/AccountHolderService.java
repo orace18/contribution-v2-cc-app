@@ -3,6 +3,7 @@ package com.ccapp.identity.account_holder.service;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.common.exception.ConflictException;
 import com.ccapp.common.exception.NotFoundException;
+import com.ccapp.country.config.service.CountryChartOfAccountsService;
 import com.ccapp.country.service.CountryService;
 import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
 import com.ccapp.identity.account_holder.domain.enums.AccountCreatedVia;
@@ -26,6 +27,7 @@ public class AccountHolderService {
 
     private final AccountHolderRepository accountHolderRepository;
     private final CountryService countryService;
+    private final CountryChartOfAccountsService countryChartOfAccountsService;
 
     @Transactional(readOnly = true)
     public AccountHolder getById(UUID accountHolderId) {
@@ -67,6 +69,7 @@ public class AccountHolderService {
                 .createdAt(user.getCreatedAt())
                 .build());
         log.info("Identity account-holder created from legacy user accountHolderId={} serviceCountryCode={}", created.getId(), created.getServiceCountryCode());
+        countryChartOfAccountsService.findOrCreateWallet(created);
         return created;
     }
 
@@ -105,6 +108,7 @@ public class AccountHolderService {
         AccountHolder saved = accountHolderRepository.save(accountHolder);
         log.info("Identity account-holder updateProfile success accountHolderId={} countryCode={} serviceCountryCode={}",
                 saved.getId(), saved.getCountryCode(), saved.getServiceCountryCode());
+        countryChartOfAccountsService.findOrCreateWallet(saved);
         return saved;
     }
 }

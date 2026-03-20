@@ -2,8 +2,10 @@ package com.ccapp.country.config.service;
 
 import com.ccapp.config.TestJacksonAndCachingConfig;
 import com.ccapp.country.config.domain.entity.CountryChartAccount;
+import com.ccapp.country.config.domain.enums.CountryAccountGroup;
 import com.ccapp.country.config.domain.enums.CountryChartAccountStatus;
 import com.ccapp.country.config.domain.enums.CountryChartAccountType;
+import com.ccapp.country.config.dto.CreateCountryChartAccountRequest;
 import com.ccapp.country.config.dto.CountryChartAccountHistoryResponse;
 import com.ccapp.country.config.dto.CountryChartAccountSummaryResponse;
 import com.ccapp.country.config.repository.CountryChartAccountRepository;
@@ -33,6 +35,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @DataJpaTest(properties = {
         "spring.profiles.active=test",
@@ -125,5 +128,51 @@ class CountryChartOfAccountsServiceIntegrationTest {
         assertEquals(new BigDecimal("2500.0000"), history.account().currentBalance());
         assertEquals(1, history.movements().size());
         assertEquals(LedgerEntryType.CREDIT, history.movements().get(0).entryType());
+    }
+
+    @Test
+    void findOrCreate_shouldCreateNumericAccountNumberByGroupAndBeIdempotent() {
+        countryRepository.save(Country.builder()
+                .id(UUID.randomUUID())
+                .code("CI")
+                .name("Cote d'Ivoire")
+                .currency("XOF")
+                .active(true)
+                .configured(false)
+                .fallback(false)
+                .build());
+
+        CountryChartAccount first = countryChartOfAccountsService.findOrCreate("ci", CountryAccountGroup.MEMBERSHIP_FEES);
+        CountryChartAccount second = countryChartOfAccountsService.findOrCreate("CI", CountryAccountGroup.MEMBERSHIP_FEES);
+
+        assertEquals(first.getId(), second.getId());
+        assertEquals("MEMBERSHIP_FEES", first.getAccountGroup().name());
+        assertTrue(first.getAccountNumber().matches("^200\\d{6}$"));
+        assertEquals(first.getAccountNumber(), first.getAccountCode());
+    }
+
+    @Test
+    void createAndAutoGenerate_shouldCreateRequestedGroupAndAllRequiredGroups() {
+        countryRepository.save(Country.builder()
+                .id(UUID.randomUUID())
+                .code("GH")
+                .name("Ghana")
+                .currency("GHS")
+                .active(true)
+                .configured(false)
+                .fallback(false)
+                .build());
+
+        var created = countryChartOfAccountsService.createCountryAccount(
+                "GH",
+                new CreateCountryChartAccountRequest(CountryAccountGroup.PLATFORM_REVENUE, "Platform Revenue GH")
+        );
+        assertEquals("PLATFORM_REVENUE", created.groupId().name());
+        assertEquals("Platform Revenue GH", created.label());
+
+        List<CountryChartAccountSummaryResponse> generated = countryChartOfAccountsService.autoGenerateRequiredAccounts("GH");
+        assertTrue(generated.size() >= CountryAccountGroup.requiredGroups().size());
+        assertTrue(generated.stream().anyMatch(item -> item.groupId() == CountryAccountGroup.GUARANTEE_FUND));
+        assertTrue(generated.stream().allMatch(item -> item.accountNumber() != null && !item.accountNumber().isBlank()));
     }
 }

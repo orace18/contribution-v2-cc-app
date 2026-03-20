@@ -51,6 +51,7 @@ public class CountryConfigurationEngineService {
     private final CountryConfigVersionRepository countryConfigVersionRepository;
     private final CountryChartAccountRepository countryChartAccountRepository;
     private final CountryRepository countryRepository;
+    private final CountryChartOfAccountsService countryChartOfAccountsService;
     private final CountryConfigReadinessService countryConfigReadinessService;
     private final ConfigAuditMetadataService configAuditMetadataService;
     private final ObjectMapper objectMapper;
@@ -135,6 +136,7 @@ public class CountryConfigurationEngineService {
             }
         }
 
+        countryChartOfAccountsService.autoGenerateInitializationAccounts(normalizedCountryCode);
         markCountryConfigured(normalizedCountryCode);
         return getCountryConfiguration(normalizedCountryCode, now);
     }

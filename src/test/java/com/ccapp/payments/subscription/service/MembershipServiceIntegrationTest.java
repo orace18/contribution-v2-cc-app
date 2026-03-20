@@ -4,6 +4,7 @@ import com.ccapp.admin.service.ConfigAuditMetadataService;
 import com.ccapp.config.TestJacksonAndCachingConfig;
 import com.ccapp.country.config.domain.enums.CountryConfigType;
 import com.ccapp.country.config.dto.UpsertCountryConfigRequest;
+import com.ccapp.country.config.service.CountryChartOfAccountsService;
 import com.ccapp.country.config.service.CountryConfigResolver;
 import com.ccapp.country.config.service.CountryConfigReadinessService;
 import com.ccapp.country.config.service.CountryConfigurationEngineService;
@@ -42,6 +43,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 })
 @Import({
         MembershipService.class,
+        CountryChartOfAccountsService.class,
         CountryConfigResolver.class,
         CountryConfigReadinessService.class,
         CountryConfigurationEngineService.class,

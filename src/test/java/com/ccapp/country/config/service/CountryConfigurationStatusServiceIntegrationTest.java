@@ -22,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Import({
         CountryConfigurationStatusService.class,
         CountrySetupBootstrapService.class,
+        CountryChartOfAccountsService.class,
         CountryConfigurationEngineService.class,
         CountryConfigReadinessService.class,
         CountryConfigResolver.class,

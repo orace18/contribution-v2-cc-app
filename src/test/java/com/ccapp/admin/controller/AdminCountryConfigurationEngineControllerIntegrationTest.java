@@ -20,6 +20,12 @@ import com.ccapp.country.config.service.CountryConfigReadinessService;
 import com.ccapp.country.config.service.CountryConfigurationEngineService;
 import com.ccapp.country.config.service.CountryConfigurationStatusService;
 import com.ccapp.country.config.service.CountrySetupBootstrapService;
+import com.ccapp.country.config.domain.enums.CountryAccountGroup;
+import com.ccapp.country.config.domain.enums.CountryChartAccountStatus;
+import com.ccapp.country.config.domain.enums.CountryChartAccountType;
+import com.ccapp.country.config.dto.CountryChartAccountDetailsResponse;
+import com.ccapp.country.config.dto.CountryChartAccountSummaryResponse;
+import com.ccapp.country.config.dto.CreateCountryChartAccountRequest;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.junit.jupiter.api.AfterEach;
@@ -35,9 +41,11 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.util.List;
+import java.math.BigDecimal;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.Mockito.when;
 
 @DataJpaTest(properties = {
@@ -192,6 +200,91 @@ class AdminCountryConfigurationEngineControllerIntegrationTest {
                 "COUNTRY_CONFIG",
                 null,
                 "GET_COUNTRY_CONFIGURATION_STATUS"
+        ));
+    }
+
+    @Test
+    void createCountryAccount_shouldReturnCreatedAccountAndWriteAuditLog() {
+        UUID accountId = UUID.randomUUID();
+        CountryChartAccountDetailsResponse account = new CountryChartAccountDetailsResponse(
+                accountId,
+                "BJ",
+                "220000001",
+                "220000001",
+                "Platform Revenue",
+                "Platform Revenue",
+                CountryAccountGroup.PLATFORM_REVENUE,
+                CountryChartAccountType.REVENUE,
+                "XOF",
+                BigDecimal.ZERO,
+                BigDecimal.ZERO,
+                CountryChartAccountStatus.ACTIVE,
+                null,
+                null
+        );
+        when(countryChartOfAccountsService.createCountryAccount("BJ",
+                new CreateCountryChartAccountRequest(CountryAccountGroup.PLATFORM_REVENUE, "Platform Revenue")))
+                .thenReturn(account);
+
+        ResponseEntity<CommonResponse<CountryChartAccountDetailsResponse>> response = controller.createCountryAccount(
+                "BJ",
+                new CreateCountryChartAccountRequest(CountryAccountGroup.PLATFORM_REVENUE, "Platform Revenue")
+        );
+
+        assertNotNull(response.getBody());
+        assertEquals(accountId, response.getBody().data().id());
+        assertEquals(1L, adminAuditLogRepository.countByEntityTypeAndEntityIdAndAction(
+                "COUNTRY_ACCOUNT",
+                accountId.toString(),
+                "CREATE_COUNTRY_CHART_ACCOUNT"
+        ));
+    }
+
+    @Test
+    void autoGenerateCountryAccounts_shouldReturnAccountsAndWriteAuditLog() {
+        List<CountryChartAccountSummaryResponse> accounts = List.of(
+                new CountryChartAccountSummaryResponse(
+                        UUID.randomUUID(),
+                        "BJ",
+                        "200000001",
+                        "200000001",
+                        "Membership Fees",
+                        "Membership Fees",
+                        CountryAccountGroup.MEMBERSHIP_FEES,
+                        CountryChartAccountType.REVENUE,
+                        "XOF",
+                        BigDecimal.ZERO,
+                        CountryChartAccountStatus.ACTIVE,
+                        null,
+                        null
+                ),
+                new CountryChartAccountSummaryResponse(
+                        UUID.randomUUID(),
+                        "BJ",
+                        "210000001",
+                        "210000001",
+                        "Commission Pool",
+                        "Commission Pool",
+                        CountryAccountGroup.COMMISSION_POOL,
+                        CountryChartAccountType.LIABILITY,
+                        "XOF",
+                        BigDecimal.ZERO,
+                        CountryChartAccountStatus.ACTIVE,
+                        null,
+                        null
+                )
+        );
+        when(countryChartOfAccountsService.autoGenerateRequiredAccounts("BJ")).thenReturn(accounts);
+
+        ResponseEntity<CommonResponse<List<CountryChartAccountSummaryResponse>>> response =
+                controller.autoGenerateCountryAccounts("BJ");
+
+        assertNotNull(response.getBody());
+        assertEquals(2, response.getBody().data().size());
+        assertEquals(1L, adminAuditLogRepository.countByEntityTypeAndEntityIdAndAction(
+                "COUNTRY_ACCOUNT",
+                "BJ",
+                "AUTO_GENERATE_COUNTRY_CHART_ACCOUNTS"
         ));
     }
 }

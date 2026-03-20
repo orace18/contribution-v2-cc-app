@@ -8,6 +8,13 @@ import com.ccapp.ledger.domain.enums.LedgerEntryType;
 import com.ccapp.ledger.repository.AccountBalanceSnapshotRepository;
 import com.ccapp.ledger.repository.AccountingEventRepository;
 import com.ccapp.ledger.repository.LedgerEntryRepository;
+import com.ccapp.country.config.domain.entity.CountryChartAccount;
+import com.ccapp.country.config.domain.enums.CountryAccountGroup;
+import com.ccapp.country.config.service.CountryChartOfAccountsService;
+import com.ccapp.country.domain.entity.Country;
+import com.ccapp.country.repository.CountryRepository;
+import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
+import com.ccapp.identity.account_holder.repository.AccountHolderRepository;
 import com.ccapp.payments.operation.domain.entity.Operation;
 import com.ccapp.payments.operation.domain.enums.OperationStatus;
 import com.ccapp.payments.operation.domain.enums.OperationType;
@@ -23,6 +30,7 @@ import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 @Service
@@ -30,18 +38,13 @@ import java.util.UUID;
 @Slf4j
 public class AccountingPostingService {
 
-    private static final String ACCOUNT_CASH_CLEARING = "1000_CASH_CLEARING";
-    private static final String ACCOUNT_LOAN_PORTFOLIO = "1300_LOAN_PORTFOLIO";
-    private static final String ACCOUNT_SUBSCRIPTION_REVENUE = "4000_SUBSCRIPTION_REVENUE";
-    private static final String ACCOUNT_ADJUSTMENT_EXPENSE = "6100_RECON_ADJUSTMENT_EXPENSE";
-    private static final String ACCOUNT_MLM_COMMISSION_EXPENSE = "6200_MLM_COMMISSION_EXPENSE";
-    private static final String ACCOUNT_WITHHOLDING_TAX_PAYABLE = "2200_WITHHOLDING_TAX_PAYABLE";
-    private static final String MEMBER_WALLET_ACCOUNT_PREFIX = "2101_MEMBER_WALLET_";
-
     private final OperationService operationService;
     private final AccountingEventRepository accountingEventRepository;
     private final LedgerEntryRepository ledgerEntryRepository;
     private final AccountBalanceSnapshotRepository snapshotRepository;
+    private final CountryChartOfAccountsService countryChartOfAccountsService;
+    private final AccountHolderRepository accountHolderRepository;
+    private final CountryRepository countryRepository;
 
     @Transactional
     public AccountingEvent postConfirmedOperation(UUID operationId) {
@@ -69,13 +72,21 @@ public class AccountingPostingService {
         if (operation.getAmount().compareTo(taxAmount.add(netAmount)) != 0) {
             throw new BusinessException("Payout amount mismatch against tax/net split");
         }
+        if (operation.getStatus() != OperationStatus.CONFIRMED) {
+            throw new BusinessException("Only CONFIRMED operations can be posted");
+        }
 
+        String countryCode = resolveOperationalCountryCode(operation.getAccountHolderId(), operation.getCurrency());
+        AccountHolder beneficiary = resolveAccountHolder(beneficiaryAccountHolderId);
         List<PostingLine> lines = List.of(
-                new PostingLine(ACCOUNT_MLM_COMMISSION_EXPENSE, LedgerEntryType.DEBIT, operation.getAmount(), operation.getCurrency(),
+                new PostingLine(resolveAccountCode(countryCode, CountryAccountGroup.COMMISSION_POOL), LedgerEntryType.DEBIT,
+                        operation.getAmount(), operation.getCurrency(),
                         "Commission payout gross expense"),
-                new PostingLine(resolveMemberWalletAccount(beneficiaryAccountHolderId), LedgerEntryType.CREDIT, netAmount, operation.getCurrency(),
+                new PostingLine(resolveWalletAccountCode(beneficiary), LedgerEntryType.CREDIT,
+                        netAmount, operation.getCurrency(),
                         "Member wallet credit"),
-                new PostingLine(ACCOUNT_WITHHOLDING_TAX_PAYABLE, LedgerEntryType.CREDIT, taxAmount, operation.getCurrency(),
+                new PostingLine(resolveAccountCode(countryCode, CountryAccountGroup.PLATFORM_REVENUE), LedgerEntryType.CREDIT,
+                        taxAmount, operation.getCurrency(),
                         "Tax withholding on commission payout")
         );
         return accountingEventRepository.findByOperationId(operation.getId())
@@ -83,10 +94,15 @@ public class AccountingPostingService {
     }
 
     private AccountingEvent doPost(Operation operation) {
+        if (operation.getStatus() != OperationStatus.CONFIRMED) {
+            throw new BusinessException("Only CONFIRMED operations can be posted");
+        }
         AccountingEventType eventType = operation.getType() == OperationType.ADJUSTMENT
                 ? AccountingEventType.ADJUSTMENT_POSTED
                 : AccountingEventType.OPERATION_CONFIRMED;
-        List<PostingLine> lines = buildPostingLines(operation);
+        String countryCode = resolveOperationalCountryCode(operation.getAccountHolderId(), operation.getCurrency());
+        AccountHolder accountHolder = resolveAccountHolder(operation.getAccountHolderId());
+        List<PostingLine> lines = buildPostingLines(operation, countryCode, accountHolder);
         return doPost(operation, lines, eventType);
     }
 
@@ -145,32 +161,108 @@ public class AccountingPostingService {
         return savedEvent;
     }
 
-    private String resolveMemberWalletAccount(UUID accountHolderId) {
-        return MEMBER_WALLET_ACCOUNT_PREFIX + accountHolderId;
-    }
-
-    private List<PostingLine> buildPostingLines(Operation operation) {
+    private List<PostingLine> buildPostingLines(Operation operation, String countryCode, AccountHolder accountHolder) {
+        String walletCode = resolveWalletAccountCode(accountHolder);
         return switch (operation.getType()) {
             case SUBSCRIPTION -> List.of(
-                    new PostingLine(ACCOUNT_CASH_CLEARING, LedgerEntryType.DEBIT, operation.getAmount(), operation.getCurrency(), "Cash received"),
-                    new PostingLine(ACCOUNT_SUBSCRIPTION_REVENUE, LedgerEntryType.CREDIT, operation.getAmount(), operation.getCurrency(), "Subscription revenue recognition")
+                    new PostingLine(walletCode, LedgerEntryType.DEBIT,
+                            operation.getAmount(), operation.getCurrency(), "Cash received"),
+                    new PostingLine(resolveAccountCode(countryCode, CountryAccountGroup.MEMBERSHIP_FEES), LedgerEntryType.CREDIT,
+                            operation.getAmount(), operation.getCurrency(), "Subscription revenue recognition")
             );
             case ADJUSTMENT -> List.of(
-                    new PostingLine(ACCOUNT_ADJUSTMENT_EXPENSE, LedgerEntryType.DEBIT, operation.getAmount(), operation.getCurrency(), "Reconciliation adjustment"),
-                    new PostingLine(ACCOUNT_CASH_CLEARING, LedgerEntryType.CREDIT, operation.getAmount(), operation.getCurrency(), "Adjustment against cash")
+                    new PostingLine(resolveAccountCode(countryCode, CountryAccountGroup.PLATFORM_REVENUE), LedgerEntryType.DEBIT,
+                            operation.getAmount(), operation.getCurrency(), "Reconciliation adjustment"),
+                    new PostingLine(walletCode, LedgerEntryType.CREDIT,
+                            operation.getAmount(), operation.getCurrency(), "Adjustment against cash")
             );
             case LOAN_DISBURSEMENT -> List.of(
-                    new PostingLine(ACCOUNT_LOAN_PORTFOLIO, LedgerEntryType.DEBIT, operation.getAmount(), operation.getCurrency(), "Loan principal recognized"),
-                    new PostingLine(ACCOUNT_CASH_CLEARING, LedgerEntryType.CREDIT, operation.getAmount(), operation.getCurrency(), "Loan disbursement cash-out")
+                    new PostingLine(resolveAccountCode(countryCode, CountryAccountGroup.PARTNER_SETTLEMENT), LedgerEntryType.DEBIT,
+                            operation.getAmount(), operation.getCurrency(), "Loan principal recognized"),
+                    new PostingLine(walletCode, LedgerEntryType.CREDIT,
+                            operation.getAmount(), operation.getCurrency(), "Loan disbursement cash-out")
             );
             case LOAN_REPAYMENT -> List.of(
-                    new PostingLine(ACCOUNT_CASH_CLEARING, LedgerEntryType.DEBIT, operation.getAmount(), operation.getCurrency(), "Loan repayment cash-in"),
-                    new PostingLine(ACCOUNT_LOAN_PORTFOLIO, LedgerEntryType.CREDIT, operation.getAmount(), operation.getCurrency(), "Loan principal repayment")
+                    new PostingLine(walletCode, LedgerEntryType.DEBIT,
+                            operation.getAmount(), operation.getCurrency(), "Loan repayment cash-in"),
+                    new PostingLine(resolveAccountCode(countryCode, CountryAccountGroup.PARTNER_SETTLEMENT), LedgerEntryType.CREDIT,
+                            operation.getAmount(), operation.getCurrency(), "Loan principal repayment")
             );
             case COMMISSION_PAYOUT -> throw new BusinessException(
                     "Use postCommissionPayout for COMMISSION_PAYOUT operations"
             );
         };
+    }
+
+    private String resolveAccountCode(String countryCode, CountryAccountGroup group) {
+        CountryChartAccount account = countryChartOfAccountsService.findOrCreate(countryCode, group);
+        return account.getAccountCode();
+    }
+
+    /**
+     * Resolves the wallet account code for a specific account holder.
+     * Auto-creates the wallet if it does not exist (safety guarantee).
+     */
+    private String resolveWalletAccountCode(AccountHolder accountHolder) {
+        CountryChartAccount wallet = countryChartOfAccountsService.findOrCreateWallet(accountHolder);
+        return wallet.getAccountCode();
+    }
+
+    private AccountHolder resolveAccountHolder(UUID accountHolderId) {
+        return accountHolderRepository.findById(accountHolderId)
+                .orElseThrow(() -> new BusinessException("Account holder not found: " + accountHolderId));
+    }
+
+    private String resolveOperationalCountryCode(UUID accountHolderId, String currency) {
+        String normalizedCurrency = currency == null ? null : currency.trim().toUpperCase(Locale.ROOT);
+        String holderCountryCode = accountHolderRepository.findById(accountHolderId)
+                .map(this::readAccountHolderCountryCode)
+                .orElse(null);
+        if (holderCountryCode != null && !holderCountryCode.isBlank()) {
+            return ensureCountryExists(holderCountryCode, normalizedCurrency);
+        }
+        return countryRepository.findByFallbackTrue()
+                .map(Country::getCode)
+                .or(() -> countryRepository.findByActiveTrueOrderByNameAsc().stream()
+                        .filter(country -> normalizedCurrency != null
+                                && normalizedCurrency.equalsIgnoreCase(country.getCurrency()))
+                        .map(Country::getCode)
+                        .findFirst())
+                .or(() -> countryRepository.findByActiveTrueOrderByNameAsc().stream()
+                        .map(Country::getCode)
+                        .findFirst())
+                .map(code -> ensureCountryExists(code, normalizedCurrency))
+                .orElseGet(() -> ensureCountryExists("INT", normalizedCurrency == null ? "USD" : normalizedCurrency));
+    }
+
+    private String readAccountHolderCountryCode(AccountHolder accountHolder) {
+        if (accountHolder == null) {
+            return null;
+        }
+        if (accountHolder.getServiceCountryCode() != null && !accountHolder.getServiceCountryCode().isBlank()) {
+            return accountHolder.getServiceCountryCode().trim().toUpperCase(Locale.ROOT);
+        }
+        if (accountHolder.getCountryCode() != null && !accountHolder.getCountryCode().isBlank()) {
+            return accountHolder.getCountryCode().trim().toUpperCase(Locale.ROOT);
+        }
+        return null;
+    }
+
+    private String ensureCountryExists(String countryCode, String currency) {
+        String normalizedCode = countryCode.trim().toUpperCase(Locale.ROOT);
+        if (countryRepository.findByCode(normalizedCode).isPresent()) {
+            return normalizedCode;
+        }
+        countryRepository.save(Country.builder()
+                .id(UUID.randomUUID())
+                .code(normalizedCode)
+                .name("Country " + normalizedCode)
+                .currency(currency == null || currency.isBlank() ? "USD" : currency)
+                .active(true)
+                .configured(false)
+                .fallback("INT".equals(normalizedCode))
+                .build());
+        return normalizedCode;
     }
 
     private void validateCurrency(List<PostingLine> lines, String operationCurrency) {

@@ -4,14 +4,16 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Refactoring configs pays" />
+    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="revue de countries">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
   <component name="EmbeddingIndexingInfo">
-    <option name="cachedIndexableFilesCount" value="819" />
+    <option name="cachedIndexableFilesCount" value="861" />
   </component>
   <component name="FileTemplateManagerImpl">
     <option name="RECENT_TEMPLATES">
@@ -141,46 +143,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1772553173766</updated>
-    </task>
-    <task id="LOCAL-00013" summary="Revue des properties">
-      <option name="closed" value="true" />
-      <created>1772700231148</created>
-      <option name="number" value="00013" />
-      <option name="presentableId" value="LOCAL-00013" />
-      <option name="project" value="LOCAL" />
-      <updated>1772700231148</updated>
-    </task>
-    <task id="LOCAL-00014" summary="Revue du properties dev">
-      <option name="closed" value="true" />
-      <created>1772701525866</created>
-      <option name="number" value="00014" />
-      <option name="presentableId" value="LOCAL-00014" />
-      <option name="project" value="LOCAL" />
-      <updated>1772701525866</updated>
-    </task>
-    <task id="LOCAL-00015" summary="Revue du docker-compose-dev.yaml">
-      <option name="closed" value="true" />
-      <created>1772704733187</created>
-      <option name="number" value="00015" />
-      <option name="presentableId" value="LOCAL-00015" />
-      <option name="project" value="LOCAL" />
-      <updated>1772704733187</updated>
-    </task>
-    <task id="LOCAL-00016" summary="Revue du docker-compose-dev.yaml">
-      <option name="closed" value="true" />
-      <created>1772705234956</created>
-      <option name="number" value="00016" />
-      <option name="presentableId" value="LOCAL-00016" />
-      <option name="project" value="LOCAL" />
-      <updated>1772705234956</updated>
-    </task>
-    <task id="LOCAL-00017" summary="Revue du docker-compose-dev.yaml">
-      <option name="closed" value="true" />
-      <created>1772705575014</created>
-      <option name="number" value="00017" />
-      <option name="presentableId" value="LOCAL-00017" />
-      <option name="project" value="LOCAL" />
-      <updated>1772705575014</updated>
     </task>
     <task id="LOCAL-00018" summary="Revue du docker-compose-dev.yaml">
       <option name="closed" value="true" />
@@ -534,7 +496,47 @@
       <option name="project" value="LOCAL" />
       <updated>1773845111981</updated>
     </task>
-    <option name="localTasksCounter" value="62" />
+    <task id="LOCAL-00062" summary="Refactoring">
+      <option name="closed" value="true" />
+      <created>1773908751919</created>
+      <option name="number" value="00062" />
+      <option name="presentableId" value="LOCAL-00062" />
+      <option name="project" value="LOCAL" />
+      <updated>1773908751919</updated>
+    </task>
+    <task id="LOCAL-00063" summary="Resolve error">
+      <option name="closed" value="true" />
+      <created>1773911030186</created>
+      <option name="number" value="00063" />
+      <option name="presentableId" value="LOCAL-00063" />
+      <option name="project" value="LOCAL" />
+      <updated>1773911030186</updated>
+    </task>
+    <task id="LOCAL-00064" summary="chat et revue">
+      <option name="closed" value="true" />
+      <created>1773918601729</created>
+      <option name="number" value="00064" />
+      <option name="presentableId" value="LOCAL-00064" />
+      <option name="project" value="LOCAL" />
+      <updated>1773918601729</updated>
+    </task>
+    <task id="LOCAL-00065" summary="revue de post">
+      <option name="closed" value="true" />
+      <created>1773919792847</created>
+      <option name="number" value="00065" />
+      <option name="presentableId" value="LOCAL-00065" />
+      <option name="project" value="LOCAL" />
+      <updated>1773919792848</updated>
+    </task>
+    <task id="LOCAL-00066" summary="revue de countries">
+      <option name="closed" value="true" />
+      <created>1773925927114</created>
+      <option name="number" value="00066" />
+      <option name="presentableId" value="LOCAL-00066" />
+      <option name="project" value="LOCAL" />
+      <updated>1773925927114</updated>
+    </task>
+    <option name="localTasksCounter" value="67" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -549,11 +551,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="Configuration pays" />
-    <MESSAGE value="Refact de pays" />
-    <MESSAGE value="Refact de retour api" />
-    <MESSAGE value="Ajout de inscription sans phone" />
-    <MESSAGE value="Ajout des apis de community" />
     <MESSAGE value="Revue des configs firebase" />
     <MESSAGE value="Revue des cors" />
     <MESSAGE value="Ajout de logs" />
@@ -574,7 +571,12 @@
     <MESSAGE value="Revue des configs" />
     <MESSAGE value="Refactoring configs" />
     <MESSAGE value="Refactoring configs pays" />
-    <option name="LAST_COMMIT_MESSAGE" value="Refactoring configs pays" />
+    <MESSAGE value="Refactoring" />
+    <MESSAGE value="Resolve error" />
+    <MESSAGE value="chat et revue" />
+    <MESSAGE value="revue de post" />
+    <MESSAGE value="revue de countries" />
+    <option name="LAST_COMMIT_MESSAGE" value="revue de countries" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />

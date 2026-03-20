@@ -28,6 +28,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
         "spring.jpa.hibernate.ddl-auto=create-drop"
 })
 @Import({
+        CountryChartOfAccountsService.class,
         CountryConfigurationEngineService.class,
         CountryConfigReadinessService.class,
         PlatformConfigurationService.class,

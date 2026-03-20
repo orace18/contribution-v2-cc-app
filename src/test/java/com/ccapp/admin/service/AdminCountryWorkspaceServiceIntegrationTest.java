@@ -1,6 +1,7 @@
 package com.ccapp.admin.service;
 
 import com.ccapp.config.TestJacksonAndCachingConfig;
+import com.ccapp.country.config.service.CountryChartOfAccountsService;
 import com.ccapp.country.config.service.CountryConfigReadinessService;
 import com.ccapp.country.config.service.CountryConfigResolver;
 import com.ccapp.country.config.service.CountryConfigurationEngineService;
@@ -25,6 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Import({
         AdminCountryWorkspaceService.class,
         CountrySetupBootstrapService.class,
+        CountryChartOfAccountsService.class,
         CountryConfigurationEngineService.class,
         CountryConfigReadinessService.class,
         CountryConfigResolver.class,
@@ -54,11 +56,14 @@ class AdminCountryWorkspaceServiceIntegrationTest {
         assertEquals("/countries/BJ/setup", response.configuredCountries().get(0).primaryAction().targetPath());
         assertTrue(response.configuredCountries().get(0).readinessPercentage() > 0);
 
-        assertEquals(1, response.unconfiguredCountries().size());
-        assertEquals("SN", response.unconfiguredCountries().get(0).code());
-        assertEquals(0, response.unconfiguredCountries().get(0).readinessPercentage());
-        assertEquals("Configure", response.unconfiguredCountries().get(0).primaryAction().label());
-        assertEquals("/countries/SN/setup", response.unconfiguredCountries().get(0).primaryAction().targetPath());
+        assertTrue(response.unconfiguredCountries().size() >= 1);
+        var senegal = response.unconfiguredCountries().stream()
+                .filter(item -> "SN".equals(item.code()))
+                .findFirst()
+                .orElseThrow();
+        assertEquals(0, senegal.readinessPercentage());
+        assertEquals("Configure", senegal.primaryAction().label());
+        assertEquals("/countries/SN/setup", senegal.primaryAction().targetPath());
     }
 
     @Test
