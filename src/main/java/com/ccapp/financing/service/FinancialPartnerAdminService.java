@@ -12,12 +12,11 @@ import com.ccapp.financing.dto.FinancialPartnerResponse;
 import com.ccapp.financing.dto.UpdateFinancialPartnerRequest;
 import com.ccapp.financing.repository.FinancialPartnerRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 
@@ -38,17 +37,33 @@ public class FinancialPartnerAdminService {
                                                                String search,
                                                                Integer page,
                                                                Integer size) {
-        Pageable pageable = normalizePageable(page, size);
+        int normalizedPage = page == null || page < 0 ? 0 : page;
+        int normalizedSize = size == null || size <= 0
+                ? DEFAULT_PAGE_SIZE
+                : Math.min(size, MAX_PAGE_SIZE);
         String normalizedCountryCode = normalizeNullableCountry(countryCode);
         String normalizedSearch = normalizeSearch(search);
-        Page<FinancialPartner> partnerPage = financialPartnerRepository.search(
-                status,
-                type,
-                normalizedCountryCode,
-                normalizedSearch,
-                pageable
+        List<FinancialPartnerResponse> filteredPartners = financialPartnerRepository.findAll(Sort.by(Sort.Direction.DESC, "createdAt")).stream()
+                .filter(partner -> status == null || partner.getStatus() == status)
+                .filter(partner -> type == null || partner.getType() == type)
+                .filter(partner -> normalizedCountryCode == null || partner.getCountryCode().equalsIgnoreCase(normalizedCountryCode))
+                .filter(partner -> normalizedSearch == null || partner.getName().toLowerCase(Locale.ROOT).contains(normalizedSearch))
+                .map(this::toResponse)
+                .toList();
+
+        int totalElements = filteredPartners.size();
+        int fromIndex = Math.min(normalizedPage * normalizedSize, totalElements);
+        int toIndex = Math.min(fromIndex + normalizedSize, totalElements);
+        int totalPages = totalElements == 0 ? 0 : (int) Math.ceil((double) totalElements / normalizedSize);
+
+        return new PageResponse<>(
+                filteredPartners.subList(fromIndex, toIndex),
+                normalizedPage,
+                normalizedSize,
+                totalElements,
+                totalPages,
+                toIndex < totalElements
         );
-        return PageResponse.from(partnerPage.map(this::toResponse));
     }
 
     @Transactional(readOnly = true)
@@ -125,14 +140,6 @@ public class FinancialPartnerAdminService {
                 partner.getApiEndpoint(),
                 partner.getCreatedAt()
         );
-    }
-
-    private Pageable normalizePageable(Integer page, Integer size) {
-        int normalizedPage = page == null || page < 0 ? 0 : page;
-        int normalizedSize = size == null || size <= 0
-                ? DEFAULT_PAGE_SIZE
-                : Math.min(size, MAX_PAGE_SIZE);
-        return PageRequest.of(normalizedPage, normalizedSize);
     }
 
     private String normalizeSearch(String search) {

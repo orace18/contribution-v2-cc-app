@@ -29,17 +29,20 @@ public class AdminAuditService {
         if (adminUserId == null) {
             return;
         }
-
-        adminAuditLogRepository.save(AdminAuditLog.builder()
-                .adminUserId(adminUserId)
-                .action(action)
-                .entityType(entityType)
-                .entityId(entityId)
-                .payload(toJson(payload))
-                .timestamp(OffsetDateTime.now())
-                .ipAddress(resolveIpAddress())
-                .deviceInfo(resolveDeviceInfo())
-                .build());
+        try {
+            adminAuditLogRepository.save(AdminAuditLog.builder()
+                    .adminUserId(adminUserId)
+                    .action(action)
+                    .entityType(entityType)
+                    .entityId(entityId)
+                    .payload(toJson(payload))
+                    .timestamp(OffsetDateTime.now())
+                    .ipAddress(resolveIpAddress())
+                    .deviceInfo(resolveDeviceInfo())
+                    .build());
+        } catch (RuntimeException ex) {
+            log.warn("Failed to persist admin audit log action={} entityType={} entityId={}", action, entityType, entityId, ex);
+        }
     }
 
     private String toJson(Object payload) {
