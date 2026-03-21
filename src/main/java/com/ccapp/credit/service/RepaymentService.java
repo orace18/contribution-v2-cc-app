@@ -23,6 +23,7 @@ import com.ccapp.ledger.service.AccountingPostingService;
 import com.ccapp.payments.operation.domain.entity.Operation;
 import com.ccapp.payments.operation.domain.enums.OperationType;
 import com.ccapp.payments.operation.service.OperationService;
+import com.ccapp.progress.event.RepaymentCompletedEvent;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -94,6 +95,11 @@ public class RepaymentService {
         repaymentScheduleRepository.save(installment);
 
         triggerRepaymentLedger(loan, actorUserId, repayment);
+        domainEventPublisher.publish(RepaymentCompletedEvent.create(
+                loan.getAccountHolderId(),
+                loan.getId(),
+                repayment.getId()
+        ));
         delegatedActionService.logIfDelegatedActor(
                 loan.getAccountHolderId(),
                 actorUserId,

@@ -15,10 +15,10 @@ import java.util.UUID;
 @AllArgsConstructor
 @Entity
 @Table(name = "user_tasks", indexes = {
-        @Index(name = "idx_user_tasks_user_id", columnList = "user_id"),
-        @Index(name = "idx_user_tasks_user_status", columnList = "user_id, status")
+        @Index(name = "idx_user_tasks_account_holder_id", columnList = "account_holder_id"),
+        @Index(name = "idx_user_tasks_account_holder_status", columnList = "account_holder_id, status")
 }, uniqueConstraints = {
-        @UniqueConstraint(name = "uk_user_tasks_user_task_type", columnNames = {"user_id", "task_type"})
+        @UniqueConstraint(name = "uk_user_tasks_active_key", columnNames = {"account_holder_id", "active_key"})
 })
 public class UserTask {
 
@@ -26,27 +26,58 @@ public class UserTask {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @Column(name = "user_id", nullable = false)
+    @Column(name = "account_holder_id", nullable = false)
     private UUID accountHolderId;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "task_type", nullable = false, length = 64)
     private TaskType taskType;
 
+    @Column(name = "title", nullable = false, length = 255)
+    private String title;
+
+    @Column(name = "description", length = 2000)
+    private String description;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 16)
     private TaskStatus status;
 
-    @Column(name = "validated_at")
-    private OffsetDateTime validatedAt;
+    @Column(name = "priority_score", nullable = false)
+    private int priorityScore;
+
+    @Column(name = "due_date")
+    private OffsetDateTime dueDate;
+
+    @Column(name = "payload_json", columnDefinition = "TEXT")
+    private String payloadJson;
+
+    @Column(name = "action_json", columnDefinition = "TEXT")
+    private String actionJson;
+
+    @Column(name = "active_key", length = 64)
+    private String activeKey;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
+
+    @Column(name = "completed_at")
+    private OffsetDateTime completedAt;
 
     @PrePersist
     protected void onCreate() {
         if (createdAt == null) {
             createdAt = OffsetDateTime.now();
         }
+        refreshActiveKey();
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        refreshActiveKey();
+    }
+
+    private void refreshActiveKey() {
+        activeKey = status != null && status.active() && taskType != null ? taskType.name() : null;
     }
 }

@@ -2,6 +2,7 @@ package com.ccapp.financing.service;
 
 import com.ccapp.circles.repository.CircleMemberRepository;
 import com.ccapp.common.api.PageResponse;
+import com.ccapp.common.events.DomainEventPublisher;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.common.exception.NotFoundException;
 import com.ccapp.common.exception.UnauthorizedException;
@@ -29,6 +30,8 @@ import com.ccapp.ledger.service.AccountingPostingService;
 import com.ccapp.payments.operation.domain.entity.Operation;
 import com.ccapp.payments.operation.domain.enums.OperationType;
 import com.ccapp.payments.operation.service.OperationService;
+import com.ccapp.progress.event.LoanApplicationSubmittedEvent;
+import com.ccapp.progress.event.LoanDisbursedEvent;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -70,6 +73,7 @@ public class FinancingApplicationService {
     private final AccountingPostingService accountingPostingService;
     private final CountryConfigResolver countryConfigResolver;
     private final ObjectMapper objectMapper;
+    private final DomainEventPublisher domainEventPublisher;
 
     @Transactional
     public LoanApplicationResponse createApplication(UUID actorUserId,
@@ -108,7 +112,6 @@ public class FinancingApplicationService {
                 .configSnapshot(buildApplicationConfigSnapshot(countryContext.serviceCountryCode(), financingConfig, guaranteeConfig))
                 .configVersion(financingConfig.version())
                 .build());
-
         partnerLedgerService.recordEntry(
                 offer.getPartnerId(),
                 application.getId(),
@@ -118,6 +121,7 @@ public class FinancingApplicationService {
                 "Financing application submitted"
         );
         partnerReportingService.refreshDailySnapshot(offer.getPartnerId());
+        domainEventPublisher.publish(LoanApplicationSubmittedEvent.create(requesterAccountHolderId, application.getId()));
         return toResponse(application, offer, currency);
     }
 
@@ -232,6 +236,7 @@ public class FinancingApplicationService {
                         "Financing application disbursed"
                 );
                 postCoreLedger(saved, reviewerAccountHolderId, OperationType.LOAN_DISBURSEMENT, effectiveAmount, currency);
+                domainEventPublisher.publish(LoanDisbursedEvent.create(saved.getAccountHolderId(), saved.getId()));
             }
             case REPAID -> {
                 partnerLedgerService.recordEntry(

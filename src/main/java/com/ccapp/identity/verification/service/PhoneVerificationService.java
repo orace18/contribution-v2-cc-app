@@ -2,6 +2,7 @@ package com.ccapp.identity.verification.service;
 
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.common.exception.NotFoundException;
+import com.ccapp.common.events.DomainEventPublisher;
 import com.ccapp.identity.verification.domain.entity.PhoneVerification;
 import com.ccapp.identity.verification.domain.enums.PhoneVerificationChannel;
 import com.ccapp.identity.verification.domain.enums.PhoneVerificationStatus;
@@ -10,6 +11,7 @@ import com.ccapp.identity.verification.dto.PhoneVerificationResponse;
 import com.ccapp.identity.verification.dto.StartPhoneVerificationRequest;
 import com.ccapp.identity.verification.repository.PhoneVerificationRepository;
 import com.ccapp.notifications.dispatcher.PhoneMessageGateway;
+import com.ccapp.progress.event.PhoneVerifiedEvent;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -38,6 +40,7 @@ public class PhoneVerificationService {
 
     private final PhoneVerificationRepository phoneVerificationRepository;
     private final PhoneMessageGateway phoneMessageGateway;
+    private final DomainEventPublisher domainEventPublisher;
 
     @Value("${identity.phone-verification.code-length:6}")
     private int codeLength;
@@ -124,6 +127,11 @@ public class PhoneVerificationService {
         verification.setStatus(PhoneVerificationStatus.VERIFIED);
         verification.setVerifiedAt(OffsetDateTime.now());
         PhoneVerification saved = phoneVerificationRepository.save(verification);
+        domainEventPublisher.publish(PhoneVerifiedEvent.create(
+                requesterAccountHolderId,
+                saved.getId(),
+                saved.getPhoneNumber()
+        ));
         return toResponse(saved);
     }
 

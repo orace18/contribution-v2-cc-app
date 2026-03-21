@@ -31,6 +31,7 @@ import com.ccapp.ledger.service.AccountingPostingService;
 import com.ccapp.payments.operation.domain.entity.Operation;
 import com.ccapp.payments.operation.domain.enums.OperationType;
 import com.ccapp.payments.operation.service.OperationService;
+import com.ccapp.progress.event.LoanDisbursedEvent;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -146,6 +147,7 @@ public class LoanService {
                 saved.getId(),
                 "Loan disbursed"
         ));
+        domainEventPublisher.publish(LoanDisbursedEvent.create(saved.getAccountHolderId(), saved.getId()));
         return saved;
     }
 

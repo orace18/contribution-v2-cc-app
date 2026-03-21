@@ -33,6 +33,8 @@ import com.ccapp.identity.repository.UserRepository;
 import com.ccapp.identity.verification.service.PhoneVerificationService;
 import com.ccapp.mlm.domain.entity.MlmRelationship;
 import com.ccapp.mlm.repository.MlmRelationshipRepository;
+import com.ccapp.progress.event.AccountHolderCreatedEvent;
+import com.ccapp.progress.event.CircleJoinedEvent;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -129,6 +131,9 @@ public class CircleService {
                     "Circle created with MLM participants"
             ));
         }
+        if (request.creatorRole() == CircleCreatorRole.MEMBER) {
+            domainEventPublisher.publish(CircleJoinedEvent.create(accountHolderId, circle.getId()));
+        }
 
         int membersCount = Math.toIntExact(circleMemberRepository.countByCircle_IdAndFinancialMemberTrue(circle.getId()));
         return toCircleResponse(circle, membersCount);
@@ -175,6 +180,7 @@ public class CircleService {
                 member.getId(),
                 "Member joined circle"
         ));
+        domainEventPublisher.publish(CircleJoinedEvent.create(accountHolderId, circleId));
         return toMemberResponse(member);
     }
 
@@ -288,6 +294,7 @@ public class CircleService {
                 .build());
 
         delegationService.createManagerDelegation(assistedAccountHolder.getId(), actorUserId);
+        domainEventPublisher.publish(AccountHolderCreatedEvent.create(assistedAccountHolder.getId()));
 
         CircleMember member = circleMemberRepository.save(CircleMember.builder()
                 .circle(circle)
@@ -307,6 +314,7 @@ public class CircleService {
                 member.getId(),
                 "Assisted member created and joined circle"
         ));
+        domainEventPublisher.publish(CircleJoinedEvent.create(assistedAccountHolder.getId(), circle.getId()));
         delegatedActionService.log(
                 assistedAccountHolder.getId(),
                 actorUserId,

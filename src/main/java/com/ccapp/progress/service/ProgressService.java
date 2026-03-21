@@ -8,6 +8,7 @@ import com.ccapp.progress.domain.entity.UserProgress;
 import com.ccapp.progress.domain.entity.UserTask;
 import com.ccapp.progress.domain.enums.TaskStatus;
 import com.ccapp.progress.domain.enums.TaskType;
+import com.ccapp.progress.dto.TaskResponse;
 import com.ccapp.progress.dto.UserProgressResponse;
 import com.ccapp.progress.repository.UserProgressRepository;
 import com.ccapp.progress.repository.UserTaskRepository;
@@ -29,6 +30,7 @@ public class ProgressService {
     private final UserTaskRepository userTaskRepository;
     private final AccountHolderService accountHolderService;
     private final AccessControlService accessControlService;
+    private final TaskEngineService taskEngineService;
 
     @Transactional
     public UserProgressResponse getUserProgress(UUID actorUserId, UUID accountHolderId) {
@@ -44,14 +46,37 @@ public class ProgressService {
     @Transactional
     public UserProgressResponse recalculateProgress(UUID accountHolderId) {
         ensureAccountHolderExists(accountHolderId);
+        taskEngineService.synchronizeTaskGraph(accountHolderId, false);
 
-        long completedTasks = userTaskRepository.countByAccountHolderIdAndStatus(accountHolderId, TaskStatus.COMPLETED);
-        int totalTasks = TaskType.values().length;
-        BigDecimal progress = BigDecimal.valueOf(completedTasks * 100L)
+        int totalTasks = TaskType.progressTypes().size();
+        long completedTasks = userTaskRepository.findByAccountHolderIdOrderByCreatedAtAsc(accountHolderId).stream()
+                .filter(task -> task.getStatus() == TaskStatus.COMPLETED)
+                .map(UserTask::getTaskType)
+                .filter(TaskType::progressTracked)
+                .distinct()
+                .count();
+        BigDecimal progress = totalTasks == 0
+                ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP)
+                : BigDecimal.valueOf(completedTasks * 100L)
                 .divide(BigDecimal.valueOf(totalTasks), 2, RoundingMode.HALF_UP);
 
-        TaskType currentStep = userTaskRepository.findTopByAccountHolderIdAndStatusOrderByValidatedAtDesc(accountHolderId, TaskStatus.COMPLETED)
+        TaskType currentStep = userTaskRepository.findByAccountHolderIdOrderByCreatedAtAsc(accountHolderId).stream()
+                .filter(task -> task.getStatus() == TaskStatus.COMPLETED)
+                .filter(task -> task.getTaskType().progressTracked())
+                .sorted((left, right) -> {
+                    if (left.getCompletedAt() == null && right.getCompletedAt() == null) {
+                        return 0;
+                    }
+                    if (left.getCompletedAt() == null) {
+                        return 1;
+                    }
+                    if (right.getCompletedAt() == null) {
+                        return -1;
+                    }
+                    return right.getCompletedAt().compareTo(left.getCompletedAt());
+                })
                 .map(UserTask::getTaskType)
+                .findFirst()
                 .orElse(null);
 
         TaskType nextTask = resolveNextTask(accountHolderId);
@@ -68,16 +93,8 @@ public class ProgressService {
     }
 
     private TaskType resolveNextTask(UUID accountHolderId) {
-        Map<TaskType, TaskStatus> statusByTask = userTaskRepository.findByAccountHolderIdOrderByCreatedAtAsc(accountHolderId).stream()
-                .collect(Collectors.toMap(UserTask::getTaskType, UserTask::getStatus, (left, right) -> right));
-
-        for (TaskType taskType : TaskType.values()) {
-            TaskStatus status = statusByTask.get(taskType);
-            if (status != TaskStatus.COMPLETED) {
-                return taskType;
-            }
-        }
-        return null;
+        TaskResponse nextBestAction = taskEngineService.getNextBestAction(accountHolderId);
+        return nextBestAction == null ? null : nextBestAction.type();
     }
 
     private void ensureAccountHolderExists(UUID accountHolderId) {

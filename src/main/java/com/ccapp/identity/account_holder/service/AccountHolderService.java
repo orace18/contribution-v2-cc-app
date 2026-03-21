@@ -3,6 +3,7 @@ package com.ccapp.identity.account_holder.service;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.common.exception.ConflictException;
 import com.ccapp.common.exception.NotFoundException;
+import com.ccapp.common.events.DomainEventPublisher;
 import com.ccapp.country.config.service.CountryChartOfAccountsService;
 import com.ccapp.country.service.CountryService;
 import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
@@ -12,6 +13,7 @@ import com.ccapp.identity.account_holder.repository.AccountHolderRepository;
 import com.ccapp.identity.domain.entity.User;
 import com.ccapp.identity.domain.entity.UserProfile;
 import com.ccapp.identity.domain.enums.KycStatus;
+import com.ccapp.progress.event.AccountHolderCreatedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -28,6 +30,7 @@ public class AccountHolderService {
     private final AccountHolderRepository accountHolderRepository;
     private final CountryService countryService;
     private final CountryChartOfAccountsService countryChartOfAccountsService;
+    private final DomainEventPublisher domainEventPublisher;
 
     @Transactional(readOnly = true)
     public AccountHolder getById(UUID accountHolderId) {
@@ -70,6 +73,7 @@ public class AccountHolderService {
                 .build());
         log.info("Identity account-holder created from legacy user accountHolderId={} serviceCountryCode={}", created.getId(), created.getServiceCountryCode());
         countryChartOfAccountsService.findOrCreateWallet(created);
+        domainEventPublisher.publish(AccountHolderCreatedEvent.create(created.getId()));
         return created;
     }
 

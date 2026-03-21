@@ -18,7 +18,7 @@ import java.util.UUID;
 public class UserProgress {
 
     @Id
-    @Column(name = "user_id", nullable = false)
+    @Column(name = "account_holder_id", nullable = false)
     private UUID accountHolderId;
 
     @Enumerated(EnumType.STRING)

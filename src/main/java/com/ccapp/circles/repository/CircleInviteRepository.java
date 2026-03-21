@@ -14,4 +14,6 @@ public interface CircleInviteRepository extends JpaRepository<CircleInvite, UUID
     Optional<CircleInvite> findByInvitationToken(String invitationToken);
 
     long countByCircle_IdAndStatus(UUID circleId, CircleInviteStatus status);
+
+    long countByCreatedByAccountHolderId(UUID accountHolderId);
 }

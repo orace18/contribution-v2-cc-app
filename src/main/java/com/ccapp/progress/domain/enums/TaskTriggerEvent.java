@@ -1,0 +1,16 @@
+package com.ccapp.progress.domain.enums;
+
+public enum TaskTriggerEvent {
+    ACCOUNT_HOLDER_CREATED,
+    PHONE_VERIFIED,
+    KYC_COMPLETED,
+    CIRCLE_JOINED,
+    CONTRIBUTION_RECEIVED,
+    LOAN_APPLIED,
+    LOAN_DISBURSED,
+    REPAYMENT_DUE,
+    REPAYMENT_COMPLETED,
+    REPAYMENT_MISSED,
+    PROFILE_COMPLETED,
+    MANUAL
+}

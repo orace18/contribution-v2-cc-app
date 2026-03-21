@@ -6,6 +6,7 @@ public enum NotificationType {
     LOAN_REPAYMENT_REMINDER,
     LOAN_REPAID,
     CIRCLE_ACTIVITY,
+    TASK_AVAILABLE,
     TASK_COMPLETED,
     AGENT_ACTION
 }

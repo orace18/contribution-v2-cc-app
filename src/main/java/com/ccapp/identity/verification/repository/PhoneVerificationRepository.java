@@ -19,4 +19,8 @@ public interface PhoneVerificationRepository extends JpaRepository<PhoneVerifica
             String phoneNumber,
             PhoneVerificationStatus status
     );
+
+    boolean existsByRequesterAccountHolderIdAndPhoneNumberAndStatus(UUID requesterAccountHolderId,
+                                                                    String phoneNumber,
+                                                                    PhoneVerificationStatus status);
 }

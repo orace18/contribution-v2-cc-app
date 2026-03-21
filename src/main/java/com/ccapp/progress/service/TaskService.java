@@ -6,58 +6,39 @@ import com.ccapp.identity.delegation.domain.enums.DelegatedActionType;
 import com.ccapp.identity.delegation.domain.enums.PermissionLevel;
 import com.ccapp.identity.delegation.service.AccessControlService;
 import com.ccapp.identity.delegation.service.DelegatedActionService;
-import com.ccapp.common.events.DomainEventPublisher;
-import com.ccapp.notifications.domain.enums.NotificationChannel;
-import com.ccapp.notifications.domain.enums.NotificationType;
-import com.ccapp.notifications.event.NotificationRequestedEvent;
 import com.ccapp.progress.domain.entity.UserTask;
 import com.ccapp.progress.domain.enums.TaskStatus;
 import com.ccapp.progress.domain.enums.TaskType;
 import com.ccapp.progress.dto.TaskCompletionResponse;
+import com.ccapp.progress.dto.TaskResponse;
 import com.ccapp.progress.dto.UserProgressResponse;
 import com.ccapp.progress.dto.UserTaskResponse;
 import com.ccapp.progress.repository.UserTaskRepository;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.OffsetDateTime;
-import java.util.Arrays;
-import java.util.EnumMap;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 @Service
-@Slf4j
 @RequiredArgsConstructor
 public class TaskService {
 
     private final UserTaskRepository userTaskRepository;
     private final AccountHolderService accountHolderService;
     private final ProgressService progressService;
-    private final DomainEventPublisher domainEventPublisher;
     private final AccessControlService accessControlService;
     private final DelegatedActionService delegatedActionService;
+    private final TaskEngineService taskEngineService;
 
-    @Transactional(readOnly = true)
+    @Transactional
     public List<UserTaskResponse> getUserTasks(UUID actorUserId, UUID accountHolderId) {
         accessControlService.assertCanActOnAccountHolder(actorUserId, accountHolderId, PermissionLevel.VIEW);
         ensureAccountHolderExists(accountHolderId);
-
-        Map<TaskType, UserTask> taskByType = new EnumMap<>(TaskType.class);
-        for (UserTask task : userTaskRepository.findByAccountHolderIdOrderByCreatedAtAsc(accountHolderId)) {
-            taskByType.put(task.getTaskType(), task);
-        }
-
-        return Arrays.stream(TaskType.values())
-                .map(taskType -> {
-                    UserTask task = taskByType.get(taskType);
-                    return task == null
-                            ? new UserTaskResponse(null, taskType, TaskStatus.PENDING, null, null)
-                            : toResponse(task);
-                })
+        taskEngineService.synchronizeTaskGraph(accountHolderId, false);
+        return userTaskRepository.findByAccountHolderIdOrderByCreatedAtAsc(accountHolderId).stream()
+                .map(this::toResponse)
                 .toList();
     }
 
@@ -66,20 +47,10 @@ public class TaskService {
         accessControlService.assertCanActOnAccountHolder(actorUserId, accountHolderId, PermissionLevel.TRANSACT);
         ensureAccountHolderExists(accountHolderId);
 
-        UserTask task = userTaskRepository.findByAccountHolderIdAndTaskType(accountHolderId, taskType)
-                .orElseGet(() -> UserTask.builder()
-                        .accountHolderId(accountHolderId)
-                        .taskType(taskType)
-                        .status(TaskStatus.PENDING)
-                        .createdAt(OffsetDateTime.now())
-                        .build());
-
-        task.setStatus(TaskStatus.COMPLETED);
-        task.setValidatedAt(OffsetDateTime.now());
-
-        UserTask savedTask = userTaskRepository.save(task);
+        TaskResponse response = taskEngineService.completeTaskByType(accountHolderId, taskType);
+        UserTask savedTask = userTaskRepository.findById(response.id())
+                .orElseThrow(() -> new NotFoundException("Task not found"));
         UserProgressResponse progress = progressService.recalculateProgress(accountHolderId);
-        emitTaskCompletedNotification(accountHolderId, taskType);
         delegatedActionService.logIfDelegatedActor(
                 accountHolderId,
                 actorUserId,
@@ -90,21 +61,38 @@ public class TaskService {
         return new TaskCompletionResponse(toResponse(savedTask), progress);
     }
 
-    private void emitTaskCompletedNotification(UUID accountHolderId, TaskType taskType) {
-        try {
-            domainEventPublisher.publish(NotificationRequestedEvent.create(
-                    accountHolderId,
-                    null,
-                    NotificationType.TASK_COMPLETED,
-                    NotificationChannel.IN_APP,
-                    "TASK_COMPLETED",
-                    "Task completed: " + taskType.name(),
-                    null,
-                    true
-            ));
-        } catch (RuntimeException ex) {
-            log.warn("Failed to emit TASK_COMPLETED notification for accountHolderId={}", accountHolderId, ex);
+    @Transactional
+    public List<TaskResponse> getVisibleTasks(UUID actorUserId, UUID accountHolderId) {
+        accessControlService.assertCanActOnAccountHolder(actorUserId, accountHolderId, PermissionLevel.VIEW);
+        ensureAccountHolderExists(accountHolderId);
+        return taskEngineService.getUserTasks(accountHolderId);
+    }
+
+    @Transactional
+    public TaskResponse getNextBestAction(UUID actorUserId, UUID accountHolderId) {
+        accessControlService.assertCanActOnAccountHolder(actorUserId, accountHolderId, PermissionLevel.VIEW);
+        ensureAccountHolderExists(accountHolderId);
+        return taskEngineService.getNextBestAction(accountHolderId);
+    }
+
+    @Transactional
+    public TaskResponse completeTaskById(UUID actorUserId, UUID accountHolderId, UUID taskId) {
+        accessControlService.assertCanActOnAccountHolder(actorUserId, accountHolderId, PermissionLevel.TRANSACT);
+        ensureAccountHolderExists(accountHolderId);
+        UserTask task = userTaskRepository.findById(taskId)
+                .orElseThrow(() -> new NotFoundException("Task not found"));
+        if (!accountHolderId.equals(task.getAccountHolderId())) {
+            throw new NotFoundException("Task not found");
         }
+        TaskResponse response = taskEngineService.completeTask(taskId);
+        progressService.recalculateProgress(accountHolderId);
+        delegatedActionService.logIfDelegatedActor(
+                accountHolderId,
+                actorUserId,
+                DelegatedActionType.PROGRESS_UPDATED,
+                "{\"taskId\":\"" + taskId + "\"}"
+        );
+        return response;
     }
 
     private void ensureAccountHolderExists(UUID accountHolderId) {
@@ -120,7 +108,7 @@ public class TaskService {
                 task.getId(),
                 task.getTaskType(),
                 task.getStatus(),
-                task.getValidatedAt(),
+                task.getCompletedAt(),
                 task.getCreatedAt()
         );
     }

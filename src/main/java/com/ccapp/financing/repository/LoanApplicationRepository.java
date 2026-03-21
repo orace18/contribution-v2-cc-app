@@ -17,6 +17,8 @@ public interface LoanApplicationRepository extends JpaRepository<LoanApplication
 
     Page<LoanApplication> findByAccountHolderIdOrderByCreatedAtDesc(UUID accountHolderId, Pageable pageable);
 
+    long countByAccountHolderIdAndStatusIn(UUID accountHolderId, Collection<LoanApplicationStatus> statuses);
+
     @Query("""
             select la
             from LoanApplication la
