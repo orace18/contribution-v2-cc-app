@@ -46,6 +46,15 @@ public class FinancialPartner {
     @Column(name = "country_code", nullable = false, length = 3)
     private String countryCode;
 
+    @Column(name = "currency", nullable = false, length = 3)
+    private String currency;
+
+    @Column(name = "contact_email", length = 180)
+    private String contactEmail;
+
+    @Column(name = "description", length = 2000)
+    private String description;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 16)
     private FinancialPartnerStatus status;

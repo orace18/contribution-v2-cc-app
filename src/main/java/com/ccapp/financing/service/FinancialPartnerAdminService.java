@@ -72,6 +72,9 @@ public class FinancialPartnerAdminService {
                 .name(normalizedName)
                 .type(request.type())
                 .countryCode(normalizedCountryCode)
+                .currency(normalizeCurrency(request.currency()))
+                .contactEmail(normalizeNullableEmail(request.contactEmail()))
+                .description(normalizeNullableDescription(request.description()))
                 .status(request.status() == null ? FinancialPartnerStatus.ACTIVE : request.status())
                 .apiEndpoint(normalizeNullableEndpoint(request.apiEndpoint()))
                 .build());
@@ -95,6 +98,9 @@ public class FinancialPartnerAdminService {
         partner.setName(normalizedName);
         partner.setType(request.type());
         partner.setCountryCode(normalizedCountryCode);
+        partner.setCurrency(normalizeCurrency(request.currency()));
+        partner.setContactEmail(normalizeNullableEmail(request.contactEmail()));
+        partner.setDescription(normalizeNullableDescription(request.description()));
         partner.setStatus(request.status());
         partner.setApiEndpoint(normalizeNullableEndpoint(request.apiEndpoint()));
         return toResponse(financialPartnerRepository.save(partner));
@@ -112,6 +118,9 @@ public class FinancialPartnerAdminService {
                 partner.getName(),
                 partner.getType(),
                 partner.getCountryCode(),
+                partner.getCurrency(),
+                partner.getContactEmail(),
+                partner.getDescription(),
                 partner.getStatus(),
                 partner.getApiEndpoint(),
                 partner.getCreatedAt()
@@ -161,5 +170,26 @@ public class FinancialPartnerAdminService {
             return null;
         }
         return apiEndpoint.trim();
+    }
+
+    private String normalizeCurrency(String currency) {
+        if (currency == null || currency.isBlank()) {
+            throw new BusinessException("Partner currency is required");
+        }
+        return currency.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private String normalizeNullableEmail(String contactEmail) {
+        if (contactEmail == null || contactEmail.isBlank()) {
+            return null;
+        }
+        return contactEmail.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private String normalizeNullableDescription(String description) {
+        if (description == null || description.isBlank()) {
+            return null;
+        }
+        return description.trim();
     }
 }

@@ -46,11 +46,17 @@ class FinancialPartnerAdminServiceIntegrationTest {
                 "Seed Finance",
                 FinancialPartnerType.FUND,
                 "bj",
+                "xof",
+                "ops@seed.example",
+                "Seed finance partner",
                 FinancialPartnerStatus.ACTIVE,
                 "https://seed.example/api"
         ));
         assertEquals("BJ", created.countryCode());
         assertEquals("Seed Finance", created.name());
+        assertEquals("XOF", created.currency());
+        assertEquals("ops@seed.example", created.contactEmail());
+        assertEquals("Seed finance partner", created.description());
 
         PageResponse<FinancialPartnerResponse> page = financialPartnerAdminService.listPartners(
                 FinancialPartnerStatus.ACTIVE,
@@ -68,15 +74,24 @@ class FinancialPartnerAdminServiceIntegrationTest {
                         "Seed Finance Group",
                         FinancialPartnerType.FUND,
                         "BJ",
+                        "eur",
+                        "support@seed.example",
+                        "Updated seed finance partner",
                         FinancialPartnerStatus.INACTIVE,
                         "https://seed.example/v2"
                 )
         );
         assertEquals(FinancialPartnerStatus.INACTIVE, updated.status());
         assertEquals("Seed Finance Group", updated.name());
+        assertEquals("EUR", updated.currency());
+        assertEquals("support@seed.example", updated.contactEmail());
+        assertEquals("Updated seed finance partner", updated.description());
 
         FinancialPartnerResponse loaded = financialPartnerAdminService.getPartner(created.id());
         assertEquals(created.id(), loaded.id());
         assertEquals("https://seed.example/v2", loaded.apiEndpoint());
+        assertEquals("EUR", loaded.currency());
+        assertEquals("support@seed.example", loaded.contactEmail());
+        assertEquals("Updated seed finance partner", loaded.description());
     }
 }

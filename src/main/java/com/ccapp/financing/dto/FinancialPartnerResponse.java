@@ -11,6 +11,9 @@ public record FinancialPartnerResponse(
         String name,
         FinancialPartnerType type,
         String countryCode,
+        String currency,
+        String contactEmail,
+        String description,
         FinancialPartnerStatus status,
         String apiEndpoint,
         OffsetDateTime createdAt
