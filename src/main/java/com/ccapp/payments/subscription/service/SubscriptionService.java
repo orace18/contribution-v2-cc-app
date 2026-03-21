@@ -5,15 +5,14 @@ import com.ccapp.payments.operation.domain.enums.OperationType;
 import com.ccapp.payments.operation.service.OperationService;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.common.exception.NotFoundException;
-import com.ccapp.country.config.domain.enums.CountryConfigType;
-import com.ccapp.country.config.service.CountryConfigResolver;
 import com.ccapp.country.dto.CountryContext;
 import com.ccapp.country.service.CountryContextService;
 import com.ccapp.identity.delegation.domain.enums.PermissionLevel;
 import com.ccapp.identity.delegation.service.AccessControlService;
-import com.ccapp.payments.psp.client.JawupayClient;
-import com.ccapp.payments.psp.dto.JawupayInitiateRequest;
 import com.ccapp.payments.psp.dto.JawupayInitiateResponse;
+import com.ccapp.country.config.domain.enums.CountryConfigType;
+import com.ccapp.country.config.service.CountryConfigResolver;
+import com.ccapp.payments.service.PaymentService;
 import com.ccapp.payments.subscription.domain.entity.SubscriptionPlan;
 import com.ccapp.payments.subscription.dto.InitiateSubscriptionRequest;
 import com.ccapp.payments.subscription.dto.InitiateSubscriptionResponse;
@@ -38,9 +37,9 @@ public class SubscriptionService {
     private final CountryContextService countryContextService;
     private final AccessControlService accessControlService;
     private final OperationService operationService;
-    private final JawupayClient jawupayClient;
     private final CountryConfigResolver countryConfigResolver;
     private final MembershipService membershipService;
+    private final PaymentService paymentService;
 
     @Transactional(readOnly = true)
     public List<SubscriptionPlanResponse> getPlans(UUID accountHolderId) {
@@ -70,12 +69,7 @@ public class SubscriptionService {
                 countryContext.serviceCountryCode(),
                 CountryConfigType.MEMBERSHIP
         );
-        CountryConfigResolver.ResolvedConfig paymentConfig = countryConfigResolver.resolveActiveConfig(
-                countryContext.serviceCountryCode(),
-                CountryConfigType.PAYMENT
-        );
         assertPlanAllowedByConfiguration(plan, membershipConfig);
-        assertPaymentConfigurationIsUsable(paymentConfig);
 
         String idempotencyKey = request.idempotencyKey() == null || request.idempotencyKey().isBlank()
                 ? "sub:" + UUID.randomUUID()
@@ -91,7 +85,7 @@ public class SubscriptionService {
                 "Subscription " + plan.getCode()
         );
 
-        JawupayInitiateResponse pspResponse = jawupayClient.initiatePayment(new JawupayInitiateRequest(
+        JawupayInitiateResponse pspResponse = paymentService.initiatePayment(
                 operation.getId(),
                 idempotencyKey,
                 operation.getAmount(),
@@ -99,7 +93,7 @@ public class SubscriptionService {
                 accountHolderId,
                 actorUserId,
                 operation.getDescription()
-        ));
+        );
 
         operationService.assignPspReference(operation.getId(), pspResponse.pspReference());
         membershipService.createPendingMembership(operation.getId(), accountHolderId, plan);
@@ -143,14 +137,6 @@ public class SubscriptionService {
         }
         if (!matchingPlan) {
             throw new BusinessException("Subscription plan is not allowed by membership configuration");
-        }
-    }
-
-    private void assertPaymentConfigurationIsUsable(CountryConfigResolver.ResolvedConfig paymentConfig) {
-        ObjectNode payload = countryConfigResolver.payloadAsObjectNode(paymentConfig);
-        JsonNode pspMethods = payload.get("pspMethods");
-        if (pspMethods != null && pspMethods.isArray() && pspMethods.isEmpty()) {
-            throw new BusinessException("Payment configuration has no PSP methods enabled");
         }
     }
 }

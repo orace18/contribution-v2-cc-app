@@ -2,10 +2,8 @@ package com.ccapp.admin.service;
 
 import com.ccapp.admin.dto.LookupItemResponse;
 import com.ccapp.common.exception.BusinessException;
-import com.ccapp.country.config.dto.CountryConfigFullResponse;
 import com.ccapp.country.config.repository.CountryConfigVersionRepository;
 import com.ccapp.country.config.repository.CountryChartAccountRepository;
-import com.ccapp.country.config.service.CountryConfigurationEngineService;
 import com.ccapp.country.config.service.CountrySetupBootstrapService;
 import com.ccapp.country.domain.entity.Country;
 import com.ccapp.country.repository.CountryRepository;
@@ -14,18 +12,12 @@ import com.ccapp.financing.domain.enums.FinancingOfferStatus;
 import com.ccapp.financing.repository.FinancialPartnerRepository;
 import com.ccapp.financing.repository.FinancingOfferRepository;
 import com.ccapp.financing.repository.OfferCountryConfigRepository;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.OffsetDateTime;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -44,9 +36,7 @@ public class AdminLookupService {
     private final OfferCountryConfigRepository offerCountryConfigRepository;
     private final CountryChartAccountRepository countryChartAccountRepository;
     private final CountryConfigVersionRepository countryConfigVersionRepository;
-    private final CountryConfigurationEngineService countryConfigurationEngineService;
     private final CountrySetupBootstrapService countrySetupBootstrapService;
-    private final ObjectMapper objectMapper;
 
     @Transactional
     public List<LookupItemResponse> listCountries() {
@@ -159,52 +149,7 @@ public class AdminLookupService {
     public List<LookupItemResponse> listPsps(String countryCode) {
         String normalizedCountryCode = normalizeCountryCode(countryCode);
         assertCountryExists(normalizedCountryCode);
-
-        CountryConfigFullResponse fullConfig = countryConfigurationEngineService
-                .getFullCountryConfiguration(normalizedCountryCode, OffsetDateTime.now());
-        ObjectNode payment = fullConfig.payment() != null && fullConfig.payment().isObject()
-                ? (ObjectNode) fullConfig.payment()
-                : objectMapper.createObjectNode();
-
-        Map<String, LookupItemResponse> deduplicated = new LinkedHashMap<>();
-        JsonNode activePsps = payment.get("activePsps");
-        if (activePsps != null && activePsps.isArray()) {
-            activePsps.forEach(item -> {
-                if (!item.isTextual() || item.asText().isBlank()) {
-                    return;
-                }
-                String provider = item.asText().trim();
-                deduplicated.putIfAbsent(provider.toUpperCase(Locale.ROOT),
-                        new LookupItemResponse(provider, provider, "ACTIVE"));
-            });
-        }
-
-        JsonNode pspsNode = payment.get("psps");
-        if (pspsNode != null && pspsNode.isArray()) {
-            pspsNode.forEach(item -> {
-                if (!item.isObject()) {
-                    return;
-                }
-                String provider = readText(item, "id", "provider", "name");
-                if (provider == null) {
-                    return;
-                }
-                String label = readText(item, "name", "label", "provider");
-                String status = readText(item, "status");
-                deduplicated.putIfAbsent(provider.toUpperCase(Locale.ROOT),
-                        new LookupItemResponse(provider, label == null ? provider : label, status == null ? "ACTIVE" : status));
-            });
-        }
-
-        JsonNode singlePsp = payment.get("psp");
-        if (singlePsp != null && singlePsp.isObject()) {
-            String provider = readText(singlePsp, "provider", "id", "name");
-            if (provider != null) {
-                deduplicated.putIfAbsent(provider.toUpperCase(Locale.ROOT),
-                        new LookupItemResponse(provider, provider, "ACTIVE"));
-            }
-        }
-        return new ArrayList<>(deduplicated.values());
+        return List.of(new LookupItemResponse("JAWUPAY", "JawuPay", "Single PSP managed centrally"));
     }
 
     private void assertCountryExists(String countryCode) {
@@ -218,13 +163,4 @@ public class AdminLookupService {
         return countryCode.trim().toUpperCase(Locale.ROOT);
     }
 
-    private String readText(JsonNode node, String... fields) {
-        for (String field : fields) {
-            JsonNode candidate = node.get(field);
-            if (candidate != null && candidate.isTextual() && !candidate.asText().isBlank()) {
-                return candidate.asText().trim();
-            }
-        }
-        return null;
-    }
 }

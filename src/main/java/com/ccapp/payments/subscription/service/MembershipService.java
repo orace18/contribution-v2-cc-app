@@ -3,6 +3,7 @@ package com.ccapp.payments.subscription.service;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.country.config.domain.enums.CountryConfigType;
 import com.ccapp.country.config.service.CountryConfigResolver;
+import com.ccapp.payments.service.PaymentService;
 import com.ccapp.payments.operation.domain.entity.Operation;
 import com.ccapp.payments.operation.domain.enums.OperationStatus;
 import com.ccapp.payments.subscription.domain.entity.Membership;
@@ -58,29 +59,29 @@ public class MembershipService {
                 membership.getCountryCode(),
                 CountryConfigType.MEMBERSHIP
         );
-        CountryConfigResolver.ResolvedConfig paymentConfig = countryConfigResolver.resolveActiveConfig(
-                membership.getCountryCode(),
-                CountryConfigType.PAYMENT
-        );
 
         OffsetDateTime now = OffsetDateTime.now();
         membership.setStatus(MembershipStatus.ACTIVE);
         membership.setActivatedAt(now);
         membership.setExpiresAt(now.plusDays(30));
-        membership.setConfigSnapshot(writeSnapshot(membershipConfig, paymentConfig));
+        membership.setConfigSnapshot(writeSnapshot(membershipConfig));
         membership.setConfigVersion(membershipConfig.version());
 
         return membershipRepository.save(membership);
     }
 
-    private String writeSnapshot(CountryConfigResolver.ResolvedConfig membershipConfig,
-                                 CountryConfigResolver.ResolvedConfig paymentConfig) {
+    private String writeSnapshot(CountryConfigResolver.ResolvedConfig membershipConfig) {
         ObjectNode root = objectMapper.createObjectNode();
         root.put("countryCode", membershipConfig.countryCode());
         root.put("membershipConfigVersion", membershipConfig.version());
-        root.put("paymentConfigVersion", paymentConfig.version());
+        root.putNull("paymentConfigVersion");
+        root.put("paymentProvider", PaymentService.PSP_PROVIDER);
         root.set("membership", countryConfigResolver.payloadAsObjectNode(membershipConfig));
-        root.set("payment", countryConfigResolver.payloadAsObjectNode(paymentConfig));
+        ObjectNode payment = objectMapper.createObjectNode();
+        payment.put("provider", PaymentService.PSP_PROVIDER);
+        payment.put("managedBy", PaymentService.PSP_PROVIDER);
+        payment.put("methodAvailabilitySource", "JAWUPAY_DYNAMIC");
+        root.set("payment", payment);
         try {
             return objectMapper.writeValueAsString(root);
         } catch (JsonProcessingException ex) {

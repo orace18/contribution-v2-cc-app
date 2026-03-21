@@ -60,7 +60,6 @@ public class CountryConfigReadinessService {
         sections.add(evaluateMembershipSection(payloadByType.get(CountryConfigType.MEMBERSHIP), payloadByType.get(CountryConfigType.MLM_LIMITS)));
         sections.add(evaluateMlmSection(normalizedCountryCode, payloadByType.get(CountryConfigType.MLM_LIMITS)));
         sections.add(evaluateFinancingSection(normalizedCountryCode, payloadByType.get(CountryConfigType.FINANCING)));
-        sections.add(evaluatePaymentSection(payloadByType.get(CountryConfigType.PAYMENT)));
         sections.add(evaluateRiskSection(payloadByType.get(CountryConfigType.GUARANTEE)));
         sections.add(evaluateRbacSection(country));
 
@@ -317,16 +316,6 @@ public class CountryConfigReadinessService {
         return section;
     }
 
-    private SectionAccumulator evaluatePaymentSection(ObjectNode payment) {
-        SectionAccumulator section = new SectionAccumulator("payment", 1);
-        boolean paymentEnabled = optionalBoolean(payment, "enabled", "paymentEnabled")
-                .orElse(hasActivePsp(payment));
-        if (paymentEnabled && !hasActivePsp(payment)) {
-            section.miss("payment.active_psp");
-        }
-        return section;
-    }
-
     private SectionAccumulator evaluateRiskSection(ObjectNode guarantee) {
         SectionAccumulator section = new SectionAccumulator("risk_guarantee", 2);
         BigDecimal globalMaxExposure = readDecimal(guarantee, "globalMaxExposure");
@@ -374,33 +363,6 @@ public class CountryConfigReadinessService {
             section.miss("rbac.country_ops");
         }
         return section;
-    }
-
-    private boolean hasActivePsp(ObjectNode payment) {
-        JsonNode activePspsNode = payment.get("activePsps");
-        if (activePspsNode != null && activePspsNode.isArray() && !activePspsNode.isEmpty()) {
-            return true;
-        }
-        JsonNode pspsNode = payment.get("psps");
-        if (pspsNode != null && pspsNode.isArray()) {
-            for (JsonNode pspNode : pspsNode) {
-                if (!pspNode.isObject()) {
-                    continue;
-                }
-                JsonNode activeNode = pspNode.get("active");
-                JsonNode statusNode = pspNode.get("status");
-                if ((activeNode != null && activeNode.isBoolean() && activeNode.booleanValue())
-                        || (statusNode != null && statusNode.isTextual() && "ACTIVE".equalsIgnoreCase(statusNode.asText()))) {
-                    return true;
-                }
-            }
-        }
-        JsonNode pspNode = payment.get("psp");
-        if (pspNode != null && pspNode.isObject()) {
-            JsonNode providerNode = pspNode.get("provider");
-            return providerNode != null && providerNode.isTextual() && !providerNode.asText().isBlank();
-        }
-        return false;
     }
 
     private Map<CountryConfigType, ObjectNode> resolveActivePayloads(String countryCode) {

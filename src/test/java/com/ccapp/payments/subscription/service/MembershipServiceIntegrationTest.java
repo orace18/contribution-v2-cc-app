@@ -2,8 +2,8 @@ package com.ccapp.payments.subscription.service;
 
 import com.ccapp.admin.service.ConfigAuditMetadataService;
 import com.ccapp.config.TestJacksonAndCachingConfig;
-import com.ccapp.country.config.domain.enums.CountryConfigType;
 import com.ccapp.country.config.dto.UpsertCountryConfigRequest;
+import com.ccapp.country.config.domain.enums.CountryConfigType;
 import com.ccapp.country.config.service.CountryChartOfAccountsService;
 import com.ccapp.country.config.service.CountryConfigResolver;
 import com.ccapp.country.config.service.CountryConfigReadinessService;
@@ -99,15 +99,6 @@ class MembershipServiceIntegrationTest {
                 UUID.randomUUID()
         );
 
-        ObjectNode paymentPayload = objectMapper.createObjectNode();
-        paymentPayload.set("pspMethods", objectMapper.createArrayNode().add("JAWUPAY"));
-        paymentPayload.set("methods", objectMapper.createArrayNode().add("JAWUPAY"));
-        countryConfigurationEngineService.upsertCountryConfiguration(
-                "BJ",
-                CountryConfigType.PAYMENT,
-                new UpsertCountryConfigRequest(paymentPayload, OffsetDateTime.now()),
-                UUID.randomUUID()
-        );
     }
 
     @Test
@@ -141,6 +132,7 @@ class MembershipServiceIntegrationTest {
         assertNotNull(activated.getExpiresAt());
         assertNotNull(activated.getConfigSnapshot());
         assertEquals(1, activated.getConfigVersion());
+        org.junit.jupiter.api.Assertions.assertTrue(activated.getConfigSnapshot().contains("JAWUPAY"));
 
         Membership persisted = membershipRepository.findByOperationId(operation.getId()).orElseThrow();
         assertEquals(MembershipStatus.ACTIVE, persisted.getStatus());

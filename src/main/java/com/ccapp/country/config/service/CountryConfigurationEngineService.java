@@ -48,6 +48,8 @@ public class CountryConfigurationEngineService {
     private static final int MAX_PAYLOAD_CHARS = 50_000;
     private static final BigDecimal ONE_HUNDRED = new BigDecimal("100");
     private static final String COUNTRY_CONFIG_ENTITY_TYPE = "COUNTRY_CONFIG";
+    private static final String JAWUPAY_PROVIDER = "JAWUPAY";
+    private static final String JAWUPAY_METHOD_SOURCE = "JAWUPAY_DYNAMIC";
 
     private final CountryConfigVersionRepository countryConfigVersionRepository;
     private final CountryChartAccountRepository countryChartAccountRepository;
@@ -89,7 +91,7 @@ public class CountryConfigurationEngineService {
                 payloadOf(snapshot, CountryConfigType.GUARANTEE),
                 payloadOf(snapshot, CountryConfigType.FINANCING),
                 payloadOf(snapshot, CountryConfigType.ACCOUNTING),
-                payloadOf(snapshot, CountryConfigType.PAYMENT)
+                buildManagedPaymentPayload()
         );
     }
 
@@ -133,7 +135,10 @@ public class CountryConfigurationEngineService {
                     .findFirstByCountryCodeAndConfigTypeOrderByVersionDesc(normalizedCountryCode, type)
                     .isPresent();
             if (!alreadyInitialized) {
-                saveNewVersion(normalizedCountryCode, type, emptyObjectPayload, now, actorAdminUserId);
+                String initialPayload = type == CountryConfigType.PAYMENT
+                        ? writePayload(buildManagedPaymentPayload())
+                        : emptyObjectPayload;
+                saveNewVersion(normalizedCountryCode, type, initialPayload, now, actorAdminUserId);
             }
         }
 
@@ -334,6 +339,9 @@ public class CountryConfigurationEngineService {
     }
 
     private JsonNode validatePayload(CountryConfigType configType, JsonNode payload, boolean allowEmptyObject) {
+        if (configType == CountryConfigType.PAYMENT) {
+            return buildManagedPaymentPayload();
+        }
         if (payload == null || payload.isNull()) {
             throw new BusinessException("Configuration payload is required");
         }
@@ -634,29 +642,8 @@ public class CountryConfigurationEngineService {
     }
 
     private void validatePaymentConfig(ObjectNode payload) {
-        Integer settlementWindowHours = optionalIntField(payload, "settlementWindowHours");
-        if (settlementWindowHours != null && settlementWindowHours < 0) {
-            throw new BusinessException("payment.settlementWindowHours must be >= 0");
-        }
-        BigDecimal feeRate = optionalDecimalField(payload, "feeRate");
-        if (feeRate != null && (feeRate.compareTo(BigDecimal.ZERO) < 0 || feeRate.compareTo(BigDecimal.ONE) > 0)) {
-            throw new BusinessException("payment.feeRate must be between 0 and 1");
-        }
-        ensureStringArray(payload, "methods", "payment.methods must be an array of non-empty strings");
-        ensureStringArray(payload, "allowedMethods", "payment.allowedMethods must be an array of non-empty strings");
-        ensureStringArray(payload, "pspMethods", "payment.pspMethods must be an array of non-empty strings");
-
-        JsonNode pspNode = payload.get("psp");
-        if (pspNode != null && !pspNode.isNull()) {
-            if (!pspNode.isObject()) {
-                throw new BusinessException("payment.psp must be an object");
-            }
-            ObjectNode psp = (ObjectNode) pspNode;
-            if (psp.has("provider")) {
-                requiredTextField(psp, "provider");
-            }
-            ensureStringArray(psp, "methods", "payment.psp.methods must be an array of non-empty strings");
-        }
+        // Payments are managed centrally by JawuPay. Country payloads no longer
+        // carry PSP selection or payment-method routing rules.
     }
 
     private String requiredTextField(ObjectNode payload, String fieldName) {
@@ -789,7 +776,16 @@ public class CountryConfigurationEngineService {
         validateGuaranteeFinancingAlignment(payloadByType.get(CountryConfigType.GUARANTEE),
                 payloadByType.get(CountryConfigType.FINANCING));
         validateAccountingAccountsExist(countryCode, payloadByType.get(CountryConfigType.ACCOUNTING));
-        validatePaymentMethodsAgainstPspConfig(payloadByType.get(CountryConfigType.PAYMENT));
+    }
+
+    private ObjectNode buildManagedPaymentPayload() {
+        ObjectNode payload = objectMapper.createObjectNode();
+        payload.put("provider", JAWUPAY_PROVIDER);
+        payload.put("managedBy", JAWUPAY_PROVIDER);
+        payload.put("methodAvailabilitySource", JAWUPAY_METHOD_SOURCE);
+        payload.put("countryRoutingSource", JAWUPAY_PROVIDER);
+        payload.put("countryOverridesAllowed", false);
+        return payload;
     }
 
     private ObjectNode resolvePayloadForValidation(String countryCode,
@@ -909,24 +905,7 @@ public class CountryConfigurationEngineService {
     }
 
     private void validatePaymentMethodsAgainstPspConfig(ObjectNode paymentConfig) {
-        Set<String> methods = readStringSet(paymentConfig, "methods");
-        if (methods.isEmpty()) {
-            methods = readStringSet(paymentConfig, "allowedMethods");
-        }
-        if (methods.isEmpty()) {
-            return;
-        }
-
-        Set<String> pspMethods = readStringSet(paymentConfig, "pspMethods");
-        if (pspMethods.isEmpty() && paymentConfig.has("psp") && paymentConfig.get("psp").isObject()) {
-            pspMethods = readStringSet((ObjectNode) paymentConfig.get("psp"), "methods");
-        }
-        if (pspMethods.isEmpty()) {
-            throw new BusinessException("payment.psp methods must be configured when payment methods are defined");
-        }
-        if (!pspMethods.containsAll(methods)) {
-            throw new BusinessException("payment methods must exist in country PSP config");
-        }
+        // No-op by design: JawuPay owns method availability and country routing.
     }
 
     private void ensureStringArray(ObjectNode payload, String fieldName, String errorMessage) {

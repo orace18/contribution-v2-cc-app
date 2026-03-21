@@ -38,7 +38,6 @@ public class AdminCountryWorkspaceService {
             new TabDefinition("membership", "Membership", CountryConfigType.MEMBERSHIP),
             new TabDefinition("mlm", "MLM", CountryConfigType.MLM_LIMITS),
             new TabDefinition("financing", "Financing", CountryConfigType.FINANCING),
-            new TabDefinition("payment", "Payment", CountryConfigType.PAYMENT),
             new TabDefinition("risk", "Risk", CountryConfigType.GUARANTEE)
     );
 

@@ -110,12 +110,6 @@ class CountryConfigReadinessServiceIntegrationTest {
                 new UpsertCountryConfigRequest(objectMapper.createObjectNode().put("enabled", false), OffsetDateTime.now()),
                 UUID.randomUUID()
         );
-        countryConfigurationEngineService.upsertCountryConfiguration(
-                "CI",
-                CountryConfigType.PAYMENT,
-                new UpsertCountryConfigRequest(objectMapper.createObjectNode().put("enabled", false), OffsetDateTime.now()),
-                UUID.randomUUID()
-        );
 
         CountryConfigReadinessResponse readiness = countryConfigReadinessService.evaluateReadiness("CI");
         assertTrue(readiness.configured());
