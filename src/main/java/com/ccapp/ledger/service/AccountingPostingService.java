@@ -9,7 +9,7 @@ import com.ccapp.ledger.repository.AccountBalanceSnapshotRepository;
 import com.ccapp.ledger.repository.AccountingEventRepository;
 import com.ccapp.ledger.repository.LedgerEntryRepository;
 import com.ccapp.country.config.domain.entity.CountryChartAccount;
-import com.ccapp.country.config.domain.enums.CountryAccountGroup;
+import com.ccapp.country.config.domain.enums.CountryAccountSystemTag;
 import com.ccapp.country.config.service.CountryChartOfAccountsService;
 import com.ccapp.country.domain.entity.Country;
 import com.ccapp.country.repository.CountryRepository;
@@ -79,13 +79,13 @@ public class AccountingPostingService {
         String countryCode = resolveOperationalCountryCode(operation.getAccountHolderId(), operation.getCurrency());
         AccountHolder beneficiary = resolveAccountHolder(beneficiaryAccountHolderId);
         List<PostingLine> lines = List.of(
-                new PostingLine(resolveAccountCode(countryCode, CountryAccountGroup.COMMISSION_POOL), LedgerEntryType.DEBIT,
+                new PostingLine(resolveAccountCode(countryCode, CountryAccountSystemTag.MLM_POOL), LedgerEntryType.DEBIT,
                         operation.getAmount(), operation.getCurrency(),
                         "Commission payout gross expense"),
                 new PostingLine(resolveWalletAccountCode(beneficiary), LedgerEntryType.CREDIT,
                         netAmount, operation.getCurrency(),
                         "Member wallet credit"),
-                new PostingLine(resolveAccountCode(countryCode, CountryAccountGroup.PLATFORM_REVENUE), LedgerEntryType.CREDIT,
+                new PostingLine(resolveAccountCode(countryCode, CountryAccountSystemTag.PLATFORM_REVENUE), LedgerEntryType.CREDIT,
                         taxAmount, operation.getCurrency(),
                         "Tax withholding on commission payout")
         );
@@ -167,17 +167,17 @@ public class AccountingPostingService {
             case SUBSCRIPTION -> List.of(
                     new PostingLine(walletCode, LedgerEntryType.DEBIT,
                             operation.getAmount(), operation.getCurrency(), "Cash received"),
-                    new PostingLine(resolveAccountCode(countryCode, CountryAccountGroup.MEMBERSHIP_FEES), LedgerEntryType.CREDIT,
+                    new PostingLine(resolveAccountCode(countryCode, CountryAccountSystemTag.CIRCLE_POOL), LedgerEntryType.CREDIT,
                             operation.getAmount(), operation.getCurrency(), "Subscription revenue recognition")
             );
             case ADJUSTMENT -> List.of(
-                    new PostingLine(resolveAccountCode(countryCode, CountryAccountGroup.PLATFORM_REVENUE), LedgerEntryType.DEBIT,
+                    new PostingLine(resolveAccountCode(countryCode, CountryAccountSystemTag.PLATFORM_REVENUE), LedgerEntryType.DEBIT,
                             operation.getAmount(), operation.getCurrency(), "Reconciliation adjustment"),
                     new PostingLine(walletCode, LedgerEntryType.CREDIT,
                             operation.getAmount(), operation.getCurrency(), "Adjustment against cash")
             );
             case LOAN_DISBURSEMENT -> List.of(
-                    new PostingLine(resolveAccountCode(countryCode, CountryAccountGroup.PARTNER_SETTLEMENT), LedgerEntryType.DEBIT,
+                    new PostingLine(resolveAccountCode(countryCode, CountryAccountSystemTag.LOAN_PORTFOLIO), LedgerEntryType.DEBIT,
                             operation.getAmount(), operation.getCurrency(), "Loan principal recognized"),
                     new PostingLine(walletCode, LedgerEntryType.CREDIT,
                             operation.getAmount(), operation.getCurrency(), "Loan disbursement cash-out")
@@ -185,7 +185,7 @@ public class AccountingPostingService {
             case LOAN_REPAYMENT -> List.of(
                     new PostingLine(walletCode, LedgerEntryType.DEBIT,
                             operation.getAmount(), operation.getCurrency(), "Loan repayment cash-in"),
-                    new PostingLine(resolveAccountCode(countryCode, CountryAccountGroup.PARTNER_SETTLEMENT), LedgerEntryType.CREDIT,
+                    new PostingLine(resolveAccountCode(countryCode, CountryAccountSystemTag.LOAN_PORTFOLIO), LedgerEntryType.CREDIT,
                             operation.getAmount(), operation.getCurrency(), "Loan principal repayment")
             );
             case COMMISSION_PAYOUT -> throw new BusinessException(
@@ -194,8 +194,8 @@ public class AccountingPostingService {
         };
     }
 
-    private String resolveAccountCode(String countryCode, CountryAccountGroup group) {
-        CountryChartAccount account = countryChartOfAccountsService.findOrCreate(countryCode, group);
+    private String resolveAccountCode(String countryCode, CountryAccountSystemTag systemTag) {
+        CountryChartAccount account = countryChartOfAccountsService.resolveSystemAccount(countryCode, systemTag);
         return account.getAccountCode();
     }
 

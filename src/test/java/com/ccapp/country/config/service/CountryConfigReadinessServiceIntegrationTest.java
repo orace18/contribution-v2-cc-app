@@ -77,11 +77,7 @@ class CountryConfigReadinessServiceIntegrationTest {
     @Test
     void evaluateReadiness_shouldReturnReadyWhenMandatorySectionsPass() {
         Country country = saveCountry("CI", "Cote d'Ivoire");
-        saveChartAccount("CI", "ACC-GUARANTEE", "Guarantee Pool");
-        saveChartAccount("CI", "ACC-ADMIN", "Admin Pool");
-        saveChartAccount("CI", "ACC-PLATFORM", "Platform Pool");
-        saveChartAccount("CI", "ACC-COMMISSION", "Commission Pool");
-        saveChartAccount("CI", "ACC-SOCIAL", "Social Fund");
+        countryConfigurationEngineService.initializeCountryConfiguration("CI", UUID.randomUUID());
         saveCountryAdmin(country);
 
         countryConfigurationEngineService.upsertCountryConfiguration(
@@ -230,13 +226,17 @@ class CountryConfigReadinessServiceIntegrationTest {
 
     private ObjectNode buildAccountingPayload() {
         ObjectNode payload = objectMapper.createObjectNode();
-        ObjectNode accounts = objectMapper.createObjectNode();
-        accounts.put("guaranteePoolAccount", "ACC-GUARANTEE");
-        accounts.put("adminPoolAccount", "ACC-ADMIN");
-        accounts.put("platformPoolAccount", "ACC-PLATFORM");
-        accounts.put("commissionPoolAccount", "ACC-COMMISSION");
-        accounts.put("socialFundAccount", "ACC-SOCIAL");
-        payload.set("accounts", accounts);
+        payload.put("mode", "AUTO_GENERATED");
+        payload.put("masterTemplate", "UNIVERSAL_MASTER");
+        ArrayNode requiredSystemTags = objectMapper.createArrayNode();
+        requiredSystemTags.add("USER_WALLET");
+        requiredSystemTags.add("PLATFORM_REVENUE");
+        requiredSystemTags.add("MLM_POOL");
+        requiredSystemTags.add("CIRCLE_POOL");
+        requiredSystemTags.add("LOAN_PORTFOLIO");
+        requiredSystemTags.add("INTEREST_REVENUE");
+        requiredSystemTags.add("PSP_CLEARING");
+        payload.set("requiredSystemTags", requiredSystemTags);
         return payload;
     }
 }

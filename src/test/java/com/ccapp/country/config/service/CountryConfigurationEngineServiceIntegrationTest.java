@@ -162,7 +162,8 @@ class CountryConfigurationEngineServiceIntegrationTest {
                 .initializeCountryConfiguration("SN", UUID.randomUUID());
         assertEquals("SN", initialized.countryCode());
         assertEquals(CountryConfigType.values().length, initialized.configs().size());
-        assertEquals(4L, countryChartAccountRepository.findByCountryCodeOrderByAccountCodeAsc("SN").stream()
+        assertEquals((long) CountryAccountGroup.defaultInitializationGroups().size(),
+                countryChartAccountRepository.findByCountryCodeOrderByAccountCodeAsc("SN").stream()
                 .filter(account -> CountryAccountGroup.defaultInitializationGroups().contains(account.getAccountGroup()))
                 .count());
 
@@ -208,16 +209,17 @@ class CountryConfigurationEngineServiceIntegrationTest {
         saveCountry("TG", "Togo");
 
         ObjectNode accountingPayload = objectMapper.createObjectNode();
-        ObjectNode accounts = objectMapper.createObjectNode();
-        accounts.put("loanDisbursement", "ACC-1100");
-        accounts.put("fees", "ACC-2100");
-        accounts.put("reserves", "ACC-3100");
-        accounts.put("penalties", "ACC-4100");
-        accountingPayload.set("accounts", accounts);
-        saveChartAccount("TG", "ACC-1100", "Loan Disbursement");
-        saveChartAccount("TG", "ACC-2100", "Fees");
-        saveChartAccount("TG", "ACC-3100", "Reserves");
-        saveChartAccount("TG", "ACC-4100", "Penalties");
+        accountingPayload.put("mode", "AUTO_GENERATED");
+        accountingPayload.put("masterTemplate", "UNIVERSAL_MASTER");
+        ArrayNode requiredSystemTags = objectMapper.createArrayNode();
+        requiredSystemTags.add("USER_WALLET");
+        requiredSystemTags.add("PLATFORM_REVENUE");
+        requiredSystemTags.add("MLM_POOL");
+        requiredSystemTags.add("CIRCLE_POOL");
+        requiredSystemTags.add("LOAN_PORTFOLIO");
+        requiredSystemTags.add("INTEREST_REVENUE");
+        requiredSystemTags.add("PSP_CLEARING");
+        accountingPayload.set("requiredSystemTags", requiredSystemTags);
 
         countryConfigurationEngineService.upsertCountryConfiguration(
                 "TG",
@@ -248,7 +250,8 @@ class CountryConfigurationEngineServiceIntegrationTest {
         );
 
         CountryConfigFullResponse full = countryConfigurationEngineService.getFullCountryConfiguration("TG", OffsetDateTime.now());
-        assertEquals("ACC-1100", full.accounting().get("accounts").get("loanDisbursement").asText());
+        assertEquals("AUTO_GENERATED", full.accounting().get("mode").asText());
+        assertEquals("UNIVERSAL_MASTER", full.accounting().get("masterTemplate").asText());
         assertEquals("Basic", full.membership().get("plans").get(0).get("name").asText());
         assertTrue(full.general().isObject());
     }

@@ -5,12 +5,14 @@ import com.ccapp.admin.domain.enums.AdminUserStatus;
 import com.ccapp.admin.repository.AdminUserRepository;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.country.config.domain.entity.CountryConfigVersion;
+import com.ccapp.country.config.domain.enums.CountryAccountSystemTag;
 import com.ccapp.country.config.domain.enums.CountryChartAccountStatus;
 import com.ccapp.country.config.domain.enums.CountryConfigType;
 import com.ccapp.country.config.dto.CountryConfigReadinessResponse;
 import com.ccapp.country.config.dto.CountryConfigReadinessSectionResponse;
 import com.ccapp.country.config.dto.CountryConfigReadinessStatus;
 import com.ccapp.country.config.repository.CountryChartAccountRepository;
+import com.ccapp.country.config.repository.CountryAccountSystemMappingRepository;
 import com.ccapp.country.config.repository.CountryConfigVersionRepository;
 import com.ccapp.country.domain.entity.Country;
 import com.ccapp.country.repository.CountryRepository;
@@ -40,6 +42,7 @@ public class CountryConfigReadinessService {
     private final CountryRepository countryRepository;
     private final CountryConfigVersionRepository countryConfigVersionRepository;
     private final CountryChartAccountRepository countryChartAccountRepository;
+    private final CountryAccountSystemMappingRepository countryAccountSystemMappingRepository;
     private final OfferCountryConfigRepository offerCountryConfigRepository;
     private final AdminUserRepository adminUserRepository;
     private final CountryConfigResolver countryConfigResolver;
@@ -114,27 +117,25 @@ public class CountryConfigReadinessService {
     }
 
     private SectionAccumulator evaluateAccountingSection(String countryCode, ObjectNode accounting) {
-        SectionAccumulator section = new SectionAccumulator("accounting", 7);
+        SectionAccumulator section = new SectionAccumulator("accounting", 3);
         long chartCount = countryChartAccountRepository.countByCountryCodeAndStatus(countryCode, CountryChartAccountStatus.ACTIVE);
         if (chartCount == 0) {
             section.miss("accounting.chart_of_accounts");
         }
 
-        ObjectNode accounts = resolveAccountsNode(accounting);
-        if (accounts == null || accounts.isEmpty()) {
-            section.miss("accounting.preallocation_accounts");
+        boolean automationConfigured = (accounting != null && !accounting.isEmpty())
+                || resolveAccountsNode(accounting) != null;
+        if (!automationConfigured) {
+            section.miss("accounting.automation_mode");
         }
 
-        validateAccountMapping(section, countryCode, accounts, "accounting.guarantee_pool_account",
-                "guaranteeAccount", "guaranteePoolAccount", "guarantee_pool_account");
-        validateAccountMapping(section, countryCode, accounts, "accounting.admin_pool_account",
-                "adminAccount", "adminPoolAccount", "admin_pool_account");
-        validateAccountMapping(section, countryCode, accounts, "accounting.platform_pool_account",
-                "platformAccount", "platformPoolAccount", "platform_pool_account");
-        validateAccountMapping(section, countryCode, accounts, "accounting.commission_pool_account",
-                "commissionAccount", "commissionPoolAccount", "commission_pool_account");
-        validateAccountMapping(section, countryCode, accounts, "accounting.social_fund_account",
-                "socialFundAccount", "socialFundPoolAccount", "social_fund_account");
+        boolean hasAllSystemMappings = CountryAccountSystemTag.requiredTags().stream()
+                .allMatch(tag -> countryAccountSystemMappingRepository.findByCountryCodeAndSystemTag(countryCode, tag)
+                        .flatMap(mapping -> countryChartAccountRepository.findByIdAndCountryCode(mapping.getAccountId(), countryCode))
+                        .isPresent());
+        if (!hasAllSystemMappings) {
+            section.miss("accounting.system_accounts");
+        }
         return section;
     }
 
@@ -419,6 +420,9 @@ public class CountryConfigReadinessService {
     }
 
     private ObjectNode resolveAccountsNode(ObjectNode accounting) {
+        if (accounting == null) {
+            return null;
+        }
         JsonNode accountsNode = accounting.get("accounts");
         if (accountsNode != null && accountsNode.isObject()) {
             return (ObjectNode) accountsNode;

@@ -3,6 +3,7 @@ package com.ccapp.country.config.service;
 import com.ccapp.admin.service.ConfigAuditMetadataService;
 import com.ccapp.common.dto.ConfigAuditMetadataResponse;
 import com.ccapp.common.exception.BusinessException;
+import com.ccapp.country.config.domain.enums.CountryAccountSystemTag;
 import com.ccapp.country.config.dto.ActivateCountryConfigVersionRequest;
 import com.ccapp.country.config.dto.CountryConfigFullResponse;
 import com.ccapp.country.config.domain.enums.CountryChartAccountStatus;
@@ -207,6 +208,8 @@ public class CountryConfigurationEngineService {
                 activationDate,
                 actorAdminUserId
         );
+        countryChartOfAccountsService.autoGenerateRequiredAccounts(normalizedCountryCode);
+        countryChartOfAccountsService.assertCriticalSystemMappingsExist(normalizedCountryCode);
         markCountryConfigured(normalizedCountryCode);
         return toVersionResponse(saved);
     }
@@ -337,7 +340,7 @@ public class CountryConfigurationEngineService {
         if (!payload.isObject()) {
             throw new BusinessException("Configuration payload must be a JSON object");
         }
-        if (payload.size() == 0 && !allowEmptyObject) {
+        if (payload.size() == 0 && !allowEmptyObject && configType != CountryConfigType.ACCOUNTING) {
             throw new BusinessException("Configuration payload cannot be empty");
         }
 
@@ -539,23 +542,52 @@ public class CountryConfigurationEngineService {
     }
 
     private void validateAccountingConfig(ObjectNode payload) {
+        if (payload.isEmpty()) {
+            return;
+        }
         JsonNode accountsNode = payload.has("accounts") ? payload.get("accounts") : payload.get("preallocationAccounts");
-        if (accountsNode == null || !accountsNode.isObject()) {
-            throw new BusinessException("accounting.accounts must be an object");
-        }
-        ObjectNode accounts = (ObjectNode) accountsNode;
-        if (accounts.isEmpty()) {
-            throw new BusinessException("accounting.accounts cannot be empty");
-        }
-        accounts.properties().forEach(entry -> {
-            if (!entry.getValue().isTextual() || entry.getValue().asText().isBlank()) {
-                throw new BusinessException("accounting.accounts values must be non-empty strings");
+        if (accountsNode != null && !accountsNode.isNull()) {
+            if (!accountsNode.isObject()) {
+                throw new BusinessException("accounting.accounts must be an object");
             }
-            String accountCode = entry.getValue().asText().trim().toUpperCase(Locale.ROOT);
-            if (!accountCode.matches("[A-Z0-9._-]{3,64}")) {
-                throw new BusinessException("Invalid accounting account code: " + entry.getKey());
+            ObjectNode accounts = (ObjectNode) accountsNode;
+            if (accounts.isEmpty()) {
+                throw new BusinessException("accounting.accounts cannot be empty");
             }
-        });
+            accounts.properties().forEach(entry -> {
+                if (!entry.getValue().isTextual() || entry.getValue().asText().isBlank()) {
+                    throw new BusinessException("accounting.accounts values must be non-empty strings");
+                }
+                String accountCode = entry.getValue().asText().trim().toUpperCase(Locale.ROOT);
+                if (!accountCode.matches("[A-Z0-9._-]{3,64}")) {
+                    throw new BusinessException("Invalid accounting account code: " + entry.getKey());
+                }
+            });
+            return;
+        }
+
+        JsonNode requiredSystemTags = payload.get("requiredSystemTags");
+        if (requiredSystemTags != null && !requiredSystemTags.isNull()) {
+            if (!requiredSystemTags.isArray()) {
+                throw new BusinessException("accounting.requiredSystemTags must be an array");
+            }
+            requiredSystemTags.forEach(tagNode -> {
+                if (!tagNode.isTextual() || tagNode.asText().isBlank()) {
+                    throw new BusinessException("accounting.requiredSystemTags values must be non-empty strings");
+                }
+                try {
+                    CountryAccountSystemTag.valueOf(tagNode.asText().trim().toUpperCase(Locale.ROOT));
+                } catch (IllegalArgumentException ex) {
+                    throw new BusinessException("Unsupported accounting system tag: " + tagNode.asText());
+                }
+            });
+        }
+        if (payload.has("mode")) {
+            requiredTextField(payload, "mode");
+        }
+        if (payload.has("masterTemplate")) {
+            requiredTextField(payload, "masterTemplate");
+        }
     }
 
     private void validateFinancingConfig(ObjectNode payload) {
@@ -850,27 +882,30 @@ public class CountryConfigurationEngineService {
         JsonNode accountsNode = accountingConfig.has("accounts")
                 ? accountingConfig.get("accounts")
                 : accountingConfig.get("preallocationAccounts");
-        if (accountsNode == null || !accountsNode.isObject()) {
+        if (accountsNode != null && accountsNode.isObject()) {
+            ObjectNode accounts = (ObjectNode) accountsNode;
+            if (accounts.isEmpty()) {
+                return;
+            }
+            accounts.properties().forEach(entry -> {
+                String accountCode = entry.getValue().asText("").trim().toUpperCase(Locale.ROOT);
+                if (accountCode.isBlank() || !accountCode.matches("[A-Z0-9._-]{3,64}")) {
+                    throw new BusinessException("accounting accounts exist and valid");
+                }
+                boolean exists = countryChartAccountRepository.existsByCountryCodeAndAccountCodeAndStatus(
+                        countryCode,
+                        accountCode,
+                        CountryChartAccountStatus.ACTIVE
+                );
+                if (!exists) {
+                    throw new BusinessException("accounting accounts exist and valid");
+                }
+            });
             return;
         }
-        ObjectNode accounts = (ObjectNode) accountsNode;
-        if (accounts.isEmpty()) {
-            return;
-        }
-        accounts.properties().forEach(entry -> {
-            String accountCode = entry.getValue().asText("").trim().toUpperCase(Locale.ROOT);
-            if (accountCode.isBlank() || !accountCode.matches("[A-Z0-9._-]{3,64}")) {
-                throw new BusinessException("accounting accounts exist and valid");
-            }
-            boolean exists = countryChartAccountRepository.existsByCountryCodeAndAccountCodeAndStatus(
-                    countryCode,
-                    accountCode,
-                    CountryChartAccountStatus.ACTIVE
-            );
-            if (!exists) {
-                throw new BusinessException("accounting accounts exist and valid");
-            }
-        });
+
+        countryChartOfAccountsService.ensureCountryChartGenerated(countryCode);
+        countryChartOfAccountsService.assertCriticalSystemMappingsExist(countryCode);
     }
 
     private void validatePaymentMethodsAgainstPspConfig(ObjectNode paymentConfig) {

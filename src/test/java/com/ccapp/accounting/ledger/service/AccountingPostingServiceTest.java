@@ -2,6 +2,7 @@ package com.ccapp.ledger.service;
 
 import com.ccapp.country.config.domain.entity.CountryChartAccount;
 import com.ccapp.country.config.domain.enums.CountryAccountGroup;
+import com.ccapp.country.config.domain.enums.CountryAccountSystemTag;
 import com.ccapp.country.config.service.CountryChartOfAccountsService;
 import com.ccapp.country.domain.entity.Country;
 import com.ccapp.country.repository.CountryRepository;
@@ -141,14 +142,14 @@ class AccountingPostingServiceTest {
                 .configured(false)
                 .fallback(true)
                 .build()));
-        when(countryChartOfAccountsService.findOrCreate(eq("INT"), any(CountryAccountGroup.class)))
+        when(countryChartOfAccountsService.resolveSystemAccount(eq("INT"), any(CountryAccountSystemTag.class)))
                 .thenAnswer(invocation -> CountryChartAccount.builder()
                         .id(UUID.randomUUID())
                         .countryCode("INT")
-                        .accountCode("200000001")
-                        .accountNumber("200000001")
+                        .accountCode("70000001")
+                        .accountNumber("70000001")
                         .accountName("Generated")
-                        .accountGroup(invocation.getArgument(1))
+                        .accountGroup(CountryAccountGroup.SALES)
                         .currency("USD")
                         .build());
         when(countryChartOfAccountsService.findOrCreateWallet(any(AccountHolder.class)))

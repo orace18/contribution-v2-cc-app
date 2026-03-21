@@ -1,6 +1,7 @@
 package com.ccapp.country.config.service;
 
 import com.ccapp.config.TestJacksonAndCachingConfig;
+import com.ccapp.common.exception.BusinessException;
 import com.ccapp.country.config.domain.entity.CountryChartAccount;
 import com.ccapp.country.config.domain.enums.CountryAccountGroup;
 import com.ccapp.country.config.domain.enums.CountryChartAccountStatus;
@@ -35,6 +36,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @DataJpaTest(properties = {
@@ -117,10 +119,13 @@ class CountryChartOfAccountsServiceIntegrationTest {
                 .build());
 
         List<CountryChartAccountSummaryResponse> summaries = countryChartOfAccountsService.listCountryAccounts("BJ");
-        assertEquals(1, summaries.size());
-        assertEquals("ACC-COMMISSION", summaries.get(0).accountCode());
-        assertEquals("Commission Pool", summaries.get(0).accountName());
-        assertEquals(new BigDecimal("2500.0000"), summaries.get(0).currentBalance());
+        assertTrue(summaries.size() >= CountryAccountGroup.requiredGroups().size());
+        CountryChartAccountSummaryResponse commission = summaries.stream()
+                .filter(item -> "ACC-COMMISSION".equals(item.accountCode()))
+                .findFirst()
+                .orElseThrow();
+        assertEquals("Commission Pool", commission.accountName());
+        assertEquals(new BigDecimal("2500.0000"), commission.currentBalance());
 
         CountryChartAccountHistoryResponse history = countryChartOfAccountsService.getCountryAccountHistory("BJ", account.getId());
         assertNotNull(history.account());
@@ -146,13 +151,13 @@ class CountryChartOfAccountsServiceIntegrationTest {
         CountryChartAccount second = countryChartOfAccountsService.findOrCreate("CI", CountryAccountGroup.MEMBERSHIP_FEES);
 
         assertEquals(first.getId(), second.getId());
-        assertEquals("MEMBERSHIP_FEES", first.getAccountGroup().name());
-        assertTrue(first.getAccountNumber().matches("^200\\d{6}$"));
+        assertEquals("SALES", first.getAccountGroup().name());
+        assertTrue(first.getAccountNumber().matches("^70\\d{6}$"));
         assertEquals(first.getAccountNumber(), first.getAccountCode());
     }
 
     @Test
-    void createAndAutoGenerate_shouldCreateRequestedGroupAndAllRequiredGroups() {
+    void createAndAutoGenerate_shouldBlockManualCreationAndGenerateRequiredTemplate() {
         countryRepository.save(Country.builder()
                 .id(UUID.randomUUID())
                 .code("GH")
@@ -163,16 +168,15 @@ class CountryChartOfAccountsServiceIntegrationTest {
                 .fallback(false)
                 .build());
 
-        var created = countryChartOfAccountsService.createCountryAccount(
+        assertThrows(BusinessException.class, () -> countryChartOfAccountsService.createCountryAccount(
                 "GH",
                 new CreateCountryChartAccountRequest(CountryAccountGroup.PLATFORM_REVENUE, "Platform Revenue GH")
-        );
-        assertEquals("PLATFORM_REVENUE", created.groupId().name());
-        assertEquals("Platform Revenue GH", created.label());
+        ));
 
         List<CountryChartAccountSummaryResponse> generated = countryChartOfAccountsService.autoGenerateRequiredAccounts("GH");
         assertTrue(generated.size() >= CountryAccountGroup.requiredGroups().size());
-        assertTrue(generated.stream().anyMatch(item -> item.groupId() == CountryAccountGroup.GUARANTEE_FUND));
+        assertTrue(generated.stream().anyMatch(item -> item.groupId() == CountryAccountGroup.FUND_STATUTAIRE));
+        assertTrue(generated.stream().anyMatch(item -> item.groupId() == CountryAccountGroup.FINTECH_REVENUE));
         assertTrue(generated.stream().allMatch(item -> item.accountNumber() != null && !item.accountNumber().isBlank()));
     }
 }

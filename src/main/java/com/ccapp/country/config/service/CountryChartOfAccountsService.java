@@ -1,14 +1,20 @@
 package com.ccapp.country.config.service;
 
 import com.ccapp.common.exception.BusinessException;
+import com.ccapp.country.config.domain.entity.AccountGroupMaster;
+import com.ccapp.country.config.domain.entity.CountryAccountSystemMapping;
 import com.ccapp.country.config.domain.entity.CountryChartAccount;
 import com.ccapp.country.config.domain.enums.CountryAccountGroup;
+import com.ccapp.country.config.domain.enums.CountryAccountSystemTag;
 import com.ccapp.country.config.domain.enums.CountryChartAccountStatus;
+import com.ccapp.country.config.domain.enums.CountryMasterAccountTemplate;
 import com.ccapp.country.config.dto.CreateCountryChartAccountRequest;
 import com.ccapp.country.config.dto.CountryChartAccountDetailsResponse;
 import com.ccapp.country.config.dto.CountryChartAccountHistoryResponse;
 import com.ccapp.country.config.dto.CountryChartAccountMovementResponse;
 import com.ccapp.country.config.dto.CountryChartAccountSummaryResponse;
+import com.ccapp.country.config.repository.AccountGroupMasterRepository;
+import com.ccapp.country.config.repository.CountryAccountSystemMappingRepository;
 import com.ccapp.country.config.repository.CountryChartAccountRepository;
 import com.ccapp.country.domain.entity.Country;
 import com.ccapp.country.repository.CountryRepository;
@@ -23,6 +29,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -38,12 +45,16 @@ public class CountryChartOfAccountsService {
 
     private final CountryRepository countryRepository;
     private final CountryChartAccountRepository countryChartAccountRepository;
+    private final AccountGroupMasterRepository accountGroupMasterRepository;
+    private final CountryAccountSystemMappingRepository countryAccountSystemMappingRepository;
     private final AccountBalanceSnapshotRepository accountBalanceSnapshotRepository;
     private final LedgerEntryRepository ledgerEntryRepository;
 
-    @Transactional(readOnly = true)
+    @Transactional
     public List<CountryChartAccountSummaryResponse> listCountryAccounts(String countryCode) {
-        Country country = resolveCountry(countryCode);
+        String normalizedCountryCode = normalizeCountryCode(countryCode);
+        ensureCountryChartGenerated(normalizedCountryCode);
+        Country country = resolveCountry(normalizedCountryCode);
         String currency = country.getCurrency();
 
         Map<String, BigDecimal> balancesByAccountCode = accountBalanceSnapshotRepository
@@ -61,10 +72,11 @@ public class CountryChartOfAccountsService {
                 .toList();
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public CountryChartAccountDetailsResponse getCountryAccount(String countryCode, UUID accountId) {
-        Country country = resolveCountry(countryCode);
-        CountryChartAccount account = resolveAccount(country.getCode(), accountId);
+        String normalizedCountryCode = normalizeCountryCode(countryCode);
+        ensureCountryChartGenerated(normalizedCountryCode);
+        CountryChartAccount account = resolveAccount(normalizedCountryCode, accountId);
         BigDecimal currentBalance = accountBalanceSnapshotRepository
                 .findFirstByAccountCodeAndCurrency(account.getAccountCode(), account.getCurrency())
                 .map(snapshot -> snapshot.getBalance() == null ? BigDecimal.ZERO : snapshot.getBalance())
@@ -72,11 +84,12 @@ public class CountryChartOfAccountsService {
         return toDetails(account, currentBalance);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public CountryChartAccountHistoryResponse getCountryAccountHistory(String countryCode, UUID accountId) {
-        Country country = resolveCountry(countryCode);
-        CountryChartAccount account = resolveAccount(country.getCode(), accountId);
-        CountryChartAccountDetailsResponse details = getCountryAccount(countryCode, accountId);
+        String normalizedCountryCode = normalizeCountryCode(countryCode);
+        ensureCountryChartGenerated(normalizedCountryCode);
+        CountryChartAccount account = resolveAccount(normalizedCountryCode, accountId);
+        CountryChartAccountDetailsResponse details = getCountryAccount(normalizedCountryCode, accountId);
 
         List<LedgerEntry> entries = ledgerEntryRepository.findByAccountCodeAndCurrencyOrderByCreatedAtAsc(
                 account.getAccountCode(),
@@ -93,36 +106,79 @@ public class CountryChartOfAccountsService {
 
     @Transactional
     public CountryChartAccountDetailsResponse createCountryAccount(String countryCode, CreateCountryChartAccountRequest request) {
-        if (request == null) {
-            throw new BusinessException("Request body is required");
-        }
-        if (CountryAccountGroup.USER_WALLET == request.group()) {
-            throw new BusinessException("USER_WALLET accounts are auto-managed per account holder and cannot be created manually");
-        }
-        CountryChartAccount account = findOrCreate(countryCode, request.group(), request.label());
-        BigDecimal currentBalance = accountBalanceSnapshotRepository
-                .findFirstByAccountCodeAndCurrency(account.getAccountCode(), account.getCurrency())
-                .map(snapshot -> snapshot.getBalance() == null ? BigDecimal.ZERO : snapshot.getBalance())
-                .orElse(BigDecimal.ZERO);
-        return toDetails(account, currentBalance);
+        log.warn("country_chart_manual_creation_blocked countryCode={}", normalizeCountryCode(countryCode));
+        throw new BusinessException("Manual country account creation is disabled. Accounts are generated automatically from the master template.");
     }
 
     @Transactional
     public List<CountryChartAccountSummaryResponse> autoGenerateInitializationAccounts(String countryCode) {
-        Country country = resolveCountry(countryCode);
-        for (CountryAccountGroup group : CountryAccountGroup.defaultInitializationGroups()) {
-            findOrCreate(country.getCode(), group);
-        }
-        return listCountryAccounts(country.getCode());
+        ensureCountryChartGenerated(countryCode);
+        return listCountryAccounts(countryCode);
     }
 
     @Transactional
     public List<CountryChartAccountSummaryResponse> autoGenerateRequiredAccounts(String countryCode) {
+        ensureCountryChartGenerated(countryCode);
+        return listCountryAccounts(countryCode);
+    }
+
+    @Transactional
+    public void ensureCountryChartGenerated(String countryCode) {
         Country country = resolveCountry(countryCode);
-        for (CountryAccountGroup group : CountryAccountGroup.requiredGroups()) {
-            findOrCreate(country.getCode(), group);
+        bootstrapMasterTemplateIfMissing();
+
+        List<AccountGroupMaster> masters = accountGroupMasterRepository.findAllByOrderByGroupIdAsc();
+        if (masters.isEmpty()) {
+            throw new BusinessException("Master chart of accounts template is not configured");
         }
-        return listCountryAccounts(country.getCode());
+
+        for (AccountGroupMaster master : masters) {
+            ensureMasterAccount(country, master);
+        }
+        for (CountryMasterAccountTemplate template : CountryMasterAccountTemplate.requiredTemplates()) {
+            ensureSystemMapping(country, template);
+        }
+        assertCriticalSystemMappingsExist(country.getCode());
+        log.info("country_chart_auto_generated countryCode={} masterGroups={} requiredMappings={}",
+                country.getCode(), masters.size(), CountryAccountSystemTag.requiredTags().size());
+    }
+
+    @Transactional(readOnly = true)
+    public boolean hasRequiredSystemMappings(String countryCode) {
+        String normalizedCountryCode = normalizeCountryCode(countryCode);
+        return CountryAccountSystemTag.requiredTags().stream()
+                .allMatch(tag -> countryAccountSystemMappingRepository.findByCountryCodeAndSystemTag(normalizedCountryCode, tag)
+                        .flatMap(mapping -> countryChartAccountRepository.findByIdAndCountryCode(mapping.getAccountId(), normalizedCountryCode))
+                        .isPresent());
+    }
+
+    @Transactional(readOnly = true)
+    public void assertCriticalSystemMappingsExist(String countryCode) {
+        String normalizedCountryCode = normalizeCountryCode(countryCode);
+        for (CountryAccountSystemTag tag : CountryAccountSystemTag.requiredTags()) {
+            countryAccountSystemMappingRepository.findByCountryCodeAndSystemTag(normalizedCountryCode, tag)
+                    .flatMap(mapping -> countryChartAccountRepository.findByIdAndCountryCode(mapping.getAccountId(), normalizedCountryCode))
+                    .orElseThrow(() -> new BusinessException("Critical system account missing for tag " + tag.name()));
+        }
+    }
+
+    @Transactional
+    public CountryChartAccount resolveSystemAccount(String countryCode, CountryAccountSystemTag systemTag) {
+        if (systemTag == null) {
+            throw new BusinessException("System tag is required");
+        }
+        String normalizedCountryCode = normalizeCountryCode(countryCode);
+        ensureCountryChartGenerated(normalizedCountryCode);
+        CountryAccountSystemMapping mapping = countryAccountSystemMappingRepository
+                .findByCountryCodeAndSystemTag(normalizedCountryCode, systemTag)
+                .orElseThrow(() -> new BusinessException("System mapping not found for tag " + systemTag.name()));
+        return countryChartAccountRepository.findByIdAndCountryCode(mapping.getAccountId(), normalizedCountryCode)
+                .orElseThrow(() -> new BusinessException("Mapped account not found for tag " + systemTag.name()));
+    }
+
+    @Transactional
+    public String resolveSystemAccountCode(String countryCode, CountryAccountSystemTag systemTag) {
+        return resolveSystemAccount(countryCode, systemTag).getAccountCode();
     }
 
     @Transactional
@@ -135,23 +191,17 @@ public class CountryChartOfAccountsService {
         if (group == null) {
             throw new BusinessException("Account group is required");
         }
-        Country country = resolveCountry(countryCode);
-        return countryChartAccountRepository
-                .findFirstByCountryCodeAndAccountGroupAndStatusOrderByCreatedAtAsc(
-                        country.getCode(),
-                        group,
-                        CountryChartAccountStatus.ACTIVE
-                )
-                .orElseGet(() -> createNewGroupAccount(country, group, preferredLabel));
+        ensureCountryChartGenerated(countryCode);
+        CountryMasterAccountTemplate template = resolveTemplate(group);
+        if (template.systemTag() != null) {
+            return resolveSystemAccount(countryCode, template.systemTag());
+        }
+        return resolveMasterGroupAccount(countryCode, template.groupId());
     }
 
     /**
      * Returns the unique USER_WALLET ledger account for this account holder,
      * creating it on-the-fly if it does not yet exist.
-     * <p>
-     * This is the ONLY safe way to access a holder's wallet in financial flows.
-     * Never call findOrCreate(country, USER_WALLET) for individual wallets —
-     * that would return any first wallet, not the holder's own.
      */
     @Transactional
     public CountryChartAccount findOrCreateWallet(AccountHolder accountHolder) {
@@ -159,6 +209,7 @@ public class CountryChartOfAccountsService {
             throw new BusinessException("Account holder is required to resolve wallet");
         }
         String countryCode = resolveAccountHolderCountryCode(accountHolder);
+        ensureCountryChartGenerated(countryCode);
         Country country = resolveCountry(countryCode);
 
         return countryChartAccountRepository
@@ -170,8 +221,115 @@ public class CountryChartOfAccountsService {
                 .orElseGet(() -> createWalletAccount(country, accountHolder));
     }
 
+    @Transactional(readOnly = true)
+    public CountryChartAccount resolveMasterGroupAccount(String countryCode, int groupId) {
+        String normalizedCountryCode = normalizeCountryCode(countryCode);
+        CountryMasterAccountTemplate template = CountryMasterAccountTemplate.fromGroupId(groupId);
+        return countryChartAccountRepository
+                .findFirstByCountryCodeAndMasterGroupIdAndAccountHolderIdIsNullAndStatusOrderByCreatedAtAsc(
+                        normalizedCountryCode,
+                        template.groupId(),
+                        CountryChartAccountStatus.ACTIVE
+                )
+                .orElseThrow(() -> new BusinessException("Country master account not found for group " + groupId));
+    }
+
+    private void bootstrapMasterTemplateIfMissing() {
+        if (accountGroupMasterRepository.count() > 0) {
+            return;
+        }
+        List<AccountGroupMaster> defaults = Arrays.stream(CountryMasterAccountTemplate.values())
+                .map(template -> AccountGroupMaster.builder()
+                        .groupId(template.groupId())
+                        .name(template.displayName())
+                        .type(template.accountType())
+                        .description(template.description())
+                        .systemRequired(template.systemRequired())
+                        .build())
+                .toList();
+        accountGroupMasterRepository.saveAll(defaults);
+        log.info("account_groups_master_seeded count={}", defaults.size());
+    }
+
+    private CountryChartAccount ensureMasterAccount(Country country, AccountGroupMaster master) {
+        return countryChartAccountRepository
+                .findFirstByCountryCodeAndMasterGroupIdAndAccountHolderIdIsNullAndStatusOrderByCreatedAtAsc(
+                        country.getCode(),
+                        master.getGroupId(),
+                        CountryChartAccountStatus.ACTIVE
+                )
+                .orElseGet(() -> createMasterAccount(country, master));
+    }
+
+    private CountryChartAccount createMasterAccount(Country country, AccountGroupMaster master) {
+        CountryMasterAccountTemplate template = CountryMasterAccountTemplate.fromGroupId(master.getGroupId());
+        String accountNumber = generateAccountNumber(country.getCode(), template.accountNumberPrefix());
+        CountryChartAccount candidate = CountryChartAccount.builder()
+                .countryCode(country.getCode().trim().toUpperCase(Locale.ROOT))
+                .accountCode(accountNumber)
+                .accountNumber(accountNumber)
+                .accountName(normalizeLabel(master.getName(), template.displayName()))
+                .accountGroup(template.accountGroup())
+                .masterGroupId(template.groupId())
+                .systemTag(template.systemTag())
+                .autoGenerated(true)
+                .accountType(master.getType() == null ? template.accountType() : master.getType())
+                .currency(country.getCurrency())
+                .openingBalance(BigDecimal.ZERO)
+                .status(CountryChartAccountStatus.ACTIVE)
+                .build();
+        try {
+            CountryChartAccount saved = countryChartAccountRepository.save(candidate);
+            log.info("country_master_account_created countryCode={} groupId={} accountCode={} systemTag={}",
+                    country.getCode(), master.getGroupId(), saved.getAccountCode(), template.systemTag());
+            return saved;
+        } catch (DataIntegrityViolationException ex) {
+            return countryChartAccountRepository
+                    .findFirstByCountryCodeAndMasterGroupIdAndAccountHolderIdIsNullAndStatusOrderByCreatedAtAsc(
+                            country.getCode(),
+                            master.getGroupId(),
+                            CountryChartAccountStatus.ACTIVE
+                    )
+                    .orElseThrow(() -> ex);
+        }
+    }
+
+    private CountryChartAccount ensureSystemMapping(Country country, CountryMasterAccountTemplate template) {
+        CountryChartAccount account = countryChartAccountRepository
+                .findFirstByCountryCodeAndSystemTagAndStatusOrderByCreatedAtAsc(
+                        country.getCode(),
+                        template.systemTag(),
+                        CountryChartAccountStatus.ACTIVE
+                )
+                .orElseGet(() -> attachSystemTag(country, template));
+
+        boolean mappingNeedsUpdate = countryAccountSystemMappingRepository
+                .findByCountryCodeAndSystemTag(country.getCode(), template.systemTag())
+                .map(existing -> !account.getId().equals(existing.getAccountId()))
+                .orElse(true);
+        if (mappingNeedsUpdate) {
+            countryAccountSystemMappingRepository.save(CountryAccountSystemMapping.builder()
+                    .countryCode(country.getCode())
+                    .systemTag(template.systemTag())
+                    .accountId(account.getId())
+                    .build());
+        }
+        return account;
+    }
+
+    private CountryChartAccount attachSystemTag(Country country, CountryMasterAccountTemplate template) {
+        AccountGroupMaster master = accountGroupMasterRepository.findById(template.groupId())
+                .orElseThrow(() -> new BusinessException("Master account group not found for " + template.groupId()));
+        CountryChartAccount account = ensureMasterAccount(country, master);
+        if (account.getSystemTag() == template.systemTag()) {
+            return account;
+        }
+        account.setSystemTag(template.systemTag());
+        return countryChartAccountRepository.save(account);
+    }
+
     private CountryChartAccount createWalletAccount(Country country, AccountHolder accountHolder) {
-        String accountNumber = generateAccountNumber(CountryAccountGroup.USER_WALLET);
+        String accountNumber = generateAccountNumber(country.getCode(), CountryMasterAccountTemplate.MEMBERS_WALLET.accountNumberPrefix());
         String label = "Wallet " + accountHolder.getFirstName() + " " + accountHolder.getLastName();
         CountryChartAccount candidate = CountryChartAccount.builder()
                 .countryCode(country.getCode().trim().toUpperCase(Locale.ROOT))
@@ -179,6 +337,8 @@ public class CountryChartOfAccountsService {
                 .accountNumber(accountNumber)
                 .accountName(normalizeLabel(label, CountryAccountGroup.USER_WALLET.defaultLabel()))
                 .accountGroup(CountryAccountGroup.USER_WALLET)
+                .masterGroupId(CountryMasterAccountTemplate.MEMBERS_WALLET.groupId())
+                .autoGenerated(true)
                 .accountType(CountryAccountGroup.USER_WALLET.defaultAccountType())
                 .currency(country.getCurrency())
                 .openingBalance(BigDecimal.ZERO)
@@ -201,6 +361,22 @@ public class CountryChartOfAccountsService {
         }
     }
 
+    private CountryMasterAccountTemplate resolveTemplate(CountryAccountGroup group) {
+        return switch (group) {
+            case CAPITAL -> CountryMasterAccountTemplate.CAPITAL;
+            case FUND_STATUTAIRE, GUARANTEE_FUND -> CountryMasterAccountTemplate.FUND_STATUTAIRE;
+            case USER_WALLET -> CountryMasterAccountTemplate.MEMBERS_WALLET;
+            case PSP_CLEARING -> CountryMasterAccountTemplate.PSP_CLEARING;
+            case BANKS -> CountryMasterAccountTemplate.BANKS;
+            case CASH -> CountryMasterAccountTemplate.CASH;
+            case MLM_POOL, COMMISSION_POOL -> CountryMasterAccountTemplate.MLM_POOL;
+            case SALES, MEMBERSHIP_FEES -> CountryMasterAccountTemplate.SALES;
+            case LOAN_PORTFOLIO, PARTNER_SETTLEMENT -> CountryMasterAccountTemplate.LOAN_PORTFOLIO;
+            case FINTECH_REVENUE, PLATFORM_REVENUE -> CountryMasterAccountTemplate.FINTECH_REVENUE;
+            case INTEREST_REVENUE -> CountryMasterAccountTemplate.INTEREST_REVENUE;
+        };
+    }
+
     private String resolveAccountHolderCountryCode(AccountHolder accountHolder) {
         if (accountHolder.getServiceCountryCode() != null && !accountHolder.getServiceCountryCode().isBlank()) {
             return accountHolder.getServiceCountryCode().trim().toUpperCase(Locale.ROOT);
@@ -214,11 +390,7 @@ public class CountryChartOfAccountsService {
     }
 
     private Country resolveCountry(String countryCode) {
-        if (countryCode == null || countryCode.isBlank()) {
-            throw new BusinessException("Country code is required");
-        }
-        String normalizedCode = countryCode.trim().toUpperCase(Locale.ROOT);
-        return countryRepository.findByCode(normalizedCode)
+        return countryRepository.findByCode(normalizeCountryCode(countryCode))
                 .orElseThrow(() -> new BusinessException("Country not found"));
     }
 
@@ -226,44 +398,19 @@ public class CountryChartOfAccountsService {
         if (accountId == null) {
             throw new BusinessException("Account id is required");
         }
-        return countryChartAccountRepository.findByIdAndCountryCode(accountId, countryCode)
+        return countryChartAccountRepository.findByIdAndCountryCode(accountId, normalizeCountryCode(countryCode))
                 .orElseThrow(() -> new BusinessException("Country account not found"));
     }
 
-    private CountryChartAccount createNewGroupAccount(Country country, CountryAccountGroup group, String preferredLabel) {
-        String normalizedCountryCode = country.getCode().trim().toUpperCase(Locale.ROOT);
-        String accountNumber = generateAccountNumber(group);
-        String label = normalizeLabel(preferredLabel, group.defaultLabel());
-        CountryChartAccount candidate = CountryChartAccount.builder()
-                .countryCode(normalizedCountryCode)
-                .accountCode(accountNumber)
-                .accountNumber(accountNumber)
-                .accountName(label)
-                .accountGroup(group)
-                .accountType(group.defaultAccountType())
-                .currency(country.getCurrency())
-                .openingBalance(BigDecimal.ZERO)
-                .status(CountryChartAccountStatus.ACTIVE)
-                .build();
-        try {
-            return countryChartAccountRepository.save(candidate);
-        } catch (DataIntegrityViolationException ex) {
-            return countryChartAccountRepository
-                    .findFirstByCountryCodeAndAccountGroupAndStatusOrderByCreatedAtAsc(
-                            normalizedCountryCode,
-                            group,
-                            CountryChartAccountStatus.ACTIVE
-                    )
-                    .orElseThrow(() -> ex);
-        }
-    }
-
-    private String generateAccountNumber(CountryAccountGroup group) {
-        String prefix = group.prefix();
+    private String generateAccountNumber(String countryCode, String prefix) {
         int totalLength = prefix.length() + GENERATED_SEQUENCE_WIDTH;
-        int sequence = countryChartAccountRepository.findMaxGeneratedSequenceForPrefix(prefix, totalLength) + 1;
+        int sequence = countryChartAccountRepository.findMaxGeneratedSequenceForCountryAndPrefix(
+                normalizeCountryCode(countryCode),
+                prefix,
+                totalLength
+        ) + 1;
         if (sequence > 999_999) {
-            throw new BusinessException("Account number sequence exhausted for group " + group.name());
+            throw new BusinessException("Account number sequence exhausted for group " + prefix);
         }
         return prefix + String.format(Locale.ROOT, "%0" + GENERATED_SEQUENCE_WIDTH + "d", sequence);
     }
@@ -274,6 +421,13 @@ public class CountryChartOfAccountsService {
             return label.substring(0, 180);
         }
         return label;
+    }
+
+    private String normalizeCountryCode(String countryCode) {
+        if (countryCode == null || countryCode.isBlank()) {
+            throw new BusinessException("Country code is required");
+        }
+        return countryCode.trim().toUpperCase(Locale.ROOT);
     }
 
     private CountryChartAccountSummaryResponse toSummary(CountryChartAccount account, BigDecimal currentBalance) {
@@ -318,7 +472,7 @@ public class CountryChartOfAccountsService {
     private CountryChartAccountMovementResponse toMovement(LedgerEntry entry) {
         return new CountryChartAccountMovementResponse(
                 entry.getId(),
-                entry.getEvent().getId(),
+                entry.getEvent() == null ? null : entry.getEvent().getId(),
                 entry.getLineNo(),
                 entry.getEntryType(),
                 entry.getAmount(),

@@ -2,6 +2,7 @@ package com.ccapp.country.config.repository;
 
 import com.ccapp.country.config.domain.entity.CountryChartAccount;
 import com.ccapp.country.config.domain.enums.CountryAccountGroup;
+import com.ccapp.country.config.domain.enums.CountryAccountSystemTag;
 import com.ccapp.country.config.domain.enums.CountryChartAccountStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -27,6 +28,18 @@ public interface CountryChartAccountRepository extends JpaRepository<CountryChar
                                                                                                       CountryAccountGroup accountGroup,
                                                                                                       CountryChartAccountStatus status);
 
+    Optional<CountryChartAccount> findFirstByCountryCodeAndMasterGroupIdAndAccountHolderIdIsNullAndStatusOrderByCreatedAtAsc(
+            String countryCode,
+            Integer masterGroupId,
+            CountryChartAccountStatus status
+    );
+
+    Optional<CountryChartAccount> findFirstByCountryCodeAndSystemTagAndStatusOrderByCreatedAtAsc(
+            String countryCode,
+            CountryAccountSystemTag systemTag,
+            CountryChartAccountStatus status
+    );
+
     Optional<CountryChartAccount> findByAccountHolderIdAndCountryCode(UUID accountHolderId, String countryCode);
 
     Optional<CountryChartAccount> findByAccountHolderIdAndCountryCodeAndStatus(UUID accountHolderId,
@@ -42,6 +55,18 @@ public interface CountryChartAccountRepository extends JpaRepository<CountryChar
                                                        CountryChartAccountStatus status);
 
     long countByCountryCodeAndStatus(String countryCode, CountryChartAccountStatus status);
+
+    @Query(value = """
+            SELECT COALESCE(MAX(CAST(RIGHT(account_code, 6) AS INTEGER)), 0)
+            FROM country_chart_accounts
+            WHERE country_code = :countryCode
+              AND account_code LIKE CONCAT(:prefix, '%')
+              AND account_code ~ '^[0-9]+$'
+              AND LENGTH(account_code) = :totalLength
+            """, nativeQuery = true)
+    int findMaxGeneratedSequenceForCountryAndPrefix(@Param("countryCode") String countryCode,
+                                                    @Param("prefix") String prefix,
+                                                    @Param("totalLength") int totalLength);
 
     @Query(value = """
             SELECT COALESCE(MAX(CAST(RIGHT(account_code, 6) AS INTEGER)), 0)
