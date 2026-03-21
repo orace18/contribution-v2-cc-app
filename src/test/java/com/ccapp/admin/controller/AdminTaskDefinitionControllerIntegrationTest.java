@@ -5,6 +5,7 @@ import com.ccapp.admin.repository.AdminAuditLogRepository;
 import com.ccapp.admin.security.AdminPrincipal;
 import com.ccapp.common.api.CommonResponse;
 import com.ccapp.config.TestJacksonAndCachingConfig;
+import com.ccapp.progress.controller.AdminTaskDefinitionController;
 import com.ccapp.progress.domain.enums.TaskTriggerEvent;
 import com.ccapp.progress.domain.enums.TaskType;
 import com.ccapp.progress.dto.TaskDefinitionRequest;
