@@ -3,6 +3,7 @@ package com.ccapp.config;
 import com.ccapp.admin.security.AdminJwtAuthenticationFilter;
 import com.ccapp.config.security.ApiKeyAuthenticationFilter;
 import com.ccapp.config.security.FirebaseAuthenticationFilter;
+import com.ccapp.config.security.RestAccessDeniedHandler;
 import com.ccapp.config.security.RestAuthenticationEntryPoint;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -33,6 +34,7 @@ public class SecurityConfig {
     private final ApiKeyAuthenticationFilter apiKeyAuthenticationFilter;
     private final FirebaseAuthenticationFilter firebaseAuthenticationFilter;
     private final RestAuthenticationEntryPoint restAuthenticationEntryPoint;
+    private final RestAccessDeniedHandler restAccessDeniedHandler;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -40,7 +42,9 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(Customizer.withDefaults())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .exceptionHandling(ex -> ex.authenticationEntryPoint(restAuthenticationEntryPoint))
+                .exceptionHandling(ex -> ex
+                        .authenticationEntryPoint(restAuthenticationEntryPoint)
+                        .accessDeniedHandler(restAccessDeniedHandler))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/actuator/health", "/actuator/info", "/error").permitAll()

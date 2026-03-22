@@ -25,6 +25,14 @@ public class RestAuthenticationEntryPoint implements AuthenticationEntryPoint {
                          AuthenticationException authException) throws IOException, ServletException {
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-        objectMapper.writeValue(response.getOutputStream(), CommonResponse.error("Unauthorized"));
+        objectMapper.writeValue(response.getOutputStream(), CommonResponse.error(messageFor(request)));
+    }
+
+    private String messageFor(HttpServletRequest request) {
+        String path = request.getServletPath();
+        if (path.startsWith("/api/admin/") || path.startsWith("/admin/")) {
+            return "Unauthorized admin access";
+        }
+        return "Unauthorized";
     }
 }
