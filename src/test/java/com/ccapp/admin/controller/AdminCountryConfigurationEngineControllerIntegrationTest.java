@@ -28,11 +28,14 @@ import com.ccapp.country.config.domain.enums.CountryConfigType;
 import com.ccapp.country.config.dto.CountryChartAccountDetailsResponse;
 import com.ccapp.country.config.dto.CountryChartAccountSummaryResponse;
 import com.ccapp.country.config.dto.CountryConfigSnapshotResponse;
+import com.ccapp.country.config.dto.CountryConfigValidationErrorResponse;
+import com.ccapp.country.config.dto.CountryConfigValidationResponse;
 import com.ccapp.country.config.dto.CountryConfigVersionResponse;
 import com.ccapp.country.config.dto.CountrySetupActivationPayloadsRequest;
 import com.ccapp.country.config.dto.CreateCountryChartAccountRequest;
 import com.ccapp.country.config.dto.SecureActivateCountrySetupRequest;
 import com.ccapp.country.config.dto.UpsertCountryConfigRequest;
+import com.ccapp.country.config.dto.ValidateCountrySetupRequest;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.junit.jupiter.api.AfterEach;
@@ -352,5 +355,41 @@ class AdminCountryConfigurationEngineControllerIntegrationTest {
         assertEquals(6L, adminAuditLogRepository.count());
         verify(adminConfigMutationSecurityService, times(1)).validateMutationApproval(eq(adminId), any());
         verify(countryConfigurationEngineService, times(6)).upsertCountryConfiguration(eq("BJ"), any(), any(), eq(adminId));
+    }
+
+    @Test
+    void validateCountrySetup_shouldReturnValidationResultAndWriteAuditLog() {
+        ObjectMapper objectMapper = new ObjectMapper();
+        OffsetDateTime effectiveDate = OffsetDateTime.parse("2026-03-22T05:19:23Z");
+        CountrySetupActivationPayloadsRequest payloads = new CountrySetupActivationPayloadsRequest(
+                objectMapper.createObjectNode().put("currency", "XOF"),
+                objectMapper.createObjectNode().put("mode", "AUTO_GENERATED"),
+                objectMapper.createObjectNode().putArray("plans"),
+                objectMapper.createObjectNode().put("weeklyCap", 10000),
+                objectMapper.createObjectNode().put("enabled", true),
+                objectMapper.createObjectNode().put("globalMaxExposure", 50000)
+        );
+        ValidateCountrySetupRequest request = new ValidateCountrySetupRequest(payloads, effectiveDate);
+
+        when(countryConfigurationEngineService.validateCountrySetup(eq("BJ"), any(), eq(effectiveDate)))
+                .thenReturn(new CountryConfigValidationResponse(
+                        false,
+                        List.of(new CountryConfigValidationErrorResponse(
+                                "guarantee",
+                                "Guarantee must align with financing rules"
+                        ))
+                ));
+
+        ResponseEntity<CommonResponse<CountryConfigValidationResponse>> response =
+                controller.validateCountrySetup("BJ", request);
+
+        assertNotNull(response.getBody());
+        assertEquals(false, response.getBody().data().valid());
+        assertEquals(1, response.getBody().data().errors().size());
+        assertEquals(1L, adminAuditLogRepository.countByEntityTypeAndEntityIdAndAction(
+                "COUNTRY_CONFIG",
+                "BJ",
+                "VALIDATE_COUNTRY_SETUP"
+        ));
     }
 }

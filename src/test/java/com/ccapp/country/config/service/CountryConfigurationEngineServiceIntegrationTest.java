@@ -28,9 +28,11 @@ import org.springframework.context.annotation.Import;
 import java.time.OffsetDateTime;
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -256,6 +258,101 @@ class CountryConfigurationEngineServiceIntegrationTest {
         assertTrue(full.general().isObject());
     }
 
+    @Test
+    void validateCountrySetup_shouldReturnCrossSectionErrorsWithoutPersisting() {
+        saveCountry("BJ", "Benin");
+        countryConfigurationEngineService.initializeCountryConfiguration("BJ", UUID.randomUUID());
+
+        ObjectNode generalPayload = objectMapper.createObjectNode();
+        generalPayload.put("taxRate", 18);
+        generalPayload.put("marketplaceDefaultCommission", 5);
+        ObjectNode circle = objectMapper.createObjectNode();
+        circle.put("minMembers", 5);
+        circle.put("maxMembers", 50);
+        circle.put("maxAssistedMembers", 10);
+        generalPayload.set("circle", circle);
+        ObjectNode features = objectMapper.createObjectNode();
+        features.put("chatEnabled", true);
+        features.put("marketplaceEnabled", true);
+        features.put("financingEnabled", true);
+        features.put("loanEnabled", true);
+        generalPayload.set("features", features);
+
+        ObjectNode accountingPayload = objectMapper.createObjectNode();
+        accountingPayload.put("mode", "AUTO_GENERATED");
+        accountingPayload.put("masterTemplate", "UNIVERSAL_MASTER");
+        accountingPayload.set("requiredSystemTags", objectMapper.createArrayNode()
+                .add("USER_WALLET")
+                .add("PLATFORM_REVENUE")
+                .add("MLM_POOL")
+                .add("CIRCLE_POOL")
+                .add("LOAN_PORTFOLIO")
+                .add("INTEREST_REVENUE")
+                .add("PSP_CLEARING"));
+
+        ObjectNode membershipPayload = objectMapper.createObjectNode();
+        ArrayNode membershipPlans = objectMapper.createArrayNode();
+        membershipPlans.add(buildMembershipPlan("CLASSIC", "Classic", 1000));
+        membershipPlans.add(buildMembershipPlan("GOLD", "Gold", 5000));
+        membershipPlans.add(buildMembershipPlan("DIAMOND", "Diamond", 10000));
+        membershipPayload.set("plans", membershipPlans);
+
+        ObjectNode mlmPayload = objectMapper.createObjectNode();
+        mlmPayload.put("maxDirectChildren", 3);
+        mlmPayload.put("weeklyCap", 50000);
+        mlmPayload.set("weeklyCapsByTier", objectMapper.createArrayNode()
+                .add(buildTierCap("CLASSIC", 10000))
+                .add(buildTierCap("GOLD", 20000))
+                .add(buildTierCap("DIAMOND", 30000)));
+        ObjectNode baseRates = objectMapper.createObjectNode();
+        baseRates.put("unilevel", 12);
+        baseRates.put("binary", 8);
+        mlmPayload.set("baseRatesOverride", baseRates);
+
+        ObjectNode financingPayload = objectMapper.createObjectNode();
+        financingPayload.put("enabled", true);
+        financingPayload.put("minAmount", 100);
+        financingPayload.put("maxAmount", 10000);
+        financingPayload.put("maxInterestRate", 25);
+        ArrayNode offers = objectMapper.createArrayNode();
+        ObjectNode standardOffer = objectMapper.createObjectNode();
+        standardOffer.put("code", "STANDARD");
+        standardOffer.put("minAmount", 100);
+        standardOffer.put("maxAmount", 10000);
+        standardOffer.put("maxInterestRate", 25);
+        standardOffer.set("eligibleTiers", objectMapper.createArrayNode()
+                .add("CLASSIC")
+                .add("GOLD")
+                .add("DIAMOND"));
+        offers.add(standardOffer);
+        financingPayload.set("offers", offers);
+
+        ObjectNode guaranteePayload = objectMapper.createObjectNode();
+        guaranteePayload.put("globalMaxExposure", 15000);
+        guaranteePayload.set("limitsByTier", objectMapper.createArrayNode()
+                .add(buildGuaranteeTier("CLASSIC", 2000, 1500))
+                .add(buildGuaranteeTier("GOLD", 3000, 2500))
+                .add(buildGuaranteeTier("DIAMOND", 4000, 3500)));
+
+        var response = countryConfigurationEngineService.validateCountrySetup(
+                "BJ",
+                Map.of(
+                        CountryConfigType.GENERAL, generalPayload,
+                        CountryConfigType.ACCOUNTING, accountingPayload,
+                        CountryConfigType.MEMBERSHIP, membershipPayload,
+                        CountryConfigType.MLM_LIMITS, mlmPayload,
+                        CountryConfigType.FINANCING, financingPayload,
+                        CountryConfigType.GUARANTEE, guaranteePayload
+                ),
+                OffsetDateTime.now()
+        );
+
+        assertFalse(response.valid());
+        assertEquals(1, response.errors().size());
+        assertEquals("guarantee", response.errors().get(0).field());
+        assertEquals("Guarantee must align with financing rules", response.errors().get(0).message());
+    }
+
     private void saveCountry(String code, String name) {
         countryRepository.save(Country.builder()
                 .id(UUID.randomUUID())
@@ -278,5 +375,33 @@ class CountryConfigurationEngineServiceIntegrationTest {
                 .openingBalance(BigDecimal.ZERO)
                 .status(CountryChartAccountStatus.ACTIVE)
                 .build());
+    }
+
+    private ObjectNode buildMembershipPlan(String tier, String name, int amount) {
+        ObjectNode plan = objectMapper.createObjectNode();
+        plan.put("code", tier);
+        plan.put("tier", tier);
+        plan.put("name", name);
+        ObjectNode pricing = objectMapper.createObjectNode();
+        pricing.put("amount", amount);
+        pricing.put("currency", "XOF");
+        plan.set("pricing", pricing);
+        plan.set("benefits", objectMapper.createArrayNode().add(name + " benefit"));
+        return plan;
+    }
+
+    private ObjectNode buildTierCap(String tier, int amount) {
+        ObjectNode cap = objectMapper.createObjectNode();
+        cap.put("tier", tier);
+        cap.put("cap", amount);
+        return cap;
+    }
+
+    private ObjectNode buildGuaranteeTier(String tier, int maxAmount, int maxExposure) {
+        ObjectNode guaranteeTier = objectMapper.createObjectNode();
+        guaranteeTier.put("tier", tier);
+        guaranteeTier.put("maxAmount", maxAmount);
+        guaranteeTier.put("maxExposure", maxExposure);
+        return guaranteeTier;
     }
 }

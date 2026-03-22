@@ -11,6 +11,8 @@ import com.ccapp.country.config.domain.entity.CountryConfigVersion;
 import com.ccapp.country.config.domain.enums.CountryConfigType;
 import com.ccapp.country.config.dto.CountryConfigSnapshotItemResponse;
 import com.ccapp.country.config.dto.CountryConfigSnapshotResponse;
+import com.ccapp.country.config.dto.CountryConfigValidationErrorResponse;
+import com.ccapp.country.config.dto.CountryConfigValidationResponse;
 import com.ccapp.country.config.dto.CountryConfigVersionResponse;
 import com.ccapp.country.config.dto.CountryConfigVersionHistoryItemResponse;
 import com.ccapp.country.config.dto.UpsertCountryConfigRequest;
@@ -31,6 +33,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -217,6 +220,59 @@ public class CountryConfigurationEngineService {
         countryChartOfAccountsService.assertCriticalSystemMappingsExist(normalizedCountryCode);
         markCountryConfigured(normalizedCountryCode);
         return toVersionResponse(saved);
+    }
+
+    @Transactional(readOnly = true)
+    public CountryConfigValidationResponse validateCountrySetup(String countryCode,
+                                                                Map<CountryConfigType, JsonNode> payloads,
+                                                                OffsetDateTime effectiveDate) {
+        String normalizedCountryCode = normalizeCountryCode(countryCode);
+        assertCountryExists(normalizedCountryCode);
+
+        Map<CountryConfigType, ObjectNode> sanitizedPayloads = new HashMap<>();
+        List<CountryConfigValidationErrorResponse> errors = new ArrayList<>();
+
+        for (Map.Entry<CountryConfigType, JsonNode> entry : payloads.entrySet()) {
+            try {
+                JsonNode sanitizedPayload = validatePayload(entry.getKey(), entry.getValue(), false);
+                sanitizedPayloads.put(entry.getKey(), toObjectNode(sanitizedPayload));
+            } catch (BusinessException ex) {
+                errors.add(new CountryConfigValidationErrorResponse(
+                        entry.getKey().externalName(),
+                        ex.getMessage()
+                ));
+            }
+        }
+
+        if (!errors.isEmpty()) {
+            return new CountryConfigValidationResponse(false, errors);
+        }
+
+        try {
+            validateMlmMembershipAlignment(
+                    sanitizedPayloads.getOrDefault(CountryConfigType.MLM_LIMITS, objectMapper.createObjectNode()),
+                    sanitizedPayloads.getOrDefault(CountryConfigType.MEMBERSHIP, objectMapper.createObjectNode())
+            );
+            validateGuaranteeMembershipAlignment(
+                    sanitizedPayloads.getOrDefault(CountryConfigType.GUARANTEE, objectMapper.createObjectNode()),
+                    sanitizedPayloads.getOrDefault(CountryConfigType.MEMBERSHIP, objectMapper.createObjectNode())
+            );
+            validateGuaranteeFinancingAlignment(
+                    sanitizedPayloads.getOrDefault(CountryConfigType.GUARANTEE, objectMapper.createObjectNode()),
+                    sanitizedPayloads.getOrDefault(CountryConfigType.FINANCING, objectMapper.createObjectNode())
+            );
+            validateAccountingAccountsExist(
+                    normalizedCountryCode,
+                    sanitizedPayloads.getOrDefault(CountryConfigType.ACCOUNTING, objectMapper.createObjectNode())
+            );
+        } catch (BusinessException ex) {
+            errors.add(new CountryConfigValidationErrorResponse(
+                    resolveValidationField(ex.getMessage()),
+                    ex.getMessage()
+            ));
+        }
+
+        return new CountryConfigValidationResponse(errors.isEmpty(), errors);
     }
 
     @Transactional(readOnly = true)
@@ -747,6 +803,33 @@ public class CountryConfigurationEngineService {
             throw new BusinessException(errorPrefix + " must be between 0 and 100");
         }
         return value;
+    }
+
+    private String resolveValidationField(String message) {
+        if (message == null || message.isBlank()) {
+            return "setup";
+        }
+        String normalizedMessage = message.trim();
+        String normalizedLower = normalizedMessage.toLowerCase(Locale.ROOT);
+        if (normalizedLower.startsWith("general.")) {
+            return "general";
+        }
+        if (normalizedLower.startsWith("membership.")) {
+            return "membership";
+        }
+        if (normalizedLower.startsWith("mlm_limits.") || normalizedLower.contains("mlm")) {
+            return "mlm_limits";
+        }
+        if (normalizedLower.startsWith("guarantee.") || normalizedLower.contains("guarantee")) {
+            return "guarantee";
+        }
+        if (normalizedLower.startsWith("financing.") || normalizedLower.contains("financing")) {
+            return "financing";
+        }
+        if (normalizedLower.startsWith("accounting.") || normalizedLower.contains("accounting")) {
+            return "accounting";
+        }
+        return "setup";
     }
 
     private String normalizeCountryCode(String countryCode) {

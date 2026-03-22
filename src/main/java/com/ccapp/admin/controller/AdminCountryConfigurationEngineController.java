@@ -16,6 +16,7 @@ import com.ccapp.country.config.dto.CountryChartAccountSummaryResponse;
 import com.ccapp.country.config.dto.CountryConfigFullResponse;
 import com.ccapp.country.config.dto.CountryConfigReadinessResponse;
 import com.ccapp.country.config.dto.CountryConfigSnapshotResponse;
+import com.ccapp.country.config.dto.CountryConfigValidationResponse;
 import com.ccapp.country.config.dto.CountryConfigurationStatusResponse;
 import com.ccapp.country.config.dto.CountrySetupCountryResponse;
 import com.ccapp.country.config.dto.CountryConfigVersionResponse;
@@ -26,6 +27,7 @@ import com.ccapp.country.config.dto.SecureActivateCountrySetupRequest;
 import com.ccapp.country.config.dto.SecureActivateCountryConfigVersionRequest;
 import com.ccapp.country.config.dto.SecureUpsertCountryConfigRequest;
 import com.ccapp.country.config.dto.UpsertCountryConfigRequest;
+import com.ccapp.country.config.dto.ValidateCountrySetupRequest;
 import com.ccapp.country.config.service.CountryChartOfAccountsService;
 import com.ccapp.country.config.service.CountryConfigReadinessService;
 import com.ccapp.country.config.service.CountryConfigurationStatusService;
@@ -339,6 +341,29 @@ public class AdminCountryConfigurationEngineController {
         }
 
         return ResponseEntity.ok(CommonResponse.success("Country setup activated", responses));
+    }
+
+    @PostMapping("/{countryCode}/validate")
+    public ResponseEntity<CommonResponse<CountryConfigValidationResponse>> validateCountrySetup(
+            @PathVariable String countryCode,
+            @Valid @RequestBody ValidateCountrySetupRequest request) {
+        AdminSecurityUtils.assertCountryAccess(countryCode);
+        CountryConfigValidationResponse response = countryConfigurationEngineService.validateCountrySetup(
+                countryCode,
+                orderedSetupPayloads(request.payloads()),
+                request.effectiveDate()
+        );
+        adminAuditService.logAction(
+                AdminSecurityUtils.currentAdminUserId(),
+                "VALIDATE_COUNTRY_SETUP",
+                "COUNTRY_CONFIG",
+                countryCode,
+                Map.of(
+                        "valid", response.valid(),
+                        "errorCount", response.errors().size()
+                )
+        );
+        return ResponseEntity.ok(CommonResponse.success("Country setup validation", response));
     }
 
     @GetMapping("/{countryCode}/readiness")
