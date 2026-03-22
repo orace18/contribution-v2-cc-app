@@ -20,7 +20,9 @@ import com.ccapp.country.config.dto.CountryConfigurationStatusResponse;
 import com.ccapp.country.config.dto.CountrySetupCountryResponse;
 import com.ccapp.country.config.dto.CountryConfigVersionResponse;
 import com.ccapp.country.config.dto.CountryConfigVersionHistoryItemResponse;
+import com.ccapp.country.config.dto.CountrySetupActivationPayloadsRequest;
 import com.ccapp.country.config.dto.CreateCountryChartAccountRequest;
+import com.ccapp.country.config.dto.SecureActivateCountrySetupRequest;
 import com.ccapp.country.config.dto.SecureActivateCountryConfigVersionRequest;
 import com.ccapp.country.config.dto.SecureUpsertCountryConfigRequest;
 import com.ccapp.country.config.dto.UpsertCountryConfigRequest;
@@ -46,6 +48,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -295,6 +298,49 @@ public class AdminCountryConfigurationEngineController {
         return ResponseEntity.ok(CommonResponse.success("Country configuration version activated", response));
     }
 
+    @PutMapping("/{countryCode}/setup/activate")
+    public ResponseEntity<CommonResponse<List<CountryConfigVersionResponse>>> activateCountrySetup(
+            @PathVariable String countryCode,
+            @Valid @RequestBody SecureActivateCountrySetupRequest request) {
+        AdminSecurityUtils.assertCountryAccess(countryCode);
+        UUID adminUserId = AdminSecurityUtils.currentAdminUserId();
+        OffsetDateTime asOf = request.effectiveDate() == null ? OffsetDateTime.now() : request.effectiveDate();
+        AdminConfigMutationSecurityService.ConfigMutationApprovalContext approvalContext =
+                adminConfigMutationSecurityService.validateMutationApproval(adminUserId, request.approval());
+
+        List<CountryConfigVersionResponse> responses = new ArrayList<>();
+        for (Map.Entry<CountryConfigType, JsonNode> entry : orderedSetupPayloads(request.payloads()).entrySet()) {
+            CountryConfigSnapshotResponse beforeSnapshot = countryConfigurationEngineService.getCountryConfiguration(countryCode, asOf);
+            JsonNode beforePayload = payloadOf(beforeSnapshot, entry.getKey());
+            CountryConfigVersionResponse response = countryConfigurationEngineService.upsertCountryConfiguration(
+                    countryCode,
+                    entry.getKey(),
+                    new UpsertCountryConfigRequest(entry.getValue(), request.effectiveDate()),
+                    adminUserId
+            );
+            adminAuditService.logAction(
+                    adminUserId,
+                    "UPSERT_COUNTRY_CONFIG",
+                    "COUNTRY_CONFIG",
+                    response.id().toString(),
+                    buildConfigMutationAuditPayload(
+                            response.countryCode(),
+                            entry.getKey().externalName(),
+                            "UPSERT",
+                            beforePayload,
+                            response.payload(),
+                            response.effectiveDate(),
+                            response.version(),
+                            null,
+                            approvalContext
+                    )
+            );
+            responses.add(response);
+        }
+
+        return ResponseEntity.ok(CommonResponse.success("Country setup activated", responses));
+    }
+
     @GetMapping("/{countryCode}/readiness")
     public ResponseEntity<CommonResponse<CountryConfigReadinessResponse>> getCountryReadiness(@PathVariable String countryCode) {
         AdminSecurityUtils.assertCountryAccess(countryCode);
@@ -421,6 +467,17 @@ public class AdminCountryConfigurationEngineController {
         payload.put("reasonForChange", approvalContext.reasonForChange());
         payload.put("timestamp", OffsetDateTime.now());
         return payload;
+    }
+
+    private Map<CountryConfigType, JsonNode> orderedSetupPayloads(CountrySetupActivationPayloadsRequest payloads) {
+        Map<CountryConfigType, JsonNode> ordered = new LinkedHashMap<>();
+        ordered.put(CountryConfigType.GENERAL, payloads.general());
+        ordered.put(CountryConfigType.ACCOUNTING, payloads.accounting());
+        ordered.put(CountryConfigType.MEMBERSHIP, payloads.membership());
+        ordered.put(CountryConfigType.MLM_LIMITS, payloads.mlmLimits());
+        ordered.put(CountryConfigType.FINANCING, payloads.financing());
+        ordered.put(CountryConfigType.GUARANTEE, payloads.guarantee());
+        return ordered;
     }
 
     private CountryConfigType parseConfigType(String rawConfigType) {

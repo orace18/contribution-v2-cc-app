@@ -9,6 +9,7 @@ import com.ccapp.admin.dto.AdminCountryWorkspaceListItemResponse;
 import com.ccapp.admin.dto.AdminCountryWorkspaceListResponse;
 import com.ccapp.admin.dto.AdminCountryWorkspaceStatus;
 import com.ccapp.admin.dto.AdminCountryWorkspaceTabResponse;
+import com.ccapp.admin.dto.ConfigMutationApprovalRequest;
 import com.ccapp.admin.repository.AdminAuditLogRepository;
 import com.ccapp.admin.security.AdminPrincipal;
 import com.ccapp.admin.service.AdminConfigMutationSecurityService;
@@ -23,9 +24,15 @@ import com.ccapp.country.config.service.CountrySetupBootstrapService;
 import com.ccapp.country.config.domain.enums.CountryAccountGroup;
 import com.ccapp.country.config.domain.enums.CountryChartAccountStatus;
 import com.ccapp.country.config.domain.enums.CountryChartAccountType;
+import com.ccapp.country.config.domain.enums.CountryConfigType;
 import com.ccapp.country.config.dto.CountryChartAccountDetailsResponse;
 import com.ccapp.country.config.dto.CountryChartAccountSummaryResponse;
+import com.ccapp.country.config.dto.CountryConfigSnapshotResponse;
+import com.ccapp.country.config.dto.CountryConfigVersionResponse;
+import com.ccapp.country.config.dto.CountrySetupActivationPayloadsRequest;
 import com.ccapp.country.config.dto.CreateCountryChartAccountRequest;
+import com.ccapp.country.config.dto.SecureActivateCountrySetupRequest;
+import com.ccapp.country.config.dto.UpsertCountryConfigRequest;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.junit.jupiter.api.AfterEach;
@@ -42,10 +49,15 @@ import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.util.List;
 import java.math.BigDecimal;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @DataJpaTest(properties = {
@@ -289,5 +301,56 @@ class AdminCountryConfigurationEngineControllerIntegrationTest {
                 "BJ",
                 "AUTO_GENERATE_COUNTRY_CHART_ACCOUNTS"
         ));
+    }
+
+    @Test
+    void activateCountrySetup_shouldValidateApprovalOnceAndPersistAllWizardSections() {
+        ObjectMapper objectMapper = new ObjectMapper();
+        OffsetDateTime effectiveDate = OffsetDateTime.parse("2026-03-22T05:19:23Z");
+        CountrySetupActivationPayloadsRequest payloads = new CountrySetupActivationPayloadsRequest(
+                objectMapper.createObjectNode().put("currency", "XOF"),
+                objectMapper.createObjectNode().put("mode", "AUTO_GENERATED"),
+                objectMapper.createObjectNode().putArray("plans"),
+                objectMapper.createObjectNode().put("weeklyCap", 10000),
+                objectMapper.createObjectNode().put("enabled", true),
+                objectMapper.createObjectNode().put("globalMaxExposure", 50000)
+        );
+        SecureActivateCountrySetupRequest request = new SecureActivateCountrySetupRequest(
+                payloads,
+                effectiveDate,
+                new ConfigMutationApprovalRequest("secret", "123456", "Initial setup", null)
+        );
+
+        when(adminConfigMutationSecurityService.validateMutationApproval(eq(adminId), any()))
+                .thenReturn(new AdminConfigMutationSecurityService.ConfigMutationApprovalContext(adminId, adminId, "Initial setup"));
+        when(countryConfigurationEngineService.getCountryConfiguration(eq("BJ"), eq(effectiveDate)))
+                .thenReturn(new CountryConfigSnapshotResponse("BJ", effectiveDate, List.of()));
+        when(countryConfigurationEngineService.upsertCountryConfiguration(eq("BJ"), any(), any(), eq(adminId)))
+                .thenAnswer(invocation -> {
+                    CountryConfigType configType = invocation.getArgument(1);
+                    UpsertCountryConfigRequest upsertRequest = invocation.getArgument(2);
+                    return new CountryConfigVersionResponse(
+                            UUID.randomUUID(),
+                            "BJ",
+                            configType,
+                            1,
+                            effectiveDate,
+                            upsertRequest.payload(),
+                            adminId,
+                            effectiveDate,
+                            null
+                    );
+                });
+
+        ResponseEntity<CommonResponse<List<CountryConfigVersionResponse>>> response =
+                controller.activateCountrySetup("BJ", request);
+
+        assertNotNull(response.getBody());
+        assertEquals(6, response.getBody().data().size());
+        assertEquals(CountryConfigType.GENERAL, response.getBody().data().get(0).configType());
+        assertEquals(CountryConfigType.GUARANTEE, response.getBody().data().get(5).configType());
+        assertEquals(6L, adminAuditLogRepository.count());
+        verify(adminConfigMutationSecurityService, times(1)).validateMutationApproval(eq(adminId), any());
+        verify(countryConfigurationEngineService, times(6)).upsertCountryConfiguration(eq("BJ"), any(), any(), eq(adminId));
     }
 }
