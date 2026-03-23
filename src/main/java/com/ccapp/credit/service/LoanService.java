@@ -24,13 +24,14 @@ import com.ccapp.credit.dto.LoanResponse;
 import com.ccapp.credit.dto.RepaymentScheduleResponse;
 import com.ccapp.credit.repository.LoanRepository;
 import com.ccapp.credit.repository.RepaymentScheduleRepository;
+import com.ccapp.financing.domain.entity.FinancialPartner;
+import com.ccapp.financing.domain.enums.FinancialPartnerStatus;
+import com.ccapp.financing.domain.enums.InstitutionLedgerEntryType;
+import com.ccapp.financing.repository.FinancialPartnerRepository;
+import com.ccapp.financing.service.InstitutionLedgerService;
 import com.ccapp.identity.account_holder.service.AccountHolderService;
 import com.ccapp.identity.delegation.domain.enums.PermissionLevel;
 import com.ccapp.identity.delegation.service.AccessControlService;
-import com.ccapp.ledger.service.AccountingPostingService;
-import com.ccapp.payments.operation.domain.entity.Operation;
-import com.ccapp.payments.operation.domain.enums.OperationType;
-import com.ccapp.payments.operation.service.OperationService;
 import com.ccapp.progress.event.LoanDisbursedEvent;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
@@ -42,7 +43,9 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 @Service
@@ -51,6 +54,11 @@ public class LoanService {
 
     private static final long DEFAULT_MIN_FINANCIAL_MEMBERS_PER_CIRCLE = 3;
     private static final long DEFAULT_MAX_FINANCIAL_MEMBERS_PER_CIRCLE = 5;
+    private static final EnumSet<LoanStatus> CIRCLE_LOCKING_STATUSES = EnumSet.of(
+            LoanStatus.APPROVED,
+            LoanStatus.DISBURSED,
+            LoanStatus.ACTIVE
+    );
 
     private final LoanRepository loanRepository;
     private final RepaymentScheduleRepository repaymentScheduleRepository;
@@ -62,8 +70,8 @@ public class LoanService {
     private final CountryContextService countryContextService;
     private final CountryConfigResolver countryConfigResolver;
     private final AdminPolicyRepository adminPolicyRepository;
-    private final OperationService operationService;
-    private final AccountingPostingService accountingPostingService;
+    private final FinancialPartnerRepository financialPartnerRepository;
+    private final InstitutionLedgerService institutionLedgerService;
     private final DomainEventPublisher domainEventPublisher;
 
     @Transactional
@@ -92,6 +100,9 @@ public class LoanService {
         long financialMembersCount = circleMemberRepository.countByCircle_IdAndFinancialMemberTrue(request.circleId());
         if (financialMembersCount < bounds.minFinancialMembers() || financialMembersCount > bounds.maxFinancialMembers()) {
             throw new BusinessException("Circle members count is outside configured limits");
+        }
+        if (loanRepository.existsByCircleIdAndStatusIn(request.circleId(), CIRCLE_LOCKING_STATUSES)) {
+            throw new BusinessException("CIRCLE_LOCKED_BY_ACTIVE_LOAN");
         }
         if (!countryContext.currency().equalsIgnoreCase(request.currency())) {
             throw new BusinessException("Loan currency must match account holder country currency");
@@ -127,19 +138,40 @@ public class LoanService {
     }
 
     @Transactional
-    public Loan disburseApprovedLoan(UUID loanId, UUID actorUserId, String idempotencyKey) {
+    public Loan disburseApprovedLoan(UUID loanId, UUID actorUserId, UUID institutionId, String referenceId) {
+        if (actorUserId == null) {
+            throw new BusinessException("Actor user is required");
+        }
         Loan loan = loanRepository.findById(loanId)
                 .orElseThrow(() -> new NotFoundException("Loan not found"));
 
+        accessControlService.assertCanActOnAccountHolder(actorUserId, loan.getAccountHolderId(), PermissionLevel.TRANSACT);
+        if (loan.getStatus() == LoanStatus.DISBURSED
+                && referenceId != null
+                && referenceId.equalsIgnoreCase(loan.getDisbursementReferenceId())) {
+            return loan;
+        }
         if (loan.getStatus() != LoanStatus.APPROVED) {
             throw new BusinessException("Only approved loans can be disbursed");
         }
 
-        loan.setStatus(LoanStatus.ACTIVE);
+        FinancialPartner institution = loadInstitution(institutionId, loan.getCountryCode(), loan.getCurrency());
+        String normalizedReferenceId = normalizeReference(referenceId, "Loan disbursement reference is required");
+
+        loan.setStatus(LoanStatus.DISBURSED);
+        loan.setInstitutionId(institution.getId());
+        loan.setDisbursementReferenceId(normalizedReferenceId);
         loan.setDisbursedAt(OffsetDateTime.now());
         Loan saved = loanRepository.save(loan);
 
-        triggerDisbursementLedger(saved, actorUserId, idempotencyKey);
+        institutionLedgerService.recordEntry(
+                saved.getAccountHolderId(),
+                institution.getId(),
+                InstitutionLedgerEntryType.LOAN,
+                saved.getAmount(),
+                saved.getCurrency(),
+                normalizedReferenceId
+        );
         domainEventPublisher.publish(CircleActivityRequestedEvent.create(
                 saved.getCircleId(),
                 actorUserId,
@@ -158,6 +190,11 @@ public class LoanService {
         return loanRepository.findByAccountHolderIdOrderByCreatedAtDesc(accountHolderId).stream()
                 .map(loan -> toResponse(loan, repaymentScheduleRepository.findByLoan_IdOrderByInstallmentNumberAsc(loan.getId())))
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public LoanResponse toResponse(Loan loan) {
+        return toResponse(loan, repaymentScheduleRepository.findByLoan_IdOrderByInstallmentNumberAsc(loan.getId()));
     }
 
     private void ensureCreditPolicyConfigured(String countryCode) {
@@ -230,23 +267,29 @@ public class LoanService {
         return repaymentScheduleRepository.saveAll(schedules);
     }
 
-    private void triggerDisbursementLedger(Loan loan, UUID actorUserId, String idempotencyKey) {
-        String idem = (idempotencyKey == null || idempotencyKey.isBlank())
-                ? "loan-disbursement:" + loan.getId()
-                : idempotencyKey;
+    private FinancialPartner loadInstitution(UUID institutionId, String countryCode, String currency) {
+        if (institutionId == null) {
+            throw new BusinessException("Institution is required");
+        }
+        FinancialPartner institution = financialPartnerRepository.findById(institutionId)
+                .orElseThrow(() -> new NotFoundException("Institution not found"));
+        if (institution.getStatus() != FinancialPartnerStatus.ACTIVE) {
+            throw new BusinessException("Institution is not active");
+        }
+        if (!countryCode.equalsIgnoreCase(institution.getCountryCode())) {
+            throw new BusinessException("Institution country must match loan country");
+        }
+        if (!currency.equalsIgnoreCase(institution.getCurrency())) {
+            throw new BusinessException("Institution currency must match loan currency");
+        }
+        return institution;
+    }
 
-        Operation operation = operationService.createInitiatedOperation(
-                loan.getAccountHolderId(),
-                actorUserId,
-                OperationType.LOAN_DISBURSEMENT,
-                loan.getAmount(),
-                loan.getCurrency(),
-                idem,
-                "Loan disbursement " + loan.getId()
-        );
-
-        operationService.confirmOperation(operation.getId());
-        accountingPostingService.postConfirmedOperation(operation.getId());
+    private String normalizeReference(String referenceId, String message) {
+        if (referenceId == null || referenceId.isBlank()) {
+            throw new BusinessException(message);
+        }
+        return referenceId.trim().toUpperCase(Locale.ROOT);
     }
 
     private LoanResponse toResponse(Loan loan, List<RepaymentSchedule> schedules) {
@@ -264,6 +307,7 @@ public class LoanService {
                 loan.getId(),
                 loan.getAccountHolderId(),
                 loan.getCircleId(),
+                loan.getInstitutionId(),
                 loan.getAmount(),
                 loan.getCurrency(),
                 loan.getInterestRate(),
@@ -271,6 +315,7 @@ public class LoanService {
                 loan.getStatus(),
                 loan.getApprovedAt(),
                 loan.getDisbursedAt(),
+                loan.getDisbursementReferenceId(),
                 loan.getCreatedAt(),
                 scheduleResponses
         );

@@ -5,6 +5,7 @@ import com.ccapp.common.security.SecurityUtils;
 import com.ccapp.credit.dto.CreateLoanRequest;
 import com.ccapp.credit.dto.LoanRepaymentResponse;
 import com.ccapp.credit.dto.LoanResponse;
+import com.ccapp.credit.dto.RecordLoanDisbursementRequest;
 import com.ccapp.credit.dto.RepayLoanRequest;
 import com.ccapp.credit.service.LoanService;
 import com.ccapp.credit.service.RepaymentService;
@@ -63,6 +64,30 @@ public class LoanController {
     public ResponseEntity<CommonResponse<List<LoanResponse>>> myLoans() {
         UUID accountHolderId = SecurityUtils.currentAccountHolderId();
         return ResponseEntity.ok(CommonResponse.success("My loans", loanService.getMyLoans(accountHolderId)));
+    }
+
+    @PostMapping("/{loanId}/disbursements")
+    @Operation(summary = "Enregistrer un decaissement externe de l'institution")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Succes", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Validation ou regle metier invalide", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Non authentifie", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Pret ou institution introuvable", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
+    })
+    public ResponseEntity<CommonResponse<LoanResponse>> recordDisbursement(
+            @PathVariable UUID loanId,
+            @Valid @RequestBody RecordLoanDisbursementRequest request) {
+        UUID accountHolderId = SecurityUtils.currentAccountHolderId();
+        UUID actorUserId = SecurityUtils.currentPrincipal().userId() != null
+                ? SecurityUtils.currentPrincipal().userId()
+                : accountHolderId;
+
+        return ResponseEntity.ok(CommonResponse.success(
+                "Loan disbursement recorded",
+                loanService.toResponse(
+                        loanService.disburseApprovedLoan(loanId, actorUserId, request.institutionId(), request.referenceId())
+                )
+        ));
     }
 
     @PostMapping("/{loanId}/repay")

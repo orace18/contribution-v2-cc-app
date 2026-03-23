@@ -17,6 +17,8 @@ import com.ccapp.circles.repository.CircleRepository;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.common.exception.ConflictException;
 import com.ccapp.common.exception.NotFoundException;
+import com.ccapp.credit.domain.enums.LoanStatus;
+import com.ccapp.credit.repository.LoanRepository;
 import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
 import com.ccapp.identity.account_holder.domain.enums.AccountCreatedVia;
 import com.ccapp.identity.account_holder.domain.enums.AccountType;
@@ -47,6 +49,7 @@ import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
@@ -64,12 +67,20 @@ public class CircleService {
     private static final String TOO_MANY_ASSISTED_MEMBERS = "TOO_MANY_ASSISTED_MEMBERS";
     private static final String MEMBER_NOT_ACTIVE = "MEMBER_NOT_ACTIVE";
     private static final String SPONSOR_NOT_FOUND = "SPONSOR_NOT_FOUND";
+    private static final String ASSISTED_MEMBERS_DISABLED_FOR_MVP = "ASSISTED_MEMBERS_DISABLED_FOR_MVP";
+    private static final String CIRCLE_LOCKED_BY_ACTIVE_LOAN = "CIRCLE_LOCKED_BY_ACTIVE_LOAN";
+    private static final EnumSet<LoanStatus> CIRCLE_LOCKING_LOAN_STATUSES = EnumSet.of(
+            LoanStatus.APPROVED,
+            LoanStatus.DISBURSED,
+            LoanStatus.ACTIVE
+    );
 
     private final CircleRepository circleRepository;
     private final CircleMemberRepository circleMemberRepository;
     private final DomainEventPublisher domainEventPublisher;
     private final CountryContextService countryContextService;
     private final AccountHolderRepository accountHolderRepository;
+    private final LoanRepository loanRepository;
     private final AppUserRepository appUserRepository;
     private final UserRepository userRepository;
     private final MlmRelationshipRepository mlmRelationshipRepository;
@@ -156,6 +167,7 @@ public class CircleService {
             throw new ConflictException("User already belongs to an active circle");
         }
 
+        ensureCircleUnlocked(circleId);
         CircleConfigLimits limits = resolveCircleConfigLimits(circle.getCountryCode());
         long membersCount = circleMemberRepository.countByCircle_IdAndFinancialMemberTrue(circleId);
         if (membersCount >= limits.maxFinancialMembers()) {
@@ -244,85 +256,7 @@ public class CircleService {
                                                      UUID actorUserId,
                                                      UUID circleId,
                                                      CreateAssistedMemberRequest request) {
-        if (actorUserId == null) {
-            throw new BusinessException("Actor user is required");
-        }
-
-        Circle circle = circleRepository.findByIdAndStatus(circleId, CircleStatus.ACTIVE)
-                .orElseThrow(() -> new NotFoundException("Active circle not found"));
-        if (!circleMemberRepository.existsByCircle_IdAndAccountHolderId(circleId, creatorAccountHolderId)) {
-            throw new BusinessException("Creator is not a member of this circle");
-        }
-
-        CountryContext creatorContext = countryContextService.resolve(creatorAccountHolderId);
-        if (!creatorContext.serviceCountryCode().equalsIgnoreCase(circle.getCountryCode())) {
-            throw new BusinessException(CROSS_COUNTRY_CIRCLE_NOT_ALLOWED);
-        }
-
-        CircleConfigLimits limits = resolveCircleConfigLimits(circle.getCountryCode());
-        long assistedCount = circleMemberRepository.countAssistedMembersByCircleId(circleId);
-        if (assistedCount >= limits.maxAssistedMembers()) {
-            throw new BusinessException(TOO_MANY_ASSISTED_MEMBERS);
-        }
-        long membersCount = circleMemberRepository.countByCircle_IdAndFinancialMemberTrue(circleId);
-        if (membersCount >= limits.maxFinancialMembers()) {
-            throw new BusinessException("Circle reached maximum members");
-        }
-
-        String normalizedPhone = normalizePhone(request.phoneNumber());
-        if (request.phoneVerificationId() != null) {
-            phoneVerificationService.assertVerifiedForPhone(creatorAccountHolderId, normalizedPhone, request.phoneVerificationId());
-        } else if (requirePhoneVerification) {
-            throw new BusinessException("PHONE_VERIFICATION_REQUIRED");
-        }
-        if (accountHolderRepository.existsByPhoneNumber(normalizedPhone)) {
-            throw new ConflictException("Phone number already used");
-        }
-
-        NameParts nameParts = splitFullName(request.fullName());
-        AccountHolder assistedAccountHolder = accountHolderRepository.save(AccountHolder.builder()
-                .id(UUID.randomUUID())
-                .firstName(nameParts.firstName())
-                .lastName(nameParts.lastName())
-                .phoneNumber(normalizedPhone)
-                .countryCode(creatorContext.countryCode())
-                .serviceCountryCode(creatorContext.serviceCountryCode())
-                .accountType(AccountType.ASSISTED)
-                .createdByUserId(actorUserId)
-                .createdVia(AccountCreatedVia.CIRCLE_MEMBER)
-                .kycStatus(KycStatus.NOT_STARTED)
-                .build());
-
-        delegationService.createManagerDelegation(assistedAccountHolder.getId(), actorUserId);
-        domainEventPublisher.publish(AccountHolderCreatedEvent.create(assistedAccountHolder.getId()));
-
-        CircleMember member = circleMemberRepository.save(CircleMember.builder()
-                .circle(circle)
-                .accountHolderId(assistedAccountHolder.getId())
-                .role(CircleMemberRole.MEMBER)
-                .financialMember(true)
-                .businessActivity(request.projectDescription().trim())
-                .loanStatus("NOT_STARTED")
-                .repaymentProgress(null)
-                .joinedAt(OffsetDateTime.now())
-                .build());
-
-        domainEventPublisher.publish(CircleActivityRequestedEvent.create(
-                circle.getId(),
-                actorUserId,
-                ActivityType.MEMBER_JOINED,
-                member.getId(),
-                "Assisted member created and joined circle"
-        ));
-        domainEventPublisher.publish(CircleJoinedEvent.create(assistedAccountHolder.getId(), circle.getId()));
-        delegatedActionService.log(
-                assistedAccountHolder.getId(),
-                actorUserId,
-                DelegatedActionType.CIRCLE_ACTIVITY,
-                "{\"circleId\":\"" + circle.getId() + "\",\"activityType\":\"" + request.activityType().trim() + "\",\"city\":\"" + request.city().trim() + "\"}"
-        );
-
-        return toMemberResponse(member);
+        throw new BusinessException(ASSISTED_MEMBERS_DISABLED_FOR_MVP);
     }
 
     private String resolveAccountHolderCountry(UUID accountHolderId) {
@@ -387,6 +321,12 @@ public class CircleService {
 
     private boolean isAdvisorRole(CircleMemberRole role) {
         return role == CircleMemberRole.ADVISOR_G1 || role == CircleMemberRole.ADVISOR_G2;
+    }
+
+    private void ensureCircleUnlocked(UUID circleId) {
+        if (loanRepository.existsByCircleIdAndStatusIn(circleId, CIRCLE_LOCKING_LOAN_STATUSES)) {
+            throw new BusinessException(CIRCLE_LOCKED_BY_ACTIVE_LOAN);
+        }
     }
 
     private void ensureCircleExists(UUID circleId) {

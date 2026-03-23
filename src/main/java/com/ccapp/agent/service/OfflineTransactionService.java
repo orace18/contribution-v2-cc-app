@@ -8,17 +8,13 @@ import com.ccapp.agent.dto.SyncOfflineTransactionsRequest;
 import com.ccapp.agent.dto.SyncOfflineTransactionsResponse;
 import com.ccapp.agent.repository.OfflineTransactionRepository;
 import com.ccapp.circles.repository.CircleRepository;
-import com.ccapp.circlesocial.event.CircleContributionEvent;
 import com.ccapp.common.events.DomainEventPublisher;
+import com.ccapp.common.exception.BusinessException;
 import com.ccapp.common.exception.NotFoundException;
 import com.ccapp.identity.account_holder.repository.AccountHolderRepository;
-import com.ccapp.ledger.service.AccountingPostingService;
 import com.ccapp.notifications.domain.enums.NotificationChannel;
 import com.ccapp.notifications.domain.enums.NotificationType;
 import com.ccapp.notifications.event.NotificationRequestedEvent;
-import com.ccapp.payments.operation.domain.entity.Operation;
-import com.ccapp.payments.operation.domain.enums.OperationType;
-import com.ccapp.payments.operation.service.OperationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -38,8 +34,6 @@ public class OfflineTransactionService {
     private final AccountHolderRepository accountHolderRepository;
     private final CircleRepository circleRepository;
     private final AgentService agentService;
-    private final OperationService operationService;
-    private final AccountingPostingService accountingPostingService;
     private final DomainEventPublisher domainEventPublisher;
 
     @Transactional
@@ -48,6 +42,9 @@ public class OfflineTransactionService {
 
         if (!accountHolderRepository.existsById(request.accountHolderId())) {
             throw new NotFoundException("Account holder not found");
+        }
+        if (request.transactionType() == TransactionType.CONTRIBUTION) {
+            throw new BusinessException("CIRCLE_CONTRIBUTIONS_DISABLED_FOR_MVP");
         }
 
         OfflineTransaction saved = offlineTransactionRepository.save(OfflineTransaction.builder()
@@ -59,9 +56,6 @@ public class OfflineTransactionService {
                 .status("PENDING_SYNC")
                 .build());
         emitAgentActionNotification(saved);
-        if (saved.getTransactionType() == TransactionType.CONTRIBUTION) {
-            emitCircleContribution(saved);
-        }
 
         return toResponse(saved);
     }
@@ -107,26 +101,10 @@ public class OfflineTransactionService {
 
     private void postLedgerIfNeeded(OfflineTransaction tx) {
         switch (tx.getTransactionType()) {
-            case LOAN_DISBURSEMENT -> postLoanOperation(tx, OperationType.LOAN_DISBURSEMENT, "Offline loan disbursement");
-            case LOAN_REPAYMENT -> postLoanOperation(tx, OperationType.LOAN_REPAYMENT, "Offline loan repayment");
-            case CONTRIBUTION -> {
-                // Contribution event is emitted at recording time to keep producer semantics consistent.
+            case LOAN_DISBURSEMENT, LOAN_REPAYMENT, CONTRIBUTION -> {
+                // MVP: offline financial records remain audit-only and do not simulate money movement.
             }
         }
-    }
-
-    private void postLoanOperation(OfflineTransaction tx, OperationType type, String description) {
-        Operation operation = operationService.createInitiatedOperation(
-                tx.getAccountHolderId(),
-                tx.getAgentUserId(),
-                type,
-                tx.getAmount(),
-                tx.getCurrency(),
-                "offline:" + type.name().toLowerCase(Locale.ROOT) + ":" + tx.getId(),
-                description
-        );
-        operationService.confirmOperation(operation.getId());
-        accountingPostingService.postConfirmedOperation(operation.getId());
     }
 
     private OfflineTransactionResponse toResponse(OfflineTransaction tx) {
@@ -160,20 +138,4 @@ public class OfflineTransactionService {
         }
     }
 
-    private void emitCircleContribution(OfflineTransaction tx) {
-        try {
-            circleRepository.findActiveCirclesForUser(tx.getAccountHolderId())
-                    .stream()
-                    .findFirst()
-                    .ifPresent(circle -> domainEventPublisher.publish(CircleContributionEvent.create(
-                            circle.getId(),
-                            tx.getAccountHolderId(),
-                            tx.getAgentUserId(),
-                            tx.getAmount(),
-                            tx.getCurrency()
-                    )));
-        } catch (RuntimeException ex) {
-            log.warn("Failed to emit CircleContributionEvent for offlineTransactionId={}", tx.getId(), ex);
-        }
-    }
 }

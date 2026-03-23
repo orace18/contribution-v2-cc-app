@@ -1,24 +1,18 @@
 package com.ccapp.circles.service;
 
 import com.ccapp.circles.domain.entity.Circle;
-import com.ccapp.circles.domain.entity.CircleLoan;
-import com.ccapp.circles.domain.enums.CircleLoanStatus;
 import com.ccapp.circles.domain.enums.CircleMemberRole;
 import com.ccapp.circles.domain.enums.CircleStatus;
 import com.ccapp.circles.dto.*;
 import com.ccapp.circles.repository.*;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.config.TestJacksonAndCachingConfig;
-import com.ccapp.country.config.service.CountryConfigResolver;
 import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
 import com.ccapp.identity.account_holder.domain.enums.AccountType;
 import com.ccapp.identity.account_holder.repository.AccountHolderRepository;
-import com.fasterxml.jackson.databind.node.JsonNodeFactory;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 
 import java.math.BigDecimal;
@@ -26,9 +20,8 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.when;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @DataJpaTest(properties = {
         "spring.profiles.active=test",
@@ -45,73 +38,30 @@ class CircleFinanceServiceIntegrationTest {
     @Autowired
     private CircleMemberRepository circleMemberRepository;
     @Autowired
-    private CircleCycleRepository circleCycleRepository;
-    @Autowired
-    private CircleContributionRepository circleContributionRepository;
-    @Autowired
-    private CircleLoanRepository circleLoanRepository;
-    @Autowired
     private AccountHolderRepository accountHolderRepository;
-    @MockBean
-    private CountryConfigResolver countryConfigResolver;
 
-    @BeforeEach
-    void setUp() {
-        when(countryConfigResolver.resolveActiveConfig(any(), any())).thenAnswer(invocation -> new CountryConfigResolver.ResolvedConfig(
-                invocation.getArgument(0),
-                invocation.getArgument(1),
-                null,
-                "{}",
-                CountryConfigResolver.ConfigSource.EMPTY
+    @Test
+    void createCycle_shouldBeDisabledForMvp() {
+        Setup setup = seedCircleWithParticipants();
+
+        BusinessException ex = assertThrows(BusinessException.class, () -> circleFinanceService.createCycle(
+                setup.coachId(),
+                setup.circle().getId(),
+                new CreateCircleCycleRequest(LocalDate.now(), LocalDate.now().plusDays(30), new BigDecimal("5000"))
         ));
-        when(countryConfigResolver.payloadAsObjectNode(any(CountryConfigResolver.ResolvedConfig.class)))
-                .thenReturn(JsonNodeFactory.instance.objectNode());
+
+        assertEquals("CIRCLE_FINANCE_DISABLED_FOR_MVP", ex.getMessage());
     }
 
     @Test
-    void createCycle_shouldCreateActiveCycleAndContributions() {
+    void getCycles_shouldReturnEmptyList() {
         Setup setup = seedCircleWithParticipants();
-
-        CircleCycleResponse cycle = circleFinanceService.createCycle(
-                setup.coachId(),
-                setup.circle().getId(),
-                new CreateCircleCycleRequest(LocalDate.now(), LocalDate.now().plusDays(30), new BigDecimal("5000"))
-        );
-
-        assertNotNull(cycle.id());
-        assertEquals(1, cycle.cycleNumber());
-        assertEquals(com.ccapp.circles.domain.enums.CircleCycleStatus.ACTIVE, cycle.status());
-        assertEquals(3, circleContributionRepository.countByCycle_Id(cycle.id()));
+        assertEquals(0, circleFinanceService.getCycles(setup.circle().getId()).size());
     }
 
     @Test
-    void createCycle_shouldRejectWhenActiveCycleAlreadyExists() {
+    void createLoan_shouldBeDisabledForMvp() {
         Setup setup = seedCircleWithParticipants();
-        circleFinanceService.createCycle(
-                setup.coachId(),
-                setup.circle().getId(),
-                new CreateCircleCycleRequest(LocalDate.now(), LocalDate.now().plusDays(30), new BigDecimal("5000"))
-        );
-
-        BusinessException ex = assertThrows(
-                BusinessException.class,
-                () -> circleFinanceService.createCycle(
-                        setup.coachId(),
-                        setup.circle().getId(),
-                        new CreateCircleCycleRequest(LocalDate.now().plusDays(1), LocalDate.now().plusDays(31), new BigDecimal("5000"))
-                )
-        );
-        assertEquals("ACTIVE_CYCLE_ALREADY_EXISTS", ex.getMessage());
-    }
-
-    @Test
-    void createLoan_shouldRequireCoachValidation() {
-        Setup setup = seedCircleWithParticipants();
-        circleFinanceService.createCycle(
-                setup.coachId(),
-                setup.circle().getId(),
-                new CreateCircleCycleRequest(LocalDate.now(), LocalDate.now().plusDays(30), new BigDecimal("5000"))
-        );
 
         BusinessException ex = assertThrows(
                 BusinessException.class,
@@ -121,64 +71,21 @@ class CircleFinanceServiceIntegrationTest {
                         new CreateCircleLoanRequest(setup.member1Id(), new BigDecimal("100"), new BigDecimal("10"), setup.advisorId())
                 )
         );
-        assertEquals("COACH_VALIDATION_REQUIRED", ex.getMessage());
+        assertEquals("CIRCLE_FINANCE_DISABLED_FOR_MVP", ex.getMessage());
     }
 
     @Test
-    void createLoan_shouldRejectWhenBorrowerAlreadyHasActiveLoan() {
+    void createRepayment_shouldBeDisabledForMvp() {
         Setup setup = seedCircleWithParticipants();
-        circleFinanceService.createCycle(
-                setup.coachId(),
-                setup.circle().getId(),
-                new CreateCircleCycleRequest(LocalDate.now(), LocalDate.now().plusDays(30), new BigDecimal("5000"))
-        );
-        circleFinanceService.createLoan(
-                setup.coachId(),
-                setup.circle().getId(),
-                new CreateCircleLoanRequest(setup.member1Id(), new BigDecimal("100"), new BigDecimal("10"), setup.advisorId())
-        );
-
         BusinessException ex = assertThrows(
                 BusinessException.class,
-                () -> circleFinanceService.createLoan(
-                        setup.coachId(),
-                        setup.circle().getId(),
-                        new CreateCircleLoanRequest(setup.member1Id(), new BigDecimal("200"), new BigDecimal("10"), setup.advisorId())
+                () -> circleFinanceService.createRepayment(
+                        setup.member1Id(),
+                        UUID.randomUUID(),
+                        new CreateCircleRepaymentRequest(new BigDecimal("50"), LocalDate.now())
                 )
         );
-        assertEquals("ACTIVE_LOAN_ALREADY_EXISTS", ex.getMessage());
-    }
-
-    @Test
-    void createRepayment_shouldMarkLoanAsRepaidWhenAmountReached() {
-        Setup setup = seedCircleWithParticipants();
-        circleFinanceService.createCycle(
-                setup.coachId(),
-                setup.circle().getId(),
-                new CreateCircleCycleRequest(LocalDate.now(), LocalDate.now().plusDays(30), new BigDecimal("5000"))
-        );
-        CircleLoanResponse loan = circleFinanceService.createLoan(
-                setup.coachId(),
-                setup.circle().getId(),
-                new CreateCircleLoanRequest(setup.member1Id(), new BigDecimal("100"), new BigDecimal("10"), setup.advisorId())
-        );
-
-        CircleRepaymentResponse first = circleFinanceService.createRepayment(
-                setup.member1Id(),
-                loan.id(),
-                new CreateCircleRepaymentRequest(new BigDecimal("50"), LocalDate.now())
-        );
-        assertEquals(CircleLoanStatus.DISBURSED, first.loanStatus());
-
-        CircleRepaymentResponse second = circleFinanceService.createRepayment(
-                setup.member1Id(),
-                loan.id(),
-                new CreateCircleRepaymentRequest(new BigDecimal("60"), LocalDate.now())
-        );
-        assertEquals(CircleLoanStatus.REPAID, second.loanStatus());
-
-        CircleLoan persisted = circleLoanRepository.findById(loan.id()).orElseThrow();
-        assertEquals(CircleLoanStatus.REPAID, persisted.getStatus());
+        assertEquals("CIRCLE_FINANCE_DISABLED_FOR_MVP", ex.getMessage());
     }
 
     private Setup seedCircleWithParticipants() {

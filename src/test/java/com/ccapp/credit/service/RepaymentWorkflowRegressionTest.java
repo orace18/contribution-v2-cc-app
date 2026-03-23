@@ -1,5 +1,6 @@
 package com.ccapp.credit.service;
 
+import com.ccapp.common.events.DomainEvent;
 import com.ccapp.common.events.DomainEventPublisher;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.credit.domain.entity.Loan;
@@ -13,18 +14,15 @@ import com.ccapp.credit.dto.RepayLoanRequest;
 import com.ccapp.credit.repository.LoanRepaymentRepository;
 import com.ccapp.credit.repository.LoanRepository;
 import com.ccapp.credit.repository.RepaymentScheduleRepository;
+import com.ccapp.financing.domain.enums.InstitutionLedgerEntryType;
+import com.ccapp.financing.service.InstitutionLedgerService;
 import com.ccapp.identity.delegation.domain.enums.DelegatedActionType;
 import com.ccapp.identity.delegation.domain.enums.PermissionLevel;
 import com.ccapp.identity.delegation.service.AccessControlService;
 import com.ccapp.identity.delegation.service.DelegatedActionService;
-import com.ccapp.ledger.service.AccountingPostingService;
-import com.ccapp.payments.operation.domain.entity.Operation;
-import com.ccapp.payments.operation.domain.enums.OperationType;
-import com.ccapp.payments.operation.service.OperationService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -58,9 +56,7 @@ class RepaymentWorkflowRegressionTest {
     @Mock
     private AccessControlService accessControlService;
     @Mock
-    private OperationService operationService;
-    @Mock
-    private AccountingPostingService accountingPostingService;
+    private InstitutionLedgerService institutionLedgerService;
     @Mock
     private DelegatedActionService delegatedActionService;
     @Mock
@@ -70,17 +66,18 @@ class RepaymentWorkflowRegressionTest {
     private RepaymentService repaymentService;
 
     @Test
-    void repay_shouldConfirmOperationAndPostLedger_whenFinalInstallmentIsPaid() {
+    void repay_shouldRecordInstitutionLedger_whenFinalInstallmentIsPaid() {
         UUID actorUserId = UUID.randomUUID();
         UUID loanId = UUID.randomUUID();
         UUID accountHolderId = UUID.randomUUID();
         UUID circleId = UUID.randomUUID();
-        UUID operationId = UUID.randomUUID();
+        UUID institutionId = UUID.randomUUID();
 
         Loan loan = Loan.builder()
                 .id(loanId)
                 .accountHolderId(accountHolderId)
                 .circleId(circleId)
+                .institutionId(institutionId)
                 .currency("XOF")
                 .status(LoanStatus.ACTIVE)
                 .build();
@@ -98,10 +95,10 @@ class RepaymentWorkflowRegressionTest {
                 .amount(new BigDecimal("10000.00"))
                 .currency("XOF")
                 .paymentMethod("MOBILE_MONEY")
+                .institutionId(institutionId)
                 .transactionId("TX-1")
                 .paidAt(OffsetDateTime.now())
                 .build();
-        Operation operation = Operation.builder().id(operationId).type(OperationType.LOAN_REPAYMENT).build();
 
         when(loanRepository.findById(loanId)).thenReturn(Optional.of(loan));
         doNothing().when(accessControlService).assertCanActOnAccountHolder(actorUserId, accountHolderId, PermissionLevel.TRANSACT);
@@ -111,36 +108,36 @@ class RepaymentWorkflowRegressionTest {
                 .thenReturn(Optional.of(nextInstallment));
         when(loanRepaymentRepository.save(any(LoanRepayment.class))).thenReturn(persistedRepayment);
         when(repaymentScheduleRepository.save(any(RepaymentSchedule.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        when(operationService.createInitiatedOperation(
-                eq(accountHolderId),
-                eq(actorUserId),
-                eq(OperationType.LOAN_REPAYMENT),
-                eq(new BigDecimal("10000.00")),
-                eq("XOF"),
-                anyString(),
-                anyString()
-        )).thenReturn(operation);
-        when(operationService.confirmOperation(operationId)).thenReturn(operation);
         when(repaymentScheduleRepository.countByLoan_IdAndStatusIn(eq(loanId), any())).thenReturn(0L);
         when(loanRepository.save(any(Loan.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         LoanRepaymentResponse response = repaymentService.repay(
                 actorUserId,
                 loanId,
-                new RepayLoanRequest(new BigDecimal("10000.00"), "XOF", "MOBILE_MONEY", "TX-1")
+                new RepayLoanRequest(new BigDecimal("10000.00"), "XOF", "MOBILE_MONEY", institutionId, "TX-1")
         );
 
         assertEquals(loanId, response.loanId());
         assertEquals(LoanStatus.REPAID, response.loanStatus());
         assertEquals(0L, response.remainingInstallments());
+        assertEquals(institutionId, response.institutionId());
 
-        InOrder inOrder = org.mockito.Mockito.inOrder(operationService, accountingPostingService);
-        inOrder.verify(operationService).confirmOperation(operationId);
-        inOrder.verify(accountingPostingService).postConfirmedOperation(operationId);
+        verify(institutionLedgerService).recordEntry(
+                accountHolderId,
+                institutionId,
+                InstitutionLedgerEntryType.REPAYMENT,
+                new BigDecimal("10000.00"),
+                "XOF",
+                "LOAN-REPAYMENT:TX-1"
+        );
 
-        ArgumentCaptor<LoanRepaidEvent> eventCaptor = ArgumentCaptor.forClass(LoanRepaidEvent.class);
-        verify(domainEventPublisher).publish(eventCaptor.capture());
-        LoanRepaidEvent event = eventCaptor.getValue();
+        ArgumentCaptor<DomainEvent> eventCaptor = ArgumentCaptor.forClass(DomainEvent.class);
+        verify(domainEventPublisher, org.mockito.Mockito.times(2)).publish(eventCaptor.capture());
+        LoanRepaidEvent event = eventCaptor.getAllValues().stream()
+                .filter(LoanRepaidEvent.class::isInstance)
+                .map(LoanRepaidEvent.class::cast)
+                .findFirst()
+                .orElseThrow();
         assertEquals(loanId, event.loanId());
         assertEquals(accountHolderId, event.accountHolderId());
         assertEquals(actorUserId, event.actorUserId());
@@ -184,13 +181,12 @@ class RepaymentWorkflowRegressionTest {
                 () -> repaymentService.repay(
                         actorUserId,
                         loanId,
-                        new RepayLoanRequest(new BigDecimal("9500.00"), "XOF", "MOBILE_MONEY", "TX-2")
+                        new RepayLoanRequest(new BigDecimal("9500.00"), "XOF", "MOBILE_MONEY", UUID.randomUUID(), "TX-2")
                 )
         );
 
         verify(loanRepaymentRepository, never()).save(any());
-        verify(operationService, never()).createInitiatedOperation(any(), any(), any(), any(), any(), any(), any());
-        verify(accountingPostingService, never()).postConfirmedOperation(any());
+        verify(institutionLedgerService, never()).recordEntry(any(), any(), any(), any(), any(), anyString());
         verify(domainEventPublisher, never()).publish(any());
     }
 }

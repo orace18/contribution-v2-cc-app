@@ -30,6 +30,9 @@ public class Loan {
     @Column(name = "circle_id", nullable = false)
     private UUID circleId;
 
+    @Column(name = "institution_id")
+    private UUID institutionId;
+
     @Column(name = "country_code", nullable = false, length = 3)
     private String countryCode;
 
@@ -54,6 +57,9 @@ public class Loan {
 
     @Column(name = "disbursed_at")
     private OffsetDateTime disbursedAt;
+
+    @Column(name = "disbursement_reference_id", length = 128)
+    private String disbursementReferenceId;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;

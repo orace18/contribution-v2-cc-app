@@ -6,6 +6,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
+import java.util.UUID;
 
 public record RepayLoanRequest(
         @NotNull(message = "amount is required")
@@ -19,6 +20,8 @@ public record RepayLoanRequest(
         @NotBlank(message = "paymentMethod is required")
         @Size(max = 32, message = "paymentMethod max size is 32")
         String paymentMethod,
+
+        UUID institutionId,
 
         String transactionId
 ) {

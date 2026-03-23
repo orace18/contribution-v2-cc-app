@@ -13,6 +13,7 @@ public record LoanRepaymentResponse(
         BigDecimal amount,
         String currency,
         String paymentMethod,
+        UUID institutionId,
         String transactionId,
         OffsetDateTime paidAt,
         LoanStatus loanStatus,

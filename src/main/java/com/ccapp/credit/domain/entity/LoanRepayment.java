@@ -38,6 +38,9 @@ public class LoanRepayment {
     @Column(name = "payment_method", nullable = false, length = 32)
     private String paymentMethod;
 
+    @Column(name = "institution_id")
+    private UUID institutionId;
+
     @Column(name = "transaction_id", length = 128)
     private String transactionId;
 

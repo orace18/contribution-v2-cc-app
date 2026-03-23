@@ -14,6 +14,7 @@ import com.ccapp.financing.domain.entity.FinancingOffer;
 import com.ccapp.financing.domain.entity.LoanApplication;
 import com.ccapp.financing.domain.entity.OfferCountryConfig;
 import com.ccapp.financing.domain.enums.FinancingOfferStatus;
+import com.ccapp.financing.domain.enums.InstitutionLedgerEntryType;
 import com.ccapp.financing.domain.enums.LoanApplicationStatus;
 import com.ccapp.financing.domain.enums.PartnerBackofficeRole;
 import com.ccapp.financing.domain.enums.PartnerLedgerEntryType;
@@ -26,10 +27,6 @@ import com.ccapp.financing.repository.OfferCountryConfigRepository;
 import com.ccapp.identity.account_holder.service.AccountHolderService;
 import com.ccapp.identity.delegation.domain.enums.PermissionLevel;
 import com.ccapp.identity.delegation.service.AccessControlService;
-import com.ccapp.ledger.service.AccountingPostingService;
-import com.ccapp.payments.operation.domain.entity.Operation;
-import com.ccapp.payments.operation.domain.enums.OperationType;
-import com.ccapp.payments.operation.service.OperationService;
 import com.ccapp.progress.event.LoanApplicationSubmittedEvent;
 import com.ccapp.progress.event.LoanDisbursedEvent;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -45,7 +42,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -69,8 +65,7 @@ public class FinancingApplicationService {
     private final PartnerBackofficeAccessService partnerBackofficeAccessService;
     private final PartnerLedgerService partnerLedgerService;
     private final PartnerReportingService partnerReportingService;
-    private final OperationService operationService;
-    private final AccountingPostingService accountingPostingService;
+    private final InstitutionLedgerService institutionLedgerService;
     private final CountryConfigResolver countryConfigResolver;
     private final ObjectMapper objectMapper;
     private final DomainEventPublisher domainEventPublisher;
@@ -235,7 +230,14 @@ public class FinancingApplicationService {
                         currency,
                         "Financing application disbursed"
                 );
-                postCoreLedger(saved, reviewerAccountHolderId, OperationType.LOAN_DISBURSEMENT, effectiveAmount, currency);
+                institutionLedgerService.recordEntry(
+                        saved.getAccountHolderId(),
+                        offer.getPartnerId(),
+                        InstitutionLedgerEntryType.LOAN,
+                        effectiveAmount,
+                        currency,
+                        "LOAN-APPLICATION-DISBURSEMENT:" + saved.getId()
+                );
                 domainEventPublisher.publish(LoanDisbursedEvent.create(saved.getAccountHolderId(), saved.getId()));
             }
             case REPAID -> {
@@ -247,32 +249,20 @@ public class FinancingApplicationService {
                         currency,
                         "Financing application repaid"
                 );
-                postCoreLedger(saved, reviewerAccountHolderId, OperationType.LOAN_REPAYMENT, effectiveAmount, currency);
+                institutionLedgerService.recordEntry(
+                        saved.getAccountHolderId(),
+                        offer.getPartnerId(),
+                        InstitutionLedgerEntryType.REPAYMENT,
+                        effectiveAmount,
+                        currency,
+                        "LOAN-APPLICATION-REPAYMENT:" + saved.getId()
+                );
             }
             default -> {
             }
         }
         partnerReportingService.refreshDailySnapshot(offer.getPartnerId());
         return toResponse(saved, offer, currency);
-    }
-
-    private void postCoreLedger(LoanApplication application,
-                                UUID actorUserId,
-                                OperationType operationType,
-                                BigDecimal amount,
-                                String currency) {
-        String operationCode = operationType.name().toLowerCase(Locale.ROOT);
-        Operation operation = operationService.createInitiatedOperation(
-                application.getAccountHolderId(),
-                actorUserId,
-                operationType,
-                amount,
-                currency,
-                "financing-" + operationCode + ":" + application.getId(),
-                "Financing application " + operationCode + " " + application.getId()
-        );
-        operationService.confirmOperation(operation.getId());
-        accountingPostingService.postConfirmedOperation(operation.getId());
     }
 
     private void ensureAllowedTransition(LoanApplicationStatus currentStatus, LoanApplicationStatus targetStatus) {

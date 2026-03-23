@@ -15,14 +15,12 @@ import com.ccapp.credit.dto.RepayLoanRequest;
 import com.ccapp.credit.repository.LoanRepaymentRepository;
 import com.ccapp.credit.repository.LoanRepository;
 import com.ccapp.credit.repository.RepaymentScheduleRepository;
+import com.ccapp.financing.domain.enums.InstitutionLedgerEntryType;
+import com.ccapp.financing.service.InstitutionLedgerService;
 import com.ccapp.identity.delegation.domain.enums.PermissionLevel;
 import com.ccapp.identity.delegation.domain.enums.DelegatedActionType;
 import com.ccapp.identity.delegation.service.AccessControlService;
 import com.ccapp.identity.delegation.service.DelegatedActionService;
-import com.ccapp.ledger.service.AccountingPostingService;
-import com.ccapp.payments.operation.domain.entity.Operation;
-import com.ccapp.payments.operation.domain.enums.OperationType;
-import com.ccapp.payments.operation.service.OperationService;
 import com.ccapp.progress.event.RepaymentCompletedEvent;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -31,6 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 @Service
@@ -41,8 +40,7 @@ public class RepaymentService {
     private final LoanRepaymentRepository loanRepaymentRepository;
     private final RepaymentScheduleRepository repaymentScheduleRepository;
     private final AccessControlService accessControlService;
-    private final OperationService operationService;
-    private final AccountingPostingService accountingPostingService;
+    private final InstitutionLedgerService institutionLedgerService;
     private final DelegatedActionService delegatedActionService;
     private final DomainEventPublisher domainEventPublisher;
 
@@ -87,14 +85,22 @@ public class RepaymentService {
                 .amount(request.amount())
                 .currency(request.currency().toUpperCase())
                 .paymentMethod(request.paymentMethod())
-                .transactionId(request.transactionId())
+                .institutionId(resolveInstitutionId(loan, request))
+                .transactionId(normalizeTransactionId(request.transactionId()))
                 .paidAt(OffsetDateTime.now())
                 .build());
 
         installment.setStatus(InstallmentStatus.PAID);
         repaymentScheduleRepository.save(installment);
 
-        triggerRepaymentLedger(loan, actorUserId, repayment);
+        institutionLedgerService.recordEntry(
+                loan.getAccountHolderId(),
+                repayment.getInstitutionId(),
+                InstitutionLedgerEntryType.REPAYMENT,
+                repayment.getAmount(),
+                repayment.getCurrency(),
+                repaymentReference(loan, repayment)
+        );
         domainEventPublisher.publish(RepaymentCompletedEvent.create(
                 loan.getAccountHolderId(),
                 loan.getId(),
@@ -132,6 +138,7 @@ public class RepaymentService {
                 repayment.getAmount(),
                 repayment.getCurrency(),
                 repayment.getPaymentMethod(),
+                repayment.getInstitutionId(),
                 repayment.getTransactionId(),
                 repayment.getPaidAt(),
                 loan.getStatus(),
@@ -156,23 +163,28 @@ public class RepaymentService {
         }
     }
 
-    private void triggerRepaymentLedger(Loan loan, UUID actorUserId, LoanRepayment repayment) {
-        String idempotencyKey = (repayment.getTransactionId() == null || repayment.getTransactionId().isBlank())
-                ? "loan-repayment:" + repayment.getId()
-                : "loan-repayment:" + repayment.getTransactionId();
+    private UUID resolveInstitutionId(Loan loan, RepayLoanRequest request) {
+        if (loan.getInstitutionId() == null && request.institutionId() == null) {
+            throw new BusinessException("Institution is required for repayment recording");
+        }
+        if (loan.getInstitutionId() != null && request.institutionId() != null
+                && !loan.getInstitutionId().equals(request.institutionId())) {
+            throw new BusinessException("Repayment institution must match loan institution");
+        }
+        return request.institutionId() != null ? request.institutionId() : loan.getInstitutionId();
+    }
 
-        Operation operation = operationService.createInitiatedOperation(
-                loan.getAccountHolderId(),
-                actorUserId,
-                OperationType.LOAN_REPAYMENT,
-                repayment.getAmount(),
-                repayment.getCurrency(),
-                idempotencyKey,
-                "Loan repayment " + loan.getId()
-        );
+    private String normalizeTransactionId(String transactionId) {
+        return transactionId == null || transactionId.isBlank()
+                ? null
+                : transactionId.trim().toUpperCase(Locale.ROOT);
+    }
 
-        operationService.confirmOperation(operation.getId());
-        accountingPostingService.postConfirmedOperation(operation.getId());
+    private String repaymentReference(Loan loan, LoanRepayment repayment) {
+        if (repayment.getTransactionId() != null && !repayment.getTransactionId().isBlank()) {
+            return "LOAN-REPAYMENT:" + repayment.getTransactionId();
+        }
+        return "LOAN-REPAYMENT:" + loan.getId() + ":" + repayment.getId();
     }
 
 }

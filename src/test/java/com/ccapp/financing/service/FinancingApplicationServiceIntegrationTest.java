@@ -9,23 +9,24 @@ import com.ccapp.financing.domain.entity.FinancialPartner;
 import com.ccapp.financing.domain.entity.FinancingOffer;
 import com.ccapp.financing.domain.entity.LoanApplication;
 import com.ccapp.financing.domain.entity.PartnerLedgerAccount;
+import com.ccapp.financing.domain.entity.InstitutionLedgerEntry;
 import com.ccapp.financing.domain.enums.FinancialPartnerStatus;
 import com.ccapp.financing.domain.enums.FinancialPartnerType;
 import com.ccapp.financing.domain.enums.FinancingOfferStatus;
+import com.ccapp.financing.domain.enums.InstitutionLedgerEntryType;
 import com.ccapp.financing.domain.enums.LoanApplicationStatus;
 import com.ccapp.financing.domain.enums.PartnerLedgerEntryType;
 import com.ccapp.financing.dto.CreateLoanApplicationRequest;
 import com.ccapp.financing.dto.LoanApplicationResponse;
 import com.ccapp.financing.repository.FinancialPartnerRepository;
 import com.ccapp.financing.repository.FinancingOfferRepository;
+import com.ccapp.financing.repository.InstitutionLedgerEntryRepository;
 import com.ccapp.financing.repository.LoanApplicationRepository;
 import com.ccapp.financing.repository.PartnerLedgerAccountRepository;
 import com.ccapp.financing.repository.PartnerLedgerEntryRepository;
 import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
 import com.ccapp.identity.account_holder.service.AccountHolderService;
 import com.ccapp.identity.delegation.service.AccessControlService;
-import com.ccapp.ledger.service.AccountingPostingService;
-import com.ccapp.payments.operation.service.OperationService;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -48,7 +49,7 @@ import static org.mockito.Mockito.when;
         "spring.flyway.enabled=false",
         "spring.jpa.hibernate.ddl-auto=create-drop"
 })
-@Import({FinancingApplicationService.class, PartnerLedgerService.class, PartnerReportingService.class, TestJacksonAndCachingConfig.class})
+@Import({FinancingApplicationService.class, PartnerLedgerService.class, PartnerReportingService.class, InstitutionLedgerService.class, TestJacksonAndCachingConfig.class})
 class FinancingApplicationServiceIntegrationTest {
 
     @Autowired
@@ -63,6 +64,8 @@ class FinancingApplicationServiceIntegrationTest {
     private PartnerLedgerEntryRepository partnerLedgerEntryRepository;
     @Autowired
     private PartnerLedgerAccountRepository partnerLedgerAccountRepository;
+    @Autowired
+    private InstitutionLedgerEntryRepository institutionLedgerEntryRepository;
 
     @MockBean
     private AccountHolderService accountHolderService;
@@ -72,10 +75,6 @@ class FinancingApplicationServiceIntegrationTest {
     private com.ccapp.country.service.CountryContextService countryContextService;
     @MockBean
     private PartnerBackofficeAccessService partnerBackofficeAccessService;
-    @MockBean
-    private OperationService operationService;
-    @MockBean
-    private AccountingPostingService accountingPostingService;
     @MockBean
     private CountryConfigResolver countryConfigResolver;
     @MockBean
@@ -171,5 +170,6 @@ class FinancingApplicationServiceIntegrationTest {
         LoanApplication persisted = loanApplicationRepository.findById(created.id()).orElseThrow();
         assertNotNull(persisted.getConfigSnapshot());
         assertEquals(1, persisted.getConfigVersion());
+        assertEquals(0, institutionLedgerEntryRepository.count());
     }
 }
