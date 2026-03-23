@@ -1,6 +1,11 @@
 package com.ccapp.mlm.service;
 
+import com.ccapp.common.events.DomainEventPublisher;
+import com.ccapp.country.domain.entity.Country;
+import com.ccapp.country.repository.CountryRepository;
 import com.ccapp.financial.audit.service.FinancialAuditService;
+import com.ccapp.identity.account_holder.repository.AccountHolderRepository;
+import com.ccapp.mlm.event.WeeklyBonusCalculatedEvent;
 import com.ccapp.mlm.domain.entity.MlmLegCarryover;
 import com.ccapp.mlm.domain.enums.MlmMemberGrade;
 import com.ccapp.observability.PlatformMonitoringHooks;
@@ -48,6 +53,9 @@ public class WeeklyGroupBonusService {
     private final MlmCommissionRepository mlmCommissionRepository;
     private final FinancialAuditService financialAuditService;
     private final CommissionEventRateLimiter commissionEventRateLimiter;
+    private final AccountHolderRepository accountHolderRepository;
+    private final CountryRepository countryRepository;
+    private final DomainEventPublisher domainEventPublisher;
 
     @Value("${mlm.group-bonus.currency:XOF}")
     private String groupBonusCurrency;
@@ -131,6 +139,12 @@ public class WeeklyGroupBonusService {
 
         WeeklyGroupBonusProcessingResult result = new WeeklyGroupBonusProcessingResult(
                 weekId, membersProcessed, commissionsCreated, carryoversToSave.size());
+        domainEventPublisher.publish(WeeklyBonusCalculatedEvent.create(
+                result.weekId(),
+                result.membersProcessed(),
+                result.commissionsCreated(),
+                result.carryoversStored()
+        ));
         log.info("weekly_group_bonus_completed weekId={} membersProcessed={} commissionsCreated={} carryoversStored={}",
                 result.weekId(), result.membersProcessed(), result.commissionsCreated(), result.carryoversStored());
         return result;
@@ -151,7 +165,7 @@ public class WeeklyGroupBonusService {
                     .operationId(null)
                     .beneficiaryAccountHolderId(memberId)
                     .amount(scale(amount))
-                    .currency(groupBonusCurrency)
+                    .currency(resolveCurrencyForMember(memberId))
                     .source(GROUP_BONUS_SOURCE)
                     .commissionType(CommissionType.GROUP_BONUS)
                     .generation(0)
@@ -280,6 +294,29 @@ public class WeeklyGroupBonusService {
             return ZERO;
         }
         return value.setScale(4, RoundingMode.HALF_UP);
+    }
+
+    private String resolveCurrencyForMember(UUID memberId) {
+        String countryCode = accountHolderRepository.findById(memberId)
+                .map(accountHolder -> {
+                    if (accountHolder.getServiceCountryCode() != null && !accountHolder.getServiceCountryCode().isBlank()) {
+                        return accountHolder.getServiceCountryCode().trim().toUpperCase();
+                    }
+                    return accountHolder.getCountryCode();
+                })
+                .filter(code -> code != null && !code.isBlank())
+                .map(String::trim)
+                .map(String::toUpperCase)
+                .orElse(null);
+        if (countryCode == null) {
+            return groupBonusCurrency;
+        }
+        return countryRepository.findByCode(countryCode)
+                .map(Country::getCurrency)
+                .filter(currency -> currency != null && !currency.isBlank())
+                .map(String::trim)
+                .map(String::toUpperCase)
+                .orElse(groupBonusCurrency);
     }
 
     private record BonusComputation(

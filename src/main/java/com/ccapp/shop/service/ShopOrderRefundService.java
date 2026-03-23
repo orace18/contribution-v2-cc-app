@@ -1,6 +1,7 @@
 package com.ccapp.shop.service;
 
 import com.ccapp.financial.audit.service.FinancialAuditService;
+import com.ccapp.identity.account_holder.repository.AccountHolderRepository;
 import com.ccapp.ledger.service.AccountingPostingService;
 import com.ccapp.mlm.domain.entity.MlmVolumeLedger;
 import com.ccapp.mlm.repository.MlmVolumeLedgerRepository;
@@ -25,7 +26,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.OffsetDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
@@ -41,29 +44,43 @@ public class ShopOrderRefundService {
     private final MlmCommissionRepository mlmCommissionRepository;
     private final CommissionAdjustmentRepository commissionAdjustmentRepository;
     private final FinancialAuditService financialAuditService;
+    private final AccountHolderRepository accountHolderRepository;
 
     @Transactional
     public void processRefund(ShopOrderRefundedEvent event) {
         reverseMerchantPayoutIfPossible(event);
+        reverseCommissionAllocationIfPossible(event);
 
-        List<MlmVolumeLedger> ledgerEntries = mlmVolumeLedgerRepository
-                .findBySourceOrderIdOrderByAccountHolderIdAsc(event.orderId());
-        for (MlmVolumeLedger ledgerEntry : ledgerEntries) {
-            createMlmCommissionReversalIfAbsent(event, ledgerEntry);
-            commissionAdjustmentRepository.save(CommissionAdjustment.builder()
-                    .referenceOrderId(event.orderId())
-                    .accountHolderId(ledgerEntry.getAccountHolderId())
-                    .adjustmentType(CommissionAdjustmentType.MLM_VOLUME_REVERSAL)
-                    .amount(scale(ledgerEntry.getVolumeCv().negate()))
-                    .build());
+        List<MlmVolumeLedger> ledgerEntries = mlmVolumeLedgerRepository.findBySourceOrderIdOrderByAccountHolderIdAsc(event.orderId());
+        Map<UUID, ReversalAggregate> reversalByAccountHolder = aggregateByAccountHolder(ledgerEntries);
+        for (Map.Entry<UUID, ReversalAggregate> entry : reversalByAccountHolder.entrySet()) {
+            UUID accountHolderId = entry.getKey();
+            ReversalAggregate aggregate = entry.getValue();
+            createMlmCommissionReversalIfAbsent(event, accountHolderId, aggregate.totalVolume().negate(), aggregate.weekId());
+            if (!commissionAdjustmentRepository.existsByReferenceOrderIdAndAccountHolderIdAndAdjustmentType(
+                    event.orderId(),
+                    accountHolderId,
+                    CommissionAdjustmentType.MLM_VOLUME_REVERSAL
+            )) {
+                commissionAdjustmentRepository.save(CommissionAdjustment.builder()
+                        .referenceOrderId(event.orderId())
+                        .accountHolderId(accountHolderId)
+                        .adjustmentType(CommissionAdjustmentType.MLM_VOLUME_REVERSAL)
+                        .amount(scale(aggregate.totalVolume().negate()))
+                        .build());
+            }
         }
 
+        BigDecimal deletedVolume = ledgerEntries.stream()
+                .map(MlmVolumeLedger::getVolumeCv)
+                .map(this::scale)
+                .reduce(BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP), BigDecimal::add);
         int deletedRows = mlmVolumeLedgerRepository.deleteBySourceOrderId(event.orderId());
         financialAuditService.record(
                 "MLM_VOLUME_LEDGER_REVERSED",
                 event.orderId().toString(),
                 null,
-                scale(event.mlmVolume().negate()),
+                scale(deletedVolume.negate()),
                 Map.of("rowsDeleted", String.valueOf(deletedRows))
         );
         financialAuditService.record(
@@ -75,7 +92,7 @@ public class ShopOrderRefundService {
                         "currency", event.currency(),
                         "merchantAmount", scale(event.merchantAmount()).toPlainString(),
                         "platformCommission", scale(event.platformCommission()).toPlainString(),
-                        "mlmVolume", scale(event.mlmVolume()).toPlainString()
+                        "businessVolume", scale(event.mlmVolume()).toPlainString()
                 )
         );
     }
@@ -98,20 +115,31 @@ public class ShopOrderRefundService {
         Operation reversal = operationService.createInitiatedOperation(
                 originalPayout.getAccountHolderId(),
                 originalPayout.getActorUserId(),
-                OperationType.ADJUSTMENT,
+                OperationType.MARKETPLACE_MERCHANT_PAYOUT_REVERSAL,
                 scale(event.merchantAmount()),
                 originalPayout.getCurrency(),
                 reversalKey,
                 "Marketplace merchant payout reversal for refund order " + event.orderId()
         );
-        Operation confirmedReversal = operationService.confirmOperation(reversal.getId());
-        accountingPostingService.postAdjustment(confirmedReversal);
-        commissionAdjustmentRepository.save(CommissionAdjustment.builder()
-                .referenceOrderId(event.orderId())
-                .accountHolderId(originalPayout.getAccountHolderId())
-                .adjustmentType(CommissionAdjustmentType.MERCHANT_PAYOUT_REVERSAL)
-                .amount(scale(event.merchantAmount().negate()))
-                .build());
+        Operation confirmedReversal = reversal.getStatus() == OperationStatus.CONFIRMED
+                ? reversal
+                : operationService.confirmOperation(reversal.getId());
+        accountingPostingService.postMarketplaceMerchantPayoutReversal(
+                confirmedReversal,
+                originalPayout.getAccountHolderId(),
+                resolveCountryCode(originalPayout.getAccountHolderId())
+        );
+        if (!commissionAdjustmentRepository.existsByReferenceOrderIdAndAdjustmentType(
+                event.orderId(),
+                CommissionAdjustmentType.MERCHANT_PAYOUT_REVERSAL
+        )) {
+            commissionAdjustmentRepository.save(CommissionAdjustment.builder()
+                    .referenceOrderId(event.orderId())
+                    .accountHolderId(originalPayout.getAccountHolderId())
+                    .adjustmentType(CommissionAdjustmentType.MERCHANT_PAYOUT_REVERSAL)
+                    .amount(scale(event.merchantAmount().negate()))
+                    .build());
+        }
         financialAuditService.record(
                 "MERCHANT_PAYOUT_REVERSAL",
                 event.orderId().toString(),
@@ -124,10 +152,48 @@ public class ShopOrderRefundService {
         );
     }
 
-    private void createMlmCommissionReversalIfAbsent(ShopOrderRefundedEvent event, MlmVolumeLedger ledgerEntry) {
+    private void reverseCommissionAllocationIfPossible(ShopOrderRefundedEvent event) {
+        String allocationKey = "marketplace-commission-allocation:" + event.orderId();
+        Operation originalAllocation = operationRepository.findByIdempotencyKey(allocationKey).orElse(null);
+        if (originalAllocation == null || originalAllocation.getStatus() != OperationStatus.CONFIRMED) {
+            return;
+        }
+        String reversalKey = "marketplace-commission-allocation-reversal:" + event.orderId();
+        Operation reversal = operationService.createInitiatedOperation(
+                originalAllocation.getAccountHolderId(),
+                originalAllocation.getActorUserId(),
+                OperationType.MARKETPLACE_COMMISSION_ALLOCATION_REVERSAL,
+                scale(event.platformCommission()),
+                originalAllocation.getCurrency(),
+                reversalKey,
+                "Marketplace commission allocation reversal for refund order " + event.orderId()
+        );
+        Operation confirmedReversal = reversal.getStatus() == OperationStatus.CONFIRMED
+                ? reversal
+                : operationService.confirmOperation(reversal.getId());
+        accountingPostingService.postMarketplaceCommissionAllocationReversal(
+                confirmedReversal,
+                resolveCountryCode(originalAllocation.getAccountHolderId())
+        );
+        financialAuditService.record(
+                "MARKETPLACE_COMMISSION_ALLOCATION_REVERSAL",
+                event.orderId().toString(),
+                originalAllocation.getAccountHolderId(),
+                scale(event.platformCommission().negate()),
+                Map.of(
+                        "originalOperationId", originalAllocation.getId().toString(),
+                        "reversalOperationId", confirmedReversal.getId().toString()
+                )
+        );
+    }
+
+    private void createMlmCommissionReversalIfAbsent(ShopOrderRefundedEvent event,
+                                                     UUID accountHolderId,
+                                                     BigDecimal reversalAmount,
+                                                     Integer weekId) {
         String source = "SHOP_ORDER_REFUND:" + event.orderId();
         boolean exists = mlmCommissionRepository.findByBeneficiaryAccountHolderIdAndSourceAndCommissionType(
-                ledgerEntry.getAccountHolderId(),
+                accountHolderId,
                 source,
                 CommissionType.REFUND_REVERSAL
         ).isPresent();
@@ -135,23 +201,29 @@ public class ShopOrderRefundService {
             return;
         }
 
-        BigDecimal reversalAmount = scale(ledgerEntry.getVolumeCv().negate());
         OffsetDateTime now = OffsetDateTime.now();
         MlmCommission reversal = mlmCommissionRepository.save(MlmCommission.builder()
-                .beneficiaryAccountHolderId(ledgerEntry.getAccountHolderId())
-                .amount(reversalAmount)
+                .beneficiaryAccountHolderId(accountHolderId)
+                .amount(scale(reversalAmount))
                 .currency(event.currency())
                 .source(source)
                 .commissionType(CommissionType.REFUND_REVERSAL)
                 .status(CommissionStatus.PAID)
+                .weekId(weekId)
                 .paidAt(now)
                 .build());
-        commissionAdjustmentRepository.save(CommissionAdjustment.builder()
-                .referenceOrderId(event.orderId())
-                .accountHolderId(ledgerEntry.getAccountHolderId())
-                .adjustmentType(CommissionAdjustmentType.MLM_COMMISSION_REVERSAL)
-                .amount(reversalAmount)
-                .build());
+        if (!commissionAdjustmentRepository.existsByReferenceOrderIdAndAccountHolderIdAndAdjustmentType(
+                event.orderId(),
+                accountHolderId,
+                CommissionAdjustmentType.MLM_COMMISSION_REVERSAL
+        )) {
+            commissionAdjustmentRepository.save(CommissionAdjustment.builder()
+                    .referenceOrderId(event.orderId())
+                    .accountHolderId(accountHolderId)
+                    .adjustmentType(CommissionAdjustmentType.MLM_COMMISSION_REVERSAL)
+                    .amount(scale(reversalAmount))
+                    .build());
+        }
         financialAuditService.record(
                 "MLM_COMMISSION_REVERSAL",
                 reversal.getId().toString(),
@@ -159,9 +231,40 @@ public class ShopOrderRefundService {
                 reversal.getAmount(),
                 Map.of(
                         "orderId", event.orderId().toString(),
-                        "weekId", String.valueOf(ledgerEntry.getWeekId())
+                        "weekId", String.valueOf(weekId)
                 )
         );
+    }
+
+    private Map<UUID, ReversalAggregate> aggregateByAccountHolder(List<MlmVolumeLedger> ledgerEntries) {
+        Map<UUID, ReversalAggregate> aggregates = new HashMap<>();
+        for (MlmVolumeLedger ledgerEntry : ledgerEntries) {
+            ReversalAggregate current = aggregates.get(ledgerEntry.getAccountHolderId());
+            BigDecimal amount = scale(ledgerEntry.getVolumeCv());
+            if (current == null) {
+                aggregates.put(ledgerEntry.getAccountHolderId(), new ReversalAggregate(amount, ledgerEntry.getWeekId()));
+                continue;
+            }
+            aggregates.put(ledgerEntry.getAccountHolderId(), new ReversalAggregate(
+                    scale(current.totalVolume().add(amount)),
+                    current.weekId() != null ? current.weekId() : ledgerEntry.getWeekId()
+            ));
+        }
+        return aggregates;
+    }
+
+    private String resolveCountryCode(UUID accountHolderId) {
+        return accountHolderRepository.findById(accountHolderId)
+                .map(accountHolder -> {
+                    if (accountHolder.getServiceCountryCode() != null && !accountHolder.getServiceCountryCode().isBlank()) {
+                        return accountHolder.getServiceCountryCode().trim().toUpperCase(Locale.ROOT);
+                    }
+                    if (accountHolder.getCountryCode() != null && !accountHolder.getCountryCode().isBlank()) {
+                        return accountHolder.getCountryCode().trim().toUpperCase(Locale.ROOT);
+                    }
+                    return "INT";
+                })
+                .orElse("INT");
     }
 
     private BigDecimal scale(BigDecimal amount) {
@@ -169,5 +272,8 @@ public class ShopOrderRefundService {
             return BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP);
         }
         return amount.setScale(4, RoundingMode.HALF_UP);
+    }
+
+    private record ReversalAggregate(BigDecimal totalVolume, Integer weekId) {
     }
 }

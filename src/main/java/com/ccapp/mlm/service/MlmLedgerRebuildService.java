@@ -114,7 +114,13 @@ public class MlmLedgerRebuildService {
         BigDecimal mlmVolume = shopCommissionPoolRepository.findByOrderId(order.getId())
                 .map(pool -> pool.getMlmVolume())
                 .orElse(BigDecimal.ZERO);
-        mlmVolumeLedgerService.rebuildForDeliveredOrder(order.getBuyerId(), order.getId(), mlmVolume, order.getCreatedAt());
+        mlmVolumeLedgerService.rebuildForDeliveredOrder(
+                order.getBuyerId(),
+                order.getId(),
+                mlmVolume,
+                order.getCurrency(),
+                order.getCreatedAt()
+        );
     }
 
     private int normalizeBatchSize(Integer batchSize) {

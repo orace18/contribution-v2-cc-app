@@ -5,6 +5,7 @@ import java.util.List;
 public enum CountryAccountSystemTag {
     USER_WALLET,
     PLATFORM_REVENUE,
+    MARKETPLACE_POOL,
     MLM_POOL,
     CIRCLE_POOL,
     LOAN_PORTFOLIO,

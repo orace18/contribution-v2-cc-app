@@ -1,5 +1,6 @@
 package com.ccapp.shop.service;
 
+import com.ccapp.common.events.DomainEventPublisher;
 import com.ccapp.financial.audit.domain.entity.FinancialAuditLog;
 import com.ccapp.financial.audit.repository.FinancialAuditLogRepository;
 import com.ccapp.financial.audit.service.FinancialAuditService;
@@ -68,6 +69,8 @@ class ShopOrderRefundServiceIntegrationTest {
     private OperationService operationService;
     @MockBean
     private AccountingPostingService accountingPostingService;
+    @MockBean
+    private DomainEventPublisher domainEventPublisher;
 
     @Test
     void processRefund_shouldReverseVolumeAndCreateNegativeCommissionAdjustments() {

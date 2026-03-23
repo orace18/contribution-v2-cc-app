@@ -1,5 +1,6 @@
 package com.ccapp.payments.commission.service;
 
+import com.ccapp.common.events.DomainEventPublisher;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.country.config.domain.enums.CountryConfigType;
 import com.ccapp.country.config.service.CountryConfigResolver;
@@ -8,6 +9,7 @@ import com.ccapp.financial.audit.service.FinancialAuditService;
 import com.ccapp.identity.wallet.domain.entity.Wallet;
 import com.ccapp.identity.wallet.repository.WalletRepository;
 import com.ccapp.ledger.service.AccountingPostingService;
+import com.ccapp.mlm.event.BonusPaidEvent;
 import com.ccapp.observability.PlatformMonitoringHooks;
 import com.ccapp.payments.commission.domain.entity.CommissionPayoutBatch;
 import com.ccapp.payments.commission.domain.entity.CommissionPayoutItem;
@@ -57,6 +59,7 @@ public class CommissionPayoutBatchProcessor {
     private final AccountingPostingService accountingPostingService;
     private final FinancialAuditService financialAuditService;
     private final CountryConfigResolver countryConfigResolver;
+    private final DomainEventPublisher domainEventPublisher;
 
     @Value("${commission.payout.tax-rate-percent:10.0}")
     private BigDecimal taxRatePercent;
@@ -337,6 +340,16 @@ public class CommissionPayoutBatchProcessor {
                         "weekId", String.valueOf(batch.getWeekId())
                 )
         );
+        if (commission.getCommissionType() == CommissionType.GROUP_BONUS) {
+            domainEventPublisher.publish(BonusPaidEvent.create(
+                    item.getAccountHolderId(),
+                    item.getOperationId(),
+                    item.getGrossAmount(),
+                    item.getTaxAmount(),
+                    item.getNetAmount(),
+                    currency
+            ));
+        }
 
         log.info("Commission payout item paid batchId={} itemId={} accountHolderId={} gross={} tax={} net={}",
                 batch.getId(),

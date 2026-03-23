@@ -1,5 +1,6 @@
 package com.ccapp.payments.commission.service;
 
+import com.ccapp.common.events.DomainEventPublisher;
 import com.ccapp.country.config.domain.enums.CountryConfigType;
 import com.ccapp.country.config.service.CountryConfigResolver;
 import com.ccapp.platform.config.domain.enums.PlatformConfigType;
@@ -87,6 +88,8 @@ class CommissionPayoutBatchProcessorIntegrationTest {
     private FinancialAuditLogRepository financialAuditLogRepository;
     @MockBean
     private CountryConfigResolver countryConfigResolver;
+    @MockBean
+    private DomainEventPublisher domainEventPublisher;
 
     @BeforeEach
     void setUp() {

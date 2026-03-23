@@ -1,6 +1,7 @@
 package com.ccapp.mlm.service;
 
 import com.ccapp.common.events.IdempotentEventListenerExecutor;
+import com.ccapp.common.events.DomainEventPublisher;
 import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
 import com.ccapp.identity.account_holder.domain.enums.AccountType;
 import com.ccapp.identity.account_holder.repository.AccountHolderRepository;
@@ -52,6 +53,8 @@ class MlmVolumeLedgerIntegrationTest {
 
     @MockBean
     private IdempotentEventListenerExecutor listenerExecutor;
+    @MockBean
+    private DomainEventPublisher domainEventPublisher;
 
     @Test
     void onDelivered_shouldWriteVolumeLedgerForUplinesOnly() {

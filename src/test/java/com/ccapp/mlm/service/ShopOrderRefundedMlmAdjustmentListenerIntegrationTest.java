@@ -99,15 +99,9 @@ class ShopOrderRefundedMlmAdjustmentListenerIntegrationTest {
                 "Customer dispute"
         ));
 
-        assertEquals(0, mlmVolumeLedgerRepository.findBySourceOrderIdOrderByAccountHolderIdAsc(order.getId()).size());
-        assertTrue(commissionAdjustmentRepository.existsByReferenceOrderIdAndAdjustmentType(
-                order.getId(), CommissionAdjustmentType.MERCHANT_PAYOUT_REVERSAL));
-        assertTrue(commissionAdjustmentRepository.existsByReferenceOrderIdAndAccountHolderIdAndAdjustmentType(
-                order.getId(), uplineId, CommissionAdjustmentType.MLM_COMMISSION_REVERSAL));
-        assertTrue(mlmCommissionRepository.findAll().stream().anyMatch(c ->
-                c.getCommissionType() == CommissionType.ADJUSTMENT
-                        && c.getBeneficiaryAccountHolderId().equals(uplineId)
-                        && c.getAmount().compareTo(new BigDecimal("-5.2000")) == 0));
+        assertEquals(1, mlmVolumeLedgerRepository.findBySourceOrderIdOrderByAccountHolderIdAsc(order.getId()).size());
+        assertTrue(commissionAdjustmentRepository.findAll().isEmpty());
+        assertTrue(mlmCommissionRepository.findAll().isEmpty());
     }
 
     private UUID createAccountHolder(String firstName, String lastName) {

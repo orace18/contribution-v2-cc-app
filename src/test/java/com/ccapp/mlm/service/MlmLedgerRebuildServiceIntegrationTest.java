@@ -3,6 +3,7 @@ package com.ccapp.mlm.service;
 import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
 import com.ccapp.identity.account_holder.domain.enums.AccountType;
 import com.ccapp.identity.account_holder.repository.AccountHolderRepository;
+import com.ccapp.common.events.DomainEventPublisher;
 import com.ccapp.mlm.domain.entity.MlmLedgerRebuildJob;
 import com.ccapp.mlm.domain.entity.MlmRelationship;
 import com.ccapp.mlm.domain.entity.MlmVolumeLedger;
@@ -18,6 +19,7 @@ import com.ccapp.shop.repository.ShopOrderRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 
 import java.math.BigDecimal;
@@ -49,6 +51,8 @@ class MlmLedgerRebuildServiceIntegrationTest {
     private ShopCommissionPoolRepository shopCommissionPoolRepository;
     @Autowired
     private AccountHolderRepository accountHolderRepository;
+    @MockBean
+    private DomainEventPublisher domainEventPublisher;
 
     @Test
     void rebuild_shouldRegenerateVolumeLedgerInBatches() {

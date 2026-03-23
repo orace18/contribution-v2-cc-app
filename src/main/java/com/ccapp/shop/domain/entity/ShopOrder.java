@@ -40,6 +40,12 @@ public class ShopOrder {
     @Column(name = "buyer_id", nullable = false)
     private UUID buyerId;
 
+    @Column(name = "merchant_id")
+    private UUID merchantId;
+
+    @Column(name = "country_code", length = 3)
+    private String countryCode;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 16)
     private ShopOrderStatus status;
@@ -58,6 +64,12 @@ public class ShopOrder {
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
+
+    @Column(name = "paid_at")
+    private OffsetDateTime paidAt;
+
+    @Column(name = "delivered_at")
+    private OffsetDateTime deliveredAt;
 
     @Column(name = "refunded_at")
     private OffsetDateTime refundedAt;

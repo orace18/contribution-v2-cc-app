@@ -1,6 +1,7 @@
 package com.ccapp.mlm.repository;
 
 import com.ccapp.mlm.domain.entity.MlmVolumeLedger;
+import com.ccapp.mlm.domain.enums.MlmVolumeTreeType;
 import com.ccapp.mlm.repository.projection.MlmWeeklyLegVolumeProjection;
 import com.ccapp.mlm.repository.projection.MlmWeeklyVolumeSummaryProjection;
 import org.springframework.data.domain.Pageable;
@@ -18,6 +19,10 @@ import java.util.UUID;
 public interface MlmVolumeLedgerRepository extends JpaRepository<MlmVolumeLedger, UUID> {
 
     boolean existsBySourceOrderIdAndAccountHolderId(UUID sourceOrderId, UUID accountHolderId);
+
+    boolean existsBySourceOrderIdAndAccountHolderIdAndTreeType(UUID sourceOrderId,
+                                                               UUID accountHolderId,
+                                                               MlmVolumeTreeType treeType);
 
     @Query("""
             select l.accountHolderId
@@ -41,6 +46,8 @@ public interface MlmVolumeLedgerRepository extends JpaRepository<MlmVolumeLedger
                    sum(l.volumeCv) as totalVolumeCv
             from MlmVolumeLedger l
             where l.weekId = :weekId
+              and (l.treeType is null or l.treeType = com.ccapp.mlm.domain.enums.MlmVolumeTreeType.PLACEMENT)
+              and l.legPosition is not null
             group by l.accountHolderId, l.legPosition
             """)
     List<MlmWeeklyLegVolumeProjection> aggregateWeeklyVolumeByMemberAndLeg(int weekId);
@@ -49,6 +56,7 @@ public interface MlmVolumeLedgerRepository extends JpaRepository<MlmVolumeLedger
             select coalesce(sum(l.volumeCv), 0)
             from MlmVolumeLedger l
             where l.accountHolderId = :accountHolderId
+              and (l.treeType is null or l.treeType = com.ccapp.mlm.domain.enums.MlmVolumeTreeType.PLACEMENT)
             """)
     BigDecimal sumVolumeByAccountHolderId(UUID accountHolderId);
 
@@ -57,6 +65,7 @@ public interface MlmVolumeLedgerRepository extends JpaRepository<MlmVolumeLedger
             from MlmVolumeLedger l
             where l.accountHolderId = :accountHolderId
               and l.createdAt >= :fromDate
+              and (l.treeType is null or l.treeType = com.ccapp.mlm.domain.enums.MlmVolumeTreeType.PLACEMENT)
             """)
     long countDistinctSourceMembersByAccountHolderIdSince(UUID accountHolderId, OffsetDateTime fromDate);
 
@@ -64,6 +73,7 @@ public interface MlmVolumeLedgerRepository extends JpaRepository<MlmVolumeLedger
             select distinct l.accountHolderId
             from MlmVolumeLedger l
             where l.weekId = :weekId
+              and (l.treeType is null or l.treeType = com.ccapp.mlm.domain.enums.MlmVolumeTreeType.PLACEMENT)
             """)
     Set<UUID> findDistinctAccountHolderIdsByWeekId(int weekId);
 
@@ -72,6 +82,7 @@ public interface MlmVolumeLedgerRepository extends JpaRepository<MlmVolumeLedger
             from MlmVolumeLedger l
             where l.accountHolderId = :accountHolderId
               and l.weekId = :weekId
+              and (l.treeType is null or l.treeType = com.ccapp.mlm.domain.enums.MlmVolumeTreeType.PLACEMENT)
             """)
     BigDecimal sumVolumeByAccountHolderIdAndWeekId(UUID accountHolderId, int weekId);
 
@@ -80,6 +91,7 @@ public interface MlmVolumeLedgerRepository extends JpaRepository<MlmVolumeLedger
             from MlmVolumeLedger l
             where l.accountHolderId = :accountHolderId
               and l.weekId = :weekId
+              and (l.treeType is null or l.treeType = com.ccapp.mlm.domain.enums.MlmVolumeTreeType.PLACEMENT)
             """)
     long countDistinctSourceMembersByAccountHolderIdAndWeekId(UUID accountHolderId, int weekId);
 
@@ -88,6 +100,7 @@ public interface MlmVolumeLedgerRepository extends JpaRepository<MlmVolumeLedger
                    sum(l.volumeCv) as totalVolume,
                    count(l.id) as entriesCount
             from MlmVolumeLedger l
+            where l.treeType is null or l.treeType = com.ccapp.mlm.domain.enums.MlmVolumeTreeType.PLACEMENT
             group by l.weekId
             order by l.weekId desc
             """)

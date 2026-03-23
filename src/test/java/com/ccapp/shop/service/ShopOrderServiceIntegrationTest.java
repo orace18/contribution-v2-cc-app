@@ -3,10 +3,18 @@ package com.ccapp.shop.service;
 import com.ccapp.common.events.DomainEvent;
 import com.ccapp.common.events.DomainEventPublisher;
 import com.ccapp.common.exception.BusinessException;
+import com.ccapp.country.config.domain.enums.CountryConfigType;
+import com.ccapp.country.config.service.CountryConfigResolver;
 import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
 import com.ccapp.identity.account_holder.domain.enums.AccountType;
 import com.ccapp.identity.account_holder.repository.AccountHolderRepository;
 import com.ccapp.identity.account_holder.service.AccountHolderService;
+import com.ccapp.ledger.service.AccountingPostingService;
+import com.ccapp.payments.operation.domain.entity.Operation;
+import com.ccapp.payments.operation.domain.enums.OperationStatus;
+import com.ccapp.payments.operation.domain.enums.OperationType;
+import com.ccapp.payments.operation.service.OperationService;
+import com.ccapp.platform.config.domain.enums.PlatformConfigType;
 import com.ccapp.shop.domain.entity.ShopCommissionPool;
 import com.ccapp.shop.domain.entity.ShopOrder;
 import com.ccapp.shop.domain.entity.ShopProduct;
@@ -14,11 +22,15 @@ import com.ccapp.shop.domain.enums.ShopOrderStatus;
 import com.ccapp.shop.dto.CheckoutItemRequest;
 import com.ccapp.shop.dto.CheckoutRequest;
 import com.ccapp.shop.dto.ShopOrderResponse;
+import com.ccapp.shop.event.MarketplaceCommissionAllocatedEvent;
 import com.ccapp.shop.event.ShopOrderDeliveredEvent;
+import com.ccapp.shop.event.ShopOrderPaidEvent;
 import com.ccapp.shop.repository.ShopCommissionPoolRepository;
 import com.ccapp.shop.repository.ShopOrderItemRepository;
 import com.ccapp.shop.repository.ShopOrderRepository;
 import com.ccapp.shop.repository.ShopProductRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -33,10 +45,11 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 @DataJpaTest(properties = {
@@ -64,6 +77,14 @@ class ShopOrderServiceIntegrationTest {
     private AccountHolderService accountHolderService;
     @MockBean
     private DomainEventPublisher domainEventPublisher;
+    @MockBean
+    private CountryConfigResolver countryConfigResolver;
+    @MockBean
+    private OperationService operationService;
+    @MockBean
+    private AccountingPostingService accountingPostingService;
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @BeforeEach
     void setUp() {
@@ -71,6 +92,36 @@ class ShopOrderServiceIntegrationTest {
             UUID id = invocation.getArgument(0);
             return accountHolderRepository.findById(id).orElseThrow();
         });
+        CountryConfigResolver.ResolvedConfig countryGeneral = new CountryConfigResolver.ResolvedConfig(
+                "BJ",
+                CountryConfigType.GENERAL,
+                1,
+                "{}",
+                CountryConfigResolver.ConfigSource.COUNTRY
+        );
+        CountryConfigResolver.ResolvedPlatformConfig platformGeneral = new CountryConfigResolver.ResolvedPlatformConfig(
+                PlatformConfigType.GLOBAL_GENERAL,
+                1,
+                "{}"
+        );
+        ObjectNode countryPayload = objectMapper.createObjectNode();
+        ObjectNode platformPayload = objectMapper.createObjectNode();
+        when(countryConfigResolver.resolveActiveConfig(any(), eq(CountryConfigType.GENERAL))).thenReturn(countryGeneral);
+        when(countryConfigResolver.resolveActivePlatformConfig(PlatformConfigType.GLOBAL_GENERAL)).thenReturn(platformGeneral);
+        when(countryConfigResolver.payloadAsObjectNode(countryGeneral)).thenReturn(countryPayload);
+        when(countryConfigResolver.payloadAsObjectNode(platformGeneral)).thenReturn(platformPayload);
+        when(operationService.createInitiatedOperation(any(), any(), any(OperationType.class), any(), anyString(), anyString(), anyString()))
+                .thenAnswer(invocation -> Operation.builder()
+                        .id(UUID.randomUUID())
+                        .accountHolderId(invocation.getArgument(0))
+                        .actorUserId(invocation.getArgument(1))
+                        .type(invocation.getArgument(2))
+                        .status(OperationStatus.CONFIRMED)
+                        .amount(invocation.getArgument(3))
+                        .currency(invocation.getArgument(4))
+                        .idempotencyKey(invocation.getArgument(5))
+                        .description(invocation.getArgument(6))
+                        .build());
     }
 
     @Test
@@ -104,9 +155,9 @@ class ShopOrderServiceIntegrationTest {
         assertEquals(0, response.totalAmount().compareTo(new BigDecimal("20000.0000")));
 
         ShopCommissionPool pool = shopCommissionPoolRepository.findByOrderId(response.id()).orElseThrow();
-        assertEquals(0, pool.getPlatformCommission().compareTo(new BigDecimal("4000.0000")));
-        assertEquals(0, pool.getMerchantAmount().compareTo(new BigDecimal("16000.0000")));
-        assertEquals(0, pool.getMlmVolume().compareTo(new BigDecimal("2400.0000")));
+        assertEquals(0, pool.getPlatformCommission().compareTo(BigDecimal.ZERO.setScale(4)));
+        assertEquals(0, pool.getMerchantAmount().compareTo(BigDecimal.ZERO.setScale(4)));
+        assertEquals(0, pool.getMlmVolume().compareTo(BigDecimal.ZERO.setScale(4)));
 
         Mockito.verify(domainEventPublisher, Mockito.never()).publish(any());
     }
@@ -141,14 +192,21 @@ class ShopOrderServiceIntegrationTest {
         shopOrderService.updateStatus(created.id(), ShopOrderStatus.DELIVERED);
 
         ArgumentCaptor<DomainEvent> eventCaptor = ArgumentCaptor.forClass(DomainEvent.class);
-        Mockito.verify(domainEventPublisher, Mockito.times(1)).publish(eventCaptor.capture());
+        Mockito.verify(domainEventPublisher, Mockito.times(3)).publish(eventCaptor.capture());
 
-        DomainEvent event = eventCaptor.getValue();
-        assertInstanceOf(ShopOrderDeliveredEvent.class, event);
-        ShopOrderDeliveredEvent deliveredEvent = (ShopOrderDeliveredEvent) event;
+        List<DomainEvent> events = eventCaptor.getAllValues();
+        assertTrue(events.stream().anyMatch(ShopOrderPaidEvent.class::isInstance));
+        assertTrue(events.stream().anyMatch(MarketplaceCommissionAllocatedEvent.class::isInstance));
+        ShopOrderDeliveredEvent deliveredEvent = events.stream()
+                .filter(ShopOrderDeliveredEvent.class::isInstance)
+                .map(ShopOrderDeliveredEvent.class::cast)
+                .findFirst()
+                .orElseThrow();
         assertEquals(created.id(), deliveredEvent.orderId());
         assertEquals(buyerId, deliveredEvent.buyerId());
-        assertEquals(0, deliveredEvent.mlmVolume().compareTo(new BigDecimal("1200.0000")));
+        assertEquals(0, deliveredEvent.platformCommission().compareTo(new BigDecimal("2000.0000")));
+        assertEquals(0, deliveredEvent.merchantAmount().compareTo(new BigDecimal("8000.0000")));
+        assertEquals(0, deliveredEvent.mlmVolume().compareTo(new BigDecimal("2000.0000")));
 
         ShopOrder persisted = shopOrderRepository.findById(created.id()).orElseThrow();
         assertEquals(ShopOrderStatus.DELIVERED, persisted.getStatus());

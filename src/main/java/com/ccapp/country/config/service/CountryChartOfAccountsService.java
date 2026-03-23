@@ -424,6 +424,7 @@ public class CountryChartOfAccountsService {
             case PSP_CLEARING -> CountryMasterAccountTemplate.PSP_CLEARING;
             case BANKS -> CountryMasterAccountTemplate.BANKS;
             case CASH -> CountryMasterAccountTemplate.CASH;
+            case MARKETPLACE_POOL -> CountryMasterAccountTemplate.MARKETPLACE_POOL;
             case MLM_POOL, COMMISSION_POOL -> CountryMasterAccountTemplate.MLM_POOL;
             case SALES, MEMBERSHIP_FEES -> CountryMasterAccountTemplate.SALES;
             case LOAN_PORTFOLIO, PARTNER_SETTLEMENT -> CountryMasterAccountTemplate.LOAN_PORTFOLIO;

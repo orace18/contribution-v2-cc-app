@@ -219,8 +219,194 @@ class AccountingPostingServiceTest {
         verify(snapshotRepository, atLeast(8)).save(any(AccountBalanceSnapshot.class));
     }
 
+    @Test
+    void postMarketplacePayment_shouldDebitSourceAndCreditMarketplacePool() {
+        UUID buyerId = UUID.randomUUID();
+        Operation operation = Operation.builder()
+                .id(UUID.randomUUID())
+                .accountHolderId(buyerId)
+                .type(OperationType.MARKETPLACE_PAYMENT)
+                .status(OperationStatus.CONFIRMED)
+                .amount(new BigDecimal("10000.0000"))
+                .currency("XOF")
+                .build();
+        AccountHolder buyer = AccountHolder.builder()
+                .id(buyerId)
+                .firstName("Buyer")
+                .lastName("One")
+                .serviceCountryCode("BJ")
+                .build();
+
+        when(accountHolderRepository.findById(buyerId)).thenReturn(Optional.of(buyer));
+        when(accountingEventRepository.findByOperationId(operation.getId())).thenReturn(Optional.empty());
+        when(accountingEventRepository.save(any(AccountingEvent.class))).thenAnswer(invocation -> {
+            AccountingEvent input = invocation.getArgument(0);
+            return AccountingEvent.builder()
+                    .id(UUID.randomUUID())
+                    .operation(input.getOperation())
+                    .eventType(input.getEventType())
+                    .currency(input.getCurrency())
+                    .totalDebit(input.getTotalDebit())
+                    .totalCredit(input.getTotalCredit())
+                    .postedAt(input.getPostedAt())
+                    .build();
+        });
+        when(countryChartOfAccountsService.resolveSystemAccount(eq("BJ"), any(CountryAccountSystemTag.class)))
+                .thenAnswer(invocation -> systemAccountForCountry((CountryAccountSystemTag) invocation.getArgument(1), "BJ", "XOF"));
+        when(snapshotRepository.findByAccountCodeAndCurrency(anyString(), anyString())).thenReturn(Optional.empty());
+        when(snapshotRepository.save(any(AccountBalanceSnapshot.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        AccountingEvent event = accountingPostingService.postMarketplacePayment(operation, buyerId, "BJ", false);
+
+        assertNotNull(event.getId());
+        assertEquals(0, event.getTotalDebit().compareTo(new BigDecimal("10000.0000")));
+        assertEquals(0, event.getTotalCredit().compareTo(new BigDecimal("10000.0000")));
+
+        ArgumentCaptor<Iterable<LedgerEntry>> entriesCaptor = ArgumentCaptor.forClass(Iterable.class);
+        verify(ledgerEntryRepository).saveAll(entriesCaptor.capture());
+        List<LedgerEntry> entries = StreamSupport.stream(entriesCaptor.getValue().spliterator(), false).toList();
+
+        assertEquals(2, entries.size());
+        assertEquals(LedgerEntryType.DEBIT, entries.get(0).getEntryType());
+        assertEquals("470000001", entries.get(0).getAccountCode());
+        assertEquals(0, entries.get(0).getAmount().compareTo(new BigDecimal("10000.0000")));
+        assertEquals(LedgerEntryType.CREDIT, entries.get(1).getEntryType());
+        assertEquals("710000001", entries.get(1).getAccountCode());
+        assertEquals(0, entries.get(1).getAmount().compareTo(new BigDecimal("10000.0000")));
+    }
+
+    @Test
+    void postMarketplaceMerchantPayout_shouldDebitMarketplacePoolAndCreditMerchantWallet() {
+        UUID merchantId = UUID.randomUUID();
+        Operation operation = Operation.builder()
+                .id(UUID.randomUUID())
+                .accountHolderId(merchantId)
+                .type(OperationType.MARKETPLACE_MERCHANT_PAYOUT)
+                .status(OperationStatus.CONFIRMED)
+                .amount(new BigDecimal("8000.0000"))
+                .currency("XOF")
+                .build();
+        AccountHolder merchant = AccountHolder.builder()
+                .id(merchantId)
+                .firstName("Merchant")
+                .lastName("One")
+                .serviceCountryCode("BJ")
+                .build();
+
+        when(accountHolderRepository.findById(merchantId)).thenReturn(Optional.of(merchant));
+        when(accountingEventRepository.findByOperationId(operation.getId())).thenReturn(Optional.empty());
+        when(accountingEventRepository.save(any(AccountingEvent.class))).thenAnswer(invocation -> {
+            AccountingEvent input = invocation.getArgument(0);
+            return AccountingEvent.builder()
+                    .id(UUID.randomUUID())
+                    .operation(input.getOperation())
+                    .eventType(input.getEventType())
+                    .currency(input.getCurrency())
+                    .totalDebit(input.getTotalDebit())
+                    .totalCredit(input.getTotalCredit())
+                    .postedAt(input.getPostedAt())
+                    .build();
+        });
+        when(countryChartOfAccountsService.resolveSystemAccount(eq("BJ"), any(CountryAccountSystemTag.class)))
+                .thenAnswer(invocation -> systemAccountForCountry((CountryAccountSystemTag) invocation.getArgument(1), "BJ", "XOF"));
+        when(countryChartOfAccountsService.findOrCreateWallet(any(AccountHolder.class)))
+                .thenReturn(CountryChartAccount.builder()
+                        .id(UUID.randomUUID())
+                        .countryCode("BJ")
+                        .accountCode("460000456")
+                        .accountNumber("460000456")
+                        .accountName("Wallet Merchant One")
+                        .accountGroup(CountryAccountGroup.USER_WALLET)
+                        .currency("XOF")
+                        .accountHolderId(merchantId)
+                        .build());
+        when(snapshotRepository.findByAccountCodeAndCurrency(anyString(), anyString())).thenReturn(Optional.empty());
+        when(snapshotRepository.save(any(AccountBalanceSnapshot.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        accountingPostingService.postMarketplaceMerchantPayout(operation, merchantId, "BJ");
+
+        ArgumentCaptor<Iterable<LedgerEntry>> entriesCaptor = ArgumentCaptor.forClass(Iterable.class);
+        verify(ledgerEntryRepository).saveAll(entriesCaptor.capture());
+        List<LedgerEntry> entries = StreamSupport.stream(entriesCaptor.getValue().spliterator(), false).toList();
+
+        assertEquals(2, entries.size());
+        assertEquals(LedgerEntryType.DEBIT, entries.get(0).getEntryType());
+        assertEquals("710000001", entries.get(0).getAccountCode());
+        assertEquals(0, entries.get(0).getAmount().compareTo(new BigDecimal("8000.0000")));
+        assertEquals(LedgerEntryType.CREDIT, entries.get(1).getEntryType());
+        assertEquals("460000456", entries.get(1).getAccountCode());
+        assertEquals(0, entries.get(1).getAmount().compareTo(new BigDecimal("8000.0000")));
+    }
+
+    @Test
+    void postMarketplaceCommissionAllocation_shouldSplitCommissionAcrossFiveDestinationAccounts() {
+        Operation operation = Operation.builder()
+                .id(UUID.randomUUID())
+                .accountHolderId(UUID.randomUUID())
+                .type(OperationType.MARKETPLACE_COMMISSION_ALLOCATION)
+                .status(OperationStatus.CONFIRMED)
+                .amount(new BigDecimal("2000.0000"))
+                .currency("XOF")
+                .build();
+
+        when(accountingEventRepository.findByOperationId(operation.getId())).thenReturn(Optional.empty());
+        when(accountingEventRepository.save(any(AccountingEvent.class))).thenAnswer(invocation -> {
+            AccountingEvent input = invocation.getArgument(0);
+            return AccountingEvent.builder()
+                    .id(UUID.randomUUID())
+                    .operation(input.getOperation())
+                    .eventType(input.getEventType())
+                    .currency(input.getCurrency())
+                    .totalDebit(input.getTotalDebit())
+                    .totalCredit(input.getTotalCredit())
+                    .postedAt(input.getPostedAt())
+                    .build();
+        });
+        when(countryChartOfAccountsService.resolveSystemAccount(eq("BJ"), any(CountryAccountSystemTag.class)))
+                .thenAnswer(invocation -> systemAccountForCountry((CountryAccountSystemTag) invocation.getArgument(1), "BJ", "XOF"));
+        when(countryChartOfAccountsService.findOrCreate(eq("BJ"), eq(CountryAccountGroup.GUARANTEE_FUND), anyString()))
+                .thenReturn(sharedAccountForCountry("230000001", CountryAccountGroup.GUARANTEE_FUND, "BJ", "XOF"));
+        when(countryChartOfAccountsService.findOrCreate(eq("BJ"), eq(CountryAccountGroup.ADMINISTRATION), anyString()))
+                .thenReturn(sharedAccountForCountry("221000001", CountryAccountGroup.ADMINISTRATION, "BJ", "XOF"));
+        when(countryChartOfAccountsService.findOrCreate(eq("BJ"), eq(CountryAccountGroup.SOCIAL_FUND), anyString()))
+                .thenReturn(sharedAccountForCountry("231000001", CountryAccountGroup.SOCIAL_FUND, "BJ", "XOF"));
+        when(snapshotRepository.findByAccountCodeAndCurrency(anyString(), anyString())).thenReturn(Optional.empty());
+        when(snapshotRepository.save(any(AccountBalanceSnapshot.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        AccountingEvent event = accountingPostingService.postMarketplaceCommissionAllocation(operation, "BJ");
+
+        assertNotNull(event.getId());
+        assertEquals(0, event.getTotalDebit().compareTo(new BigDecimal("2000.0000")));
+        assertEquals(0, event.getTotalCredit().compareTo(new BigDecimal("2000.0000")));
+
+        ArgumentCaptor<Iterable<LedgerEntry>> entriesCaptor = ArgumentCaptor.forClass(Iterable.class);
+        verify(ledgerEntryRepository).saveAll(entriesCaptor.capture());
+        List<LedgerEntry> entries = StreamSupport.stream(entriesCaptor.getValue().spliterator(), false).toList();
+
+        assertEquals(6, entries.size());
+        assertEquals("710000001", entries.get(0).getAccountCode());
+        assertEquals(LedgerEntryType.DEBIT, entries.get(0).getEntryType());
+        assertEquals(0, entries.get(0).getAmount().compareTo(new BigDecimal("2000.0000")));
+        assertTrue(entries.stream().anyMatch(entry -> entry.getEntryType() == LedgerEntryType.CREDIT
+                && "230000001".equals(entry.getAccountCode())
+                && entry.getAmount().compareTo(new BigDecimal("300.0000")) == 0));
+        assertTrue(entries.stream().anyMatch(entry -> entry.getEntryType() == LedgerEntryType.CREDIT
+                && "220000001".equals(entry.getAccountCode())
+                && entry.getAmount().compareTo(new BigDecimal("200.0000")) == 0));
+        assertTrue(entries.stream().anyMatch(entry -> entry.getEntryType() == LedgerEntryType.CREDIT
+                && "221000001".equals(entry.getAccountCode())
+                && entry.getAmount().compareTo(new BigDecimal("200.0000")) == 0));
+        assertTrue(entries.stream().anyMatch(entry -> entry.getEntryType() == LedgerEntryType.CREDIT
+                && "231000001".equals(entry.getAccountCode())
+                && entry.getAmount().compareTo(new BigDecimal("100.0000")) == 0));
+        assertTrue(entries.stream().anyMatch(entry -> entry.getEntryType() == LedgerEntryType.CREDIT
+                && "680000001".equals(entry.getAccountCode())
+                && entry.getAmount().compareTo(new BigDecimal("1200.0000")) == 0));
+    }
+
     private CountryChartAccount systemAccount(CountryAccountSystemTag systemTag) {
         String accountCode = switch (systemTag) {
+            case MARKETPLACE_POOL -> "710000001";
             case MLM_POOL -> "680000001";
             case PLATFORM_REVENUE -> "220000001";
             case PSP_CLEARING -> "470000001";
@@ -230,6 +416,7 @@ class AccountingPostingServiceTest {
             case CIRCLE_POOL -> "140000001";
         };
         CountryAccountGroup accountGroup = switch (systemTag) {
+            case MARKETPLACE_POOL -> CountryAccountGroup.MARKETPLACE_POOL;
             case MLM_POOL -> CountryAccountGroup.MLM_POOL;
             case PLATFORM_REVENUE -> CountryAccountGroup.PLATFORM_REVENUE;
             case PSP_CLEARING -> CountryAccountGroup.PSP_CLEARING;
@@ -250,14 +437,30 @@ class AccountingPostingServiceTest {
     }
 
     private CountryChartAccount sharedAccount(String accountCode, CountryAccountGroup group) {
+        return sharedAccountForCountry(accountCode, group, "INT", "USD");
+    }
+
+    private CountryChartAccount systemAccountForCountry(CountryAccountSystemTag systemTag,
+                                                        String countryCode,
+                                                        String currency) {
+        CountryChartAccount base = systemAccount(systemTag);
+        base.setCountryCode(countryCode);
+        base.setCurrency(currency);
+        return base;
+    }
+
+    private CountryChartAccount sharedAccountForCountry(String accountCode,
+                                                        CountryAccountGroup group,
+                                                        String countryCode,
+                                                        String currency) {
         return CountryChartAccount.builder()
                 .id(UUID.randomUUID())
-                .countryCode("INT")
+                .countryCode(countryCode)
                 .accountCode(accountCode)
                 .accountNumber(accountCode)
                 .accountName(group.name())
                 .accountGroup(group)
-                .currency("USD")
+                .currency(currency)
                 .build();
     }
 }

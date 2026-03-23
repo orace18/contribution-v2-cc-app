@@ -52,6 +52,11 @@ public class AccountingPostingService {
     private final CountryRepository countryRepository;
 
     private static final BigDecimal ONE_HUNDRED = new BigDecimal("100");
+    private static final BigDecimal MARKETPLACE_GUARANTEE_PERCENT = new BigDecimal("15");
+    private static final BigDecimal MARKETPLACE_PLATFORM_PERCENT = new BigDecimal("10");
+    private static final BigDecimal MARKETPLACE_ADMINISTRATION_PERCENT = new BigDecimal("10");
+    private static final BigDecimal MARKETPLACE_SOCIAL_PERCENT = new BigDecimal("5");
+    private static final BigDecimal MARKETPLACE_MLM_PERCENT = new BigDecimal("60");
 
     @Transactional
     public AccountingEvent postConfirmedOperation(UUID operationId) {
@@ -95,6 +100,132 @@ public class AccountingPostingService {
                 new PostingLine(resolveAccountCode(countryCode, CountryAccountSystemTag.PLATFORM_REVENUE), LedgerEntryType.CREDIT,
                         taxAmount, operation.getCurrency(),
                         "Tax withholding on commission payout")
+        );
+        return accountingEventRepository.findByOperationId(operation.getId())
+                .orElseGet(() -> doPost(operation, lines, AccountingEventType.OPERATION_CONFIRMED));
+    }
+
+    @Transactional
+    public AccountingEvent postMarketplacePayment(Operation operation,
+                                                  UUID buyerAccountHolderId,
+                                                  String countryCode,
+                                                  boolean walletPayment) {
+        if (operation.getType() != OperationType.MARKETPLACE_PAYMENT) {
+            throw new BusinessException("Operation type must be MARKETPLACE_PAYMENT");
+        }
+        if (operation.getStatus() != OperationStatus.CONFIRMED) {
+            throw new BusinessException("Only CONFIRMED marketplace payment operations can be posted");
+        }
+        AccountHolder buyer = resolveAccountHolder(buyerAccountHolderId);
+        List<PostingLine> lines = List.of(
+                new PostingLine(
+                        walletPayment
+                                ? resolveWalletAccountCode(buyer)
+                                : resolveAccountCode(countryCode, CountryAccountSystemTag.PSP_CLEARING),
+                        LedgerEntryType.DEBIT,
+                        operation.getAmount(),
+                        operation.getCurrency(),
+                        walletPayment ? "Marketplace payment from wallet" : "Marketplace payment via PSP shadow"
+                ),
+                new PostingLine(
+                        resolveAccountCode(countryCode, CountryAccountSystemTag.MARKETPLACE_POOL),
+                        LedgerEntryType.CREDIT,
+                        operation.getAmount(),
+                        operation.getCurrency(),
+                        "Marketplace pool funding"
+                )
+        );
+        return accountingEventRepository.findByOperationId(operation.getId())
+                .orElseGet(() -> doPost(operation, lines, AccountingEventType.OPERATION_CONFIRMED));
+    }
+
+    @Transactional
+    public AccountingEvent postMarketplaceMerchantPayout(Operation operation,
+                                                         UUID merchantAccountHolderId,
+                                                         String countryCode) {
+        if (operation.getType() != OperationType.MARKETPLACE_MERCHANT_PAYOUT) {
+            throw new BusinessException("Operation type must be MARKETPLACE_MERCHANT_PAYOUT");
+        }
+        if (operation.getStatus() != OperationStatus.CONFIRMED) {
+            throw new BusinessException("Only CONFIRMED merchant payout operations can be posted");
+        }
+        AccountHolder merchant = resolveAccountHolder(merchantAccountHolderId);
+        List<PostingLine> lines = List.of(
+                new PostingLine(resolveAccountCode(countryCode, CountryAccountSystemTag.MARKETPLACE_POOL),
+                        LedgerEntryType.DEBIT,
+                        operation.getAmount(),
+                        operation.getCurrency(),
+                        "Marketplace merchant net payout"),
+                new PostingLine(resolveWalletAccountCode(merchant),
+                        LedgerEntryType.CREDIT,
+                        operation.getAmount(),
+                        operation.getCurrency(),
+                        "Merchant wallet credit")
+        );
+        return accountingEventRepository.findByOperationId(operation.getId())
+                .orElseGet(() -> doPost(operation, lines, AccountingEventType.OPERATION_CONFIRMED));
+    }
+
+    @Transactional
+    public AccountingEvent postMarketplaceMerchantPayoutReversal(Operation operation,
+                                                                 UUID merchantAccountHolderId,
+                                                                 String countryCode) {
+        if (operation.getType() != OperationType.MARKETPLACE_MERCHANT_PAYOUT_REVERSAL) {
+            throw new BusinessException("Operation type must be MARKETPLACE_MERCHANT_PAYOUT_REVERSAL");
+        }
+        if (operation.getStatus() != OperationStatus.CONFIRMED) {
+            throw new BusinessException("Only CONFIRMED merchant payout reversal operations can be posted");
+        }
+        AccountHolder merchant = resolveAccountHolder(merchantAccountHolderId);
+        List<PostingLine> lines = List.of(
+                new PostingLine(resolveWalletAccountCode(merchant),
+                        LedgerEntryType.DEBIT,
+                        operation.getAmount(),
+                        operation.getCurrency(),
+                        "Merchant payout reversal"),
+                new PostingLine(resolveAccountCode(countryCode, CountryAccountSystemTag.MARKETPLACE_POOL),
+                        LedgerEntryType.CREDIT,
+                        operation.getAmount(),
+                        operation.getCurrency(),
+                        "Marketplace pool restoration")
+        );
+        return accountingEventRepository.findByOperationId(operation.getId())
+                .orElseGet(() -> doPost(operation, lines, AccountingEventType.OPERATION_CONFIRMED));
+    }
+
+    @Transactional
+    public AccountingEvent postMarketplaceCommissionAllocation(Operation operation,
+                                                               String countryCode) {
+        if (operation.getType() != OperationType.MARKETPLACE_COMMISSION_ALLOCATION) {
+            throw new BusinessException("Operation type must be MARKETPLACE_COMMISSION_ALLOCATION");
+        }
+        if (operation.getStatus() != OperationStatus.CONFIRMED) {
+            throw new BusinessException("Only CONFIRMED marketplace commission allocation operations can be posted");
+        }
+        MarketplaceAllocationProfile profile = resolveMarketplaceAllocationProfile(countryCode);
+        List<PostingLine> lines = buildMarketplaceAllocationLines(
+                operation,
+                profile,
+                true
+        );
+        return accountingEventRepository.findByOperationId(operation.getId())
+                .orElseGet(() -> doPost(operation, lines, AccountingEventType.OPERATION_CONFIRMED));
+    }
+
+    @Transactional
+    public AccountingEvent postMarketplaceCommissionAllocationReversal(Operation operation,
+                                                                       String countryCode) {
+        if (operation.getType() != OperationType.MARKETPLACE_COMMISSION_ALLOCATION_REVERSAL) {
+            throw new BusinessException("Operation type must be MARKETPLACE_COMMISSION_ALLOCATION_REVERSAL");
+        }
+        if (operation.getStatus() != OperationStatus.CONFIRMED) {
+            throw new BusinessException("Only CONFIRMED marketplace commission allocation reversal operations can be posted");
+        }
+        MarketplaceAllocationProfile profile = resolveMarketplaceAllocationProfile(countryCode);
+        List<PostingLine> lines = buildMarketplaceAllocationLines(
+                operation,
+                profile,
+                false
         );
         return accountingEventRepository.findByOperationId(operation.getId())
                 .orElseGet(() -> doPost(operation, lines, AccountingEventType.OPERATION_CONFIRMED));
@@ -192,6 +323,21 @@ public class AccountingPostingService {
             );
             case COMMISSION_PAYOUT -> throw new BusinessException(
                     "Use postCommissionPayout for COMMISSION_PAYOUT operations"
+            );
+            case MARKETPLACE_PAYMENT -> throw new BusinessException(
+                    "Use postMarketplacePayment for MARKETPLACE_PAYMENT operations"
+            );
+            case MARKETPLACE_MERCHANT_PAYOUT -> throw new BusinessException(
+                    "Use postMarketplaceMerchantPayout for MARKETPLACE_MERCHANT_PAYOUT operations"
+            );
+            case MARKETPLACE_COMMISSION_ALLOCATION -> throw new BusinessException(
+                    "Use postMarketplaceCommissionAllocation for MARKETPLACE_COMMISSION_ALLOCATION operations"
+            );
+            case MARKETPLACE_MERCHANT_PAYOUT_REVERSAL -> throw new BusinessException(
+                    "Use postMarketplaceMerchantPayoutReversal for MARKETPLACE_MERCHANT_PAYOUT_REVERSAL operations"
+            );
+            case MARKETPLACE_COMMISSION_ALLOCATION_REVERSAL -> throw new BusinessException(
+                    "Use postMarketplaceCommissionAllocationReversal for MARKETPLACE_COMMISSION_ALLOCATION_REVERSAL operations"
             );
         };
     }
@@ -349,6 +495,78 @@ public class AccountingPostingService {
         return account.getAccountCode();
     }
 
+    private List<PostingLine> buildMarketplaceAllocationLines(Operation operation,
+                                                              MarketplaceAllocationProfile profile,
+                                                              boolean allocateOutOfPool) {
+        BigDecimal mlmAmount = allocationAmount(operation.getAmount(), profile.mlmPercent());
+        BigDecimal guaranteeAmount = allocationAmount(operation.getAmount(), profile.guaranteePercent());
+        BigDecimal platformAmount = allocationAmount(operation.getAmount(), profile.platformPercent());
+        BigDecimal administrationAmount = allocationAmount(operation.getAmount(), profile.administrationPercent());
+        BigDecimal socialAmount = operation.getAmount()
+                .subtract(mlmAmount)
+                .subtract(guaranteeAmount)
+                .subtract(platformAmount)
+                .subtract(administrationAmount)
+                .setScale(4, RoundingMode.HALF_UP);
+
+        if (allocateOutOfPool) {
+            return List.of(
+                    new PostingLine(profile.marketplacePoolAccountCode(), LedgerEntryType.DEBIT,
+                            operation.getAmount(), operation.getCurrency(), "Marketplace commission allocation"),
+                    new PostingLine(profile.guaranteeFundAccountCode(), LedgerEntryType.CREDIT,
+                            guaranteeAmount, operation.getCurrency(), "Marketplace guarantee allocation"),
+                    new PostingLine(profile.platformFeeAccountCode(), LedgerEntryType.CREDIT,
+                            platformAmount, operation.getCurrency(), "Marketplace platform fee allocation"),
+                    new PostingLine(profile.administrationAccountCode(), LedgerEntryType.CREDIT,
+                            administrationAmount, operation.getCurrency(), "Marketplace administration allocation"),
+                    new PostingLine(profile.socialFundAccountCode(), LedgerEntryType.CREDIT,
+                            socialAmount, operation.getCurrency(), "Marketplace social fund allocation"),
+                    new PostingLine(profile.mlmPoolAccountCode(), LedgerEntryType.CREDIT,
+                            mlmAmount, operation.getCurrency(), "Marketplace MLM pool allocation")
+            );
+        }
+
+        return List.of(
+                new PostingLine(profile.guaranteeFundAccountCode(), LedgerEntryType.DEBIT,
+                        guaranteeAmount, operation.getCurrency(), "Marketplace guarantee allocation reversal"),
+                new PostingLine(profile.platformFeeAccountCode(), LedgerEntryType.DEBIT,
+                        platformAmount, operation.getCurrency(), "Marketplace platform fee allocation reversal"),
+                new PostingLine(profile.administrationAccountCode(), LedgerEntryType.DEBIT,
+                        administrationAmount, operation.getCurrency(), "Marketplace administration allocation reversal"),
+                new PostingLine(profile.socialFundAccountCode(), LedgerEntryType.DEBIT,
+                        socialAmount, operation.getCurrency(), "Marketplace social fund allocation reversal"),
+                new PostingLine(profile.mlmPoolAccountCode(), LedgerEntryType.DEBIT,
+                        mlmAmount, operation.getCurrency(), "Marketplace MLM pool allocation reversal"),
+                new PostingLine(profile.marketplacePoolAccountCode(), LedgerEntryType.CREDIT,
+                        operation.getAmount(), operation.getCurrency(), "Marketplace pool restoration")
+        );
+    }
+
+    private MarketplaceAllocationProfile resolveMarketplaceAllocationProfile(String countryCode) {
+        BigDecimal totalPercent = MARKETPLACE_MLM_PERCENT
+                .add(MARKETPLACE_GUARANTEE_PERCENT)
+                .add(MARKETPLACE_PLATFORM_PERCENT)
+                .add(MARKETPLACE_ADMINISTRATION_PERCENT)
+                .add(MARKETPLACE_SOCIAL_PERCENT)
+                .setScale(4, RoundingMode.HALF_UP);
+        if (totalPercent.compareTo(ONE_HUNDRED.setScale(4, RoundingMode.HALF_UP)) != 0) {
+            throw new BusinessException("Marketplace allocation percentages must sum to 100");
+        }
+        return new MarketplaceAllocationProfile(
+                resolveAccountCode(countryCode, CountryAccountSystemTag.MARKETPLACE_POOL),
+                resolveAccountCode(countryCode, CountryAccountSystemTag.MLM_POOL),
+                countryChartOfAccountsService.findOrCreate(countryCode, CountryAccountGroup.GUARANTEE_FUND, "Guarantee Fund").getAccountCode(),
+                resolveAccountCode(countryCode, CountryAccountSystemTag.PLATFORM_REVENUE),
+                countryChartOfAccountsService.findOrCreate(countryCode, CountryAccountGroup.ADMINISTRATION, "Administration").getAccountCode(),
+                countryChartOfAccountsService.findOrCreate(countryCode, CountryAccountGroup.SOCIAL_FUND, "Social Fund").getAccountCode(),
+                MARKETPLACE_GUARANTEE_PERCENT,
+                MARKETPLACE_PLATFORM_PERCENT,
+                MARKETPLACE_ADMINISTRATION_PERCENT,
+                MARKETPLACE_SOCIAL_PERCENT,
+                MARKETPLACE_MLM_PERCENT
+        );
+    }
+
     /**
      * Resolves the wallet account code for a specific account holder.
      * Auto-creates the wallet if it does not exist (safety guarantee).
@@ -477,6 +695,21 @@ public class AccountingPostingService {
             BigDecimal platformFeePercent,
             BigDecimal administrationPercent,
             BigDecimal socialFundPercent
+    ) {
+    }
+
+    private record MarketplaceAllocationProfile(
+            String marketplacePoolAccountCode,
+            String mlmPoolAccountCode,
+            String guaranteeFundAccountCode,
+            String platformFeeAccountCode,
+            String administrationAccountCode,
+            String socialFundAccountCode,
+            BigDecimal guaranteePercent,
+            BigDecimal platformPercent,
+            BigDecimal administrationPercent,
+            BigDecimal socialPercent,
+            BigDecimal mlmPercent
     ) {
     }
 }
