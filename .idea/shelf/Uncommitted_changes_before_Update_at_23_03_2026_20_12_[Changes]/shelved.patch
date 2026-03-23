@@ -1,0 +1,429 @@
+Index: src/main/java/com/ccapp/identity/wallet/repository/WalletRepository.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>package com.ccapp.identity.wallet.repository;\n\nimport com.ccapp.identity.wallet.domain.entity.Wallet;\nimport org.springframework.data.jpa.repository.JpaRepository;\n\nimport java.util.List;\nimport java.util.Optional;\nimport java.util.UUID;\n\npublic interface WalletRepository extends JpaRepository<Wallet, UUID> {\n\n    List<Wallet> findByAccountHolderIdOrderByCreatedAtDesc(UUID accountHolderId);\n\n    Optional<Wallet> findFirstByAccountHolderIdAndStatusOrderByCreatedAtDesc(UUID accountHolderId, String status);\n}\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/com/ccapp/identity/wallet/repository/WalletRepository.java b/src/main/java/com/ccapp/identity/wallet/repository/WalletRepository.java
+--- a/src/main/java/com/ccapp/identity/wallet/repository/WalletRepository.java	(revision 0f55b52b402fcc8a3a0426bd8ec5fefe4f264bb9)
++++ b/src/main/java/com/ccapp/identity/wallet/repository/WalletRepository.java	(date 1774284326383)
+@@ -1,6 +1,7 @@
+ package com.ccapp.identity.wallet.repository;
+ 
+ import com.ccapp.identity.wallet.domain.entity.Wallet;
++import com.ccapp.wallet.domain.enums.WalletType;
+ import org.springframework.data.jpa.repository.JpaRepository;
+ 
+ import java.util.List;
+@@ -12,4 +13,11 @@
+     List<Wallet> findByAccountHolderIdOrderByCreatedAtDesc(UUID accountHolderId);
+ 
+     Optional<Wallet> findFirstByAccountHolderIdAndStatusOrderByCreatedAtDesc(UUID accountHolderId, String status);
++
++    /** Used for phone-based wallet identity lookup (1 phone = 1 wallet). */
++    Optional<Wallet> findByMobileMoneyNumber(String mobileMoneyNumber);
++
++    /** Used by agent deposit to locate the AGENT wallet of a given account holder. */
++    Optional<Wallet> findFirstByAccountHolderIdAndWalletTypeAndStatus(
++            UUID accountHolderId, WalletType walletType, String status);
+ }
+Index: src/main/java/com/ccapp/identity/wallet/domain/entity/Wallet.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>package com.ccapp.identity.wallet.domain.entity;\n\nimport jakarta.persistence.*;\nimport lombok.*;\n\nimport java.time.OffsetDateTime;\nimport java.util.UUID;\n\n@Getter\n@Setter\n@Builder\n@NoArgsConstructor\n@AllArgsConstructor\n@Entity\n@Table(name = \"wallets\", indexes = {\n        @Index(name = \"idx_wallets_account_holder_id\", columnList = \"account_holder_id\")\n})\npublic class Wallet {\n\n    @Id\n    @GeneratedValue(strategy = GenerationType.UUID)\n    private UUID id;\n\n    @Column(name = \"account_holder_id\", nullable = false)\n    private UUID accountHolderId;\n\n    @Column(name = \"provider\", nullable = false, length = 64)\n    private String provider;\n\n    @Column(name = \"mobile_money_number\", nullable = false, length = 32)\n    private String mobileMoneyNumber;\n\n    @Column(name = \"status\", nullable = false, length = 32)\n    private String status;\n\n    @Column(name = \"created_at\", nullable = false, updatable = false)\n    private OffsetDateTime createdAt;\n\n    @PrePersist\n    protected void onCreate() {\n        if (createdAt == null) {\n            createdAt = OffsetDateTime.now();\n        }\n    }\n}\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/com/ccapp/identity/wallet/domain/entity/Wallet.java b/src/main/java/com/ccapp/identity/wallet/domain/entity/Wallet.java
+--- a/src/main/java/com/ccapp/identity/wallet/domain/entity/Wallet.java	(revision 0f55b52b402fcc8a3a0426bd8ec5fefe4f264bb9)
++++ b/src/main/java/com/ccapp/identity/wallet/domain/entity/Wallet.java	(date 1774284167855)
+@@ -1,5 +1,6 @@
+ package com.ccapp.identity.wallet.domain.entity;
+ 
++import com.ccapp.wallet.domain.enums.WalletType;
+ import jakarta.persistence.*;
+ import lombok.*;
+ 
+@@ -33,6 +34,10 @@
+     @Column(name = "status", nullable = false, length = 32)
+     private String status;
+ 
++    @Enumerated(EnumType.STRING)
++    @Column(name = "wallet_type", nullable = false, length = 16)
++    private WalletType walletType;
++
+     @Column(name = "created_at", nullable = false, updatable = false)
+     private OffsetDateTime createdAt;
+ 
+@@ -41,5 +46,8 @@
+         if (createdAt == null) {
+             createdAt = OffsetDateTime.now();
+         }
++        if (walletType == null) {
++            walletType = WalletType.USER;
++        }
+     }
+ }
+Index: .idea/compiler.xml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+><?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<project version=\"4\">\n  <component name=\"CompilerConfiguration\">\n    <annotationProcessing>\n      <profile default=\"true\" name=\"Default\" enabled=\"true\" />\n      <profile name=\"Annotation profile for cc-app-backend\" enabled=\"true\">\n        <sourceOutputDir name=\"target/generated-sources/annotations\" />\n        <sourceTestOutputDir name=\"target/generated-test-sources/test-annotations\" />\n        <outputRelativeToContentRoot value=\"true\" />\n        <processorPath useClasspath=\"false\">\n          <entry name=\"$MAVEN_REPOSITORY$/org/projectlombok/lombok/1.18.42/lombok-1.18.42.jar\" />\n          <entry name=\"$MAVEN_REPOSITORY$/org/mapstruct/mapstruct-processor/1.5.5.Final/mapstruct-processor-1.5.5.Final.jar\" />\n          <entry name=\"$MAVEN_REPOSITORY$/org/projectlombok/lombok/1.18.42/lombok-1.18.42.jar\" />\n          <entry name=\"$MAVEN_REPOSITORY$/org/mapstruct/mapstruct-processor/1.5.5.Final/mapstruct-processor-1.5.5.Final.jar\" />\n        </processorPath>\n        <module name=\"cc-app-backend\" />\n      </profile>\n    </annotationProcessing>\n    <bytecodeTargetLevel>\n      <module name=\"abonnement\" target=\"21\" />\n    </bytecodeTargetLevel>\n  </component>\n  <component name=\"JavacSettings\">\n    <option name=\"ADDITIONAL_OPTIONS_OVERRIDE\">\n      <module name=\"abonnement\" options=\"-parameters\" />\n      <module name=\"cc-app-backend\" options=\"-parameters -Amapstruct.defaultComponentModel=spring\" />\n    </option>\n  </component>\n</project>
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/.idea/compiler.xml b/.idea/compiler.xml
+--- a/.idea/compiler.xml	(revision 0f55b52b402fcc8a3a0426bd8ec5fefe4f264bb9)
++++ b/.idea/compiler.xml	(date 1774027353444)
+@@ -10,8 +10,6 @@
+         <processorPath useClasspath="false">
+           <entry name="$MAVEN_REPOSITORY$/org/projectlombok/lombok/1.18.42/lombok-1.18.42.jar" />
+           <entry name="$MAVEN_REPOSITORY$/org/mapstruct/mapstruct-processor/1.5.5.Final/mapstruct-processor-1.5.5.Final.jar" />
+-          <entry name="$MAVEN_REPOSITORY$/org/projectlombok/lombok/1.18.42/lombok-1.18.42.jar" />
+-          <entry name="$MAVEN_REPOSITORY$/org/mapstruct/mapstruct-processor/1.5.5.Final/mapstruct-processor-1.5.5.Final.jar" />
+         </processorPath>
+         <module name="cc-app-backend" />
+       </profile>
+Index: .idea/workspace.xml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+><?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<project version=\"4\">\n  <component name=\"AutoImportSettings\">\n    <option name=\"autoReloadType\" value=\"SELECTIVE\" />\n  </component>\n  <component name=\"ChangeListManager\">\n    <list default=\"true\" id=\"b353ea51-7e7b-473f-9dc0-91faa829de30\" name=\"Changes\" comment=\"revue de countries\">\n      <change beforePath=\"$PROJECT_DIR$/.idea/workspace.xml\" beforeDir=\"false\" afterPath=\"$PROJECT_DIR$/.idea/workspace.xml\" afterDir=\"false\" />\n    </list>\n    <option name=\"SHOW_DIALOG\" value=\"false\" />\n    <option name=\"HIGHLIGHT_CONFLICTS\" value=\"true\" />\n    <option name=\"HIGHLIGHT_NON_ACTIVE_CHANGELIST\" value=\"false\" />\n    <option name=\"LAST_RESOLUTION\" value=\"IGNORE\" />\n  </component>\n  <component name=\"EmbeddingIndexingInfo\">\n    <option name=\"cachedIndexableFilesCount\" value=\"861\" />\n  </component>\n  <component name=\"FileTemplateManagerImpl\">\n    <option name=\"RECENT_TEMPLATES\">\n      <list>\n        <option value=\"Dockerfile\" />\n      </list>\n    </option>\n  </component>\n  <component name=\"Git.Settings\">\n    <option name=\"RECENT_GIT_ROOT_PATH\" value=\"$PROJECT_DIR$\" />\n  </component>\n  <component name=\"GitLabMergeRequestFiltersHistory\">{\n  &quot;lastFilter&quot;: {\n    &quot;state&quot;: &quot;OPENED&quot;,\n    &quot;assignee&quot;: {\n      &quot;type&quot;: &quot;org.jetbrains.plugins.gitlab.mergerequest.ui.filters.GitLabMergeRequestsFiltersValue.MergeRequestsMemberFilterValue.MergeRequestsAssigneeFilterValue&quot;,\n      &quot;username&quot;: &quot;smiledev229&quot;,\n      &quot;fullname&quot;: &quot;Orace EDJO&quot;\n    }\n  }\n}</component>\n  <component name=\"GitLabMergeRequestsSettings\">{\n  &quot;selectedUrlAndAccountId&quot;: {\n    &quot;first&quot;: &quot;https://repo.hesystems-group.com/club-chretien/cc-backend-monolitic.git&quot;,\n    &quot;second&quot;: &quot;bdc0fa4e-f75d-4a66-9991-7b4b0e4ef646&quot;\n  }\n}</component>\n  <component name=\"GitToolBoxStore\">\n    <option name=\"recentBranches\">\n      <RecentBranches>\n        <option name=\"branchesForRepo\">\n          <list>\n            <RecentBranchesForRepo>\n              <option name=\"branches\">\n                <list>\n                  <RecentBranch>\n                    <option name=\"branchName\" value=\"dev\" />\n                    <option name=\"lastUsedInstant\" value=\"1772617406\" />\n                  </RecentBranch>\n                  <RecentBranch>\n                    <option name=\"branchName\" value=\"master\" />\n                    <option name=\"lastUsedInstant\" value=\"1772617405\" />\n                  </RecentBranch>\n                </list>\n              </option>\n              <option name=\"repositoryRootUrl\" value=\"file://$PROJECT_DIR$\" />\n            </RecentBranchesForRepo>\n          </list>\n        </option>\n      </RecentBranches>\n    </option>\n  </component>\n  <component name=\"MavenImportPreferences\">\n    <option name=\"generalSettings\">\n      <MavenGeneralSettings>\n        <option name=\"mavenHomeTypeForPersistence\" value=\"WRAPPER\" />\n      </MavenGeneralSettings>\n    </option>\n  </component>\n  <component name=\"McpProjectServerCommands\">\n    <commands />\n    <urls />\n  </component>\n  <component name=\"ProjectColorInfo\">{\n  &quot;associatedIndex&quot;: 2\n}</component>\n  <component name=\"ProjectId\" id=\"3ARR0KLInnQxlk9jRd78dGlRQfn\" />\n  <component name=\"ProjectViewState\">\n    <option name=\"hideEmptyMiddlePackages\" value=\"true\" />\n    <option name=\"showLibraryContents\" value=\"true\" />\n  </component>\n  <component name=\"PropertiesComponent\">{\n  &quot;keyToString&quot;: {\n    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,\n    &quot;RunOnceActivity.MCP Project settings loaded&quot;: &quot;true&quot;,\n    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,\n    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,\n    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,\n    &quot;RunOnceActivity.restore.workspace.module&quot;: &quot;true&quot;,\n    &quot;Spring Boot.CcAppBackendApplication.executor&quot;: &quot;Run&quot;,\n    &quot;com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1&quot;: &quot;true&quot;,\n    &quot;git-widget-placeholder&quot;: &quot;dev&quot;,\n    &quot;junie.onboarding.icon.badge.shown&quot;: &quot;true&quot;,\n    &quot;kotlin-language-version-configured&quot;: &quot;true&quot;,\n    &quot;last_opened_file_path&quot;: &quot;/home/user/Documents/backoofice&quot;,\n    &quot;settings.editor.selected.configurable&quot;: &quot;preferences.pluginManager&quot;,\n    &quot;to.speed.mode.migration.done&quot;: &quot;true&quot;\n  }\n}</component>\n  <component name=\"RecentsManager\">\n    <key name=\"CopyFile.RECENT_KEYS\">\n      <recent name=\"$PROJECT_DIR$/src/main/resources/firebase\" />\n    </key>\n  </component>\n  <component name=\"RunManager\">\n    <configuration name=\"CcAppBackendApplication\" type=\"SpringBootApplicationConfigurationType\" factoryName=\"Spring Boot\" temporary=\"true\" nameIsGenerated=\"true\">\n      <option name=\"FRAME_DEACTIVATION_UPDATE_POLICY\" value=\"UnknownPolicyInFreeMode\" />\n      <module name=\"cc-app-backend\" />\n      <option name=\"SPRING_BOOT_MAIN_CLASS\" value=\"com.ccapp.CcAppBackendApplication\" />\n      <extension name=\"coverage\">\n        <pattern>\n          <option name=\"PATTERN\" value=\"com.ccapp.*\" />\n          <option name=\"ENABLED\" value=\"true\" />\n        </pattern>\n      </extension>\n      <method v=\"2\">\n        <option name=\"Make\" enabled=\"true\" />\n      </method>\n    </configuration>\n    <recent_temporary>\n      <list>\n        <item itemvalue=\"Spring Boot.CcAppBackendApplication\" />\n      </list>\n    </recent_temporary>\n  </component>\n  <component name=\"SharedIndexes\">\n    <attachedChunks>\n      <set>\n        <option value=\"bundled-jdk-30f59d01ecdd-2fc7cc6b9a17-intellij.indexing.shared.core-IU-253.32098.37\" />\n      </set>\n    </attachedChunks>\n  </component>\n  <component name=\"TaskManager\">\n    <task active=\"true\" id=\"Default\" summary=\"Default task\">\n      <changelist id=\"b353ea51-7e7b-473f-9dc0-91faa829de30\" name=\"Changes\" comment=\"\" />\n      <created>1772553173766</created>\n      <option name=\"number\" value=\"Default\" />\n      <option name=\"presentableId\" value=\"Default\" />\n      <updated>1772553173766</updated>\n    </task>\n    <task id=\"LOCAL-00018\" summary=\"Revue du docker-compose-dev.yaml\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1772706055588</created>\n      <option name=\"number\" value=\"00018\" />\n      <option name=\"presentableId\" value=\"LOCAL-00018\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1772706055588</updated>\n    </task>\n    <task id=\"LOCAL-00019\" summary=\"Mise a jour de OpenApi\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1772706587921</created>\n      <option name=\"number\" value=\"00019\" />\n      <option name=\"presentableId\" value=\"LOCAL-00019\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1772706587921</updated>\n    </task>\n    <task id=\"LOCAL-00020\" summary=\"Mise a jour de OpenApi\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1772714543854</created>\n      <option name=\"number\" value=\"00020\" />\n      <option name=\"presentableId\" value=\"LOCAL-00020\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1772714543854</updated>\n    </task>\n    <task id=\"LOCAL-00021\" summary=\"Ajout de progress et de circle\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1772872172218</created>\n      <option name=\"number\" value=\"00021\" />\n      <option name=\"presentableId\" value=\"LOCAL-00021\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1772872172218</updated>\n    </task>\n    <task id=\"LOCAL-00022\" summary=\"Ajout des apis admin, credit, scoring\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1772889207278</created>\n      <option name=\"number\" value=\"00022\" />\n      <option name=\"presentableId\" value=\"LOCAL-00022\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1772889207278</updated>\n    </task>\n    <task id=\"LOCAL-00023\" summary=\"Ajout des apis admin, credit, scoring\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1772889817415</created>\n      <option name=\"number\" value=\"00023\" />\n      <option name=\"presentableId\" value=\"LOCAL-00023\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1772889817415</updated>\n    </task>\n    <task id=\"LOCAL-00024\" summary=\"justement onboarding\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1772920071555</created>\n      <option name=\"number\" value=\"00024\" />\n      <option name=\"presentableId\" value=\"LOCAL-00024\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1772920071555</updated>\n    </task>\n    <task id=\"LOCAL-00025\" summary=\"Ajout de MinIO pour les images\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1772922738201</created>\n      <option name=\"number\" value=\"00025\" />\n      <option name=\"presentableId\" value=\"LOCAL-00025\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1772922738201</updated>\n    </task>\n    <task id=\"LOCAL-00026\" summary=\"Ajout de MinIO pour les images\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1772923440342</created>\n      <option name=\"number\" value=\"00026\" />\n      <option name=\"presentableId\" value=\"LOCAL-00026\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1772923440342</updated>\n    </task>\n    <task id=\"LOCAL-00027\" summary=\"Config MinIO\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1772923865594</created>\n      <option name=\"number\" value=\"00027\" />\n      <option name=\"presentableId\" value=\"LOCAL-00027\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1772923865594</updated>\n    </task>\n    <task id=\"LOCAL-00028\" summary=\"Revue du base name\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773063816250</created>\n      <option name=\"number\" value=\"00028\" />\n      <option name=\"presentableId\" value=\"LOCAL-00028\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773063816250</updated>\n    </task>\n    <task id=\"LOCAL-00029\" summary=\"Revue du base name\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773064844077</created>\n      <option name=\"number\" value=\"00029\" />\n      <option name=\"presentableId\" value=\"LOCAL-00029\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773064844077</updated>\n    </task>\n    <task id=\"LOCAL-00030\" summary=\"Refact de onboarding\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773128986428</created>\n      <option name=\"number\" value=\"00030\" />\n      <option name=\"presentableId\" value=\"LOCAL-00030\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773128986428</updated>\n    </task>\n    <task id=\"LOCAL-00031\" summary=\"Configuration pays\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773131598588</created>\n      <option name=\"number\" value=\"00031\" />\n      <option name=\"presentableId\" value=\"LOCAL-00031\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773131598588</updated>\n    </task>\n    <task id=\"LOCAL-00032\" summary=\"Configuration pays\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773133762062</created>\n      <option name=\"number\" value=\"00032\" />\n      <option name=\"presentableId\" value=\"LOCAL-00032\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773133762062</updated>\n    </task>\n    <task id=\"LOCAL-00033\" summary=\"Refact de pays\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773136059107</created>\n      <option name=\"number\" value=\"00033\" />\n      <option name=\"presentableId\" value=\"LOCAL-00033\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773136059107</updated>\n    </task>\n    <task id=\"LOCAL-00034\" summary=\"Refact de retour api\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773137346445</created>\n      <option name=\"number\" value=\"00034\" />\n      <option name=\"presentableId\" value=\"LOCAL-00034\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773137346445</updated>\n    </task>\n    <task id=\"LOCAL-00035\" summary=\"Ajout de inscription sans phone\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773141624570</created>\n      <option name=\"number\" value=\"00035\" />\n      <option name=\"presentableId\" value=\"LOCAL-00035\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773141624570</updated>\n    </task>\n    <task id=\"LOCAL-00036\" summary=\"Ajout des apis de community\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773150348520</created>\n      <option name=\"number\" value=\"00036\" />\n      <option name=\"presentableId\" value=\"LOCAL-00036\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773150348520</updated>\n    </task>\n    <task id=\"LOCAL-00037\" summary=\"Ajout des apis de community\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773151430123</created>\n      <option name=\"number\" value=\"00037\" />\n      <option name=\"presentableId\" value=\"LOCAL-00037\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773151430123</updated>\n    </task>\n    <task id=\"LOCAL-00038\" summary=\"Revue des configs firebase\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773155647468</created>\n      <option name=\"number\" value=\"00038\" />\n      <option name=\"presentableId\" value=\"LOCAL-00038\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773155647468</updated>\n    </task>\n    <task id=\"LOCAL-00039\" summary=\"Revue des configs firebase\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773156976862</created>\n      <option name=\"number\" value=\"00039\" />\n      <option name=\"presentableId\" value=\"LOCAL-00039\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773156976862</updated>\n    </task>\n    <task id=\"LOCAL-00040\" summary=\"Revue des cors\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773159592488</created>\n      <option name=\"number\" value=\"00040\" />\n      <option name=\"presentableId\" value=\"LOCAL-00040\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773159592488</updated>\n    </task>\n    <task id=\"LOCAL-00041\" summary=\"Ajout de logs\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773161541860</created>\n      <option name=\"number\" value=\"00041\" />\n      <option name=\"presentableId\" value=\"LOCAL-00041\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773161541860</updated>\n    </task>\n    <task id=\"LOCAL-00042\" summary=\"Firebase\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773162136384</created>\n      <option name=\"number\" value=\"00042\" />\n      <option name=\"presentableId\" value=\"LOCAL-00042\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773162136384</updated>\n    </task>\n    <task id=\"LOCAL-00043\" summary=\"Firebase config\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773214146706</created>\n      <option name=\"number\" value=\"00043\" />\n      <option name=\"presentableId\" value=\"LOCAL-00043\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773214146706</updated>\n    </task>\n    <task id=\"LOCAL-00044\" summary=\"Refact\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773248158165</created>\n      <option name=\"number\" value=\"00044\" />\n      <option name=\"presentableId\" value=\"LOCAL-00044\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773248158166</updated>\n    </task>\n    <task id=\"LOCAL-00045\" summary=\"Correction de la configuration firebase\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773265272409</created>\n      <option name=\"number\" value=\"00045\" />\n      <option name=\"presentableId\" value=\"LOCAL-00045\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773265272409</updated>\n    </task>\n    <task id=\"LOCAL-00046\" summary=\"Correction de la configuration firebase\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773265784930</created>\n      <option name=\"number\" value=\"00046\" />\n      <option name=\"presentableId\" value=\"LOCAL-00046\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773265784931</updated>\n    </task>\n    <task id=\"LOCAL-00047\" summary=\"Firebase location\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773266805186</created>\n      <option name=\"number\" value=\"00047\" />\n      <option name=\"presentableId\" value=\"LOCAL-00047\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773266805186</updated>\n    </task>\n    <task id=\"LOCAL-00048\" summary=\"Reajustement firebase\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773267952307</created>\n      <option name=\"number\" value=\"00048\" />\n      <option name=\"presentableId\" value=\"LOCAL-00048\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773267952307</updated>\n    </task>\n    <task id=\"LOCAL-00049\" summary=\"Config smtp et secret key\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773302320648</created>\n      <option name=\"number\" value=\"00049\" />\n      <option name=\"presentableId\" value=\"LOCAL-00049\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773302320648</updated>\n    </task>\n    <task id=\"LOCAL-00050\" summary=\"Config des secrets key\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773303826976</created>\n      <option name=\"number\" value=\"00050\" />\n      <option name=\"presentableId\" value=\"LOCAL-00050\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773303826977</updated>\n    </task>\n    <task id=\"LOCAL-00051\" summary=\"Ajout de url su back-office\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773304382788</created>\n      <option name=\"number\" value=\"00051\" />\n      <option name=\"presentableId\" value=\"LOCAL-00051\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773304382788</updated>\n    </task>\n    <task id=\"LOCAL-00052\" summary=\"Revue du profil\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773305396216</created>\n      <option name=\"number\" value=\"00052\" />\n      <option name=\"presentableId\" value=\"LOCAL-00052\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773305396216</updated>\n    </task>\n    <task id=\"LOCAL-00053\" summary=\"Mise en place des base mlm\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773306858244</created>\n      <option name=\"number\" value=\"00053\" />\n      <option name=\"presentableId\" value=\"LOCAL-00053\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773306858245</updated>\n    </task>\n    <task id=\"LOCAL-00054\" summary=\"Mise en place des base mlm commissions\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773312360936</created>\n      <option name=\"number\" value=\"00054\" />\n      <option name=\"presentableId\" value=\"LOCAL-00054\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773312360938</updated>\n    </task>\n    <task id=\"LOCAL-00055\" summary=\"Revue des migrations flyway\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773656352150</created>\n      <option name=\"number\" value=\"00055\" />\n      <option name=\"presentableId\" value=\"LOCAL-00055\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773656352151</updated>\n    </task>\n    <task id=\"LOCAL-00056\" summary=\"Revue des migrations flyway\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773656970302</created>\n      <option name=\"number\" value=\"00056\" />\n      <option name=\"presentableId\" value=\"LOCAL-00056\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773656970302</updated>\n    </task>\n    <task id=\"LOCAL-00057\" summary=\"Ajout de fonctionnalités\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773673787607</created>\n      <option name=\"number\" value=\"00057\" />\n      <option name=\"presentableId\" value=\"LOCAL-00057\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773673787607</updated>\n    </task>\n    <task id=\"LOCAL-00058\" summary=\"Revue des configs\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773762631389</created>\n      <option name=\"number\" value=\"00058\" />\n      <option name=\"presentableId\" value=\"LOCAL-00058\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773762631389</updated>\n    </task>\n    <task id=\"LOCAL-00059\" summary=\"Revue des configs\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773838409831</created>\n      <option name=\"number\" value=\"00059\" />\n      <option name=\"presentableId\" value=\"LOCAL-00059\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773838409832</updated>\n    </task>\n    <task id=\"LOCAL-00060\" summary=\"Refactoring configs\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773841922271</created>\n      <option name=\"number\" value=\"00060\" />\n      <option name=\"presentableId\" value=\"LOCAL-00060\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773841922271</updated>\n    </task>\n    <task id=\"LOCAL-00061\" summary=\"Refactoring configs pays\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773845111981</created>\n      <option name=\"number\" value=\"00061\" />\n      <option name=\"presentableId\" value=\"LOCAL-00061\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773845111981</updated>\n    </task>\n    <task id=\"LOCAL-00062\" summary=\"Refactoring\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773908751919</created>\n      <option name=\"number\" value=\"00062\" />\n      <option name=\"presentableId\" value=\"LOCAL-00062\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773908751919</updated>\n    </task>\n    <task id=\"LOCAL-00063\" summary=\"Resolve error\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773911030186</created>\n      <option name=\"number\" value=\"00063\" />\n      <option name=\"presentableId\" value=\"LOCAL-00063\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773911030186</updated>\n    </task>\n    <task id=\"LOCAL-00064\" summary=\"chat et revue\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773918601729</created>\n      <option name=\"number\" value=\"00064\" />\n      <option name=\"presentableId\" value=\"LOCAL-00064\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773918601729</updated>\n    </task>\n    <task id=\"LOCAL-00065\" summary=\"revue de post\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773919792847</created>\n      <option name=\"number\" value=\"00065\" />\n      <option name=\"presentableId\" value=\"LOCAL-00065\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773919792848</updated>\n    </task>\n    <task id=\"LOCAL-00066\" summary=\"revue de countries\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773925927114</created>\n      <option name=\"number\" value=\"00066\" />\n      <option name=\"presentableId\" value=\"LOCAL-00066\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773925927114</updated>\n    </task>\n    <option name=\"localTasksCounter\" value=\"67\" />\n    <servers />\n  </component>\n  <component name=\"Vcs.Log.Tabs.Properties\">\n    <option name=\"TAB_STATES\">\n      <map>\n        <entry key=\"MAIN\">\n          <value>\n            <State />\n          </value>\n        </entry>\n      </map>\n    </option>\n  </component>\n  <component name=\"VcsManagerConfiguration\">\n    <MESSAGE value=\"Revue des configs firebase\" />\n    <MESSAGE value=\"Revue des cors\" />\n    <MESSAGE value=\"Ajout de logs\" />\n    <MESSAGE value=\"Firebase\" />\n    <MESSAGE value=\"Firebase config\" />\n    <MESSAGE value=\"Refact\" />\n    <MESSAGE value=\"Correction de la configuration firebase\" />\n    <MESSAGE value=\"Firebase location\" />\n    <MESSAGE value=\"Reajustement firebase\" />\n    <MESSAGE value=\"Config smtp et secret key\" />\n    <MESSAGE value=\"Config des secrets key\" />\n    <MESSAGE value=\"Ajout de url su back-office\" />\n    <MESSAGE value=\"Revue du profil\" />\n    <MESSAGE value=\"Mise en place des base mlm\" />\n    <MESSAGE value=\"Mise en place des base mlm commissions\" />\n    <MESSAGE value=\"Revue des migrations flyway\" />\n    <MESSAGE value=\"Ajout de fonctionnalités\" />\n    <MESSAGE value=\"Revue des configs\" />\n    <MESSAGE value=\"Refactoring configs\" />\n    <MESSAGE value=\"Refactoring configs pays\" />\n    <MESSAGE value=\"Refactoring\" />\n    <MESSAGE value=\"Resolve error\" />\n    <MESSAGE value=\"chat et revue\" />\n    <MESSAGE value=\"revue de post\" />\n    <MESSAGE value=\"revue de countries\" />\n    <option name=\"LAST_COMMIT_MESSAGE\" value=\"revue de countries\" />\n  </component>\n  <component name=\"XSLT-Support.FileAssociations.UIState\">\n    <expand />\n    <select />\n  </component>\n</project>
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/.idea/workspace.xml b/.idea/workspace.xml
+--- a/.idea/workspace.xml	(revision 0f55b52b402fcc8a3a0426bd8ec5fefe4f264bb9)
++++ b/.idea/workspace.xml	(date 1774293113443)
+@@ -4,8 +4,13 @@
+     <option name="autoReloadType" value="SELECTIVE" />
+   </component>
+   <component name="ChangeListManager">
+-    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="revue de countries">
++    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Config mail revue">
++      <change beforePath="$PROJECT_DIR$/.idea/compiler.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/compiler.xml" afterDir="false" />
+       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
++      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/wallet/domain/entity/Wallet.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/wallet/domain/entity/Wallet.java" afterDir="false" />
++      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/wallet/repository/WalletRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/wallet/repository/WalletRepository.java" afterDir="false" />
++      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/ledger/service/AccountingPostingService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/ledger/service/AccountingPostingService.java" afterDir="false" />
++      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/payments/operation/domain/enums/OperationType.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/payments/operation/domain/enums/OperationType.java" afterDir="false" />
+     </list>
+     <option name="SHOW_DIALOG" value="false" />
+     <option name="HIGHLIGHT_CONFLICTS" value="true" />
+@@ -13,7 +18,7 @@
+     <option name="LAST_RESOLUTION" value="IGNORE" />
+   </component>
+   <component name="EmbeddingIndexingInfo">
+-    <option name="cachedIndexableFilesCount" value="861" />
++    <option name="cachedIndexableFilesCount" value="893" />
+   </component>
+   <component name="FileTemplateManagerImpl">
+     <option name="RECENT_TEMPLATES">
+@@ -143,70 +148,6 @@
+       <option name="number" value="Default" />
+       <option name="presentableId" value="Default" />
+       <updated>1772553173766</updated>
+-    </task>
+-    <task id="LOCAL-00018" summary="Revue du docker-compose-dev.yaml">
+-      <option name="closed" value="true" />
+-      <created>1772706055588</created>
+-      <option name="number" value="00018" />
+-      <option name="presentableId" value="LOCAL-00018" />
+-      <option name="project" value="LOCAL" />
+-      <updated>1772706055588</updated>
+-    </task>
+-    <task id="LOCAL-00019" summary="Mise a jour de OpenApi">
+-      <option name="closed" value="true" />
+-      <created>1772706587921</created>
+-      <option name="number" value="00019" />
+-      <option name="presentableId" value="LOCAL-00019" />
+-      <option name="project" value="LOCAL" />
+-      <updated>1772706587921</updated>
+-    </task>
+-    <task id="LOCAL-00020" summary="Mise a jour de OpenApi">
+-      <option name="closed" value="true" />
+-      <created>1772714543854</created>
+-      <option name="number" value="00020" />
+-      <option name="presentableId" value="LOCAL-00020" />
+-      <option name="project" value="LOCAL" />
+-      <updated>1772714543854</updated>
+-    </task>
+-    <task id="LOCAL-00021" summary="Ajout de progress et de circle">
+-      <option name="closed" value="true" />
+-      <created>1772872172218</created>
+-      <option name="number" value="00021" />
+-      <option name="presentableId" value="LOCAL-00021" />
+-      <option name="project" value="LOCAL" />
+-      <updated>1772872172218</updated>
+-    </task>
+-    <task id="LOCAL-00022" summary="Ajout des apis admin, credit, scoring">
+-      <option name="closed" value="true" />
+-      <created>1772889207278</created>
+-      <option name="number" value="00022" />
+-      <option name="presentableId" value="LOCAL-00022" />
+-      <option name="project" value="LOCAL" />
+-      <updated>1772889207278</updated>
+-    </task>
+-    <task id="LOCAL-00023" summary="Ajout des apis admin, credit, scoring">
+-      <option name="closed" value="true" />
+-      <created>1772889817415</created>
+-      <option name="number" value="00023" />
+-      <option name="presentableId" value="LOCAL-00023" />
+-      <option name="project" value="LOCAL" />
+-      <updated>1772889817415</updated>
+-    </task>
+-    <task id="LOCAL-00024" summary="justement onboarding">
+-      <option name="closed" value="true" />
+-      <created>1772920071555</created>
+-      <option name="number" value="00024" />
+-      <option name="presentableId" value="LOCAL-00024" />
+-      <option name="project" value="LOCAL" />
+-      <updated>1772920071555</updated>
+-    </task>
+-    <task id="LOCAL-00025" summary="Ajout de MinIO pour les images">
+-      <option name="closed" value="true" />
+-      <created>1772922738201</created>
+-      <option name="number" value="00025" />
+-      <option name="presentableId" value="LOCAL-00025" />
+-      <option name="project" value="LOCAL" />
+-      <updated>1772922738201</updated>
+     </task>
+     <task id="LOCAL-00026" summary="Ajout de MinIO pour les images">
+       <option name="closed" value="true" />
+@@ -536,7 +477,71 @@
+       <option name="project" value="LOCAL" />
+       <updated>1773925927114</updated>
+     </task>
+-    <option name="localTasksCounter" value="67" />
++    <task id="LOCAL-00067" summary="Revue model comptable">
++      <option name="closed" value="true" />
++      <created>1773992896543</created>
++      <option name="number" value="00067" />
++      <option name="presentableId" value="LOCAL-00067" />
++      <option name="project" value="LOCAL" />
++      <updated>1773992896544</updated>
++    </task>
++    <task id="LOCAL-00068" summary="Revue model comptable">
++      <option name="closed" value="true" />
++      <created>1773993829626</created>
++      <option name="number" value="00068" />
++      <option name="presentableId" value="LOCAL-00068" />
++      <option name="project" value="LOCAL" />
++      <updated>1773993829626</updated>
++    </task>
++    <task id="LOCAL-00069" summary="Revue model comptable">
++      <option name="closed" value="true" />
++      <created>1773999281401</created>
++      <option name="number" value="00069" />
++      <option name="presentableId" value="LOCAL-00069" />
++      <option name="project" value="LOCAL" />
++      <updated>1773999281401</updated>
++    </task>
++    <task id="LOCAL-00070" summary="Gestion des admins">
++      <option name="closed" value="true" />
++      <created>1774017286650</created>
++      <option name="number" value="00070" />
++      <option name="presentableId" value="LOCAL-00070" />
++      <option name="project" value="LOCAL" />
++      <updated>1774017286650</updated>
++    </task>
++    <task id="LOCAL-00071" summary="Gestion des admins">
++      <option name="closed" value="true" />
++      <created>1774018084800</created>
++      <option name="number" value="00071" />
++      <option name="presentableId" value="LOCAL-00071" />
++      <option name="project" value="LOCAL" />
++      <updated>1774018084800</updated>
++    </task>
++    <task id="LOCAL-00072" summary="Config mail">
++      <option name="closed" value="true" />
++      <created>1774018603106</created>
++      <option name="number" value="00072" />
++      <option name="presentableId" value="LOCAL-00072" />
++      <option name="project" value="LOCAL" />
++      <updated>1774018603106</updated>
++    </task>
++    <task id="LOCAL-00073" summary="Config mail revue">
++      <option name="closed" value="true" />
++      <created>1774019255113</created>
++      <option name="number" value="00073" />
++      <option name="presentableId" value="LOCAL-00073" />
++      <option name="project" value="LOCAL" />
++      <updated>1774019255113</updated>
++    </task>
++    <task id="LOCAL-00074" summary="Config mail revue">
++      <option name="closed" value="true" />
++      <created>1774020347773</created>
++      <option name="number" value="00074" />
++      <option name="presentableId" value="LOCAL-00074" />
++      <option name="project" value="LOCAL" />
++      <updated>1774020347773</updated>
++    </task>
++    <option name="localTasksCounter" value="75" />
+     <servers />
+   </component>
+   <component name="Vcs.Log.Tabs.Properties">
+@@ -551,10 +556,6 @@
+     </option>
+   </component>
+   <component name="VcsManagerConfiguration">
+-    <MESSAGE value="Revue des configs firebase" />
+-    <MESSAGE value="Revue des cors" />
+-    <MESSAGE value="Ajout de logs" />
+-    <MESSAGE value="Firebase" />
+     <MESSAGE value="Firebase config" />
+     <MESSAGE value="Refact" />
+     <MESSAGE value="Correction de la configuration firebase" />
+@@ -576,7 +577,11 @@
+     <MESSAGE value="chat et revue" />
+     <MESSAGE value="revue de post" />
+     <MESSAGE value="revue de countries" />
+-    <option name="LAST_COMMIT_MESSAGE" value="revue de countries" />
++    <MESSAGE value="Revue model comptable" />
++    <MESSAGE value="Gestion des admins" />
++    <MESSAGE value="Config mail" />
++    <MESSAGE value="Config mail revue" />
++    <option name="LAST_COMMIT_MESSAGE" value="Config mail revue" />
+   </component>
+   <component name="XSLT-Support.FileAssociations.UIState">
+     <expand />
+Index: src/main/java/com/ccapp/payments/operation/domain/enums/OperationType.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>package com.ccapp.payments.operation.domain.enums;\n\npublic enum OperationType {\n    SUBSCRIPTION,\n    ADJUSTMENT,\n    LOAN_DISBURSEMENT,\n    LOAN_REPAYMENT,\n    COMMISSION_PAYOUT\n}\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/com/ccapp/payments/operation/domain/enums/OperationType.java b/src/main/java/com/ccapp/payments/operation/domain/enums/OperationType.java
+--- a/src/main/java/com/ccapp/payments/operation/domain/enums/OperationType.java	(revision 0f55b52b402fcc8a3a0426bd8ec5fefe4f264bb9)
++++ b/src/main/java/com/ccapp/payments/operation/domain/enums/OperationType.java	(date 1774284636832)
+@@ -5,5 +5,13 @@
+     ADJUSTMENT,
+     LOAN_DISBURSEMENT,
+     LOAN_REPAYMENT,
+-    COMMISSION_PAYOUT
++    COMMISSION_PAYOUT,
++    /** Peer-to-peer wallet payment (sender debited, recipient credited). */
++    WALLET_PAYMENT,
++    /** Inbound deposit funded by a PSP payment (PSP_CLEARING debited, wallet credited). */
++    WALLET_DEPOSIT_PSP,
++    /** Agent cash-in (agent float debited, user wallet credited). */
++    WALLET_DEPOSIT_AGENT,
++    /** Outbound withdrawal to PSP payout (wallet debited, PSP_CLEARING credited). */
++    WALLET_WITHDRAWAL
+ }
+Index: src/main/java/com/ccapp/ledger/service/AccountingPostingService.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>package com.ccapp.ledger.service;\n\nimport com.ccapp.ledger.domain.entity.AccountBalanceSnapshot;\nimport com.ccapp.ledger.domain.entity.AccountingEvent;\nimport com.ccapp.ledger.domain.entity.LedgerEntry;\nimport com.ccapp.ledger.domain.enums.AccountingEventType;\nimport com.ccapp.ledger.domain.enums.LedgerEntryType;\nimport com.ccapp.country.config.domain.enums.CountryAccountGroup;\nimport com.ccapp.ledger.repository.AccountBalanceSnapshotRepository;\nimport com.ccapp.ledger.repository.AccountingEventRepository;\nimport com.ccapp.ledger.repository.LedgerEntryRepository;\nimport com.ccapp.country.config.domain.entity.CountryChartAccount;\nimport com.ccapp.country.config.domain.enums.CountryConfigType;\nimport com.ccapp.country.config.domain.enums.CountryAccountSystemTag;\nimport com.ccapp.country.config.service.CountryConfigResolver;\nimport com.ccapp.country.config.service.CountryChartOfAccountsService;\nimport com.ccapp.country.domain.entity.Country;\nimport com.ccapp.country.repository.CountryRepository;\nimport com.ccapp.identity.account_holder.domain.entity.AccountHolder;\nimport com.ccapp.identity.account_holder.repository.AccountHolderRepository;\nimport com.ccapp.payments.operation.domain.entity.Operation;\nimport com.ccapp.payments.operation.domain.enums.OperationStatus;\nimport com.ccapp.payments.operation.domain.enums.OperationType;\nimport com.ccapp.payments.operation.service.OperationService;\nimport com.ccapp.common.exception.BusinessException;\nimport lombok.RequiredArgsConstructor;\nimport lombok.extern.slf4j.Slf4j;\nimport org.springframework.dao.DataIntegrityViolationException;\nimport org.springframework.stereotype.Service;\nimport org.springframework.transaction.annotation.Transactional;\n\nimport java.math.BigDecimal;\nimport java.math.RoundingMode;\nimport java.time.OffsetDateTime;\nimport java.util.ArrayList;\nimport java.util.List;\nimport java.util.Locale;\nimport java.util.UUID;\n\n@Service\n@RequiredArgsConstructor\n@Slf4j\npublic class AccountingPostingService {\n\n    private final OperationService operationService;\n    private final AccountingEventRepository accountingEventRepository;\n    private final LedgerEntryRepository ledgerEntryRepository;\n    private final AccountBalanceSnapshotRepository snapshotRepository;\n    private final CountryChartOfAccountsService countryChartOfAccountsService;\n    private final CountryConfigResolver countryConfigResolver;\n    private final AccountHolderRepository accountHolderRepository;\n    private final CountryRepository countryRepository;\n\n    private static final BigDecimal ONE_HUNDRED = new BigDecimal(\"100\");\n\n    @Transactional\n    public AccountingEvent postConfirmedOperation(UUID operationId) {\n        return accountingEventRepository.findByOperationId(operationId)\n                .orElseGet(() -> doPost(operationService.getById(operationId)));\n    }\n\n    @Transactional\n    public AccountingEvent postAdjustment(Operation operation) {\n        return accountingEventRepository.findByOperationId(operation.getId())\n                .orElseGet(() -> doPost(operation));\n    }\n\n    @Transactional\n    public AccountingEvent postCommissionPayout(Operation operation,\n                                                UUID beneficiaryAccountHolderId,\n                                                BigDecimal taxAmount,\n                                                BigDecimal netAmount) {\n        if (operation.getType() != OperationType.COMMISSION_PAYOUT) {\n            throw new BusinessException(\"Operation type must be COMMISSION_PAYOUT\");\n        }\n        if (taxAmount == null || taxAmount.signum() < 0 || netAmount == null || netAmount.signum() < 0) {\n            throw new BusinessException(\"Invalid payout tax/net amounts\");\n        }\n        if (operation.getAmount().compareTo(taxAmount.add(netAmount)) != 0) {\n            throw new BusinessException(\"Payout amount mismatch against tax/net split\");\n        }\n        if (operation.getStatus() != OperationStatus.CONFIRMED) {\n            throw new BusinessException(\"Only CONFIRMED operations can be posted\");\n        }\n\n        String countryCode = resolveOperationalCountryCode(operation.getAccountHolderId(), operation.getCurrency());\n        AccountHolder beneficiary = resolveAccountHolder(beneficiaryAccountHolderId);\n        List<PostingLine> lines = List.of(\n                new PostingLine(resolveAccountCode(countryCode, CountryAccountSystemTag.MLM_POOL), LedgerEntryType.DEBIT,\n                        operation.getAmount(), operation.getCurrency(),\n                        \"Commission payout gross expense\"),\n                new PostingLine(resolveWalletAccountCode(beneficiary), LedgerEntryType.CREDIT,\n                        netAmount, operation.getCurrency(),\n                        \"Member wallet credit\"),\n                new PostingLine(resolveAccountCode(countryCode, CountryAccountSystemTag.PLATFORM_REVENUE), LedgerEntryType.CREDIT,\n                        taxAmount, operation.getCurrency(),\n                        \"Tax withholding on commission payout\")\n        );\n        return accountingEventRepository.findByOperationId(operation.getId())\n                .orElseGet(() -> doPost(operation, lines, AccountingEventType.OPERATION_CONFIRMED));\n    }\n\n    private AccountingEvent doPost(Operation operation) {\n        if (operation.getStatus() != OperationStatus.CONFIRMED) {\n            throw new BusinessException(\"Only CONFIRMED operations can be posted\");\n        }\n        AccountingEventType eventType = operation.getType() == OperationType.ADJUSTMENT\n                ? AccountingEventType.ADJUSTMENT_POSTED\n                : AccountingEventType.OPERATION_CONFIRMED;\n        String countryCode = resolveOperationalCountryCode(operation.getAccountHolderId(), operation.getCurrency());\n        AccountHolder accountHolder = resolveAccountHolder(operation.getAccountHolderId());\n        List<PostingLine> lines = buildPostingLines(operation, countryCode, accountHolder);\n        return doPost(operation, lines, eventType);\n    }\n\n    private AccountingEvent doPost(Operation operation, List<PostingLine> lines, AccountingEventType eventType) {\n        if (operation.getStatus() != OperationStatus.CONFIRMED) {\n            throw new BusinessException(\"Only CONFIRMED operations can be posted\");\n        }\n\n        validateCurrency(lines, operation.getCurrency());\n        validateBalanced(lines);\n\n        BigDecimal totalDebit = lines.stream()\n                .filter(line -> line.entryType() == LedgerEntryType.DEBIT)\n                .map(PostingLine::amount)\n                .reduce(BigDecimal.ZERO, BigDecimal::add);\n        BigDecimal totalCredit = lines.stream()\n                .filter(line -> line.entryType() == LedgerEntryType.CREDIT)\n                .map(PostingLine::amount)\n                .reduce(BigDecimal.ZERO, BigDecimal::add);\n\n        AccountingEvent event = AccountingEvent.builder()\n                .operation(operation)\n                .eventType(eventType)\n                .currency(operation.getCurrency())\n                .totalDebit(totalDebit)\n                .totalCredit(totalCredit)\n                .postedAt(OffsetDateTime.now())\n                .build();\n\n        AccountingEvent savedEvent;\n        try {\n            savedEvent = accountingEventRepository.save(event);\n        } catch (DataIntegrityViolationException ex) {\n            return accountingEventRepository.findByOperationId(operation.getId())\n                    .orElseThrow(() -> ex);\n        }\n\n        List<LedgerEntry> entries = new ArrayList<>();\n        for (int i = 0; i < lines.size(); i++) {\n            PostingLine line = lines.get(i);\n            entries.add(LedgerEntry.builder()\n                    .event(savedEvent)\n                    .lineNo(i + 1)\n                    .accountCode(line.accountCode())\n                    .entryType(line.entryType())\n                    .amount(line.amount())\n                    .currency(line.currency())\n                    .description(line.description())\n                    .build());\n        }\n\n        ledgerEntryRepository.saveAll(entries);\n        updateSnapshots(entries);\n        log.info(\"ledger_posting_completed operationId={} operationType={} eventType={} entries={} totalDebit={} totalCredit={}\",\n                operation.getId(), operation.getType(), eventType, entries.size(), totalDebit, totalCredit);\n        return savedEvent;\n    }\n\n    private List<PostingLine> buildPostingLines(Operation operation, String countryCode, AccountHolder accountHolder) {\n        String walletCode = resolveWalletAccountCode(accountHolder);\n        return switch (operation.getType()) {\n            case SUBSCRIPTION -> buildSubscriptionPostingLines(operation, countryCode, walletCode);\n            case ADJUSTMENT -> List.of(\n                    new PostingLine(resolveAccountCode(countryCode, CountryAccountSystemTag.PLATFORM_REVENUE), LedgerEntryType.DEBIT,\n                            operation.getAmount(), operation.getCurrency(), \"Reconciliation adjustment\"),\n                    new PostingLine(walletCode, LedgerEntryType.CREDIT,\n                            operation.getAmount(), operation.getCurrency(), \"Adjustment against cash\")\n            );\n            case LOAN_DISBURSEMENT -> List.of(\n                    new PostingLine(resolveAccountCode(countryCode, CountryAccountSystemTag.LOAN_PORTFOLIO), LedgerEntryType.DEBIT,\n                            operation.getAmount(), operation.getCurrency(), \"Loan principal recognized\"),\n                    new PostingLine(walletCode, LedgerEntryType.CREDIT,\n                            operation.getAmount(), operation.getCurrency(), \"Loan disbursement cash-out\")\n            );\n            case LOAN_REPAYMENT -> List.of(\n                    new PostingLine(walletCode, LedgerEntryType.DEBIT,\n                            operation.getAmount(), operation.getCurrency(), \"Loan repayment cash-in\"),\n                    new PostingLine(resolveAccountCode(countryCode, CountryAccountSystemTag.LOAN_PORTFOLIO), LedgerEntryType.CREDIT,\n                            operation.getAmount(), operation.getCurrency(), \"Loan principal repayment\")\n            );\n            case COMMISSION_PAYOUT -> throw new BusinessException(\n                    \"Use postCommissionPayout for COMMISSION_PAYOUT operations\"\n            );\n        };\n    }\n\n    private List<PostingLine> buildSubscriptionPostingLines(Operation operation,\n                                                            String countryCode,\n                                                            String walletCode) {\n        SubscriptionPostingProfile profile = resolveSubscriptionPostingProfile(countryCode);\n        String paymentSourceAccountCode = operation.getPspReference() == null || operation.getPspReference().isBlank()\n                ? walletCode\n                : resolveAccountCode(countryCode, CountryAccountSystemTag.PSP_CLEARING);\n\n        BigDecimal commissionPoolAmount = allocationAmount(operation.getAmount(), profile.commissionPoolPercent());\n        BigDecimal guaranteeFundAmount = allocationAmount(operation.getAmount(), profile.guaranteeFundPercent());\n        BigDecimal platformFeeAmount = allocationAmount(operation.getAmount(), profile.platformFeePercent());\n        BigDecimal administrationAmount = allocationAmount(operation.getAmount(), profile.administrationPercent());\n        BigDecimal socialFundAmount = operation.getAmount()\n                .subtract(commissionPoolAmount)\n                .subtract(guaranteeFundAmount)\n                .subtract(platformFeeAmount)\n                .subtract(administrationAmount)\n                .setScale(4, RoundingMode.HALF_UP);\n\n        return List.of(\n                new PostingLine(paymentSourceAccountCode, LedgerEntryType.DEBIT,\n                        operation.getAmount(), operation.getCurrency(), \"Subscription payment recognition\"),\n                new PostingLine(profile.membershipRevenueAccountCode(), LedgerEntryType.CREDIT,\n                        operation.getAmount(), operation.getCurrency(), \"Cotisations des membres\"),\n                new PostingLine(profile.membershipRevenueAccountCode(), LedgerEntryType.DEBIT,\n                        operation.getAmount(), operation.getCurrency(), \"Subscription pre-allocation\"),\n                new PostingLine(profile.commissionPoolAccountCode(), LedgerEntryType.CREDIT,\n                        commissionPoolAmount, operation.getCurrency(), \"Commission pool allocation\"),\n                new PostingLine(profile.guaranteeFundAccountCode(), LedgerEntryType.CREDIT,\n                        guaranteeFundAmount, operation.getCurrency(), \"Guarantee fund allocation\"),\n                new PostingLine(profile.platformFeeAccountCode(), LedgerEntryType.CREDIT,\n                        platformFeeAmount, operation.getCurrency(), \"Platform fee allocation\"),\n                new PostingLine(profile.administrationAccountCode(), LedgerEntryType.CREDIT,\n                        administrationAmount, operation.getCurrency(), \"Administration allocation\"),\n                new PostingLine(profile.socialFundAccountCode(), LedgerEntryType.CREDIT,\n                        socialFundAmount, operation.getCurrency(), \"Social fund allocation\")\n        );\n    }\n\n    private SubscriptionPostingProfile resolveSubscriptionPostingProfile(String countryCode) {\n        var generalConfig = countryConfigResolver.resolveActiveConfig(countryCode, CountryConfigType.GENERAL);\n        var accountingConfig = countryConfigResolver.resolveActiveConfig(countryCode, CountryConfigType.ACCOUNTING);\n        var generalPayload = countryConfigResolver.payloadAsObjectNode(generalConfig);\n        var accountingPayload = countryConfigResolver.payloadAsObjectNode(accountingConfig);\n        var accountsNode = accountingPayload.has(\"accounts\") && accountingPayload.get(\"accounts\").isObject()\n                ? (com.fasterxml.jackson.databind.node.ObjectNode) accountingPayload.get(\"accounts\")\n                : accountingPayload.has(\"preallocationAccounts\") && accountingPayload.get(\"preallocationAccounts\").isObject()\n                ? (com.fasterxml.jackson.databind.node.ObjectNode) accountingPayload.get(\"preallocationAccounts\")\n                : accountingPayload;\n\n        BigDecimal commissionPoolPercent = requiredPercentage(generalPayload, \"commissionPool\", \"commission_pool\");\n        BigDecimal guaranteeFundPercent = requiredPercentage(generalPayload, \"guaranteeFund\", \"guarantee_fund\");\n        BigDecimal platformFeePercent = requiredPercentage(generalPayload, \"platformFee\", \"platform_fee\");\n        BigDecimal administrationPercent = requiredPercentage(generalPayload, \"administration\", \"administrationFee\");\n        BigDecimal socialFundPercent = requiredPercentage(generalPayload, \"socialFund\", \"social_fund\");\n        BigDecimal totalPercent = commissionPoolPercent\n                .add(guaranteeFundPercent)\n                .add(platformFeePercent)\n                .add(administrationPercent)\n                .add(socialFundPercent)\n                .setScale(4, RoundingMode.HALF_UP);\n        if (totalPercent.compareTo(ONE_HUNDRED.setScale(4, RoundingMode.HALF_UP)) != 0) {\n            throw new BusinessException(\"Subscription allocation percentages must sum to 100\");\n        }\n\n        return new SubscriptionPostingProfile(\n                resolveExplicitOrDefaultAccountCode(countryCode, accountsNode, \"membershipRevenue\", \"cotisations\",\n                        () -> countryChartOfAccountsService.findOrCreate(\n                                countryCode,\n                                CountryAccountGroup.MEMBERSHIP_FEES,\n                                \"750001 Cotisations des membres\"\n                        ).getAccountCode()),\n                resolveExplicitOrDefaultAccountCode(countryCode, accountsNode, \"commissionPool\", \"mlmPool\",\n                        () -> resolveAccountCode(countryCode, CountryAccountSystemTag.MLM_POOL)),\n                resolveExplicitOrDefaultAccountCode(countryCode, accountsNode, \"guaranteeFund\", \"guarantee\",\n                        () -> countryChartOfAccountsService.findOrCreate(\n                                countryCode,\n                                CountryAccountGroup.GUARANTEE_FUND,\n                                \"Guarantee Fund\"\n                        ).getAccountCode()),\n                resolveExplicitOrDefaultAccountCode(countryCode, accountsNode, \"platformFee\", \"platformRevenue\",\n                        () -> resolveAccountCode(countryCode, CountryAccountSystemTag.PLATFORM_REVENUE)),\n                resolveExplicitOrDefaultAccountCode(countryCode, accountsNode, \"administration\", \"administrationFee\",\n                        () -> countryChartOfAccountsService.findOrCreate(\n                                countryCode,\n                                CountryAccountGroup.ADMINISTRATION,\n                                \"Administration\"\n                        ).getAccountCode()),\n                resolveExplicitOrDefaultAccountCode(countryCode, accountsNode, \"socialFund\", \"social\",\n                        () -> countryChartOfAccountsService.findOrCreate(\n                                countryCode,\n                                CountryAccountGroup.SOCIAL_FUND,\n                                \"Social Fund\"\n                        ).getAccountCode()),\n                commissionPoolPercent,\n                guaranteeFundPercent,\n                platformFeePercent,\n                administrationPercent,\n                socialFundPercent\n        );\n    }\n\n    private String resolveExplicitOrDefaultAccountCode(String countryCode,\n                                                       com.fasterxml.jackson.databind.node.ObjectNode accountsNode,\n                                                       String primaryAlias,\n                                                       String secondaryAlias,\n                                                       java.util.function.Supplier<String> fallbackSupplier) {\n        if (accountsNode != null) {\n            for (String alias : List.of(primaryAlias, secondaryAlias)) {\n                var node = accountsNode.get(alias);\n                if (node != null && node.isTextual() && !node.asText().isBlank()) {\n                    String explicitCode = node.asText().trim().toUpperCase(Locale.ROOT);\n                    if (!countryChartOfAccountsService.hasRequiredSystemMappings(countryCode)\n                            && explicitCode.isBlank()) {\n                        break;\n                    }\n                    return explicitCode;\n                }\n            }\n        }\n        return fallbackSupplier.get();\n    }\n\n    private BigDecimal requiredPercentage(com.fasterxml.jackson.databind.node.ObjectNode payload, String... aliases) {\n        if (payload == null) {\n            throw new BusinessException(\"Subscription allocation configuration is required\");\n        }\n        com.fasterxml.jackson.databind.JsonNode source = payload.has(\"percentages\") && payload.get(\"percentages\").isObject()\n                ? payload.get(\"percentages\")\n                : payload;\n        for (String alias : aliases) {\n            var node = source.get(alias);\n            if (node != null && node.isNumber()) {\n                BigDecimal value = node.decimalValue();\n                if (value.compareTo(BigDecimal.ZERO) < 0 || value.compareTo(ONE_HUNDRED) > 0) {\n                    throw new BusinessException(\"Subscription allocation percentage must be between 0 and 100 for \" + alias);\n                }\n                return value;\n            }\n        }\n        throw new BusinessException(\"Missing subscription allocation percentage for \" + aliases[0]);\n    }\n\n    private BigDecimal allocationAmount(BigDecimal baseAmount, BigDecimal percent) {\n        return baseAmount.multiply(percent)\n                .divide(ONE_HUNDRED, 4, RoundingMode.HALF_UP);\n    }\n\n    private String resolveAccountCode(String countryCode, CountryAccountSystemTag systemTag) {\n        CountryChartAccount account = countryChartOfAccountsService.resolveSystemAccount(countryCode, systemTag);\n        return account.getAccountCode();\n    }\n\n    /**\n     * Resolves the wallet account code for a specific account holder.\n     * Auto-creates the wallet if it does not exist (safety guarantee).\n     */\n    private String resolveWalletAccountCode(AccountHolder accountHolder) {\n        CountryChartAccount wallet = countryChartOfAccountsService.findOrCreateWallet(accountHolder);\n        return wallet.getAccountCode();\n    }\n\n    private AccountHolder resolveAccountHolder(UUID accountHolderId) {\n        return accountHolderRepository.findById(accountHolderId)\n                .orElseThrow(() -> new BusinessException(\"Account holder not found: \" + accountHolderId));\n    }\n\n    private String resolveOperationalCountryCode(UUID accountHolderId, String currency) {\n        String normalizedCurrency = currency == null ? null : currency.trim().toUpperCase(Locale.ROOT);\n        String holderCountryCode = accountHolderRepository.findById(accountHolderId)\n                .map(this::readAccountHolderCountryCode)\n                .orElse(null);\n        if (holderCountryCode != null && !holderCountryCode.isBlank()) {\n            return ensureCountryExists(holderCountryCode, normalizedCurrency);\n        }\n        return countryRepository.findByFallbackTrue()\n                .map(Country::getCode)\n                .or(() -> countryRepository.findByActiveTrueOrderByNameAsc().stream()\n                        .filter(country -> normalizedCurrency != null\n                                && normalizedCurrency.equalsIgnoreCase(country.getCurrency()))\n                        .map(Country::getCode)\n                        .findFirst())\n                .or(() -> countryRepository.findByActiveTrueOrderByNameAsc().stream()\n                        .map(Country::getCode)\n                        .findFirst())\n                .map(code -> ensureCountryExists(code, normalizedCurrency))\n                .orElseGet(() -> ensureCountryExists(\"INT\", normalizedCurrency == null ? \"USD\" : normalizedCurrency));\n    }\n\n    private String readAccountHolderCountryCode(AccountHolder accountHolder) {\n        if (accountHolder == null) {\n            return null;\n        }\n        if (accountHolder.getServiceCountryCode() != null && !accountHolder.getServiceCountryCode().isBlank()) {\n            return accountHolder.getServiceCountryCode().trim().toUpperCase(Locale.ROOT);\n        }\n        if (accountHolder.getCountryCode() != null && !accountHolder.getCountryCode().isBlank()) {\n            return accountHolder.getCountryCode().trim().toUpperCase(Locale.ROOT);\n        }\n        return null;\n    }\n\n    private String ensureCountryExists(String countryCode, String currency) {\n        String normalizedCode = countryCode.trim().toUpperCase(Locale.ROOT);\n        if (countryRepository.findByCode(normalizedCode).isPresent()) {\n            return normalizedCode;\n        }\n        countryRepository.save(Country.builder()\n                .id(UUID.randomUUID())\n                .code(normalizedCode)\n                .name(\"Country \" + normalizedCode)\n                .currency(currency == null || currency.isBlank() ? \"USD\" : currency)\n                .active(true)\n                .configured(false)\n                .fallback(\"INT\".equals(normalizedCode))\n                .build());\n        return normalizedCode;\n    }\n\n    private void validateCurrency(List<PostingLine> lines, String operationCurrency) {\n        boolean invalid = lines.stream().anyMatch(line -> !operationCurrency.equals(line.currency()));\n        if (invalid) {\n            throw new BusinessException(\"Strict currency verification failed\");\n        }\n    }\n\n    private void validateBalanced(List<PostingLine> lines) {\n        BigDecimal debit = lines.stream()\n                .filter(line -> line.entryType() == LedgerEntryType.DEBIT)\n                .map(PostingLine::amount)\n                .reduce(BigDecimal.ZERO, BigDecimal::add);\n        BigDecimal credit = lines.stream()\n                .filter(line -> line.entryType() == LedgerEntryType.CREDIT)\n                .map(PostingLine::amount)\n                .reduce(BigDecimal.ZERO, BigDecimal::add);\n\n        if (debit.compareTo(credit) != 0) {\n            throw new BusinessException(\"Ledger entries are not balanced\");\n        }\n    }\n\n    private void updateSnapshots(List<LedgerEntry> entries) {\n        for (LedgerEntry entry : entries) {\n            AccountBalanceSnapshot snapshot = snapshotRepository\n                    .findByAccountCodeAndCurrency(entry.getAccountCode(), entry.getCurrency())\n                    .orElseGet(() -> snapshotRepository.save(AccountBalanceSnapshot.builder()\n                            .accountCode(entry.getAccountCode())\n                            .currency(entry.getCurrency())\n                            .balance(BigDecimal.ZERO)\n                            .version(0L)\n                            .build()));\n\n            BigDecimal delta = entry.getEntryType() == LedgerEntryType.DEBIT\n                    ? entry.getAmount()\n                    : entry.getAmount().negate();\n            snapshot.setBalance(snapshot.getBalance().add(delta));\n            snapshotRepository.save(snapshot);\n        }\n    }\n\n    private record PostingLine(\n            String accountCode,\n            LedgerEntryType entryType,\n            BigDecimal amount,\n            String currency,\n            String description\n    ) {\n    }\n\n    private record SubscriptionPostingProfile(\n            String membershipRevenueAccountCode,\n            String commissionPoolAccountCode,\n            String guaranteeFundAccountCode,\n            String platformFeeAccountCode,\n            String administrationAccountCode,\n            String socialFundAccountCode,\n            BigDecimal commissionPoolPercent,\n            BigDecimal guaranteeFundPercent,\n            BigDecimal platformFeePercent,\n            BigDecimal administrationPercent,\n            BigDecimal socialFundPercent\n    ) {\n    }\n}\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/com/ccapp/ledger/service/AccountingPostingService.java b/src/main/java/com/ccapp/ledger/service/AccountingPostingService.java
+--- a/src/main/java/com/ccapp/ledger/service/AccountingPostingService.java	(revision 0f55b52b402fcc8a3a0426bd8ec5fefe4f264bb9)
++++ b/src/main/java/com/ccapp/ledger/service/AccountingPostingService.java	(date 1774284678051)
+@@ -100,6 +100,94 @@
+                 .orElseGet(() -> doPost(operation, lines, AccountingEventType.OPERATION_CONFIRMED));
+     }
+ 
++    // =========================================================================
++    // Wallet operation posting methods (pre-built lines – no switch dispatch)
++    // =========================================================================
++
++    /**
++     * WALLET_PAYMENT: DEBIT senderWallet → CREDIT destinationAccount.
++     * Used for P2P payments and auto-debit rules.
++     */
++    @Transactional
++    public AccountingEvent postWalletPayment(Operation operation,
++                                              String senderWalletCode,
++                                              String destinationAccountCode) {
++        validateWalletOperation(operation, OperationType.WALLET_PAYMENT);
++        List<PostingLine> lines = List.of(
++                new PostingLine(senderWalletCode, LedgerEntryType.DEBIT,
++                        operation.getAmount(), operation.getCurrency(), "Wallet payment – sender debit"),
++                new PostingLine(destinationAccountCode, LedgerEntryType.CREDIT,
++                        operation.getAmount(), operation.getCurrency(), "Wallet payment – destination credit")
++        );
++        return accountingEventRepository.findByOperationId(operation.getId())
++                .orElseGet(() -> doPost(operation, lines, AccountingEventType.OPERATION_CONFIRMED));
++    }
++
++    /**
++     * WALLET_DEPOSIT_PSP: DEBIT PSP_CLEARING → CREDIT userWallet.
++     */
++    @Transactional
++    public AccountingEvent postWalletDepositPsp(Operation operation, String userWalletCode) {
++        validateWalletOperation(operation, OperationType.WALLET_DEPOSIT_PSP);
++        String countryCode = resolveOperationalCountryCode(operation.getAccountHolderId(), operation.getCurrency());
++        String pspCode = resolveAccountCode(countryCode, CountryAccountSystemTag.PSP_CLEARING);
++        List<PostingLine> lines = List.of(
++                new PostingLine(pspCode, LedgerEntryType.DEBIT,
++                        operation.getAmount(), operation.getCurrency(), "PSP deposit clearing debit"),
++                new PostingLine(userWalletCode, LedgerEntryType.CREDIT,
++                        operation.getAmount(), operation.getCurrency(), "Wallet top-up from PSP")
++        );
++        return accountingEventRepository.findByOperationId(operation.getId())
++                .orElseGet(() -> doPost(operation, lines, AccountingEventType.OPERATION_CONFIRMED));
++    }
++
++    /**
++     * WALLET_DEPOSIT_AGENT: DEBIT agentWallet → CREDIT userWallet.
++     * Full traceability for cash-in via agent float.
++     */
++    @Transactional
++    public AccountingEvent postWalletDepositAgent(Operation operation,
++                                                   String agentWalletCode,
++                                                   String userWalletCode) {
++        validateWalletOperation(operation, OperationType.WALLET_DEPOSIT_AGENT);
++        List<PostingLine> lines = List.of(
++                new PostingLine(agentWalletCode, LedgerEntryType.DEBIT,
++                        operation.getAmount(), operation.getCurrency(), "Agent float debit – cash-in"),
++                new PostingLine(userWalletCode, LedgerEntryType.CREDIT,
++                        operation.getAmount(), operation.getCurrency(), "User wallet credit – agent cash-in")
++        );
++        return accountingEventRepository.findByOperationId(operation.getId())
++                .orElseGet(() -> doPost(operation, lines, AccountingEventType.OPERATION_CONFIRMED));
++    }
++
++    /**
++     * WALLET_WITHDRAWAL: DEBIT userWallet → CREDIT PSP_CLEARING.
++     */
++    @Transactional
++    public AccountingEvent postWalletWithdrawal(Operation operation, String userWalletCode) {
++        validateWalletOperation(operation, OperationType.WALLET_WITHDRAWAL);
++        String countryCode = resolveOperationalCountryCode(operation.getAccountHolderId(), operation.getCurrency());
++        String pspCode = resolveAccountCode(countryCode, CountryAccountSystemTag.PSP_CLEARING);
++        List<PostingLine> lines = List.of(
++                new PostingLine(userWalletCode, LedgerEntryType.DEBIT,
++                        operation.getAmount(), operation.getCurrency(), "Wallet withdrawal debit"),
++                new PostingLine(pspCode, LedgerEntryType.CREDIT,
++                        operation.getAmount(), operation.getCurrency(), "PSP payout clearing credit")
++        );
++        return accountingEventRepository.findByOperationId(operation.getId())
++                .orElseGet(() -> doPost(operation, lines, AccountingEventType.OPERATION_CONFIRMED));
++    }
++
++    private void validateWalletOperation(Operation operation, OperationType expected) {
++        if (operation.getType() != expected) {
++            throw new BusinessException("Operation type must be " + expected.name()
++                    + ", got: " + operation.getType());
++        }
++        if (operation.getStatus() != OperationStatus.CONFIRMED) {
++            throw new BusinessException("Only CONFIRMED operations can be posted");
++        }
++    }
++
+     private AccountingEvent doPost(Operation operation) {
+         if (operation.getStatus() != OperationStatus.CONFIRMED) {
+             throw new BusinessException("Only CONFIRMED operations can be posted");
+@@ -193,6 +281,10 @@
+             case COMMISSION_PAYOUT -> throw new BusinessException(
+                     "Use postCommissionPayout for COMMISSION_PAYOUT operations"
+             );
++            case WALLET_PAYMENT, WALLET_DEPOSIT_PSP, WALLET_DEPOSIT_AGENT, WALLET_WITHDRAWAL ->
++                    throw new BusinessException(
++                            "Use the dedicated wallet posting method for type: " + operation.getType()
++                    );
+         };
+     }
+ 

@@ -231,6 +231,94 @@ public class AccountingPostingService {
                 .orElseGet(() -> doPost(operation, lines, AccountingEventType.OPERATION_CONFIRMED));
     }
 
+    // =========================================================================
+    // Wallet operation posting methods (pre-built lines – no switch dispatch)
+    // =========================================================================
+
+    /**
+     * WALLET_PAYMENT: DEBIT senderWallet → CREDIT destinationAccount.
+     * Used for P2P payments and auto-debit rules.
+     */
+    @Transactional
+    public AccountingEvent postWalletPayment(Operation operation,
+                                              String senderWalletCode,
+                                              String destinationAccountCode) {
+        validateWalletOperation(operation, OperationType.WALLET_PAYMENT);
+        List<PostingLine> lines = List.of(
+                new PostingLine(senderWalletCode, LedgerEntryType.DEBIT,
+                        operation.getAmount(), operation.getCurrency(), "Wallet payment – sender debit"),
+                new PostingLine(destinationAccountCode, LedgerEntryType.CREDIT,
+                        operation.getAmount(), operation.getCurrency(), "Wallet payment – destination credit")
+        );
+        return accountingEventRepository.findByOperationId(operation.getId())
+                .orElseGet(() -> doPost(operation, lines, AccountingEventType.OPERATION_CONFIRMED));
+    }
+
+    /**
+     * WALLET_DEPOSIT_PSP: DEBIT PSP_CLEARING → CREDIT userWallet.
+     */
+    @Transactional
+    public AccountingEvent postWalletDepositPsp(Operation operation, String userWalletCode) {
+        validateWalletOperation(operation, OperationType.WALLET_DEPOSIT_PSP);
+        String countryCode = resolveOperationalCountryCode(operation.getAccountHolderId(), operation.getCurrency());
+        String pspCode = resolveAccountCode(countryCode, CountryAccountSystemTag.PSP_CLEARING);
+        List<PostingLine> lines = List.of(
+                new PostingLine(pspCode, LedgerEntryType.DEBIT,
+                        operation.getAmount(), operation.getCurrency(), "PSP deposit clearing debit"),
+                new PostingLine(userWalletCode, LedgerEntryType.CREDIT,
+                        operation.getAmount(), operation.getCurrency(), "Wallet top-up from PSP")
+        );
+        return accountingEventRepository.findByOperationId(operation.getId())
+                .orElseGet(() -> doPost(operation, lines, AccountingEventType.OPERATION_CONFIRMED));
+    }
+
+    /**
+     * WALLET_DEPOSIT_AGENT: DEBIT agentWallet → CREDIT userWallet.
+     * Full traceability for cash-in via agent float.
+     */
+    @Transactional
+    public AccountingEvent postWalletDepositAgent(Operation operation,
+                                                   String agentWalletCode,
+                                                   String userWalletCode) {
+        validateWalletOperation(operation, OperationType.WALLET_DEPOSIT_AGENT);
+        List<PostingLine> lines = List.of(
+                new PostingLine(agentWalletCode, LedgerEntryType.DEBIT,
+                        operation.getAmount(), operation.getCurrency(), "Agent float debit – cash-in"),
+                new PostingLine(userWalletCode, LedgerEntryType.CREDIT,
+                        operation.getAmount(), operation.getCurrency(), "User wallet credit – agent cash-in")
+        );
+        return accountingEventRepository.findByOperationId(operation.getId())
+                .orElseGet(() -> doPost(operation, lines, AccountingEventType.OPERATION_CONFIRMED));
+    }
+
+    /**
+     * WALLET_WITHDRAWAL: DEBIT userWallet → CREDIT PSP_CLEARING.
+     */
+    @Transactional
+    public AccountingEvent postWalletWithdrawal(Operation operation, String userWalletCode) {
+        validateWalletOperation(operation, OperationType.WALLET_WITHDRAWAL);
+        String countryCode = resolveOperationalCountryCode(operation.getAccountHolderId(), operation.getCurrency());
+        String pspCode = resolveAccountCode(countryCode, CountryAccountSystemTag.PSP_CLEARING);
+        List<PostingLine> lines = List.of(
+                new PostingLine(userWalletCode, LedgerEntryType.DEBIT,
+                        operation.getAmount(), operation.getCurrency(), "Wallet withdrawal debit"),
+                new PostingLine(pspCode, LedgerEntryType.CREDIT,
+                        operation.getAmount(), operation.getCurrency(), "PSP payout clearing credit")
+        );
+        return accountingEventRepository.findByOperationId(operation.getId())
+                .orElseGet(() -> doPost(operation, lines, AccountingEventType.OPERATION_CONFIRMED));
+    }
+
+    private void validateWalletOperation(Operation operation, OperationType expected) {
+        if (operation.getType() != expected) {
+            throw new BusinessException("Operation type must be " + expected.name()
+                    + ", got: " + operation.getType());
+        }
+        if (operation.getStatus() != OperationStatus.CONFIRMED) {
+            throw new BusinessException("Only CONFIRMED operations can be posted");
+        }
+    }
+
     private AccountingEvent doPost(Operation operation) {
         if (operation.getStatus() != OperationStatus.CONFIRMED) {
             throw new BusinessException("Only CONFIRMED operations can be posted");
@@ -339,6 +427,10 @@ public class AccountingPostingService {
             case MARKETPLACE_COMMISSION_ALLOCATION_REVERSAL -> throw new BusinessException(
                     "Use postMarketplaceCommissionAllocationReversal for MARKETPLACE_COMMISSION_ALLOCATION_REVERSAL operations"
             );
+            case WALLET_PAYMENT, WALLET_DEPOSIT_PSP, WALLET_DEPOSIT_AGENT, WALLET_WITHDRAWAL ->
+                    throw new BusinessException(
+                            "Use the dedicated wallet posting method for type: " + operation.getType()
+                    );
         };
     }
 

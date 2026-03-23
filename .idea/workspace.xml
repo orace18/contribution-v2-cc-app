@@ -4,8 +4,13 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="revue de countries">
+    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Config mail revue">
+      <change beforePath="$PROJECT_DIR$/.idea/compiler.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/compiler.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/wallet/domain/entity/Wallet.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/wallet/domain/entity/Wallet.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/wallet/repository/WalletRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/wallet/repository/WalletRepository.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/ledger/service/AccountingPostingService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/ledger/service/AccountingPostingService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/payments/operation/domain/enums/OperationType.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/payments/operation/domain/enums/OperationType.java" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -13,7 +18,7 @@
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
   <component name="EmbeddingIndexingInfo">
-    <option name="cachedIndexableFilesCount" value="861" />
+    <option name="cachedIndexableFilesCount" value="893" />
   </component>
   <component name="FileTemplateManagerImpl">
     <option name="RECENT_TEMPLATES">
@@ -143,70 +148,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1772553173766</updated>
-    </task>
-    <task id="LOCAL-00018" summary="Revue du docker-compose-dev.yaml">
-      <option name="closed" value="true" />
-      <created>1772706055588</created>
-      <option name="number" value="00018" />
-      <option name="presentableId" value="LOCAL-00018" />
-      <option name="project" value="LOCAL" />
-      <updated>1772706055588</updated>
-    </task>
-    <task id="LOCAL-00019" summary="Mise a jour de OpenApi">
-      <option name="closed" value="true" />
-      <created>1772706587921</created>
-      <option name="number" value="00019" />
-      <option name="presentableId" value="LOCAL-00019" />
-      <option name="project" value="LOCAL" />
-      <updated>1772706587921</updated>
-    </task>
-    <task id="LOCAL-00020" summary="Mise a jour de OpenApi">
-      <option name="closed" value="true" />
-      <created>1772714543854</created>
-      <option name="number" value="00020" />
-      <option name="presentableId" value="LOCAL-00020" />
-      <option name="project" value="LOCAL" />
-      <updated>1772714543854</updated>
-    </task>
-    <task id="LOCAL-00021" summary="Ajout de progress et de circle">
-      <option name="closed" value="true" />
-      <created>1772872172218</created>
-      <option name="number" value="00021" />
-      <option name="presentableId" value="LOCAL-00021" />
-      <option name="project" value="LOCAL" />
-      <updated>1772872172218</updated>
-    </task>
-    <task id="LOCAL-00022" summary="Ajout des apis admin, credit, scoring">
-      <option name="closed" value="true" />
-      <created>1772889207278</created>
-      <option name="number" value="00022" />
-      <option name="presentableId" value="LOCAL-00022" />
-      <option name="project" value="LOCAL" />
-      <updated>1772889207278</updated>
-    </task>
-    <task id="LOCAL-00023" summary="Ajout des apis admin, credit, scoring">
-      <option name="closed" value="true" />
-      <created>1772889817415</created>
-      <option name="number" value="00023" />
-      <option name="presentableId" value="LOCAL-00023" />
-      <option name="project" value="LOCAL" />
-      <updated>1772889817415</updated>
-    </task>
-    <task id="LOCAL-00024" summary="justement onboarding">
-      <option name="closed" value="true" />
-      <created>1772920071555</created>
-      <option name="number" value="00024" />
-      <option name="presentableId" value="LOCAL-00024" />
-      <option name="project" value="LOCAL" />
-      <updated>1772920071555</updated>
-    </task>
-    <task id="LOCAL-00025" summary="Ajout de MinIO pour les images">
-      <option name="closed" value="true" />
-      <created>1772922738201</created>
-      <option name="number" value="00025" />
-      <option name="presentableId" value="LOCAL-00025" />
-      <option name="project" value="LOCAL" />
-      <updated>1772922738201</updated>
     </task>
     <task id="LOCAL-00026" summary="Ajout de MinIO pour les images">
       <option name="closed" value="true" />
@@ -536,7 +477,71 @@
       <option name="project" value="LOCAL" />
       <updated>1773925927114</updated>
     </task>
-    <option name="localTasksCounter" value="67" />
+    <task id="LOCAL-00067" summary="Revue model comptable">
+      <option name="closed" value="true" />
+      <created>1773992896543</created>
+      <option name="number" value="00067" />
+      <option name="presentableId" value="LOCAL-00067" />
+      <option name="project" value="LOCAL" />
+      <updated>1773992896544</updated>
+    </task>
+    <task id="LOCAL-00068" summary="Revue model comptable">
+      <option name="closed" value="true" />
+      <created>1773993829626</created>
+      <option name="number" value="00068" />
+      <option name="presentableId" value="LOCAL-00068" />
+      <option name="project" value="LOCAL" />
+      <updated>1773993829626</updated>
+    </task>
+    <task id="LOCAL-00069" summary="Revue model comptable">
+      <option name="closed" value="true" />
+      <created>1773999281401</created>
+      <option name="number" value="00069" />
+      <option name="presentableId" value="LOCAL-00069" />
+      <option name="project" value="LOCAL" />
+      <updated>1773999281401</updated>
+    </task>
+    <task id="LOCAL-00070" summary="Gestion des admins">
+      <option name="closed" value="true" />
+      <created>1774017286650</created>
+      <option name="number" value="00070" />
+      <option name="presentableId" value="LOCAL-00070" />
+      <option name="project" value="LOCAL" />
+      <updated>1774017286650</updated>
+    </task>
+    <task id="LOCAL-00071" summary="Gestion des admins">
+      <option name="closed" value="true" />
+      <created>1774018084800</created>
+      <option name="number" value="00071" />
+      <option name="presentableId" value="LOCAL-00071" />
+      <option name="project" value="LOCAL" />
+      <updated>1774018084800</updated>
+    </task>
+    <task id="LOCAL-00072" summary="Config mail">
+      <option name="closed" value="true" />
+      <created>1774018603106</created>
+      <option name="number" value="00072" />
+      <option name="presentableId" value="LOCAL-00072" />
+      <option name="project" value="LOCAL" />
+      <updated>1774018603106</updated>
+    </task>
+    <task id="LOCAL-00073" summary="Config mail revue">
+      <option name="closed" value="true" />
+      <created>1774019255113</created>
+      <option name="number" value="00073" />
+      <option name="presentableId" value="LOCAL-00073" />
+      <option name="project" value="LOCAL" />
+      <updated>1774019255113</updated>
+    </task>
+    <task id="LOCAL-00074" summary="Config mail revue">
+      <option name="closed" value="true" />
+      <created>1774020347773</created>
+      <option name="number" value="00074" />
+      <option name="presentableId" value="LOCAL-00074" />
+      <option name="project" value="LOCAL" />
+      <updated>1774020347773</updated>
+    </task>
+    <option name="localTasksCounter" value="75" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -551,10 +556,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="Revue des configs firebase" />
-    <MESSAGE value="Revue des cors" />
-    <MESSAGE value="Ajout de logs" />
-    <MESSAGE value="Firebase" />
     <MESSAGE value="Firebase config" />
     <MESSAGE value="Refact" />
     <MESSAGE value="Correction de la configuration firebase" />
@@ -576,7 +577,11 @@
     <MESSAGE value="chat et revue" />
     <MESSAGE value="revue de post" />
     <MESSAGE value="revue de countries" />
-    <option name="LAST_COMMIT_MESSAGE" value="revue de countries" />
+    <MESSAGE value="Revue model comptable" />
+    <MESSAGE value="Gestion des admins" />
+    <MESSAGE value="Config mail" />
+    <MESSAGE value="Config mail revue" />
+    <option name="LAST_COMMIT_MESSAGE" value="Config mail revue" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />

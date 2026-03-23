@@ -1,5 +1,6 @@
 package com.ccapp.identity.wallet.domain.entity;
 
+import com.ccapp.wallet.domain.enums.WalletType;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -33,6 +34,10 @@ public class Wallet {
     @Column(name = "status", nullable = false, length = 32)
     private String status;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "wallet_type", nullable = false, length = 16)
+    private WalletType walletType;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
 
@@ -40,6 +45,9 @@ public class Wallet {
     protected void onCreate() {
         if (createdAt == null) {
             createdAt = OffsetDateTime.now();
+        }
+        if (walletType == null) {
+            walletType = WalletType.USER;
         }
     }
 }
