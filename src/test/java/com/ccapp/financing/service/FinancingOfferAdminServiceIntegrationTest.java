@@ -58,6 +58,7 @@ class FinancingOfferAdminServiceIntegrationTest {
                 .name("Partner Two")
                 .type(FinancialPartnerType.BANK)
                 .countryCode("BJ")
+                .currency("XOF")
                 .status(FinancialPartnerStatus.ACTIVE)
                 .build());
 

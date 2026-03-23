@@ -20,10 +20,8 @@ import com.ccapp.mobile.home.dto.MobileHomeNotificationItemResponse;
 import com.ccapp.mobile.home.dto.MobileHomeNotificationSummaryResponse;
 import com.ccapp.mobile.home.dto.MobileHomeResponse;
 import com.ccapp.notifications.repository.NotificationRepository;
-import com.ccapp.payments.operation.domain.entity.Operation;
-import com.ccapp.payments.operation.domain.enums.OperationStatus;
-import com.ccapp.payments.operation.domain.enums.OperationType;
-import com.ccapp.payments.operation.repository.OperationRepository;
+import com.ccapp.payments.subscription.domain.entity.Membership;
+import com.ccapp.payments.subscription.repository.MembershipRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -53,7 +51,7 @@ public class MobileHomeService {
 
     private final AccessControlService accessControlService;
     private final AccountHolderService accountHolderService;
-    private final OperationRepository operationRepository;
+    private final MembershipRepository membershipRepository;
     private final CreditEligibilityRepository creditEligibilityRepository;
     private final LoanRepository loanRepository;
     private final CircleRepository circleRepository;
@@ -132,23 +130,19 @@ public class MobileHomeService {
     }
 
     private MobileHomeMembershipResponse buildMembership(UUID accountHolderId) {
-        Operation latestSubscription = operationRepository
-                .findFirstByAccountHolderIdAndTypeAndStatusOrderByCreatedAtDesc(
-                        accountHolderId,
-                        OperationType.SUBSCRIPTION,
-                        OperationStatus.CONFIRMED
-                )
+        Membership latestMembership = membershipRepository
+                .findFirstByAccountHolderIdAndExpiresAtIsNotNullOrderByExpiresAtDescCreatedAtDesc(accountHolderId)
                 .orElse(null);
-        if (latestSubscription == null) {
+        if (latestMembership == null) {
             return new MobileHomeMembershipResponse("NONE", null, null, null);
         }
 
-        OffsetDateTime expiresAt = latestSubscription.getCreatedAt().plusDays(30);
+        OffsetDateTime expiresAt = latestMembership.getExpiresAt();
         boolean active = !expiresAt.isBefore(OffsetDateTime.now());
         long daysRemaining = Math.max(0, ChronoUnit.DAYS.between(OffsetDateTime.now().toLocalDate(), expiresAt.toLocalDate()));
         return new MobileHomeMembershipResponse(
                 active ? "ACTIVE" : "EXPIRED",
-                latestSubscription.getCreatedAt(),
+                latestMembership.getActivatedAt(),
                 expiresAt,
                 active ? daysRemaining : 0L
         );

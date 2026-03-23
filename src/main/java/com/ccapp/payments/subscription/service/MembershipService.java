@@ -9,6 +9,7 @@ import com.ccapp.payments.operation.domain.enums.OperationStatus;
 import com.ccapp.payments.subscription.domain.entity.Membership;
 import com.ccapp.payments.subscription.domain.entity.SubscriptionPlan;
 import com.ccapp.payments.subscription.domain.enums.MembershipStatus;
+import com.ccapp.payments.subscription.repository.SubscriptionPlanRepository;
 import com.ccapp.payments.subscription.repository.MembershipRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -17,6 +18,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
@@ -25,6 +27,7 @@ import java.util.UUID;
 public class MembershipService {
 
     private final MembershipRepository membershipRepository;
+    private final SubscriptionPlanRepository subscriptionPlanRepository;
     private final CountryConfigResolver countryConfigResolver;
     private final ObjectMapper objectMapper;
 
@@ -35,8 +38,11 @@ public class MembershipService {
         return membershipRepository.findByOperationId(operationId)
                 .orElseGet(() -> membershipRepository.save(Membership.builder()
                         .operationId(operationId)
+                        .planId(plan.getId())
                         .accountHolderId(accountHolderId)
                         .planCode(plan.getCode())
+                        .planGrade(plan.getGrade())
+                        .durationMonths(plan.getDurationMonths())
                         .countryCode(plan.getCountry())
                         .currency(plan.getCurrency())
                         .amount(plan.getPrice())
@@ -48,12 +54,11 @@ public class MembershipService {
     public Membership activateForConfirmedOperation(Operation operation) {
         Membership membership = membershipRepository.findByOperationId(operation.getId())
                 .orElseThrow(() -> new BusinessException("Membership not found for operation"));
-        if (membership.getStatus() == MembershipStatus.ACTIVE) {
-            return membership;
-        }
         if (operation.getStatus() != OperationStatus.CONFIRMED) {
             throw new BusinessException("Membership activation requires a confirmed operation");
         }
+        SubscriptionPlan plan = resolvePlanForOperation(operation, membership);
+        int durationDays = durationDays(plan);
 
         CountryConfigResolver.ResolvedConfig membershipConfig = countryConfigResolver.resolveActiveConfig(
                 membership.getCountryCode(),
@@ -61,13 +66,66 @@ public class MembershipService {
         );
 
         OffsetDateTime now = OffsetDateTime.now();
+        Membership existingActiveMembership = membershipRepository
+                .findFirstByAccountHolderIdAndStatusAndExpiresAtAfterOrderByExpiresAtDesc(
+                        membership.getAccountHolderId(),
+                        MembershipStatus.ACTIVE,
+                        now
+                )
+                .filter(activeMembership -> !activeMembership.getId().equals(membership.getId()))
+                .orElse(null);
+
+        OffsetDateTime activatedAt = existingActiveMembership != null && existingActiveMembership.getActivatedAt() != null
+                ? existingActiveMembership.getActivatedAt()
+                : now;
+        OffsetDateTime baseExpiry = existingActiveMembership != null
+                && existingActiveMembership.getExpiresAt() != null
+                && existingActiveMembership.getExpiresAt().isAfter(now)
+                ? existingActiveMembership.getExpiresAt()
+                : now;
+
+        if (existingActiveMembership != null) {
+            existingActiveMembership.setStatus(MembershipStatus.CANCELED);
+            membershipRepository.save(existingActiveMembership);
+        }
+
         membership.setStatus(MembershipStatus.ACTIVE);
-        membership.setActivatedAt(now);
-        membership.setExpiresAt(now.plusDays(30));
+        membership.setPlanId(plan.getId());
+        membership.setPlanCode(plan.getCode());
+        membership.setPlanGrade(plan.getGrade());
+        membership.setDurationMonths(plan.getDurationMonths());
+        membership.setActivatedAt(activatedAt);
+        membership.setExpiresAt(baseExpiry.plusDays(durationDays));
         membership.setConfigSnapshot(writeSnapshot(membershipConfig));
         membership.setConfigVersion(membershipConfig.version());
 
         return membershipRepository.save(membership);
+    }
+
+    @Transactional
+    public void cancelPendingMembership(UUID operationId) {
+        membershipRepository.findByOperationId(operationId)
+                .filter(membership -> membership.getStatus() == MembershipStatus.PENDING)
+                .ifPresent(membership -> {
+                    membership.setStatus(MembershipStatus.CANCELED);
+                    membershipRepository.save(membership);
+                });
+    }
+
+    private SubscriptionPlan resolvePlanForOperation(Operation operation, Membership membership) {
+        UUID planId = operation.getPlanId() != null ? operation.getPlanId() : membership.getPlanId();
+        if (planId == null) {
+            throw new BusinessException("Subscription plan is required on the operation");
+        }
+        return subscriptionPlanRepository.findById(planId)
+                .orElseThrow(() -> new BusinessException("Subscription plan not found for membership activation"));
+    }
+
+    private int durationDays(SubscriptionPlan plan) {
+        if (plan.getDurationMonths() == null || plan.getDurationMonths() <= 0) {
+            throw new BusinessException("Subscription plan durationMonths must be positive");
+        }
+        return Math.toIntExact(Duration.ofDays(plan.getDurationMonths() * 30L).toDays());
     }
 
     private String writeSnapshot(CountryConfigResolver.ResolvedConfig membershipConfig) {

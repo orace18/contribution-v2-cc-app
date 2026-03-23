@@ -30,6 +30,18 @@ public class OperationService {
                                               String currency,
                                               String idempotencyKey,
                                               String description) {
+        return createInitiatedOperation(accountHolderId, actorUserId, type, amount, currency, idempotencyKey, description, null);
+    }
+
+    @Transactional
+    public Operation createInitiatedOperation(UUID accountHolderId,
+                                              UUID actorUserId,
+                                              OperationType type,
+                                              BigDecimal amount,
+                                              String currency,
+                                              String idempotencyKey,
+                                              String description,
+                                              UUID planId) {
         String normalizedIdempotencyKey = normalizeIdempotencyKey(idempotencyKey);
         String normalizedCurrency = normalizeCurrency(currency);
         validateAmount(amount);
@@ -41,7 +53,8 @@ public class OperationService {
                         actorUserId,
                         type,
                         amount,
-                        normalizedCurrency
+                        normalizedCurrency,
+                        planId
                 ))
                 .orElseGet(() -> operationRepository.save(Operation.builder()
                         .accountHolderId(accountHolderId)
@@ -51,6 +64,7 @@ public class OperationService {
                         .amount(amount)
                         .currency(normalizedCurrency)
                         .idempotencyKey(normalizedIdempotencyKey)
+                        .planId(planId)
                         .description(normalizeDescription(description))
                         .build()));
     }
@@ -62,15 +76,7 @@ public class OperationService {
                                               String currency,
                                               String idempotencyKey,
                                               String description) {
-        return createInitiatedOperation(
-                accountHolderId,
-                accountHolderId,
-                type,
-                amount,
-                currency,
-                idempotencyKey,
-                description
-        );
+        return createInitiatedOperation(accountHolderId, accountHolderId, type, amount, currency, idempotencyKey, description, null);
     }
 
     @Transactional
@@ -80,6 +86,19 @@ public class OperationService {
             throw new ConflictException("Operation already linked to another PSP reference");
         }
         operation.setPspReference(pspReference);
+        return operationRepository.save(operation);
+    }
+
+    @Transactional
+    public Operation markPendingPsp(UUID operationId, String pspReference) {
+        Operation operation = assignPspReference(operationId, pspReference);
+        if (operation.getStatus() == OperationStatus.PENDING_PSP) {
+            return operation;
+        }
+        if (operation.getStatus() != OperationStatus.INITIATED) {
+            throw new BusinessException("Operation cannot move to PENDING_PSP");
+        }
+        operation.setStatus(OperationStatus.PENDING_PSP);
         return operationRepository.save(operation);
     }
 
@@ -98,7 +117,8 @@ public class OperationService {
         if (operation.getStatus() == OperationStatus.CONFIRMED) {
             return operation;
         }
-        if (operation.getStatus() != OperationStatus.INITIATED) {
+        if (operation.getStatus() != OperationStatus.INITIATED
+                && operation.getStatus() != OperationStatus.PENDING_PSP) {
             throw new BusinessException("Operation not confirmable");
         }
 
@@ -112,10 +132,49 @@ public class OperationService {
         if (operation.getStatus() == OperationStatus.CONFIRMED) {
             return operation;
         }
-        if (operation.getStatus() != OperationStatus.INITIATED) {
+        if (operation.getStatus() != OperationStatus.INITIATED
+                && operation.getStatus() != OperationStatus.PENDING_PSP) {
             throw new BusinessException("Operation not confirmable");
         }
         operation.setStatus(OperationStatus.CONFIRMED);
+        return operationRepository.save(operation);
+    }
+
+    @Transactional
+    public Operation failByPspReference(String pspReference) {
+        Operation operation = getByPspReference(pspReference);
+        return markFailed(operation.getId());
+    }
+
+    @Transactional
+    public Operation expireByPspReference(String pspReference) {
+        Operation operation = getByPspReference(pspReference);
+        return markExpired(operation.getId());
+    }
+
+    @Transactional
+    public Operation markFailed(UUID operationId) {
+        Operation operation = getById(operationId);
+        if (operation.getStatus() == OperationStatus.FAILED) {
+            return operation;
+        }
+        if (operation.getStatus() == OperationStatus.CONFIRMED) {
+            throw new BusinessException("Confirmed operation cannot be failed");
+        }
+        operation.setStatus(OperationStatus.FAILED);
+        return operationRepository.save(operation);
+    }
+
+    @Transactional
+    public Operation markExpired(UUID operationId) {
+        Operation operation = getById(operationId);
+        if (operation.getStatus() == OperationStatus.EXPIRED) {
+            return operation;
+        }
+        if (operation.getStatus() == OperationStatus.CONFIRMED) {
+            throw new BusinessException("Confirmed operation cannot be expired");
+        }
+        operation.setStatus(OperationStatus.EXPIRED);
         return operationRepository.save(operation);
     }
 
@@ -136,12 +195,14 @@ public class OperationService {
                                                         UUID actorUserId,
                                                         OperationType type,
                                                         BigDecimal amount,
-                                                        String currency) {
+                                                        String currency,
+                                                        UUID planId) {
         boolean compatible = Objects.equals(existing.getAccountHolderId(), accountHolderId)
                 && Objects.equals(existing.getActorUserId(), actorUserId)
                 && existing.getType() == type
                 && existing.getAmount().compareTo(amount) == 0
-                && existing.getCurrency().equalsIgnoreCase(currency);
+                && existing.getCurrency().equalsIgnoreCase(currency)
+                && Objects.equals(existing.getPlanId(), planId);
         if (!compatible) {
             throw new ConflictException("Idempotency key already used by another operation signature");
         }

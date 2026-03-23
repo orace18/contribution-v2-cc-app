@@ -56,6 +56,9 @@ public class Operation extends AuditableEntity {
     @Column(name = "psp_reference", length = 128)
     private String pspReference;
 
+    @Column(name = "plan_id")
+    private UUID planId;
+
     @Column(name = "description", length = 255)
     private String description;
 }

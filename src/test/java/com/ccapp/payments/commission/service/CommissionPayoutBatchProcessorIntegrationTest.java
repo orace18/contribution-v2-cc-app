@@ -1,5 +1,8 @@
 package com.ccapp.payments.commission.service;
 
+import com.ccapp.country.config.domain.enums.CountryConfigType;
+import com.ccapp.country.config.service.CountryConfigResolver;
+import com.ccapp.platform.config.domain.enums.PlatformConfigType;
 import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
 import com.ccapp.identity.account_holder.domain.enums.AccountType;
 import com.ccapp.identity.account_holder.repository.AccountHolderRepository;
@@ -30,9 +33,12 @@ import com.ccapp.payments.operation.domain.enums.OperationStatus;
 import com.ccapp.payments.operation.domain.enums.OperationType;
 import com.ccapp.payments.operation.repository.OperationRepository;
 import com.ccapp.payments.operation.service.OperationService;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 
 import java.math.BigDecimal;
@@ -42,6 +48,8 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.when;
 
 @DataJpaTest(properties = {
         "spring.profiles.active=test",
@@ -77,6 +85,32 @@ class CommissionPayoutBatchProcessorIntegrationTest {
     private LedgerEntryRepository ledgerEntryRepository;
     @Autowired
     private FinancialAuditLogRepository financialAuditLogRepository;
+    @MockBean
+    private CountryConfigResolver countryConfigResolver;
+
+    @BeforeEach
+    void setUp() {
+        CountryConfigResolver.ResolvedConfig generalConfig = new CountryConfigResolver.ResolvedConfig(
+                "BJ",
+                CountryConfigType.GENERAL,
+                1,
+                "{\"taxRate\":10}",
+                CountryConfigResolver.ConfigSource.COUNTRY
+        );
+        CountryConfigResolver.ResolvedPlatformConfig platformGeneralConfig = new CountryConfigResolver.ResolvedPlatformConfig(
+                PlatformConfigType.GLOBAL_GENERAL,
+                1,
+                "{\"taxRate\":10}"
+        );
+        when(countryConfigResolver.resolveActiveConfig(eq("BJ"), eq(CountryConfigType.GENERAL)))
+                .thenReturn(generalConfig);
+        when(countryConfigResolver.resolveActivePlatformConfig(eq(PlatformConfigType.GLOBAL_GENERAL)))
+                .thenReturn(platformGeneralConfig);
+        when(countryConfigResolver.payloadAsObjectNode(generalConfig))
+                .thenReturn(JsonNodeFactory.instance.objectNode().put("taxRate", 10));
+        when(countryConfigResolver.payloadAsObjectNode(platformGeneralConfig))
+                .thenReturn(JsonNodeFactory.instance.objectNode().put("taxRate", 10));
+    }
 
     @Test
     void processWeek_shouldCreateBatchItemCreditWalletPostLedgerAndMarkCommissionPaid() {

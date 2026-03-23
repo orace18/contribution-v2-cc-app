@@ -21,14 +21,13 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/subscriptions")
 @RequiredArgsConstructor
 @Tag(name = "Subscription", description = "Gestion des plans et de l'initiation d'abonnement")
 public class SubscriptionController {
 
     private final SubscriptionService subscriptionService;
 
-    @GetMapping("/plans")
+    @GetMapping({"/subscriptions/plans", "/subscription-plans"})
     @Operation(summary = "Lister les plans actifs par pays")
     @SecurityRequirement(name = "bearerAuth")
     @ApiResponses(value = {
@@ -36,11 +35,15 @@ public class SubscriptionController {
             @ApiResponse(responseCode = "401", description = "Non authentifie", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
             @ApiResponse(responseCode = "400", description = "Parametre invalide", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
     })
-    public ResponseEntity<CommonResponse<List<SubscriptionPlanResponse>>> plans() {
-        return ResponseEntity.ok(CommonResponse.success("Subscription plans", subscriptionService.getPlans(SecurityUtils.currentAccountHolderId())));
+    public ResponseEntity<CommonResponse<List<SubscriptionPlanResponse>>> plans(
+            @RequestParam(name = "countryCode", required = false) String countryCode) {
+        List<SubscriptionPlanResponse> response = countryCode == null || countryCode.isBlank()
+                ? subscriptionService.getPlans(SecurityUtils.currentAccountHolderId())
+                : subscriptionService.getPlansForCountryCode(countryCode);
+        return ResponseEntity.ok(CommonResponse.success("Subscription plans", response));
     }
 
-    @PostMapping("/initiate")
+    @PostMapping("/subscriptions/initiate")
     @Operation(summary = "Initier un abonnement")
     @SecurityRequirement(name = "bearerAuth")
     @ApiResponses(value = {

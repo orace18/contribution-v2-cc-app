@@ -9,7 +9,9 @@ import com.ccapp.country.config.service.CountryConfigReadinessService;
 import com.ccapp.country.domain.entity.Country;
 import com.ccapp.country.repository.CountryRepository;
 import com.ccapp.payments.subscription.domain.entity.SubscriptionPlan;
+import com.ccapp.payments.subscription.domain.enums.SubscriptionGrade;
 import com.ccapp.payments.subscription.repository.SubscriptionPlanRepository;
+import com.ccapp.payments.subscription.service.SubscriptionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,6 +29,7 @@ public class AdminCountryConfigService {
     private final SubscriptionPlanRepository subscriptionPlanRepository;
     private final CountryRepository countryRepository;
     private final CountryConfigReadinessService countryConfigReadinessService;
+    private final SubscriptionService subscriptionService;
 
     @Transactional(readOnly = true)
     public List<CountryConfigResponse> listCountries() {
@@ -79,6 +82,7 @@ public class AdminCountryConfigService {
 
     @Transactional
     public CountryConfigResponse activateCountry(String code) {
+        subscriptionService.assertCountryPlanCatalogValid(code);
         Country country = loadCountryByCode(code);
         country.setActive(true);
         Country saved = countryRepository.save(country);
@@ -87,6 +91,7 @@ public class AdminCountryConfigService {
 
     @Transactional
     public CountryConfigResponse configureCountry(String code) {
+        subscriptionService.assertCountryPlanCatalogValid(code);
         Country country = loadCountryByCode(code);
         country.setActive(true);
         boolean configured = countryConfigReadinessService.evaluateReadiness(country.getCode()).configured();
@@ -104,9 +109,11 @@ public class AdminCountryConfigService {
 
     @Transactional
     public AdminSubscriptionPlanResponse createSubscriptionPlan(AdminSubscriptionPlanRequest request) {
-        String code = request.code().trim().toUpperCase(Locale.ROOT);
+        String code = resolveCode(request);
+        String name = resolveName(request);
         String country = request.country().trim().toUpperCase(Locale.ROOT);
         String currency = request.currency().trim().toUpperCase(Locale.ROOT);
+        validateDuration(request.grade(), request.durationMonths());
 
         boolean duplicate = subscriptionPlanRepository.findAll().stream()
                 .anyMatch(plan -> plan.getCode().equalsIgnoreCase(code)
@@ -115,13 +122,23 @@ public class AdminCountryConfigService {
         if (duplicate) {
             throw new BusinessException("Subscription plan already exists for code/country/currency");
         }
+        if (subscriptionPlanRepository.existsByCountryAndGradeAndDurationMonthsAndCurrency(
+                country,
+                request.grade(),
+                request.durationMonths(),
+                currency
+        )) {
+            throw new BusinessException("Subscription plan already exists for grade/duration/country/currency");
+        }
 
         SubscriptionPlan saved = subscriptionPlanRepository.save(SubscriptionPlan.builder()
                 .code(code)
-                .name(request.name().trim())
+                .name(name)
+                .grade(request.grade())
+                .durationMonths(request.durationMonths())
                 .country(country)
                 .currency(currency)
-                .price(request.price())
+                .price(request.unitAmount())
                 .active(request.active())
                 .build());
         ensureCountryExists(country, currency);
@@ -162,14 +179,39 @@ public class AdminCountryConfigService {
     private AdminSubscriptionPlanResponse toPlanResponse(SubscriptionPlan plan) {
         return new AdminSubscriptionPlanResponse(
                 plan.getId(),
+                plan.getCountry(),
+                plan.getGrade(),
+                plan.getDurationMonths(),
+                plan.getPrice(),
+                plan.getCurrency(),
                 plan.getCode(),
                 plan.getName(),
-                plan.getCountry(),
-                plan.getCurrency(),
-                plan.getPrice(),
                 plan.isActive(),
                 plan.getCreatedAt()
         );
+    }
+
+    private void validateDuration(SubscriptionGrade grade, Integer durationMonths) {
+        if (durationMonths == null || durationMonths <= 0) {
+            throw new BusinessException("durationMonths must be positive");
+        }
+        if (grade != SubscriptionGrade.FREE && !List.of(1, 3, 12).contains(durationMonths)) {
+            throw new BusinessException("durationMonths must be one of 1, 3 or 12 for paid plans");
+        }
+    }
+
+    private String resolveCode(AdminSubscriptionPlanRequest request) {
+        if (request.code() != null && !request.code().isBlank()) {
+            return request.code().trim().toUpperCase(Locale.ROOT);
+        }
+        return request.grade().name() + "_" + request.durationMonths() + "M";
+    }
+
+    private String resolveName(AdminSubscriptionPlanRequest request) {
+        if (request.name() != null && !request.name().isBlank()) {
+            return request.name().trim();
+        }
+        return request.grade().name() + " " + request.durationMonths() + " months";
     }
 
     private void ensureCountryExists(String code, String preferredCurrency) {

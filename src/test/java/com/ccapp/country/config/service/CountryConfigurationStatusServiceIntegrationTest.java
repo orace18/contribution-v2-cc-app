@@ -4,9 +4,11 @@ import com.ccapp.admin.service.ConfigAuditMetadataService;
 import com.ccapp.config.TestJacksonAndCachingConfig;
 import com.ccapp.country.domain.entity.Country;
 import com.ccapp.country.repository.CountryRepository;
+import com.ccapp.payments.subscription.service.SubscriptionService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 
 import java.util.UUID;
@@ -37,6 +39,8 @@ class CountryConfigurationStatusServiceIntegrationTest {
     private CountryConfigurationEngineService countryConfigurationEngineService;
     @Autowired
     private CountryRepository countryRepository;
+    @MockBean
+    private SubscriptionService subscriptionService;
 
     @Test
     void shouldIncludeActiveWorldCountriesInNotConfiguredWhenNoConfigAttemptExists() {

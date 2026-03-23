@@ -20,6 +20,7 @@ import com.ccapp.country.config.repository.CountryChartAccountRepository;
 import com.ccapp.country.domain.entity.Country;
 import com.ccapp.country.config.repository.CountryConfigVersionRepository;
 import com.ccapp.country.repository.CountryRepository;
+import com.ccapp.payments.subscription.service.SubscriptionService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -59,6 +60,7 @@ public class CountryConfigurationEngineService {
     private final CountryRepository countryRepository;
     private final CountryChartOfAccountsService countryChartOfAccountsService;
     private final CountryConfigReadinessService countryConfigReadinessService;
+    private final SubscriptionService subscriptionService;
     private final ConfigAuditMetadataService configAuditMetadataService;
     private final ObjectMapper objectMapper;
 
@@ -1102,6 +1104,9 @@ public class CountryConfigurationEngineService {
         Country country = countryRepository.findByCode(countryCode)
                 .orElseThrow(() -> new BusinessException("Country not found"));
         boolean configured = countryConfigReadinessService.evaluateReadiness(countryCode).configured();
+        if (configured) {
+            subscriptionService.assertCountryPlanCatalogValid(countryCode);
+        }
         boolean changed = false;
         if (country.isConfigured() != configured) {
             country.setConfigured(configured);

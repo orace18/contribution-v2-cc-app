@@ -154,6 +154,7 @@ public class WeeklyGroupBonusService {
                     .currency(groupBonusCurrency)
                     .source(GROUP_BONUS_SOURCE)
                     .commissionType(CommissionType.GROUP_BONUS)
+                    .generation(0)
                     .weekId(weekId)
                     .build());
             PlatformMonitoringHooks.onCommissionCalculated(saved.getCommissionType().name(), saved.getAmount());

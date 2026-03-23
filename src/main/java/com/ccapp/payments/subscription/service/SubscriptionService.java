@@ -1,52 +1,106 @@
 package com.ccapp.payments.subscription.service;
 
-import com.ccapp.payments.operation.domain.entity.Operation;
-import com.ccapp.payments.operation.domain.enums.OperationType;
-import com.ccapp.payments.operation.service.OperationService;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.common.exception.NotFoundException;
-import com.ccapp.country.dto.CountryContext;
+import com.ccapp.country.domain.entity.Country;
+import com.ccapp.country.repository.CountryRepository;
 import com.ccapp.country.service.CountryContextService;
 import com.ccapp.identity.delegation.domain.enums.PermissionLevel;
 import com.ccapp.identity.delegation.service.AccessControlService;
+import com.ccapp.payments.operation.domain.entity.Operation;
+import com.ccapp.payments.operation.domain.enums.OperationType;
+import com.ccapp.payments.operation.service.OperationService;
 import com.ccapp.payments.psp.dto.JawupayInitiateResponse;
-import com.ccapp.country.config.domain.enums.CountryConfigType;
-import com.ccapp.country.config.service.CountryConfigResolver;
 import com.ccapp.payments.service.PaymentService;
 import com.ccapp.payments.subscription.domain.entity.SubscriptionPlan;
+import com.ccapp.payments.subscription.domain.enums.SubscriptionGrade;
 import com.ccapp.payments.subscription.dto.InitiateSubscriptionRequest;
 import com.ccapp.payments.subscription.dto.InitiateSubscriptionResponse;
 import com.ccapp.payments.subscription.dto.SubscriptionPlanResponse;
 import com.ccapp.payments.subscription.mapper.SubscriptionPlanMapper;
 import com.ccapp.payments.subscription.repository.SubscriptionPlanRepository;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 public class SubscriptionService {
 
+    private static final String FALLBACK_COUNTRY_CODE = "INT";
+    private static final Set<Integer> REQUIRED_PAID_DURATIONS = Set.of(1, 3, 12);
+
     private final SubscriptionPlanRepository subscriptionPlanRepository;
     private final SubscriptionPlanMapper subscriptionPlanMapper;
     private final CountryContextService countryContextService;
+    private final CountryRepository countryRepository;
     private final AccessControlService accessControlService;
     private final OperationService operationService;
-    private final CountryConfigResolver countryConfigResolver;
     private final MembershipService membershipService;
     private final PaymentService paymentService;
 
     @Transactional(readOnly = true)
     public List<SubscriptionPlanResponse> getPlans(UUID accountHolderId) {
-        CountryContext countryContext = countryContextService.resolve(accountHolderId);
-        return subscriptionPlanRepository.findByCountryAndActiveTrueOrderByPriceAsc(countryContext.serviceCountryCode()).stream()
+        String serviceCountryCode = countryContextService.resolve(accountHolderId).serviceCountryCode();
+        return getPlansForCountryCode(serviceCountryCode);
+    }
+
+    @Transactional(readOnly = true)
+    public List<SubscriptionPlanResponse> getPlansForCountryCode(String countryCode) {
+        return subscriptionPlanRepository
+                .findByCountryAndActiveTrueOrderByGradeAscDurationMonthsAscPriceAsc(resolveCatalogCountryCode(countryCode))
+                .stream()
                 .map(subscriptionPlanMapper::toResponse)
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public void assertCountryPlanCatalogValid(String countryCode) {
+        String normalizedCountryCode = normalizeCountryCode(countryCode);
+        List<SubscriptionPlan> activePlans = subscriptionPlanRepository
+                .findByCountryAndActiveTrueOrderByGradeAscDurationMonthsAscPriceAsc(normalizedCountryCode);
+        if (activePlans.size() < 10) {
+            throw new BusinessException("Subscription plans must include at least 10 active plans for the country");
+        }
+
+        Map<SubscriptionGrade, Set<Integer>> durationsByGrade = new EnumMap<>(SubscriptionGrade.class);
+        for (SubscriptionGrade grade : SubscriptionGrade.values()) {
+            durationsByGrade.put(grade, new java.util.HashSet<>());
+        }
+        for (SubscriptionPlan plan : activePlans) {
+            if (plan.getGrade() == null || plan.getDurationMonths() == null) {
+                throw new BusinessException("All active subscription plans must define grade and durationMonths");
+            }
+            durationsByGrade.get(plan.getGrade()).add(plan.getDurationMonths());
+        }
+
+        for (SubscriptionGrade grade : List.of(SubscriptionGrade.CLASSIC, SubscriptionGrade.GOLD, SubscriptionGrade.DIAMOND)) {
+            if (!durationsByGrade.get(grade).containsAll(REQUIRED_PAID_DURATIONS)) {
+                throw new BusinessException("Subscription plans must include 1, 3 and 12-month durations for " + grade.name());
+            }
+        }
+        if (durationsByGrade.get(SubscriptionGrade.FREE).isEmpty()) {
+            throw new BusinessException("Subscription plans must include at least one FREE plan");
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public String resolveCatalogCountryCode(String countryCode) {
+        if (countryCode == null || countryCode.isBlank()) {
+            return FALLBACK_COUNTRY_CODE;
+        }
+        String normalizedCountryCode = normalizeCountryCode(countryCode);
+        return countryRepository.findByCode(normalizedCountryCode)
+                .filter(Country::isConfigured)
+                .map(Country::getCode)
+                .orElse(FALLBACK_COUNTRY_CODE);
     }
 
     @Transactional
@@ -57,19 +111,14 @@ public class SubscriptionService {
             throw new BusinessException("Actor user is required");
         }
         accessControlService.assertCanActOnAccountHolder(actorUserId, accountHolderId, PermissionLevel.TRANSACT);
-        CountryContext countryContext = countryContextService.resolve(accountHolderId);
 
-        SubscriptionPlan plan = subscriptionPlanRepository
-                .findByCodeAndCountryAndActiveTrue(request.planCode(), countryContext.serviceCountryCode())
+        String serviceCountryCode = countryContextService.resolve(accountHolderId).serviceCountryCode();
+        String expectedCatalogCountryCode = resolveCatalogCountryCode(serviceCountryCode);
+        SubscriptionPlan plan = subscriptionPlanRepository.findByIdAndActiveTrue(request.planId())
                 .orElseThrow(() -> new NotFoundException("Subscription plan not found"));
-        if (!plan.getCountry().equalsIgnoreCase(countryContext.serviceCountryCode())) {
-            throw new BusinessException("Subscription plan country must match account holder service country");
+        if (!plan.getCountry().equalsIgnoreCase(expectedCatalogCountryCode)) {
+            throw new BusinessException("Selected plan is not available for the requested country catalog");
         }
-        CountryConfigResolver.ResolvedConfig membershipConfig = countryConfigResolver.resolveActiveConfig(
-                countryContext.serviceCountryCode(),
-                CountryConfigType.MEMBERSHIP
-        );
-        assertPlanAllowedByConfiguration(plan, membershipConfig);
 
         String idempotencyKey = request.idempotencyKey() == null || request.idempotencyKey().isBlank()
                 ? "sub:" + UUID.randomUUID()
@@ -82,7 +131,8 @@ public class SubscriptionService {
                 plan.getPrice(),
                 plan.getCurrency(),
                 idempotencyKey,
-                "Subscription " + plan.getCode()
+                "Subscription " + plan.getCode(),
+                plan.getId()
         );
 
         JawupayInitiateResponse pspResponse = paymentService.initiatePayment(
@@ -95,14 +145,14 @@ public class SubscriptionService {
                 operation.getDescription()
         );
 
-        operationService.assignPspReference(operation.getId(), pspResponse.pspReference());
+        operationService.markPendingPsp(operation.getId(), pspResponse.pspReference());
         membershipService.createPendingMembership(operation.getId(), accountHolderId, plan);
 
         return new InitiateSubscriptionResponse(
                 operation.getId(),
                 pspResponse.pspReference(),
                 pspResponse.checkoutUrl(),
-                operation.getStatus().name()
+                "PENDING_PSP"
         );
     }
 
@@ -111,32 +161,7 @@ public class SubscriptionService {
         return initiate(accountHolderId, accountHolderId, request);
     }
 
-    private void assertPlanAllowedByConfiguration(SubscriptionPlan plan,
-                                                  CountryConfigResolver.ResolvedConfig membershipConfig) {
-        ObjectNode payload = countryConfigResolver.payloadAsObjectNode(membershipConfig);
-        JsonNode plans = payload.get("plans");
-        if (plans == null || !plans.isArray() || plans.isEmpty()) {
-            return;
-        }
-
-        boolean matchingPlan = false;
-        for (JsonNode configuredPlan : plans) {
-            if (!configuredPlan.isObject()) {
-                continue;
-            }
-            JsonNode codeNode = configuredPlan.get("code");
-            JsonNode nameNode = configuredPlan.get("name");
-            boolean codeMatches = codeNode != null && codeNode.isTextual()
-                    && codeNode.asText().equalsIgnoreCase(plan.getCode());
-            boolean nameMatches = nameNode != null && nameNode.isTextual()
-                    && nameNode.asText().equalsIgnoreCase(plan.getName());
-            if (codeMatches || nameMatches) {
-                matchingPlan = true;
-                break;
-            }
-        }
-        if (!matchingPlan) {
-            throw new BusinessException("Subscription plan is not allowed by membership configuration");
-        }
+    private String normalizeCountryCode(String countryCode) {
+        return countryCode.trim().toUpperCase(Locale.ROOT);
     }
 }

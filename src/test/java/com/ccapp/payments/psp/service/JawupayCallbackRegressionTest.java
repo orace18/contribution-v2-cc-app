@@ -4,10 +4,14 @@ import com.ccapp.common.exception.BusinessException;
 import com.ccapp.ledger.service.AccountingPostingService;
 import com.ccapp.payments.commission.service.MlmCommissionService;
 import com.ccapp.payments.operation.domain.entity.Operation;
+import com.ccapp.payments.operation.domain.enums.OperationType;
+import com.ccapp.payments.operation.repository.OperationRepository;
+import com.ccapp.payments.service.PaymentService;
 import com.ccapp.payments.operation.service.OperationService;
 import com.ccapp.payments.psp.domain.entity.PspCallbackEvent;
 import com.ccapp.payments.psp.dto.JawupayCallbackRequest;
 import com.ccapp.payments.psp.repository.PspCallbackEventRepository;
+import com.ccapp.payments.subscription.service.MembershipService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -41,9 +45,15 @@ class JawupayCallbackRegressionTest {
     @Mock
     private OperationService operationService;
     @Mock
+    private OperationRepository operationRepository;
+    @Mock
+    private PaymentService paymentService;
+    @Mock
     private AccountingPostingService accountingPostingService;
     @Mock
     private MlmCommissionService mlmCommissionService;
+    @Mock
+    private MembershipService membershipService;
     @Mock
     private PspCallbackEventRepository callbackEventRepository;
     @Mock
@@ -81,7 +91,7 @@ class JawupayCallbackRegressionTest {
         JawupayCallbackRequest request = callbackRequest("SUCCESS", Instant.now().getEpochSecond());
         String signature = sign(request);
         UUID operationId = UUID.randomUUID();
-        Operation confirmedOperation = Operation.builder().id(operationId).build();
+        Operation confirmedOperation = Operation.builder().id(operationId).type(OperationType.SUBSCRIPTION).build();
 
         when(simpleRateLimiter.allow("10.0.0.1", 60)).thenReturn(true);
         when(callbackEventRepository.existsByNonce("nonce-1")).thenReturn(false);
@@ -97,6 +107,7 @@ class JawupayCallbackRegressionTest {
         assertEquals(signature, eventCaptor.getValue().getSignature());
 
         verify(operationService).confirmByPspReference("PSP-REF-001", new BigDecimal("1500.00"), "XOF");
+        verify(membershipService).activateForConfirmedOperation(confirmedOperation);
         verify(accountingPostingService).postConfirmedOperation(operationId);
         verify(mlmCommissionService).calculateForOperation(confirmedOperation);
     }
@@ -105,14 +116,19 @@ class JawupayCallbackRegressionTest {
     void processCallback_shouldNotPostLedger_forNonSuccessfulStatus() throws Exception {
         JawupayCallbackRequest request = callbackRequest("FAILED", Instant.now().getEpochSecond());
         String signature = sign(request);
+        UUID operationId = UUID.randomUUID();
+        Operation failedOperation = Operation.builder().id(operationId).build();
 
         when(simpleRateLimiter.allow("10.0.0.2", 60)).thenReturn(true);
         when(callbackEventRepository.existsByNonce("nonce-1")).thenReturn(false);
         when(callbackEventRepository.save(any(PspCallbackEvent.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(operationService.failByPspReference("PSP-REF-001")).thenReturn(failedOperation);
 
         jawupayService.processCallback(request, signature, "10.0.0.2");
 
         verify(callbackEventRepository).save(any(PspCallbackEvent.class));
+        verify(operationService).failByPspReference("PSP-REF-001");
+        verify(membershipService).cancelPendingMembership(operationId);
         verify(operationService, never()).confirmByPspReference(any(), any(), any());
         verify(accountingPostingService, never()).postConfirmedOperation(any());
         verify(mlmCommissionService, never()).calculateForOperation(any());

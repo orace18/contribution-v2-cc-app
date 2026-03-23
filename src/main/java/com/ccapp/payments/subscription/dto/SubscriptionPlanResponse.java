@@ -5,10 +5,12 @@ import java.util.UUID;
 
 public record SubscriptionPlanResponse(
         UUID id,
-        String code,
-        String name,
-        String country,
+        String countryCode,
+        String grade,
+        Integer durationMonths,
+        java.math.BigDecimal unitAmount,
         String currency,
-        BigDecimal price
+        String code,
+        String name
 ) {
 }

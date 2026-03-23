@@ -1,6 +1,7 @@
 package com.ccapp.identity.verification.service;
 
 import com.ccapp.common.exception.BusinessException;
+import com.ccapp.common.events.DomainEventPublisher;
 import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
 import com.ccapp.identity.account_holder.domain.enums.AccountType;
 import com.ccapp.identity.account_holder.repository.AccountHolderRepository;
@@ -47,6 +48,8 @@ class PhoneVerificationServiceIntegrationTest {
 
     @MockBean
     private PhoneMessageGateway phoneMessageGateway;
+    @MockBean
+    private DomainEventPublisher domainEventPublisher;
 
     @BeforeEach
     void setUp() {

@@ -4,37 +4,45 @@ import com.ccapp.notifications.domain.enums.NotificationChannel;
 import com.ccapp.notifications.domain.enums.NotificationType;
 import com.ccapp.notifications.dto.SendMultiChannelNotificationRequest;
 import com.ccapp.notifications.service.NotificationService;
-import com.ccapp.payments.operation.domain.entity.Operation;
-import com.ccapp.payments.operation.domain.enums.OperationStatus;
-import com.ccapp.payments.operation.domain.enums.OperationType;
-import com.ccapp.payments.operation.repository.OperationRepository;
+import com.ccapp.payments.subscription.domain.entity.Membership;
+import com.ccapp.payments.subscription.repository.MembershipRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Sort;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class SubscriptionExpirationJob {
 
-    private final OperationRepository operationRepository;
+    private final MembershipRepository membershipRepository;
     private final NotificationService notificationService;
 
     @Scheduled(cron = "${notifications.scheduler.subscription-expiration.cron:0 0 */6 * * *}")
     @Transactional
     public void run() {
-        List<Operation> latestSubscriptions = operationRepository
-                .findLatestByTypeAndStatus(OperationType.SUBSCRIPTION, OperationStatus.CONFIRMED);
+        List<Membership> memberships = membershipRepository.findAll(
+                Sort.by(Sort.Order.asc("accountHolderId"), Sort.Order.desc("expiresAt"), Sort.Order.desc("createdAt"))
+        );
 
         LocalDate today = LocalDate.now();
-        for (Operation operation : latestSubscriptions) {
-            LocalDate expirationDate = operation.getCreatedAt().toLocalDate().plusDays(30);
+        Set<java.util.UUID> processedAccountHolderIds = new HashSet<>();
+        for (Membership membership : memberships) {
+            if (membership.getAccountHolderId() == null
+                    || membership.getExpiresAt() == null
+                    || !processedAccountHolderIds.add(membership.getAccountHolderId())) {
+                continue;
+            }
+            LocalDate expirationDate = membership.getExpiresAt().toLocalDate();
             long daysUntilExpiration = ChronoUnit.DAYS.between(today, expirationDate);
 
             SubscriptionWindow window = resolveWindow(daysUntilExpiration);
@@ -43,7 +51,7 @@ public class SubscriptionExpirationJob {
             }
 
             if (notificationService.existsNotificationForToday(
-                    operation.getAccountHolderId(),
+                    membership.getAccountHolderId(),
                     window.type(),
                     window.templateCode(),
                     today)) {
@@ -52,8 +60,8 @@ public class SubscriptionExpirationJob {
 
             try {
                 notificationService.sendMultiChannel(new SendMultiChannelNotificationRequest(
-                        operation.getAccountHolderId(),
-                        operation.getActorUserId(),
+                        membership.getAccountHolderId(),
+                        membership.getAccountHolderId(),
                         window.type(),
                         List.of(NotificationChannel.IN_APP, NotificationChannel.PUSH, NotificationChannel.SMS, NotificationChannel.EMAIL),
                         window.templateCode(),
@@ -63,7 +71,7 @@ public class SubscriptionExpirationJob {
                 ));
             } catch (RuntimeException ex) {
                 log.warn("Subscription expiration notification failed for accountHolderId={}",
-                        operation.getAccountHolderId(), ex);
+                        membership.getAccountHolderId(), ex);
             }
         }
     }

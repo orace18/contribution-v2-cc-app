@@ -1,10 +1,12 @@
 package com.ccapp.payments.subscription.dto;
 
-import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+
+import java.util.UUID;
 
 public record InitiateSubscriptionRequest(
-        @NotBlank(message = "planCode is required")
-        String planCode,
+        @NotNull(message = "planId is required")
+        UUID planId,
 
         String idempotencyKey
 ) {

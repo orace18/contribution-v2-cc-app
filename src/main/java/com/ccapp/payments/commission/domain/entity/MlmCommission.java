@@ -30,15 +30,15 @@ import java.util.UUID;
 @Entity
 @Table(name = "mlm_commissions",
         uniqueConstraints = {
-                @UniqueConstraint(name = "uk_mlm_commissions_operation", columnNames = "operation_id"),
-                @UniqueConstraint(name = "uk_mlm_commissions_member_type_week",
-                        columnNames = {"beneficiary_account_holder_id", "commission_type", "week_id"})
+                @UniqueConstraint(name = "uk_mlm_commissions_operation_member_generation",
+                        columnNames = {"operation_id", "beneficiary_account_holder_id", "generation"})
         },
         indexes = {
                 @Index(name = "idx_mlm_commissions_beneficiary_created",
                         columnList = "beneficiary_account_holder_id, created_at"),
                 @Index(name = "idx_mlm_commissions_type_week", columnList = "commission_type, week_id"),
                 @Index(name = "idx_mlm_commissions_week_type_status", columnList = "week_id, commission_type, status"),
+                @Index(name = "idx_mlm_commissions_operation_generation", columnList = "operation_id, generation"),
                 @Index(name = "idx_mlm_commissions_payout_batch", columnList = "payout_batch_id"),
                 @Index(name = "idx_mlm_commissions_payout_item", columnList = "payout_item_id")
         })
@@ -66,6 +66,9 @@ public class MlmCommission {
     @Enumerated(EnumType.STRING)
     @Column(name = "commission_type", nullable = false, length = 32)
     private CommissionType commissionType;
+
+    @Column(name = "generation")
+    private Integer generation;
 
     @Column(name = "week_id")
     private Integer weekId;

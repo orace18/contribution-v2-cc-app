@@ -1,6 +1,9 @@
 package com.ccapp.payments.commission.service;
 
 import com.ccapp.common.exception.BusinessException;
+import com.ccapp.country.config.domain.enums.CountryConfigType;
+import com.ccapp.country.config.service.CountryConfigResolver;
+import com.ccapp.identity.account_holder.repository.AccountHolderRepository;
 import com.ccapp.financial.audit.service.FinancialAuditService;
 import com.ccapp.identity.wallet.domain.entity.Wallet;
 import com.ccapp.identity.wallet.repository.WalletRepository;
@@ -20,10 +23,12 @@ import com.ccapp.payments.operation.domain.entity.Operation;
 import com.ccapp.payments.operation.domain.enums.OperationStatus;
 import com.ccapp.payments.operation.domain.enums.OperationType;
 import com.ccapp.payments.operation.service.OperationService;
+import com.ccapp.platform.config.domain.enums.PlatformConfigType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,6 +39,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -46,12 +52,17 @@ public class CommissionPayoutBatchProcessor {
     private final CommissionPayoutItemRepository payoutItemRepository;
     private final MlmCommissionRepository mlmCommissionRepository;
     private final WalletRepository walletRepository;
+    private final AccountHolderRepository accountHolderRepository;
     private final OperationService operationService;
     private final AccountingPostingService accountingPostingService;
     private final FinancialAuditService financialAuditService;
+    private final CountryConfigResolver countryConfigResolver;
 
     @Value("${commission.payout.tax-rate-percent:10.0}")
     private BigDecimal taxRatePercent;
+
+    @Value("${commission.payout.subscription.cron:0 59 23 * * SUN}")
+    private String subscriptionPayoutCron;
 
     @Transactional
     public CommissionPayoutProcessingResult processWeek(int weekId) {
@@ -104,6 +115,50 @@ public class CommissionPayoutBatchProcessor {
         return new CommissionPayoutProcessingResult(batch.getId(), weekId, batch.getStatus(), paidItems, failedItems);
     }
 
+    @Scheduled(cron = "${commission.payout.subscription.cron:0 59 23 * * SUN}", zone = "${mlm.group-bonus.zone:Africa/Porto-Novo}")
+    @Transactional
+    public CommissionPayoutProcessingResult processPendingSubscriptionCommissions() {
+        int weekId = currentWeekId();
+        OffsetDateTime startedAt = OffsetDateTime.now();
+        CommissionPayoutBatch batch = resolveOrCreateBatch(weekId);
+        batch.setStatus(CommissionPayoutBatchStatus.PROCESSING);
+        payoutBatchRepository.save(batch);
+
+        List<MlmCommission> pendingCommissions = mlmCommissionRepository
+                .findByCommissionTypeAndStatusOrderByBeneficiaryAccountHolderIdAscCreatedAtAsc(
+                        CommissionType.SUBSCRIPTION,
+                        CommissionStatus.PENDING
+                );
+        if (pendingCommissions.isEmpty()) {
+            batch.setStatus(CommissionPayoutBatchStatus.COMPLETED);
+            payoutBatchRepository.save(batch);
+            return new CommissionPayoutProcessingResult(batch.getId(), weekId, batch.getStatus(), 0, 0);
+        }
+
+        int paidItems = 0;
+        int failedItems = 0;
+        Map<UUID, List<MlmCommission>> commissionsByAccountHolder = pendingCommissions.stream()
+                .collect(Collectors.groupingBy(MlmCommission::getBeneficiaryAccountHolderId));
+
+        for (Map.Entry<UUID, List<MlmCommission>> entry : commissionsByAccountHolder.entrySet()) {
+            UUID accountHolderId = entry.getKey();
+            List<MlmCommission> commissions = entry.getValue();
+            try {
+                paidItems += processSubscriptionCommissionGroup(batch, accountHolderId, commissions);
+            } catch (RuntimeException ex) {
+                failedItems += commissions.size();
+                log.warn("Subscription commission payout group failed batchId={} accountHolderId={} count={}",
+                        batch.getId(), accountHolderId, commissions.size(), ex);
+            }
+        }
+
+        batch.setStatus(failedItems > 0 ? CommissionPayoutBatchStatus.FAILED : CommissionPayoutBatchStatus.COMPLETED);
+        payoutBatchRepository.save(batch);
+        Duration duration = Duration.between(startedAt, OffsetDateTime.now());
+        PlatformMonitoringHooks.onPayoutBatchProcessed(batch.getStatus().name(), paidItems, failedItems, duration);
+        return new CommissionPayoutProcessingResult(batch.getId(), weekId, batch.getStatus(), paidItems, failedItems);
+    }
+
     private CommissionPayoutBatch resolveOrCreateBatch(int weekId) {
         return payoutBatchRepository.findByWeekId(weekId)
                 .orElseGet(() -> {
@@ -116,6 +171,81 @@ public class CommissionPayoutBatchProcessor {
                         return payoutBatchRepository.findByWeekId(weekId).orElseThrow(() -> ex);
                     }
                 });
+    }
+
+    private int processSubscriptionCommissionGroup(CommissionPayoutBatch batch,
+                                                   UUID accountHolderId,
+                                                   List<MlmCommission> commissions) {
+        requireActiveWallet(accountHolderId);
+        BigDecimal grossAmount = commissions.stream()
+                .map(MlmCommission::getAmount)
+                .reduce(BigDecimal.ZERO.setScale(SCALE, RoundingMode.HALF_UP), BigDecimal::add)
+                .setScale(SCALE, RoundingMode.HALF_UP);
+        BigDecimal taxRate = resolveTaxRate(accountHolderId);
+        BigDecimal taxAmount = grossAmount
+                .multiply(taxRate)
+                .divide(BigDecimal.valueOf(100), SCALE, RoundingMode.HALF_UP);
+        BigDecimal netAmount = grossAmount.subtract(taxAmount).setScale(SCALE, RoundingMode.HALF_UP);
+        String currency = commissions.getFirst().getCurrency();
+
+        Operation payoutOperation = resolveOrCreateGroupedPayoutOperation(
+                batch.getWeekId(),
+                accountHolderId,
+                grossAmount,
+                currency
+        );
+        accountingPostingService.postCommissionPayout(payoutOperation, accountHolderId, taxAmount, netAmount);
+
+        List<AmountSplit> splits = splitAcrossCommissions(commissions, taxAmount);
+        OffsetDateTime paidAt = OffsetDateTime.now();
+        for (int i = 0; i < commissions.size(); i++) {
+            MlmCommission commission = commissions.get(i);
+            AmountSplit split = splits.get(i);
+            CommissionPayoutItem item = resolveOrCreatePayoutItem(batch.getId(), commission);
+            item.setGrossAmount(split.grossAmount());
+            item.setTaxAmount(split.taxAmount());
+            item.setNetAmount(split.netAmount());
+            item.setOperationId(payoutOperation.getId());
+            item.setStatus(CommissionPayoutItemStatus.PAID);
+            item.setFailureReason(null);
+            item.setProcessedAt(paidAt);
+            payoutItemRepository.save(item);
+
+            commission.setStatus(CommissionStatus.PAID);
+            commission.setPaidAt(paidAt);
+            commission.setPayoutBatchId(batch.getId());
+            commission.setPayoutItemId(item.getId());
+            mlmCommissionRepository.save(commission);
+        }
+
+        financialAuditService.record(
+                "COMMISSION_PAYOUT",
+                payoutOperation.getId().toString(),
+                accountHolderId,
+                grossAmount,
+                Map.of(
+                        "batchId", batch.getId().toString(),
+                        "weekId", String.valueOf(batch.getWeekId()),
+                        "taxAmount", taxAmount.toPlainString(),
+                        "netAmount", netAmount.toPlainString(),
+                        "commissionsCount", String.valueOf(commissions.size()),
+                        "commissionType", CommissionType.SUBSCRIPTION.name()
+                )
+        );
+        financialAuditService.record(
+                "WALLET_CREDIT",
+                payoutOperation.getId().toString(),
+                accountHolderId,
+                netAmount,
+                Map.of(
+                        "batchId", batch.getId().toString(),
+                        "weekId", String.valueOf(batch.getWeekId()),
+                        "grossAmount", grossAmount.toPlainString(),
+                        "taxAmount", taxAmount.toPlainString(),
+                        "commissionType", CommissionType.SUBSCRIPTION.name()
+                )
+        );
+        return commissions.size();
     }
 
     private CommissionPayoutItem resolveOrCreatePayoutItem(UUID batchId, MlmCommission commission) {
@@ -246,6 +376,80 @@ public class CommissionPayoutBatchProcessor {
         }
     }
 
+    private Operation resolveOrCreateGroupedPayoutOperation(int weekId,
+                                                            UUID accountHolderId,
+                                                            BigDecimal grossAmount,
+                                                            String currency) {
+        String idempotencyKey = "commission-payout-subscription:" + weekId + ":" + accountHolderId;
+        Operation initiated = operationService.createInitiatedOperation(
+                accountHolderId,
+                accountHolderId,
+                OperationType.COMMISSION_PAYOUT,
+                grossAmount,
+                currency,
+                idempotencyKey,
+                "Subscription commission payout week " + weekId
+        );
+        return initiated.getStatus() == OperationStatus.CONFIRMED
+                ? initiated
+                : operationService.confirmOperation(initiated.getId());
+    }
+
+    private BigDecimal resolveTaxRate(UUID accountHolderId) {
+        String countryCode = accountHolderRepository.findById(accountHolderId)
+                .map(accountHolder -> {
+                    if (accountHolder.getServiceCountryCode() != null && !accountHolder.getServiceCountryCode().isBlank()) {
+                        return accountHolder.getServiceCountryCode();
+                    }
+                    return accountHolder.getCountryCode();
+                })
+                .orElse(null);
+        if (countryCode != null && !countryCode.isBlank()) {
+            var countryGeneral = countryConfigResolver.resolveActiveConfig(countryCode, CountryConfigType.GENERAL);
+            var payload = countryConfigResolver.payloadAsObjectNode(countryGeneral);
+            var taxNode = payload.get("taxRate");
+            if (taxNode != null && taxNode.isNumber()) {
+                return taxNode.decimalValue().setScale(SCALE, RoundingMode.HALF_UP);
+            }
+        }
+        var platformGeneral = countryConfigResolver.resolveActivePlatformConfig(PlatformConfigType.GLOBAL_GENERAL);
+        var platformPayload = countryConfigResolver.payloadAsObjectNode(platformGeneral);
+        var fallbackTaxNode = platformPayload.get("taxRate");
+        if (fallbackTaxNode != null && fallbackTaxNode.isNumber()) {
+            return fallbackTaxNode.decimalValue().setScale(SCALE, RoundingMode.HALF_UP);
+        }
+        return taxRatePercent.setScale(SCALE, RoundingMode.HALF_UP);
+    }
+
+    private List<AmountSplit> splitAcrossCommissions(List<MlmCommission> commissions, BigDecimal totalTaxAmount) {
+        List<AmountSplit> splits = new java.util.ArrayList<>(commissions.size());
+        BigDecimal allocatedTax = BigDecimal.ZERO.setScale(SCALE, RoundingMode.HALF_UP);
+        for (int i = 0; i < commissions.size(); i++) {
+            MlmCommission commission = commissions.get(i);
+            BigDecimal grossAmount = commission.getAmount().setScale(SCALE, RoundingMode.HALF_UP);
+            BigDecimal taxAmount = i == commissions.size() - 1
+                    ? totalTaxAmount.subtract(allocatedTax).setScale(SCALE, RoundingMode.HALF_UP)
+                    : grossAmount.multiply(resolveTaxRate(commission.getBeneficiaryAccountHolderId()))
+                    .divide(BigDecimal.valueOf(100), SCALE, RoundingMode.HALF_UP);
+            if (taxAmount.compareTo(grossAmount) > 0) {
+                taxAmount = grossAmount;
+            }
+            allocatedTax = allocatedTax.add(taxAmount).setScale(SCALE, RoundingMode.HALF_UP);
+            splits.add(new AmountSplit(
+                    grossAmount,
+                    taxAmount,
+                    grossAmount.subtract(taxAmount).setScale(SCALE, RoundingMode.HALF_UP)
+            ));
+        }
+        return splits;
+    }
+
+    private int currentWeekId() {
+        OffsetDateTime now = OffsetDateTime.now();
+        return (now.get(java.time.temporal.IsoFields.WEEK_BASED_YEAR) * 100)
+                + now.get(java.time.temporal.IsoFields.WEEK_OF_WEEK_BASED_YEAR);
+    }
+
     private Operation resolveOrCreateConfirmedPayoutOperation(CommissionPayoutBatch batch,
                                                               CommissionPayoutItem item,
                                                               MlmCommission commission,
@@ -291,5 +495,12 @@ public class CommissionPayoutBatchProcessor {
             return "Unexpected payout failure";
         }
         return reason.length() <= 512 ? reason : reason.substring(0, 512);
+    }
+
+    private record AmountSplit(
+            BigDecimal grossAmount,
+            BigDecimal taxAmount,
+            BigDecimal netAmount
+    ) {
     }
 }

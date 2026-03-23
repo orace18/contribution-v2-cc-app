@@ -5,6 +5,8 @@ import com.ccapp.community.domain.entity.CommunityPost;
 import com.ccapp.community.dto.CreateCommunityPostRequest;
 import com.ccapp.community.event.PostCreatedEvent;
 import com.ccapp.community.repository.CommunityPostRepository;
+import com.ccapp.community.repository.PostCommentRepository;
+import com.ccapp.community.repository.PostLikeRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -24,6 +26,10 @@ class CommunityAdminServiceTest {
 
     @Mock
     private CommunityPostRepository communityPostRepository;
+    @Mock
+    private PostLikeRepository postLikeRepository;
+    @Mock
+    private PostCommentRepository postCommentRepository;
     @Mock
     private DomainEventPublisher domainEventPublisher;
 

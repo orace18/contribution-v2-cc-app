@@ -8,9 +8,11 @@ import com.ccapp.country.config.service.CountryConfigurationEngineService;
 import com.ccapp.country.config.service.CountrySetupBootstrapService;
 import com.ccapp.country.domain.entity.Country;
 import com.ccapp.country.repository.CountryRepository;
+import com.ccapp.payments.subscription.service.SubscriptionService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 
 import java.util.UUID;
@@ -41,6 +43,8 @@ class AdminCountryWorkspaceServiceIntegrationTest {
     private CountryConfigurationEngineService countryConfigurationEngineService;
     @Autowired
     private CountryRepository countryRepository;
+    @MockBean
+    private SubscriptionService subscriptionService;
 
     @Test
     void countriesOverview_shouldSeparateConfiguredAndUnconfiguredCountriesWithCountryBoundActions() {
@@ -83,14 +87,13 @@ class AdminCountryWorkspaceServiceIntegrationTest {
         assertEquals("/countries/GH?mode=edit", response.headerActions().get(0).targetPath());
         assertEquals("Continue Setup", response.headerActions().get(1).label());
         assertEquals("/countries/GH/setup", response.headerActions().get(1).targetPath());
-        assertEquals(7, response.tabs().size());
+        assertEquals(6, response.tabs().size());
         assertEquals("general", response.tabs().get(0).key());
         assertEquals("accounting", response.tabs().get(1).key());
         assertEquals("membership", response.tabs().get(2).key());
         assertEquals("mlm", response.tabs().get(3).key());
         assertEquals("financing", response.tabs().get(4).key());
-        assertEquals("payment", response.tabs().get(5).key());
-        assertEquals("risk", response.tabs().get(6).key());
+        assertEquals("risk", response.tabs().get(5).key());
     }
 
     private void saveCountry(String code, String name) {

@@ -1,6 +1,7 @@
 package com.ccapp.financing.service;
 
 import com.ccapp.config.TestJacksonAndCachingConfig;
+import com.ccapp.common.events.DomainEventPublisher;
 import com.ccapp.country.config.service.CountryConfigResolver;
 import com.ccapp.country.dto.CountryContext;
 import com.ccapp.financing.domain.entity.FinancialPartner;
@@ -80,6 +81,8 @@ class PartnerBackofficeApplicationFlowIntegrationTest {
     private AccountingPostingService accountingPostingService;
     @MockBean
     private CountryConfigResolver countryConfigResolver;
+    @MockBean
+    private DomainEventPublisher domainEventPublisher;
 
     private FinancingOffer offer;
     private LoanApplication application;
@@ -128,6 +131,7 @@ class PartnerBackofficeApplicationFlowIntegrationTest {
                 .name("Partner Review")
                 .type(FinancialPartnerType.IMF)
                 .countryCode("BJ")
+                .currency("XOF")
                 .status(FinancialPartnerStatus.ACTIVE)
                 .build());
         offer = financingOfferRepository.save(FinancingOffer.builder()

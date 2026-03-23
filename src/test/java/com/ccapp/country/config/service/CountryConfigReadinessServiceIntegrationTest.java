@@ -15,6 +15,7 @@ import com.ccapp.country.config.dto.UpsertCountryConfigRequest;
 import com.ccapp.country.config.repository.CountryChartAccountRepository;
 import com.ccapp.country.domain.entity.Country;
 import com.ccapp.country.repository.CountryRepository;
+import com.ccapp.payments.subscription.service.SubscriptionService;
 import com.ccapp.platform.config.service.PlatformConfigurationService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -22,6 +23,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 
 import java.math.BigDecimal;
@@ -58,6 +60,8 @@ class CountryConfigReadinessServiceIntegrationTest {
     private CountryConfigurationEngineService countryConfigurationEngineService;
     @Autowired
     private CountryConfigReadinessService countryConfigReadinessService;
+    @MockBean
+    private SubscriptionService subscriptionService;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 

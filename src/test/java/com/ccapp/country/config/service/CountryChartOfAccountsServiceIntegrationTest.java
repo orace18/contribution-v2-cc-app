@@ -151,8 +151,8 @@ class CountryChartOfAccountsServiceIntegrationTest {
         CountryChartAccount second = countryChartOfAccountsService.findOrCreate("CI", CountryAccountGroup.MEMBERSHIP_FEES);
 
         assertEquals(first.getId(), second.getId());
-        assertEquals("SALES", first.getAccountGroup().name());
-        assertTrue(first.getAccountNumber().matches("^70\\d{6}$"));
+        assertEquals("MEMBERSHIP_FEES", first.getAccountGroup().name());
+        assertEquals("750001", first.getAccountNumber());
         assertEquals(first.getAccountNumber(), first.getAccountCode());
     }
 

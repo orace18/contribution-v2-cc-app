@@ -1,9 +1,12 @@
-package com.ccapp.ledger.service;
+package com.ccapp.accounting.ledger.service;
 
+import com.ccapp.common.exception.BusinessException;
 import com.ccapp.country.config.domain.entity.CountryChartAccount;
 import com.ccapp.country.config.domain.enums.CountryAccountGroup;
 import com.ccapp.country.config.domain.enums.CountryAccountSystemTag;
+import com.ccapp.country.config.domain.enums.CountryConfigType;
 import com.ccapp.country.config.service.CountryChartOfAccountsService;
+import com.ccapp.country.config.service.CountryConfigResolver;
 import com.ccapp.country.domain.entity.Country;
 import com.ccapp.country.repository.CountryRepository;
 import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
@@ -15,11 +18,13 @@ import com.ccapp.ledger.domain.enums.LedgerEntryType;
 import com.ccapp.ledger.repository.AccountBalanceSnapshotRepository;
 import com.ccapp.ledger.repository.AccountingEventRepository;
 import com.ccapp.ledger.repository.LedgerEntryRepository;
+import com.ccapp.ledger.service.AccountingPostingService;
 import com.ccapp.payments.operation.domain.entity.Operation;
 import com.ccapp.payments.operation.domain.enums.OperationStatus;
 import com.ccapp.payments.operation.domain.enums.OperationType;
 import com.ccapp.payments.operation.service.OperationService;
-import com.ccapp.common.exception.BusinessException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -58,6 +63,9 @@ class AccountingPostingServiceTest {
     private CountryChartOfAccountsService countryChartOfAccountsService;
 
     @Mock
+    private CountryConfigResolver countryConfigResolver;
+
+    @Mock
     private AccountHolderRepository accountHolderRepository;
 
     @Mock
@@ -65,6 +73,8 @@ class AccountingPostingServiceTest {
 
     @InjectMocks
     private AccountingPostingService accountingPostingService;
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Test
     void postConfirmedOperation_shouldReturnExistingEvent_whenAlreadyPosted() {
@@ -133,25 +143,34 @@ class AccountingPostingServiceTest {
                     .postedAt(input.getPostedAt())
                     .build();
         });
-        when(countryRepository.findByFallbackTrue()).thenReturn(Optional.of(Country.builder()
-                .id(UUID.randomUUID())
-                .code("INT")
-                .name("International")
-                .currency("USD")
-                .active(true)
-                .configured(false)
-                .fallback(true)
-                .build()));
+        CountryConfigResolver.ResolvedConfig generalConfig = new CountryConfigResolver.ResolvedConfig(
+                "INT",
+                CountryConfigType.GENERAL,
+                1,
+                "{\"percentages\":{\"commissionPool\":60,\"guaranteeFund\":15,\"platformFee\":10,\"administration\":10,\"socialFund\":5}}",
+                CountryConfigResolver.ConfigSource.COUNTRY
+        );
+        CountryConfigResolver.ResolvedConfig accountingConfig = new CountryConfigResolver.ResolvedConfig(
+                "INT",
+                CountryConfigType.ACCOUNTING,
+                1,
+                "{}",
+                CountryConfigResolver.ConfigSource.COUNTRY
+        );
+        ObjectNode generalPayload = objectMapper.createObjectNode();
+        ObjectNode percentages = generalPayload.putObject("percentages");
+        percentages.put("commissionPool", 60);
+        percentages.put("guaranteeFund", 15);
+        percentages.put("platformFee", 10);
+        percentages.put("administration", 10);
+        percentages.put("socialFund", 5);
+        ObjectNode accountingPayload = objectMapper.createObjectNode();
+        when(countryConfigResolver.resolveActiveConfig("INT", CountryConfigType.GENERAL)).thenReturn(generalConfig);
+        when(countryConfigResolver.resolveActiveConfig("INT", CountryConfigType.ACCOUNTING)).thenReturn(accountingConfig);
+        when(countryConfigResolver.payloadAsObjectNode(generalConfig)).thenReturn(generalPayload);
+        when(countryConfigResolver.payloadAsObjectNode(accountingConfig)).thenReturn(accountingPayload);
         when(countryChartOfAccountsService.resolveSystemAccount(eq("INT"), any(CountryAccountSystemTag.class)))
-                .thenAnswer(invocation -> CountryChartAccount.builder()
-                        .id(UUID.randomUUID())
-                        .countryCode("INT")
-                        .accountCode("70000001")
-                        .accountNumber("70000001")
-                        .accountName("Generated")
-                        .accountGroup(CountryAccountGroup.SALES)
-                        .currency("USD")
-                        .build());
+                .thenAnswer(invocation -> systemAccount((CountryAccountSystemTag) invocation.getArgument(1)));
         when(countryChartOfAccountsService.findOrCreateWallet(any(AccountHolder.class)))
                 .thenReturn(CountryChartAccount.builder()
                         .id(UUID.randomUUID())
@@ -163,26 +182,82 @@ class AccountingPostingServiceTest {
                         .currency("USD")
                         .accountHolderId(accountHolder.getId())
                         .build());
+        when(countryChartOfAccountsService.findOrCreate(eq("INT"), eq(CountryAccountGroup.MEMBERSHIP_FEES), anyString()))
+                .thenReturn(sharedAccount("750001", CountryAccountGroup.MEMBERSHIP_FEES));
+        when(countryChartOfAccountsService.findOrCreate(eq("INT"), eq(CountryAccountGroup.GUARANTEE_FUND), anyString()))
+                .thenReturn(sharedAccount("230000001", CountryAccountGroup.GUARANTEE_FUND));
+        when(countryChartOfAccountsService.findOrCreate(eq("INT"), eq(CountryAccountGroup.ADMINISTRATION), anyString()))
+                .thenReturn(sharedAccount("221000001", CountryAccountGroup.ADMINISTRATION));
+        when(countryChartOfAccountsService.findOrCreate(eq("INT"), eq(CountryAccountGroup.SOCIAL_FUND), anyString()))
+                .thenReturn(sharedAccount("231000001", CountryAccountGroup.SOCIAL_FUND));
         when(snapshotRepository.findByAccountCodeAndCurrency(anyString(), anyString())).thenReturn(Optional.empty());
         when(snapshotRepository.save(any(AccountBalanceSnapshot.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         AccountingEvent event = accountingPostingService.postConfirmedOperation(operationId);
 
         assertNotNull(event.getId());
-        assertEquals(new BigDecimal("100.00"), event.getTotalDebit());
-        assertEquals(new BigDecimal("100.00"), event.getTotalCredit());
+        assertEquals(0, new BigDecimal("200.0000").compareTo(event.getTotalDebit()));
+        assertEquals(0, new BigDecimal("200.0000").compareTo(event.getTotalCredit()));
 
         ArgumentCaptor<Iterable<LedgerEntry>> entriesCaptor = ArgumentCaptor.forClass(Iterable.class);
         verify(ledgerEntryRepository).saveAll(entriesCaptor.capture());
         List<LedgerEntry> entries = StreamSupport.stream(entriesCaptor.getValue().spliterator(), false).toList();
 
-        assertEquals(2, entries.size());
+        assertEquals(8, entries.size());
         assertEquals(LedgerEntryType.DEBIT, entries.get(0).getEntryType());
         assertEquals(LedgerEntryType.CREDIT, entries.get(1).getEntryType());
         assertEquals(new BigDecimal("100.00"), entries.get(0).getAmount());
         assertEquals(new BigDecimal("100.00"), entries.get(1).getAmount());
+        assertEquals(LedgerEntryType.DEBIT, entries.get(2).getEntryType());
+        assertEquals(new BigDecimal("60.0000"), entries.get(3).getAmount());
+        assertEquals(new BigDecimal("15.0000"), entries.get(4).getAmount());
+        assertEquals(new BigDecimal("10.0000"), entries.get(5).getAmount());
+        assertEquals(new BigDecimal("10.0000"), entries.get(6).getAmount());
+        assertEquals(new BigDecimal("5.0000"), entries.get(7).getAmount());
         assertTrue(entries.stream().allMatch(entry -> "USD".equals(entry.getCurrency())));
 
-        verify(snapshotRepository, atLeast(2)).save(any(AccountBalanceSnapshot.class));
+        verify(snapshotRepository, atLeast(8)).save(any(AccountBalanceSnapshot.class));
+    }
+
+    private CountryChartAccount systemAccount(CountryAccountSystemTag systemTag) {
+        String accountCode = switch (systemTag) {
+            case MLM_POOL -> "680000001";
+            case PLATFORM_REVENUE -> "220000001";
+            case PSP_CLEARING -> "470000001";
+            case USER_WALLET -> "460000001";
+            case LOAN_PORTFOLIO -> "720000001";
+            case INTEREST_REVENUE -> "760000001";
+            case CIRCLE_POOL -> "140000001";
+        };
+        CountryAccountGroup accountGroup = switch (systemTag) {
+            case MLM_POOL -> CountryAccountGroup.MLM_POOL;
+            case PLATFORM_REVENUE -> CountryAccountGroup.PLATFORM_REVENUE;
+            case PSP_CLEARING -> CountryAccountGroup.PSP_CLEARING;
+            case USER_WALLET -> CountryAccountGroup.USER_WALLET;
+            case LOAN_PORTFOLIO -> CountryAccountGroup.LOAN_PORTFOLIO;
+            case INTEREST_REVENUE -> CountryAccountGroup.INTEREST_REVENUE;
+            case CIRCLE_POOL -> CountryAccountGroup.FUND_STATUTAIRE;
+        };
+        return CountryChartAccount.builder()
+                .id(UUID.randomUUID())
+                .countryCode("INT")
+                .accountCode(accountCode)
+                .accountNumber(accountCode)
+                .accountName(systemTag.name())
+                .accountGroup(accountGroup)
+                .currency("USD")
+                .build();
+    }
+
+    private CountryChartAccount sharedAccount(String accountCode, CountryAccountGroup group) {
+        return CountryChartAccount.builder()
+                .id(UUID.randomUUID())
+                .countryCode("INT")
+                .accountCode(accountCode)
+                .accountNumber(accountCode)
+                .accountName(group.name())
+                .accountGroup(group)
+                .currency("USD")
+                .build();
     }
 }

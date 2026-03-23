@@ -17,6 +17,7 @@ import com.ccapp.payments.operation.repository.OperationRepository;
 import com.ccapp.payments.subscription.domain.entity.Membership;
 import com.ccapp.payments.subscription.domain.entity.SubscriptionPlan;
 import com.ccapp.payments.subscription.domain.enums.MembershipStatus;
+import com.ccapp.payments.subscription.domain.enums.SubscriptionGrade;
 import com.ccapp.payments.subscription.repository.MembershipRepository;
 import com.ccapp.payments.subscription.repository.SubscriptionPlanRepository;
 import com.ccapp.platform.config.service.PlatformConfigurationService;
@@ -27,6 +28,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 
 import java.math.BigDecimal;
@@ -65,6 +67,8 @@ class MembershipServiceIntegrationTest {
     private CountryRepository countryRepository;
     @Autowired
     private CountryConfigurationEngineService countryConfigurationEngineService;
+    @MockBean
+    private SubscriptionService subscriptionService;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -107,6 +111,8 @@ class MembershipServiceIntegrationTest {
         SubscriptionPlan plan = subscriptionPlanRepository.save(SubscriptionPlan.builder()
                 .code("BASIC")
                 .name("Basic")
+                .grade(SubscriptionGrade.CLASSIC)
+                .durationMonths(3)
                 .country("BJ")
                 .currency("XOF")
                 .price(new BigDecimal("2000"))
@@ -130,6 +136,7 @@ class MembershipServiceIntegrationTest {
         assertEquals(MembershipStatus.ACTIVE, activated.getStatus());
         assertNotNull(activated.getActivatedAt());
         assertNotNull(activated.getExpiresAt());
+        assertEquals(90L, java.time.Duration.between(activated.getActivatedAt(), activated.getExpiresAt()).toDays());
         assertNotNull(activated.getConfigSnapshot());
         assertEquals(1, activated.getConfigVersion());
         org.junit.jupiter.api.Assertions.assertTrue(activated.getConfigSnapshot().contains("JAWUPAY"));

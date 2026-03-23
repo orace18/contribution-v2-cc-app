@@ -17,7 +17,9 @@ public enum CountryAccountGroup {
     MEMBERSHIP_FEES("200", "Membership Fees", CountryChartAccountType.REVENUE),
     COMMISSION_POOL("210", "Commission Pool", CountryChartAccountType.LIABILITY),
     PLATFORM_REVENUE("220", "Platform Revenue", CountryChartAccountType.REVENUE),
+    ADMINISTRATION("221", "Administration", CountryChartAccountType.REVENUE),
     GUARANTEE_FUND("230", "Guarantee Fund", CountryChartAccountType.LIABILITY),
+    SOCIAL_FUND("231", "Social Fund", CountryChartAccountType.LIABILITY),
     PARTNER_SETTLEMENT("240", "Partner Settlement", CountryChartAccountType.LIABILITY);
 
     private final String prefix;

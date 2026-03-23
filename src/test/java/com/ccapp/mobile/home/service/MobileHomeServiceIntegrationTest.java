@@ -33,6 +33,10 @@ import com.ccapp.payments.operation.domain.entity.Operation;
 import com.ccapp.payments.operation.domain.enums.OperationStatus;
 import com.ccapp.payments.operation.domain.enums.OperationType;
 import com.ccapp.payments.operation.repository.OperationRepository;
+import com.ccapp.payments.subscription.domain.entity.Membership;
+import com.ccapp.payments.subscription.domain.enums.MembershipStatus;
+import com.ccapp.payments.subscription.domain.enums.SubscriptionGrade;
+import com.ccapp.payments.subscription.repository.MembershipRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -65,6 +69,8 @@ class MobileHomeServiceIntegrationTest {
     private AccountHolderRepository accountHolderRepository;
     @Autowired
     private OperationRepository operationRepository;
+    @Autowired
+    private MembershipRepository membershipRepository;
     @Autowired
     private CreditEligibilityRepository creditEligibilityRepository;
     @Autowired
@@ -112,6 +118,20 @@ class MobileHomeServiceIntegrationTest {
                 .currency("XOF")
                 .idempotencyKey("sub-" + UUID.randomUUID())
                 .description("subscription")
+                .build());
+        membershipRepository.save(Membership.builder()
+                .operationId(UUID.randomUUID())
+                .planId(UUID.randomUUID())
+                .accountHolderId(accountHolderId)
+                .planCode("CLASSIC_1M")
+                .planGrade(SubscriptionGrade.CLASSIC)
+                .durationMonths(1)
+                .countryCode("BJ")
+                .currency("XOF")
+                .amount(new BigDecimal("10000"))
+                .status(MembershipStatus.ACTIVE)
+                .activatedAt(OffsetDateTime.now().minusDays(2))
+                .expiresAt(OffsetDateTime.now().plusDays(28))
                 .build());
 
         creditEligibilityRepository.save(CreditEligibility.builder()

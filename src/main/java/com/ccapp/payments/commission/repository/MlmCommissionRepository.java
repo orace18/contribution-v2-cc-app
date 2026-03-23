@@ -18,6 +18,10 @@ import java.util.UUID;
 public interface MlmCommissionRepository extends JpaRepository<MlmCommission, UUID> {
     Optional<MlmCommission> findByOperationId(UUID operationId);
 
+    boolean existsByOperationIdAndBeneficiaryAccountHolderIdAndGeneration(UUID operationId,
+                                                                          UUID beneficiaryAccountHolderId,
+                                                                          Integer generation);
+
     Optional<MlmCommission> findByBeneficiaryAccountHolderIdAndSourceAndCommissionType(UUID beneficiaryAccountHolderId,
                                                                                          String source,
                                                                                          CommissionType commissionType);
@@ -39,6 +43,11 @@ public interface MlmCommissionRepository extends JpaRepository<MlmCommission, UU
     List<MlmCommission> findByWeekIdAndCommissionTypeAndStatusOrderByBeneficiaryAccountHolderIdAsc(Integer weekId,
                                                                                                      CommissionType commissionType,
                                                                                                      CommissionStatus status);
+
+    List<MlmCommission> findByCommissionTypeAndStatusOrderByBeneficiaryAccountHolderIdAscCreatedAtAsc(
+            CommissionType commissionType,
+            CommissionStatus status
+    );
 
     List<MlmCommission> findByWeekIdAndCommissionTypeAndBeneficiaryAccountHolderIdAndStatusOrderByCreatedAtAsc(
             Integer weekId,

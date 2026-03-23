@@ -3,6 +3,7 @@ package com.ccapp.payments.service;
 import com.ccapp.payments.psp.client.JawupayClient;
 import com.ccapp.payments.psp.dto.JawupayInitiateRequest;
 import com.ccapp.payments.psp.dto.JawupayInitiateResponse;
+import com.ccapp.payments.psp.dto.JawupayPaymentStatusResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -37,5 +38,9 @@ public class PaymentService {
 
     public String provider() {
         return PSP_PROVIDER;
+    }
+
+    public JawupayPaymentStatusResponse fetchPaymentStatus(String pspReference) {
+        return jawupayClient.fetchPaymentStatus(pspReference);
     }
 }

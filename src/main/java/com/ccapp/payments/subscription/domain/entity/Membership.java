@@ -2,6 +2,7 @@ package com.ccapp.payments.subscription.domain.entity;
 
 import com.ccapp.common.model.AuditableEntity;
 import com.ccapp.payments.subscription.domain.enums.MembershipStatus;
+import com.ccapp.payments.subscription.domain.enums.SubscriptionGrade;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -43,11 +44,21 @@ public class Membership extends AuditableEntity {
     @Column(name = "operation_id", nullable = false)
     private UUID operationId;
 
+    @Column(name = "plan_id")
+    private UUID planId;
+
     @Column(name = "account_holder_id", nullable = false)
     private UUID accountHolderId;
 
     @Column(name = "plan_code", nullable = false, length = 64)
     private String planCode;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "plan_grade", length = 16)
+    private SubscriptionGrade planGrade;
+
+    @Column(name = "duration_months")
+    private Integer durationMonths;
 
     @Column(name = "country_code", nullable = false, length = 3)
     private String countryCode;

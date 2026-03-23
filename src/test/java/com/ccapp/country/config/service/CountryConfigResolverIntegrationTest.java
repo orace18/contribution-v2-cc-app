@@ -6,6 +6,7 @@ import com.ccapp.country.config.domain.enums.CountryConfigType;
 import com.ccapp.country.config.dto.UpsertCountryConfigRequest;
 import com.ccapp.country.domain.entity.Country;
 import com.ccapp.country.repository.CountryRepository;
+import com.ccapp.payments.subscription.service.SubscriptionService;
 import com.ccapp.platform.config.domain.enums.PlatformConfigType;
 import com.ccapp.platform.config.dto.UpsertPlatformConfigRequest;
 import com.ccapp.platform.config.service.PlatformConfigurationService;
@@ -15,6 +16,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 
 import java.time.OffsetDateTime;
@@ -46,6 +48,8 @@ class CountryConfigResolverIntegrationTest {
     private PlatformConfigurationService platformConfigurationService;
     @Autowired
     private CountryConfigResolver countryConfigResolver;
+    @MockBean
+    private SubscriptionService subscriptionService;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
