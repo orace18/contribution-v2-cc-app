@@ -3,6 +3,7 @@ package com.ccapp.wallet.dto;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
@@ -18,6 +19,9 @@ public record WalletReserveRequest(
         @NotBlank @Size(max = 255) String reason,
 
         /** Optional expiry date – reservation is auto-expired after this date. */
-        OffsetDateTime expiryDate
+        OffsetDateTime expiryDate,
+
+        @Pattern(regexp = "\\d{4,8}", message = "PIN must be 4 to 8 digits")
+        String pin
 ) {
 }

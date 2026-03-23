@@ -2,17 +2,10 @@ package com.ccapp.wallet.service;
 
 import com.ccapp.common.events.DomainEventPublisher;
 import com.ccapp.common.exception.BusinessException;
-import com.ccapp.country.config.service.CountryChartOfAccountsService;
-import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
-import com.ccapp.identity.account_holder.repository.AccountHolderRepository;
 import com.ccapp.identity.wallet.domain.entity.Wallet;
 import com.ccapp.identity.wallet.repository.WalletRepository;
-import com.ccapp.ledger.service.AccountingPostingService;
-import com.ccapp.payments.operation.domain.entity.Operation;
 import com.ccapp.payments.operation.domain.enums.OperationType;
-import com.ccapp.payments.operation.service.OperationService;
 import com.ccapp.wallet.domain.entity.WalletAutoDebitRule;
-import com.ccapp.wallet.event.WalletDebitedEvent;
 import com.ccapp.wallet.repository.WalletAutoDebitRuleRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -45,11 +38,7 @@ public class WalletAutoDebitService {
     private final WalletAutoDebitRuleRepository ruleRepository;
     private final WalletRepository walletRepository;
     private final WalletBalanceService walletBalanceService;
-    private final OperationService operationService;
-    private final AccountingPostingService accountingPostingService;
-    private final CountryChartOfAccountsService countryChartOfAccountsService;
-    private final AccountHolderRepository accountHolderRepository;
-    private final DomainEventPublisher eventPublisher;
+    private final WalletDebitFacade walletDebitFacade;
 
     /**
      * Executes all auto-debit rules for {@code walletId} triggered by an incoming credit.
@@ -66,7 +55,7 @@ public class WalletAutoDebitService {
                 .orElseThrow(() -> new BusinessException("Wallet not found: " + walletId));
 
         List<WalletAutoDebitRule> rules =
-                ruleRepository.findByWalletIdAndEnabledTrueOrderByPriorityAsc(walletId);
+                ruleRepository.findByWalletIdAndEnabledTrueAndAutoDebitAuthorizedTrueOrderByPriorityAsc(walletId);
 
         if (rules.isEmpty()) {
             return;
@@ -105,29 +94,43 @@ public class WalletAutoDebitService {
 
         // Idempotency: one auto-debit per rule per credit operation
         String idempotencyKey = "auto-debit:rule:" + rule.getId() + ":op:" + creditOperationId;
+        String fingerprint = "auto-debit|"
+                + rule.getId()
+                + "|" + creditOperationId
+                + "|" + debitAmount.stripTrailingZeros().toPlainString()
+                + "|" + currency.trim().toUpperCase()
+                + "|" + rule.getDestinationAccountCode();
 
-        AccountHolder holder = accountHolderRepository.findById(wallet.getAccountHolderId())
-                .orElseThrow(() -> new BusinessException("Account holder not found"));
-        String walletCode = countryChartOfAccountsService.findOrCreateWallet(holder).getAccountCode();
-
-        Operation operation = operationService.createInitiatedOperation(
-                wallet.getAccountHolderId(),
-                wallet.getAccountHolderId(),
-                OperationType.WALLET_PAYMENT,
-                debitAmount,
-                currency,
-                idempotencyKey,
-                "Auto-debit [" + rule.getRuleType().name() + "] priority=" + rule.getPriority()
+        WalletDebitFacade.WalletDebitExecutionResult result = walletDebitFacade.executeSecureDebit(
+                new WalletDebitFacade.SecureDebitRequest(
+                        wallet.getAccountHolderId(),
+                        wallet.getAccountHolderId(),
+                        wallet.getAccountHolderId(),
+                        wallet,
+                        OperationType.WALLET_PAYMENT,
+                        debitAmount,
+                        currency,
+                        idempotencyKey,
+                        "Auto-debit [" + rule.getRuleType().name() + "] priority=" + rule.getPriority(),
+                        fingerprint,
+                        rule.getDestinationAccountCode(),
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        true,
+                        rule.isAutoDebitAuthorized(),
+                        "Auto-debit wallet debit",
+                        "Auto-debit destination credit",
+                        null,
+                        null
+                )
         );
-
-        operation = operationService.confirmOperation(operation.getId());
-        accountingPostingService.postWalletPayment(operation, walletCode, rule.getDestinationAccountCode());
-
-        eventPublisher.publish(WalletDebitedEvent.create(
-                wallet.getId(), wallet.getAccountHolderId(), debitAmount, currency, operation.getId()));
 
         log.info("wallet_auto_debit_executed walletId={} ruleId={} ruleType={} amount={} dest={} operationId={}",
                 wallet.getId(), rule.getId(), rule.getRuleType(),
-                debitAmount, rule.getDestinationAccountCode(), operation.getId());
+                debitAmount, rule.getDestinationAccountCode(), result.operationId());
     }
 }

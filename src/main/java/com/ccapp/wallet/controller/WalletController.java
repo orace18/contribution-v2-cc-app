@@ -2,8 +2,22 @@ package com.ccapp.wallet.controller;
 
 import com.ccapp.common.api.CommonResponse;
 import com.ccapp.common.security.SecurityUtils;
-import com.ccapp.wallet.dto.*;
-import com.ccapp.wallet.service.*;
+import com.ccapp.wallet.dto.WalletAgentDepositRequest;
+import com.ccapp.wallet.dto.WalletBalanceResponse;
+import com.ccapp.wallet.dto.WalletDepositResponse;
+import com.ccapp.wallet.dto.WalletPayRequest;
+import com.ccapp.wallet.dto.WalletPayResponse;
+import com.ccapp.wallet.dto.WalletPinSetupRequest;
+import com.ccapp.wallet.dto.WalletReserveRequest;
+import com.ccapp.wallet.dto.WalletReserveResponse;
+import com.ccapp.wallet.dto.WalletWithdrawRequest;
+import com.ccapp.wallet.dto.WalletWithdrawResponse;
+import com.ccapp.wallet.service.WalletBalanceService;
+import com.ccapp.wallet.service.WalletDepositService;
+import com.ccapp.wallet.service.WalletPaymentService;
+import com.ccapp.wallet.service.WalletReservationService;
+import com.ccapp.wallet.service.WalletSecurityService;
+import com.ccapp.wallet.service.WalletWithdrawalService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -30,10 +44,7 @@ public class WalletController {
     private final WalletDepositService walletDepositService;
     private final WalletWithdrawalService walletWithdrawalService;
     private final WalletReservationService walletReservationService;
-
-    // -------------------------------------------------------------------------
-    // Balance
-    // -------------------------------------------------------------------------
+    private final WalletSecurityService walletSecurityService;
 
     @GetMapping("/balance")
     @Operation(summary = "Get wallet balance (derived from ledger)")
@@ -51,15 +62,24 @@ public class WalletController {
                 walletBalanceService.getBalance(accountHolderId, currency.toUpperCase())));
     }
 
-    // -------------------------------------------------------------------------
-    // Payment (P2P)
-    // -------------------------------------------------------------------------
+    @PostMapping("/pin")
+    @Operation(summary = "Set or update the wallet PIN")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "PIN updated"),
+            @ApiResponse(responseCode = "400", description = "PIN invalid / current PIN invalid"),
+            @ApiResponse(responseCode = "401", description = "Unauthenticated"),
+            @ApiResponse(responseCode = "404", description = "No active wallet found")
+    })
+    public ResponseEntity<CommonResponse<Void>> configurePin(
+            @Valid @RequestBody WalletPinSetupRequest request) {
+        walletSecurityService.configurePin(SecurityUtils.currentAccountHolderId(), request);
+        return ResponseEntity.ok(CommonResponse.success("Wallet PIN updated"));
+    }
 
     @PostMapping("/pay")
     @Operation(summary = "Send funds to another wallet by phone number")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Payment executed",
-                    content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "200", description = "Payment executed"),
             @ApiResponse(responseCode = "400", description = "Insufficient balance / invalid request"),
             @ApiResponse(responseCode = "401", description = "Unauthenticated"),
             @ApiResponse(responseCode = "404", description = "Destination wallet not found"),
@@ -68,17 +88,14 @@ public class WalletController {
     public ResponseEntity<CommonResponse<WalletPayResponse>> pay(
             @Valid @RequestBody WalletPayRequest request) {
         var principal = SecurityUtils.currentPrincipal();
+        WalletPayResponse response = walletPaymentService.pay(
+                SecurityUtils.currentAccountHolderId(),
+                principal.userId(),
+                request);
         return ResponseEntity.ok(CommonResponse.success(
-                "Payment executed",
-                walletPaymentService.pay(
-                        SecurityUtils.currentAccountHolderId(),
-                        principal.userId(),
-                        request)));
+                response.otpRequired() ? "OTP sent" : "Payment executed",
+                response));
     }
-
-    // -------------------------------------------------------------------------
-    // Deposit – PSP
-    // -------------------------------------------------------------------------
 
     @PostMapping("/deposit/psp")
     @Operation(summary = "Initiate a PSP wallet deposit (returns operationId for PSP redirect)")
@@ -100,10 +117,6 @@ public class WalletController {
                         request.idempotencyKey())));
     }
 
-    // -------------------------------------------------------------------------
-    // Deposit – Agent cash-in
-    // -------------------------------------------------------------------------
-
     @PostMapping("/deposit/agent")
     @Operation(summary = "Agent cash-in: debit agent float, credit user wallet")
     @ApiResponses({
@@ -115,17 +128,14 @@ public class WalletController {
     public ResponseEntity<CommonResponse<WalletDepositResponse>> agentDeposit(
             @Valid @RequestBody WalletAgentDepositRequest request) {
         var principal = SecurityUtils.currentPrincipal();
+        WalletDepositResponse response = walletDepositService.agentDeposit(
+                SecurityUtils.currentAccountHolderId(),
+                principal.userId(),
+                request);
         return ResponseEntity.ok(CommonResponse.success(
-                "Agent cash-in executed",
-                walletDepositService.agentDeposit(
-                        SecurityUtils.currentAccountHolderId(),
-                        principal.userId(),
-                        request)));
+                response.otpRequired() ? "OTP sent" : "Agent cash-in executed",
+                response));
     }
-
-    // -------------------------------------------------------------------------
-    // Withdrawal
-    // -------------------------------------------------------------------------
 
     @PostMapping("/withdraw")
     @Operation(summary = "Withdraw funds to PSP payout (KYC required)")
@@ -137,17 +147,14 @@ public class WalletController {
     public ResponseEntity<CommonResponse<WalletWithdrawResponse>> withdraw(
             @Valid @RequestBody WalletWithdrawRequest request) {
         var principal = SecurityUtils.currentPrincipal();
+        WalletWithdrawResponse response = walletWithdrawalService.withdraw(
+                SecurityUtils.currentAccountHolderId(),
+                principal.userId(),
+                request);
         return ResponseEntity.ok(CommonResponse.success(
-                "Withdrawal executed",
-                walletWithdrawalService.withdraw(
-                        SecurityUtils.currentAccountHolderId(),
-                        principal.userId(),
-                        request)));
+                response.otpRequired() ? "OTP sent" : "Withdrawal executed",
+                response));
     }
-
-    // -------------------------------------------------------------------------
-    // Reservations
-    // -------------------------------------------------------------------------
 
     @PostMapping("/reserve")
     @Operation(summary = "Reserve funds (reduce available balance without debiting ledger)")

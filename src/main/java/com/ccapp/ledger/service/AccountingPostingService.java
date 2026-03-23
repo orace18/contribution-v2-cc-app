@@ -116,16 +116,17 @@ public class AccountingPostingService {
         if (operation.getStatus() != OperationStatus.CONFIRMED) {
             throw new BusinessException("Only CONFIRMED marketplace payment operations can be posted");
         }
-        AccountHolder buyer = resolveAccountHolder(buyerAccountHolderId);
+        if (walletPayment) {
+            throw new BusinessException("Wallet marketplace debits must go through WalletDebitFacade");
+        }
+        resolveAccountHolder(buyerAccountHolderId);
         List<PostingLine> lines = List.of(
                 new PostingLine(
-                        walletPayment
-                                ? resolveWalletAccountCode(buyer)
-                                : resolveAccountCode(countryCode, CountryAccountSystemTag.PSP_CLEARING),
+                        resolveAccountCode(countryCode, CountryAccountSystemTag.PSP_CLEARING),
                         LedgerEntryType.DEBIT,
                         operation.getAmount(),
                         operation.getCurrency(),
-                        walletPayment ? "Marketplace payment from wallet" : "Marketplace payment via PSP shadow"
+                        "Marketplace payment via PSP shadow"
                 ),
                 new PostingLine(
                         resolveAccountCode(countryCode, CountryAccountSystemTag.MARKETPLACE_POOL),
@@ -170,27 +171,7 @@ public class AccountingPostingService {
     public AccountingEvent postMarketplaceMerchantPayoutReversal(Operation operation,
                                                                  UUID merchantAccountHolderId,
                                                                  String countryCode) {
-        if (operation.getType() != OperationType.MARKETPLACE_MERCHANT_PAYOUT_REVERSAL) {
-            throw new BusinessException("Operation type must be MARKETPLACE_MERCHANT_PAYOUT_REVERSAL");
-        }
-        if (operation.getStatus() != OperationStatus.CONFIRMED) {
-            throw new BusinessException("Only CONFIRMED merchant payout reversal operations can be posted");
-        }
-        AccountHolder merchant = resolveAccountHolder(merchantAccountHolderId);
-        List<PostingLine> lines = List.of(
-                new PostingLine(resolveWalletAccountCode(merchant),
-                        LedgerEntryType.DEBIT,
-                        operation.getAmount(),
-                        operation.getCurrency(),
-                        "Merchant payout reversal"),
-                new PostingLine(resolveAccountCode(countryCode, CountryAccountSystemTag.MARKETPLACE_POOL),
-                        LedgerEntryType.CREDIT,
-                        operation.getAmount(),
-                        operation.getCurrency(),
-                        "Marketplace pool restoration")
-        );
-        return accountingEventRepository.findByOperationId(operation.getId())
-                .orElseGet(() -> doPost(operation, lines, AccountingEventType.OPERATION_CONFIRMED));
+        throw new BusinessException("Merchant payout reversal wallet debits must go through WalletDebitFacade");
     }
 
     @Transactional
@@ -244,14 +225,13 @@ public class AccountingPostingService {
                                               String senderWalletCode,
                                               String destinationAccountCode) {
         validateWalletOperation(operation, OperationType.WALLET_PAYMENT);
-        List<PostingLine> lines = List.of(
-                new PostingLine(senderWalletCode, LedgerEntryType.DEBIT,
-                        operation.getAmount(), operation.getCurrency(), "Wallet payment – sender debit"),
-                new PostingLine(destinationAccountCode, LedgerEntryType.CREDIT,
-                        operation.getAmount(), operation.getCurrency(), "Wallet payment – destination credit")
+        return postSecureWalletDebit(
+                operation,
+                senderWalletCode,
+                destinationAccountCode,
+                "Wallet payment - sender debit",
+                "Wallet payment - destination credit"
         );
-        return accountingEventRepository.findByOperationId(operation.getId())
-                .orElseGet(() -> doPost(operation, lines, AccountingEventType.OPERATION_CONFIRMED));
     }
 
     /**
@@ -281,14 +261,13 @@ public class AccountingPostingService {
                                                    String agentWalletCode,
                                                    String userWalletCode) {
         validateWalletOperation(operation, OperationType.WALLET_DEPOSIT_AGENT);
-        List<PostingLine> lines = List.of(
-                new PostingLine(agentWalletCode, LedgerEntryType.DEBIT,
-                        operation.getAmount(), operation.getCurrency(), "Agent float debit – cash-in"),
-                new PostingLine(userWalletCode, LedgerEntryType.CREDIT,
-                        operation.getAmount(), operation.getCurrency(), "User wallet credit – agent cash-in")
+        return postSecureWalletDebit(
+                operation,
+                agentWalletCode,
+                userWalletCode,
+                "Agent float debit - cash-in",
+                "User wallet credit - agent cash-in"
         );
-        return accountingEventRepository.findByOperationId(operation.getId())
-                .orElseGet(() -> doPost(operation, lines, AccountingEventType.OPERATION_CONFIRMED));
     }
 
     /**
@@ -299,11 +278,33 @@ public class AccountingPostingService {
         validateWalletOperation(operation, OperationType.WALLET_WITHDRAWAL);
         String countryCode = resolveOperationalCountryCode(operation.getAccountHolderId(), operation.getCurrency());
         String pspCode = resolveAccountCode(countryCode, CountryAccountSystemTag.PSP_CLEARING);
+        return postSecureWalletDebit(
+                operation,
+                userWalletCode,
+                pspCode,
+                "Wallet withdrawal debit",
+                "PSP payout clearing credit"
+        );
+    }
+
+    @Transactional
+    public AccountingEvent postSecureWalletDebit(Operation operation,
+                                                 String sourceWalletCode,
+                                                 String destinationAccountCode,
+                                                 String debitDescription,
+                                                 String creditDescription) {
+        if (operation.getStatus() != OperationStatus.CONFIRMED) {
+            throw new BusinessException("Only CONFIRMED operations can be posted");
+        }
+        if (sourceWalletCode == null || sourceWalletCode.isBlank()
+                || destinationAccountCode == null || destinationAccountCode.isBlank()) {
+            throw new BusinessException("Secure wallet debit account codes are required");
+        }
         List<PostingLine> lines = List.of(
-                new PostingLine(userWalletCode, LedgerEntryType.DEBIT,
-                        operation.getAmount(), operation.getCurrency(), "Wallet withdrawal debit"),
-                new PostingLine(pspCode, LedgerEntryType.CREDIT,
-                        operation.getAmount(), operation.getCurrency(), "PSP payout clearing credit")
+                new PostingLine(sourceWalletCode.trim(), LedgerEntryType.DEBIT,
+                        operation.getAmount(), operation.getCurrency(), safeDescription(debitDescription)),
+                new PostingLine(destinationAccountCode.trim(), LedgerEntryType.CREDIT,
+                        operation.getAmount(), operation.getCurrency(), safeDescription(creditDescription))
         );
         return accountingEventRepository.findByOperationId(operation.getId())
                 .orElseGet(() -> doPost(operation, lines, AccountingEventType.OPERATION_CONFIRMED));
@@ -764,6 +765,13 @@ public class AccountingPostingService {
             snapshot.setBalance(snapshot.getBalance().add(delta));
             snapshotRepository.save(snapshot);
         }
+    }
+
+    private String safeDescription(String description) {
+        if (description == null || description.isBlank()) {
+            return "Wallet secure debit";
+        }
+        return description;
     }
 
     private record PostingLine(

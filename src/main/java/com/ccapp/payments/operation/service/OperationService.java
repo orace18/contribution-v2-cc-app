@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -30,7 +31,7 @@ public class OperationService {
                                               String currency,
                                               String idempotencyKey,
                                               String description) {
-        return createInitiatedOperation(accountHolderId, actorUserId, type, amount, currency, idempotencyKey, description, null);
+        return createInitiatedOperation(accountHolderId, actorUserId, type, amount, currency, idempotencyKey, description, null, OperationRouting.none());
     }
 
     @Transactional
@@ -42,8 +43,32 @@ public class OperationService {
                                               String idempotencyKey,
                                               String description,
                                               UUID planId) {
+        return createInitiatedOperation(
+                accountHolderId,
+                actorUserId,
+                type,
+                amount,
+                currency,
+                idempotencyKey,
+                description,
+                planId,
+                OperationRouting.none()
+        );
+    }
+
+    @Transactional
+    public Operation createInitiatedOperation(UUID accountHolderId,
+                                              UUID actorUserId,
+                                              OperationType type,
+                                              BigDecimal amount,
+                                              String currency,
+                                              String idempotencyKey,
+                                              String description,
+                                              UUID planId,
+                                              OperationRouting routing) {
         String normalizedIdempotencyKey = normalizeIdempotencyKey(idempotencyKey);
         String normalizedCurrency = normalizeCurrency(currency);
+        OperationRouting normalizedRouting = normalizeRouting(routing);
         validateAmount(amount);
 
         return operationRepository.findByIdempotencyKey(normalizedIdempotencyKey)
@@ -54,7 +79,8 @@ public class OperationService {
                         type,
                         amount,
                         normalizedCurrency,
-                        planId
+                        planId,
+                        normalizedRouting
                 ))
                 .orElseGet(() -> operationRepository.save(Operation.builder()
                         .accountHolderId(accountHolderId)
@@ -65,6 +91,10 @@ public class OperationService {
                         .currency(normalizedCurrency)
                         .idempotencyKey(normalizedIdempotencyKey)
                         .planId(planId)
+                        .destinationAccountHolderId(normalizedRouting.destinationAccountHolderId())
+                        .destinationWalletId(normalizedRouting.destinationWalletId())
+                        .destinationPhone(normalizedRouting.destinationPhone())
+                        .destinationAccountCode(normalizedRouting.destinationAccountCode())
                         .description(normalizeDescription(description))
                         .build()));
     }
@@ -76,7 +106,33 @@ public class OperationService {
                                               String currency,
                                               String idempotencyKey,
                                               String description) {
-        return createInitiatedOperation(accountHolderId, accountHolderId, type, amount, currency, idempotencyKey, description, null);
+        return createInitiatedOperation(accountHolderId, accountHolderId, type, amount, currency, idempotencyKey, description, null, OperationRouting.none());
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<Operation> findByIdempotencyKey(String idempotencyKey) {
+        return operationRepository.findByIdempotencyKey(normalizeIdempotencyKey(idempotencyKey));
+    }
+
+    @Transactional(readOnly = true)
+    public Operation assertCompatibleExistingOperation(Operation existing,
+                                                       UUID accountHolderId,
+                                                       UUID actorUserId,
+                                                       OperationType type,
+                                                       BigDecimal amount,
+                                                       String currency,
+                                                       UUID planId,
+                                                       OperationRouting routing) {
+        return ensureCompatibleExistingOperation(
+                existing,
+                accountHolderId,
+                actorUserId,
+                type,
+                amount,
+                normalizeCurrency(currency),
+                planId,
+                normalizeRouting(routing)
+        );
     }
 
     @Transactional
@@ -196,13 +252,18 @@ public class OperationService {
                                                         OperationType type,
                                                         BigDecimal amount,
                                                         String currency,
-                                                        UUID planId) {
+                                                        UUID planId,
+                                                        OperationRouting routing) {
         boolean compatible = Objects.equals(existing.getAccountHolderId(), accountHolderId)
                 && Objects.equals(existing.getActorUserId(), actorUserId)
                 && existing.getType() == type
                 && existing.getAmount().compareTo(amount) == 0
                 && existing.getCurrency().equalsIgnoreCase(currency)
-                && Objects.equals(existing.getPlanId(), planId);
+                && Objects.equals(existing.getPlanId(), planId)
+                && Objects.equals(existing.getDestinationAccountHolderId(), routing.destinationAccountHolderId())
+                && Objects.equals(existing.getDestinationWalletId(), routing.destinationWalletId())
+                && Objects.equals(normalizeNullableText(existing.getDestinationPhone()), routing.destinationPhone())
+                && Objects.equals(normalizeNullableText(existing.getDestinationAccountCode()), routing.destinationAccountCode());
         if (!compatible) {
             throw new ConflictException("Idempotency key already used by another operation signature");
         }
@@ -239,5 +300,36 @@ public class OperationService {
         }
         String normalized = description.trim();
         return normalized.length() <= 255 ? normalized : normalized.substring(0, 255);
+    }
+
+    private OperationRouting normalizeRouting(OperationRouting routing) {
+        if (routing == null) {
+            return OperationRouting.none();
+        }
+        return new OperationRouting(
+                routing.destinationAccountHolderId(),
+                routing.destinationWalletId(),
+                normalizeNullableText(routing.destinationPhone()),
+                normalizeNullableText(routing.destinationAccountCode())
+        );
+    }
+
+    private String normalizeNullableText(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        String normalized = value.trim();
+        return normalized.length() <= 64 ? normalized : normalized.substring(0, 64);
+    }
+
+    public record OperationRouting(
+            UUID destinationAccountHolderId,
+            UUID destinationWalletId,
+            String destinationPhone,
+            String destinationAccountCode
+    ) {
+        public static OperationRouting none() {
+            return new OperationRouting(null, null, null, null);
+        }
     }
 }

@@ -53,6 +53,9 @@ public class WalletAutoDebitRule {
     @Column(name = "enabled", nullable = false)
     private boolean enabled;
 
+    @Column(name = "auto_debit_authorized", nullable = false)
+    private boolean autoDebitAuthorized;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
 

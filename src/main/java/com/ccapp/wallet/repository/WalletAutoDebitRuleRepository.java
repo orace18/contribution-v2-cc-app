@@ -9,4 +9,6 @@ import java.util.UUID;
 public interface WalletAutoDebitRuleRepository extends JpaRepository<WalletAutoDebitRule, UUID> {
 
     List<WalletAutoDebitRule> findByWalletIdAndEnabledTrueOrderByPriorityAsc(UUID walletId);
+
+    List<WalletAutoDebitRule> findByWalletIdAndEnabledTrueAndAutoDebitAuthorizedTrueOrderByPriorityAsc(UUID walletId);
 }

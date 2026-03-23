@@ -59,6 +59,18 @@ public class Operation extends AuditableEntity {
     @Column(name = "plan_id")
     private UUID planId;
 
+    @Column(name = "destination_account_holder_id")
+    private UUID destinationAccountHolderId;
+
+    @Column(name = "destination_wallet_id")
+    private UUID destinationWalletId;
+
+    @Column(name = "destination_phone", length = 64)
+    private String destinationPhone;
+
+    @Column(name = "destination_account_code", length = 64)
+    private String destinationAccountCode;
+
     @Column(name = "description", length = 255)
     private String description;
 }

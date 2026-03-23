@@ -38,6 +38,18 @@ public class Wallet {
     @Column(name = "wallet_type", nullable = false, length = 16)
     private WalletType walletType;
 
+    @Column(name = "pin_hash", length = 255)
+    private String pinHash;
+
+    @Column(name = "pin_failed_attempts", nullable = false)
+    private Integer pinFailedAttempts;
+
+    @Column(name = "locked_at")
+    private OffsetDateTime lockedAt;
+
+    @Column(name = "last_pin_changed_at")
+    private OffsetDateTime lastPinChangedAt;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
 
@@ -48,6 +60,9 @@ public class Wallet {
         }
         if (walletType == null) {
             walletType = WalletType.USER;
+        }
+        if (pinFailedAttempts == null) {
+            pinFailedAttempts = 0;
         }
     }
 }

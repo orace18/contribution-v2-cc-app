@@ -468,6 +468,34 @@ public class CountryConfigurationEngineService {
                 }
             });
         }
+
+        JsonNode walletSecurityNode = payload.get("walletSecurity");
+        if (walletSecurityNode != null && !walletSecurityNode.isNull()) {
+            if (!walletSecurityNode.isObject()) {
+                throw new BusinessException("general.walletSecurity must be an object");
+            }
+            ObjectNode walletSecurity = (ObjectNode) walletSecurityNode;
+            JsonNode pinRequired = walletSecurity.get("pinRequired");
+            if (pinRequired != null && !pinRequired.isNull() && !pinRequired.isBoolean()) {
+                throw new BusinessException("general.walletSecurity.pinRequired must be boolean");
+            }
+            BigDecimal otpThreshold = optionalDecimalField(walletSecurity, "otpThreshold");
+            if (otpThreshold != null && otpThreshold.compareTo(BigDecimal.ZERO) <= 0) {
+                throw new BusinessException("general.walletSecurity.otpThreshold must be > 0");
+            }
+            Integer pinMaxAttempts = optionalIntField(walletSecurity, "pinMaxAttempts");
+            if (pinMaxAttempts != null && pinMaxAttempts < 1) {
+                throw new BusinessException("general.walletSecurity.pinMaxAttempts must be >= 1");
+            }
+            Integer otpMaxAttempts = optionalIntField(walletSecurity, "otpMaxAttempts");
+            if (otpMaxAttempts != null && otpMaxAttempts < 1) {
+                throw new BusinessException("general.walletSecurity.otpMaxAttempts must be >= 1");
+            }
+            Integer otpTtlSeconds = optionalIntField(walletSecurity, "otpTtlSeconds");
+            if (otpTtlSeconds != null && otpTtlSeconds < 30) {
+                throw new BusinessException("general.walletSecurity.otpTtlSeconds must be >= 30");
+            }
+        }
     }
 
     private void validateMembershipConfig(ObjectNode payload) {

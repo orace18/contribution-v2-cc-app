@@ -34,12 +34,24 @@ public class WalletReservationService {
 
     private final WalletReservationRepository reservationRepository;
     private final WalletGuardService walletGuardService;
+    private final WalletSecurityService walletSecurityService;
     private final DomainEventPublisher eventPublisher;
 
     /** Creates a fund reservation after verifying available balance. */
     public WalletReserveResponse reserve(UUID accountHolderId, WalletReserveRequest request) {
+        return reserveInternal(accountHolderId, request, false);
+    }
+
+    public WalletReserveResponse reserveSystem(UUID accountHolderId, WalletReserveRequest request) {
+        return reserveInternal(accountHolderId, request, true);
+    }
+
+    private WalletReserveResponse reserveInternal(UUID accountHolderId,
+                                                  WalletReserveRequest request,
+                                                  boolean systemReservation) {
         Wallet wallet = walletGuardService.requireActiveWallet(accountHolderId);
         walletGuardService.checkDebitAllowed(wallet, request.amount(), request.currency());
+        walletSecurityService.authorizeReservation(wallet, accountHolderId, request.pin(), systemReservation);
 
         WalletReservation reservation = reservationRepository.save(WalletReservation.builder()
                 .walletId(wallet.getId())

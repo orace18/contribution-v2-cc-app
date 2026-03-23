@@ -186,6 +186,22 @@ public class PlatformConfigurationService {
     private void validateGlobalGeneralConfig(ObjectNode payload) {
         optionalPercentageField(payload, "marketplaceDefaultCommission", "global_general.marketplaceDefaultCommission");
         optionalPercentageField(payload, "taxRate", "global_general.taxRate");
+
+        JsonNode walletSecurityNode = payload.get("walletSecurity");
+        if (walletSecurityNode != null && !walletSecurityNode.isNull()) {
+            if (!walletSecurityNode.isObject()) {
+                throw new BusinessException("global_general.walletSecurity must be an object");
+            }
+            ObjectNode walletSecurity = (ObjectNode) walletSecurityNode;
+            JsonNode pinRequired = walletSecurity.get("pinRequired");
+            if (pinRequired != null && !pinRequired.isNull() && !pinRequired.isBoolean()) {
+                throw new BusinessException("global_general.walletSecurity.pinRequired must be boolean");
+            }
+            validatePositiveNumber(walletSecurity, "otpThreshold", "global_general.walletSecurity.otpThreshold");
+            validatePositiveInteger(walletSecurity, "pinMaxAttempts", "global_general.walletSecurity.pinMaxAttempts");
+            validatePositiveInteger(walletSecurity, "otpMaxAttempts", "global_general.walletSecurity.otpMaxAttempts");
+            validateMinInteger(walletSecurity, "otpTtlSeconds", 30, "global_general.walletSecurity.otpTtlSeconds");
+        }
     }
 
     private void validateGlobalMlmBaseRates(ObjectNode payload) {
@@ -247,6 +263,36 @@ public class PlatformConfigurationService {
             throw new BusinessException(errorPrefix + " must be between 0 and 100");
         }
         return decimal;
+    }
+
+    private void validatePositiveNumber(ObjectNode payload, String fieldName, String errorPrefix) {
+        JsonNode value = payload.get(fieldName);
+        if (value == null || value.isNull()) {
+            return;
+        }
+        if (!value.isNumber() || value.decimalValue().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BusinessException(errorPrefix + " must be > 0");
+        }
+    }
+
+    private void validatePositiveInteger(ObjectNode payload, String fieldName, String errorPrefix) {
+        JsonNode value = payload.get(fieldName);
+        if (value == null || value.isNull()) {
+            return;
+        }
+        if (!value.isInt() || value.asInt() < 1) {
+            throw new BusinessException(errorPrefix + " must be >= 1");
+        }
+    }
+
+    private void validateMinInteger(ObjectNode payload, String fieldName, int minValue, String errorPrefix) {
+        JsonNode value = payload.get(fieldName);
+        if (value == null || value.isNull()) {
+            return;
+        }
+        if (!value.isInt() || value.asInt() < minValue) {
+            throw new BusinessException(errorPrefix + " must be >= " + minValue);
+        }
     }
 
     private String writePayload(JsonNode payload) {

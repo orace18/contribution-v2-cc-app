@@ -3,6 +3,7 @@ package com.ccapp.wallet.dto;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
@@ -17,6 +18,14 @@ public record WalletAgentDepositRequest(
 
         @NotBlank @Size(min = 3, max = 3) String currency,
 
-        @NotBlank @Size(max = 128) String idempotencyKey
+        @NotBlank @Size(max = 128) String idempotencyKey,
+
+        @Pattern(regexp = "\\d{4,8}", message = "PIN must be 4 to 8 digits")
+        String pin,
+
+        UUID otpChallengeId,
+
+        @Pattern(regexp = "\\d{4,8}", message = "OTP code must be 4 to 8 digits")
+        String otpCode
 ) {
 }
