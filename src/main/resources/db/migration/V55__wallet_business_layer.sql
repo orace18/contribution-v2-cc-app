@@ -1,5 +1,5 @@
 -- ============================================================
--- V53 – Wallet Business Layer
+-- V55 – Wallet Business Layer
 -- ============================================================
 
 -- 1. wallet_type column on existing wallets
