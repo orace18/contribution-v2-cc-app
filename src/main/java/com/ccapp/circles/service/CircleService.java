@@ -197,7 +197,7 @@ public class CircleService {
         return toMemberResponse(member);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, noRollbackFor = NotFoundException.class)
     public MyCircleResponse getMyCircle(UUID accountHolderId) {
         List<Circle> activeCircles = circleRepository.findActiveCirclesForUser(accountHolderId);
         if (activeCircles.isEmpty()) {
