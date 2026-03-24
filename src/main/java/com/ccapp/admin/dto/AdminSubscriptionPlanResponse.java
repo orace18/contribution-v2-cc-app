@@ -8,13 +8,12 @@ import java.util.UUID;
 public record AdminSubscriptionPlanResponse(
         UUID id,
         String countryCode,
-        SubscriptionGrade grade,
+        SubscriptionGrade formulaType,
         Integer durationMonths,
-        BigDecimal unitAmount,
+        BigDecimal monthlyPrice,
+        BigDecimal totalPrice,
         String currency,
-        String code,
-        String name,
-        boolean active,
+        boolean isActive,
         OffsetDateTime createdAt
 ) {
 }

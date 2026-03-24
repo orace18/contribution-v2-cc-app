@@ -11,9 +11,16 @@ import java.util.UUID;
 public interface SubscriptionPlanRepository extends JpaRepository<SubscriptionPlan, UUID> {
     List<SubscriptionPlan> findByCountryAndActiveTrueOrderByGradeAscDurationMonthsAscPriceAsc(String country);
 
+    List<SubscriptionPlan> findAllByCountryOrderByGradeAscDurationMonthsAscPriceAsc(String country);
+
     Optional<SubscriptionPlan> findByCodeAndCountryAndActiveTrue(String code, String country);
 
     Optional<SubscriptionPlan> findByIdAndActiveTrue(UUID id);
+
+    Optional<SubscriptionPlan> findByCountryAndGradeAndDurationMonthsAndCurrency(String country,
+                                                                                 SubscriptionGrade grade,
+                                                                                 Integer durationMonths,
+                                                                                 String currency);
 
     boolean existsByCountryAndGradeAndDurationMonthsAndCurrency(String country,
                                                                 SubscriptionGrade grade,

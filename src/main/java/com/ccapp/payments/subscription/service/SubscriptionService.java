@@ -70,28 +70,38 @@ public class SubscriptionService {
         String normalizedCountryCode = normalizeCountryCode(countryCode);
         List<SubscriptionPlan> activePlans = subscriptionPlanRepository
                 .findByCountryAndActiveTrueOrderByGradeAscDurationMonthsAscPriceAsc(normalizedCountryCode);
-        if (activePlans.size() < 10) {
-            throw new BusinessException("Subscription plans must include at least 10 active plans for the country");
+        if (activePlans.size() != 10) {
+            throw new BusinessException("Subscription plans must include exactly 10 active plans: 9 paid variants and 1 FREE plan");
         }
 
         Map<SubscriptionGrade, Set<Integer>> durationsByGrade = new EnumMap<>(SubscriptionGrade.class);
         for (SubscriptionGrade grade : SubscriptionGrade.values()) {
             durationsByGrade.put(grade, new java.util.HashSet<>());
         }
+        int freePlanCount = 0;
         for (SubscriptionPlan plan : activePlans) {
             if (plan.getGrade() == null || plan.getDurationMonths() == null) {
                 throw new BusinessException("All active subscription plans must define grade and durationMonths");
+            }
+            if (plan.getGrade() == SubscriptionGrade.FREE) {
+                freePlanCount += 1;
+                if (plan.getDurationMonths() != 1) {
+                    throw new BusinessException("FREE plan must use durationMonths = 1");
+                }
+                if (plan.getPrice() == null || plan.getPrice().compareTo(java.math.BigDecimal.ZERO) != 0) {
+                    throw new BusinessException("FREE plan must have totalPrice = 0");
+                }
             }
             durationsByGrade.get(plan.getGrade()).add(plan.getDurationMonths());
         }
 
         for (SubscriptionGrade grade : List.of(SubscriptionGrade.CLASSIC, SubscriptionGrade.GOLD, SubscriptionGrade.DIAMOND)) {
-            if (!durationsByGrade.get(grade).containsAll(REQUIRED_PAID_DURATIONS)) {
+            if (!durationsByGrade.get(grade).equals(REQUIRED_PAID_DURATIONS)) {
                 throw new BusinessException("Subscription plans must include 1, 3 and 12-month durations for " + grade.name());
             }
         }
-        if (durationsByGrade.get(SubscriptionGrade.FREE).isEmpty()) {
-            throw new BusinessException("Subscription plans must include at least one FREE plan");
+        if (freePlanCount != 1) {
+            throw new BusinessException("Subscription plans must include exactly one FREE plan");
         }
     }
 

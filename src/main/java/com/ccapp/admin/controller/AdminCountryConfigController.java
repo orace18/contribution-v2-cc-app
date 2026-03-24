@@ -54,19 +54,20 @@ public class AdminCountryConfigController {
     }
 
     @GetMapping("/subscription-plans")
-    public ResponseEntity<CommonResponse<List<AdminSubscriptionPlanResponse>>> listPlans() {
-        List<AdminSubscriptionPlanResponse> response = adminCountryConfigService.listSubscriptionPlans();
+    public ResponseEntity<CommonResponse<List<AdminSubscriptionPlanResponse>>> listPlans(
+            @RequestParam(required = false) String country) {
+        List<AdminSubscriptionPlanResponse> response = adminCountryConfigService.listSubscriptionPlans(country);
         adminAuditService.logAction(AdminSecurityUtils.currentAdminUserId(), "LIST_SUBSCRIPTION_PLANS", "SUBSCRIPTION_PLAN", null, "count=" + response.size());
         return ResponseEntity.ok(CommonResponse.success("Subscription plans", response));
     }
 
     @PostMapping("/subscription-plans")
-    public ResponseEntity<CommonResponse<AdminSubscriptionPlanResponse>> createPlan(
-            @Valid @RequestBody AdminSubscriptionPlanRequest request) {
+    public ResponseEntity<CommonResponse<List<AdminSubscriptionPlanResponse>>> savePlans(
+            @Valid @RequestBody AdminSubscriptionPlanBulkUpsertRequest request) {
         requireSuperOrOperations();
-        AdminSubscriptionPlanResponse response = adminCountryConfigService.createSubscriptionPlan(request);
-        adminAuditService.logAction(AdminSecurityUtils.currentAdminUserId(), "CREATE_SUBSCRIPTION_PLAN", "SUBSCRIPTION_PLAN", response.id().toString(), request);
-        return ResponseEntity.ok(CommonResponse.success("Subscription plan created", response));
+        List<AdminSubscriptionPlanResponse> response = adminCountryConfigService.saveSubscriptionPlans(request);
+        adminAuditService.logAction(AdminSecurityUtils.currentAdminUserId(), "UPSERT_SUBSCRIPTION_PLAN_CATALOG", "SUBSCRIPTION_PLAN", request.countryCode(), "count=" + response.size());
+        return ResponseEntity.ok(CommonResponse.success("Subscription plan catalog saved", response));
     }
 
     @PostMapping("/credit-policy")

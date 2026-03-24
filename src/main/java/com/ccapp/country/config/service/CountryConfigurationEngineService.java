@@ -20,6 +20,7 @@ import com.ccapp.country.config.repository.CountryChartAccountRepository;
 import com.ccapp.country.domain.entity.Country;
 import com.ccapp.country.config.repository.CountryConfigVersionRepository;
 import com.ccapp.country.repository.CountryRepository;
+import com.ccapp.payments.subscription.service.SubscriptionPlanCatalogService;
 import com.ccapp.payments.subscription.service.SubscriptionService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -60,6 +61,7 @@ public class CountryConfigurationEngineService {
     private final CountryRepository countryRepository;
     private final CountryChartOfAccountsService countryChartOfAccountsService;
     private final CountryConfigReadinessService countryConfigReadinessService;
+    private final SubscriptionPlanCatalogService subscriptionPlanCatalogService;
     private final SubscriptionService subscriptionService;
     private final ConfigAuditMetadataService configAuditMetadataService;
     private final ObjectMapper objectMapper;
@@ -123,6 +125,9 @@ public class CountryConfigurationEngineService {
                 effectiveDate,
                 actorAdminUserId
         );
+        if (configType == CountryConfigType.MEMBERSHIP) {
+            subscriptionPlanCatalogService.syncCountryCatalogFromMembershipConfig(normalizedCountryCode, sanitizedPayload);
+        }
         markCountryConfigured(normalizedCountryCode);
         return toVersionResponse(saved);
     }
@@ -262,6 +267,10 @@ public class CountryConfigurationEngineService {
             validateGuaranteeFinancingAlignment(
                     sanitizedPayloads.getOrDefault(CountryConfigType.GUARANTEE, objectMapper.createObjectNode()),
                     sanitizedPayloads.getOrDefault(CountryConfigType.FINANCING, objectMapper.createObjectNode())
+            );
+            subscriptionPlanCatalogService.assertMembershipPayloadCompatibleWithCountry(
+                    normalizedCountryCode,
+                    sanitizedPayloads.getOrDefault(CountryConfigType.MEMBERSHIP, objectMapper.createObjectNode())
             );
             validateAccountingAccountsExist(
                     normalizedCountryCode,
@@ -499,47 +508,7 @@ public class CountryConfigurationEngineService {
     }
 
     private void validateMembershipConfig(ObjectNode payload) {
-        JsonNode plansNode = payload.get("plans");
-        if (plansNode == null || !plansNode.isArray() || plansNode.isEmpty()) {
-            throw new BusinessException("membership.plans must be a non-empty array");
-        }
-        Set<String> tiers = new HashSet<>();
-        plansNode.forEach(planNode -> {
-            if (!planNode.isObject()) {
-                throw new BusinessException("membership.plans entries must be objects");
-            }
-            ObjectNode plan = (ObjectNode) planNode;
-            String code = optionalTextField(plan, "code");
-            String name = requiredTextField(plan, "name");
-            String tier = optionalTextField(plan, "tier");
-            String normalizedTier = tier != null ? tier : (code != null ? code : name);
-            if (!tiers.add(normalizedTier.trim().toUpperCase(Locale.ROOT))) {
-                throw new BusinessException("membership.plans contains duplicate tier/code: " + normalizedTier);
-            }
-            JsonNode pricingNode = plan.get("pricing");
-            if (pricingNode == null || !pricingNode.isObject()) {
-                throw new BusinessException("membership.plans.pricing must be an object");
-            }
-            ObjectNode pricing = (ObjectNode) pricingNode;
-            BigDecimal amount = requiredPositiveDecimal(pricing, "amount");
-            if (amount.compareTo(BigDecimal.ZERO) <= 0) {
-                throw new BusinessException("membership plan pricing amount must be positive");
-            }
-            String currency = requiredTextField(pricing, "currency");
-            if (currency.length() != 3) {
-                throw new BusinessException("membership.plans.pricing.currency must be a 3-letter code");
-            }
-
-            JsonNode benefitsNode = plan.get("benefits");
-            if (benefitsNode == null || !benefitsNode.isArray() || benefitsNode.isEmpty()) {
-                throw new BusinessException("membership.plans.benefits must be a non-empty array");
-            }
-            benefitsNode.forEach(benefitNode -> {
-                if (!benefitNode.isTextual() || benefitNode.asText().isBlank()) {
-                    throw new BusinessException("membership.plans.benefits values must be non-empty strings");
-                }
-            });
-        });
+        subscriptionPlanCatalogService.assertMembershipPayloadCatalogValid(payload);
     }
 
     private void validateMlmLimitsConfig(ObjectNode payload) {
@@ -928,11 +897,11 @@ public class CountryConfigurationEngineService {
             return;
         }
 
-        Set<String> membershipTiers = readMembershipTierSet(membershipConfig);
-        if (membershipTiers.isEmpty()) {
-            throw new BusinessException("membership.plans must be configured before tier-based mlm_limits");
+        Set<String> membershipFormulas = readMembershipPaidFormulaSet(membershipConfig);
+        if (membershipFormulas.isEmpty()) {
+            throw new BusinessException("membership.plans must define paid formula variants before tier-based mlm_limits");
         }
-        if (!membershipTiers.containsAll(cappedTiers) || !cappedTiers.containsAll(membershipTiers)) {
+        if (!membershipFormulas.containsAll(cappedTiers) || !cappedTiers.containsAll(membershipFormulas)) {
             throw new BusinessException("MLM caps must align with membership tiers");
         }
     }
@@ -943,11 +912,11 @@ public class CountryConfigurationEngineService {
             return;
         }
 
-        Set<String> membershipTiers = readMembershipTierSet(membershipConfig);
-        if (membershipTiers.isEmpty()) {
-            throw new BusinessException("membership.plans must be configured before tier-based guarantee limits");
+        Set<String> membershipFormulas = readMembershipPaidFormulaSet(membershipConfig);
+        if (membershipFormulas.isEmpty()) {
+            throw new BusinessException("membership.plans must define paid formula variants before tier-based guarantee limits");
         }
-        if (!membershipTiers.containsAll(guaranteeTiers) || !guaranteeTiers.containsAll(membershipTiers)) {
+        if (!membershipFormulas.containsAll(guaranteeTiers) || !guaranteeTiers.containsAll(membershipFormulas)) {
             throw new BusinessException("Guarantee configuration must align with membership tiers");
         }
     }
@@ -1071,7 +1040,7 @@ public class CountryConfigurationEngineService {
         return values;
     }
 
-    private Set<String> readMembershipTierSet(ObjectNode membershipConfig) {
+    private Set<String> readMembershipPaidFormulaSet(ObjectNode membershipConfig) {
         JsonNode plans = membershipConfig.get("plans");
         Set<String> tiers = new HashSet<>();
         if (plans == null || !plans.isArray()) {
@@ -1082,12 +1051,16 @@ public class CountryConfigurationEngineService {
                 return;
             }
             ObjectNode plan = (ObjectNode) planNode;
+            String formulaType = optionalTextField(plan, "formulaType");
             String tier = optionalTextField(plan, "tier");
             String code = optionalTextField(plan, "code");
             String name = optionalTextField(plan, "name");
-            String selected = tier != null ? tier : (code != null ? code : name);
+            String selected = formulaType != null ? formulaType : (tier != null ? tier : (code != null ? code : name));
             if (selected != null && !selected.isBlank()) {
-                tiers.add(selected.trim().toUpperCase(Locale.ROOT));
+                String normalized = selected.trim().toUpperCase(Locale.ROOT);
+                if (!"FREE".equals(normalized)) {
+                    tiers.add(normalized);
+                }
             }
         });
         return tiers;

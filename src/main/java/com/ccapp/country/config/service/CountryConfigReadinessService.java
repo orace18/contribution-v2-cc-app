@@ -39,6 +39,9 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class CountryConfigReadinessService {
 
+    private static final Set<Integer> REQUIRED_PAID_DURATIONS = Set.of(1, 3, 12);
+    private static final Set<String> REQUIRED_PAID_FORMULAS = Set.of("CLASSIC", "GOLD", "DIAMOND");
+
     private final CountryRepository countryRepository;
     private final CountryConfigVersionRepository countryConfigVersionRepository;
     private final CountryChartAccountRepository countryChartAccountRepository;
@@ -159,18 +162,21 @@ public class CountryConfigReadinessService {
     }
 
     private SectionAccumulator evaluateMembershipSection(ObjectNode membership, ObjectNode mlmLimits) {
-        SectionAccumulator section = new SectionAccumulator("membership", 5);
+        SectionAccumulator section = new SectionAccumulator("membership", 6);
         JsonNode plansNode = membership.get("plans");
         if (plansNode == null || !plansNode.isArray() || plansNode.isEmpty()) {
-            section.miss("membership.classic_plan");
-            section.miss("membership.gold_plan");
-            section.miss("membership.diamond_plan");
+            section.miss("membership.classic_variants");
+            section.miss("membership.gold_variants");
+            section.miss("membership.diamond_variants");
+            section.miss("membership.free_plan");
             section.miss("membership.pricing");
             section.miss("membership.weekly_caps");
             return section;
         }
 
-        Set<String> tiers = new HashSet<>();
+        Map<String, Set<Integer>> durationsByFormula = new java.util.HashMap<>();
+        REQUIRED_PAID_FORMULAS.forEach(formula -> durationsByFormula.put(formula, new HashSet<>()));
+        int freePlanCount = 0;
         boolean pricingValid = true;
         for (JsonNode planNode : plansNode) {
             if (!planNode.isObject()) {
@@ -178,36 +184,58 @@ public class CountryConfigReadinessService {
                 continue;
             }
             ObjectNode plan = (ObjectNode) planNode;
-            String tier = optionalText(plan, "tier");
-            if (tier == null) {
-                tier = optionalText(plan, "code");
-            }
-            if (tier == null) {
-                tier = optionalText(plan, "name");
-            }
-            if (tier != null && !tier.isBlank()) {
-                tiers.add(tier.trim().toUpperCase(Locale.ROOT));
-            }
-
-            JsonNode pricingNode = plan.get("pricing");
-            if (pricingNode == null || !pricingNode.isObject()) {
+            String formulaType = firstNonBlank(
+                    optionalText(plan, "formulaType"),
+                    optionalText(plan, "tier"),
+                    optionalText(plan, "code"),
+                    optionalText(plan, "name")
+            );
+            if (formulaType == null) {
                 pricingValid = false;
                 continue;
             }
-            JsonNode amountNode = pricingNode.get("amount");
-            if (amountNode == null || !amountNode.isNumber() || amountNode.decimalValue().compareTo(BigDecimal.ZERO) <= 0) {
+
+            String normalizedFormula = formulaType.trim().toUpperCase(Locale.ROOT);
+            Integer durationMonths = optionalInt(plan, "durationMonths");
+            BigDecimal totalPrice = resolveMembershipPlanTotalPrice(plan);
+            String currency = resolveMembershipPlanCurrency(plan);
+            boolean active = optionalBoolean(plan, "isActive", "active").orElse(true);
+
+            if (!active || durationMonths == null || durationMonths <= 0 || currency == null) {
+                pricingValid = false;
+                continue;
+            }
+
+            if ("FREE".equals(normalizedFormula)) {
+                freePlanCount += 1;
+                if (durationMonths != 1 || totalPrice == null || totalPrice.compareTo(BigDecimal.ZERO) != 0) {
+                    pricingValid = false;
+                }
+                continue;
+            }
+
+            if (!REQUIRED_PAID_FORMULAS.contains(normalizedFormula)) {
+                pricingValid = false;
+                continue;
+            }
+
+            durationsByFormula.get(normalizedFormula).add(durationMonths);
+            if (totalPrice == null || totalPrice.compareTo(BigDecimal.ZERO) <= 0 || !REQUIRED_PAID_DURATIONS.contains(durationMonths)) {
                 pricingValid = false;
             }
         }
 
-        if (!tiers.contains("CLASSIC")) {
-            section.miss("membership.classic_plan");
+        if (!durationsByFormula.get("CLASSIC").equals(REQUIRED_PAID_DURATIONS)) {
+            section.miss("membership.classic_variants");
         }
-        if (!tiers.contains("GOLD")) {
-            section.miss("membership.gold_plan");
+        if (!durationsByFormula.get("GOLD").equals(REQUIRED_PAID_DURATIONS)) {
+            section.miss("membership.gold_variants");
         }
-        if (!tiers.contains("DIAMOND")) {
-            section.miss("membership.diamond_plan");
+        if (!durationsByFormula.get("DIAMOND").equals(REQUIRED_PAID_DURATIONS)) {
+            section.miss("membership.diamond_variants");
+        }
+        if (freePlanCount != 1) {
+            section.miss("membership.free_plan");
         }
         if (!pricingValid) {
             section.miss("membership.pricing");
@@ -240,6 +268,47 @@ public class CountryConfigReadinessService {
             section.miss("membership.weekly_caps");
         }
         return section;
+    }
+
+    private Integer optionalInt(ObjectNode payload, String fieldName) {
+        if (payload == null) {
+            return null;
+        }
+        JsonNode node = payload.get(fieldName);
+        if (node == null || node.isNull() || !node.isInt()) {
+            return null;
+        }
+        return node.intValue();
+    }
+
+    private BigDecimal resolveMembershipPlanTotalPrice(ObjectNode plan) {
+        JsonNode totalPriceNode = plan.get("totalPrice");
+        if (totalPriceNode != null && totalPriceNode.isNumber()) {
+            return totalPriceNode.decimalValue();
+        }
+        JsonNode pricingNode = plan.get("pricing");
+        if (pricingNode != null && pricingNode.isObject()) {
+            JsonNode amountNode = pricingNode.get("amount");
+            if (amountNode != null && amountNode.isNumber()) {
+                return amountNode.decimalValue();
+            }
+        }
+        return null;
+    }
+
+    private String resolveMembershipPlanCurrency(ObjectNode plan) {
+        String currency = optionalText(plan, "currency");
+        if (currency != null) {
+            return currency;
+        }
+        JsonNode pricingNode = plan.get("pricing");
+        if (pricingNode != null && pricingNode.isObject()) {
+            JsonNode currencyNode = pricingNode.get("currency");
+            if (currencyNode != null && currencyNode.isTextual() && !currencyNode.asText().isBlank()) {
+                return currencyNode.asText().trim();
+            }
+        }
+        return null;
     }
 
     private SectionAccumulator evaluateMlmSection(String countryCode, ObjectNode mlmLimitsCountryPayload) {
