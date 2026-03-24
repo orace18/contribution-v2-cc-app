@@ -17,7 +17,7 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, UUID> 
 
     List<LedgerEntry> findByAccountCodeAndCurrencyOrderByCreatedAtAsc(String accountCode, String currency);
 
-    @Query("""
+    @Query(value = """
             select le
             from LedgerEntry le
             join fetch le.event event
@@ -27,6 +27,16 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, UUID> 
               and (:fromDate is null or event.postedAt >= :fromDate)
               and (:toDate is null or event.postedAt < :toDate)
             order by event.postedAt desc, le.lineNo asc
+            """,
+            countQuery = """
+            select count(le)
+            from LedgerEntry le
+            join le.event event
+            join event.operation operation
+            where (:accountCode is null or upper(le.accountCode) = upper(:accountCode))
+              and (:operationType is null or operation.type = :operationType)
+              and (:fromDate is null or event.postedAt >= :fromDate)
+              and (:toDate is null or event.postedAt < :toDate)
             """)
     Page<LedgerEntry> searchExplorer(String accountCode,
                                      OperationType operationType,

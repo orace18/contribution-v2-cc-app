@@ -3,6 +3,7 @@ package com.ccapp.admin.invitation;
 import com.ccapp.admin.domain.entity.AdminInvitation;
 import com.ccapp.admin.domain.entity.AdminUser;
 import com.ccapp.admin.domain.enums.AdminInvitationStatus;
+import com.ccapp.admin.domain.enums.AdminUserStatus;
 import com.ccapp.admin.dto.AdminAccountSummaryResponse;
 import com.ccapp.admin.dto.AdminInvitationResponse;
 import com.ccapp.admin.dto.CreateAdminInvitationRequest;
@@ -152,6 +153,43 @@ public class AdminInvitationService {
     }
 
     @Transactional
+    public AdminAccountSummaryResponse disableAccount(UUID id) {
+        AdminUser user = adminUserRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Admin account not found"));
+        if (user.getStatus() == AdminUserStatus.DISABLED) {
+            throw new BusinessException("Admin account is already disabled");
+        }
+        user.setStatus(AdminUserStatus.DISABLED);
+        return toAccountResponse(adminUserRepository.save(user));
+    }
+
+    @Transactional
+    public AdminAccountSummaryResponse enableAccount(UUID id) {
+        AdminUser user = adminUserRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Admin account not found"));
+        if (user.getStatus() != AdminUserStatus.DISABLED) {
+            throw new BusinessException("Admin account is not disabled");
+        }
+        user.setStatus(AdminUserStatus.ACTIVE);
+        return toAccountResponse(adminUserRepository.save(user));
+    }
+
+    @Transactional
+    public AdminAccountSummaryResponse changeRole(UUID id, com.ccapp.admin.domain.enums.AdminRole newRole, UUID newCountryId) {
+        if (newRole == com.ccapp.admin.domain.enums.AdminRole.ROLE_SUPER_ADMIN && newCountryId != null) {
+            throw new BusinessException("SUPER_ADMIN must not have countryId");
+        }
+        if (newRole != com.ccapp.admin.domain.enums.AdminRole.ROLE_SUPER_ADMIN && newCountryId == null) {
+            throw new BusinessException("countryId is required for non super admin roles");
+        }
+        AdminUser user = adminUserRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Admin account not found"));
+        user.setRole(newRole);
+        user.setCountryId(newCountryId);
+        return toAccountResponse(adminUserRepository.save(user));
+    }
+
+    @Transactional
     public int expireOutdatedInvitations() {
         List<AdminInvitation> expired = adminInvitationRepository.findByStatusAndExpiresAtBefore(
                 AdminInvitationStatus.PENDING,
@@ -183,6 +221,23 @@ public class AdminInvitationService {
         byte[] bytes = new byte[32];
         new SecureRandom().nextBytes(bytes);
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+    }
+
+    private AdminAccountSummaryResponse toAccountResponse(AdminUser user) {
+        String countryCode = user.getCountryId() != null
+                ? countryRepository.findById(user.getCountryId()).map(c -> c.getCode()).orElse(null)
+                : null;
+        return new AdminAccountSummaryResponse(
+                user.getId(),
+                user.getEmail(),
+                user.getRole(),
+                user.getCountryId(),
+                countryCode,
+                user.getStatus(),
+                user.isTwoFactorEnabled(),
+                user.getCreatedAt(),
+                user.getActivatedAt()
+        );
     }
 
     private AdminInvitationResponse toResponse(AdminInvitation invitation) {

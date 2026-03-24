@@ -4,6 +4,7 @@ import com.ccapp.admin.audit.AdminAuditService;
 import com.ccapp.admin.domain.enums.AdminRole;
 import com.ccapp.admin.dto.AdminAccountSummaryResponse;
 import com.ccapp.admin.dto.AdminInvitationResponse;
+import com.ccapp.admin.dto.ChangeAdminRoleRequest;
 import com.ccapp.admin.dto.CreateAdminInvitationRequest;
 import com.ccapp.admin.invitation.AdminInvitationService;
 import com.ccapp.admin.security.AdminSecurityUtils;
@@ -62,6 +63,32 @@ public class AdminInvitationController {
         AdminInvitationResponse response = adminInvitationService.revoke(id);
         adminAuditService.logAction(AdminSecurityUtils.currentAdminUserId(), "REVOKE_INVITATION", "ADMIN_INVITATION", id.toString(), null);
         return ResponseEntity.ok(CommonResponse.success("Invitation revoked", response));
+    }
+
+    @PostMapping("/admin-accounts/{id}/disable")
+    public ResponseEntity<CommonResponse<AdminAccountSummaryResponse>> disableAccount(@PathVariable UUID id) {
+        requireSuperAdmin();
+        AdminAccountSummaryResponse response = adminInvitationService.disableAccount(id);
+        adminAuditService.logAction(AdminSecurityUtils.currentAdminUserId(), "DISABLE_ADMIN_ACCOUNT", "ADMIN_USER", id.toString(), null);
+        return ResponseEntity.ok(CommonResponse.success("Admin account disabled", response));
+    }
+
+    @PostMapping("/admin-accounts/{id}/enable")
+    public ResponseEntity<CommonResponse<AdminAccountSummaryResponse>> enableAccount(@PathVariable UUID id) {
+        requireSuperAdmin();
+        AdminAccountSummaryResponse response = adminInvitationService.enableAccount(id);
+        adminAuditService.logAction(AdminSecurityUtils.currentAdminUserId(), "ENABLE_ADMIN_ACCOUNT", "ADMIN_USER", id.toString(), null);
+        return ResponseEntity.ok(CommonResponse.success("Admin account enabled", response));
+    }
+
+    @PutMapping("/admin-accounts/{id}/role")
+    public ResponseEntity<CommonResponse<AdminAccountSummaryResponse>> changeRole(
+            @PathVariable UUID id,
+            @Valid @RequestBody ChangeAdminRoleRequest request) {
+        requireSuperAdmin();
+        AdminAccountSummaryResponse response = adminInvitationService.changeRole(id, request.role(), request.countryId());
+        adminAuditService.logAction(AdminSecurityUtils.currentAdminUserId(), "CHANGE_ADMIN_ROLE", "ADMIN_USER", id.toString(), request);
+        return ResponseEntity.ok(CommonResponse.success("Admin role updated", response));
     }
 
     private void requireSuperAdmin() {
