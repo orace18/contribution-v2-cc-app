@@ -241,10 +241,8 @@ public class CountryChartOfAccountsService {
     }
 
     private void bootstrapMasterTemplateIfMissing() {
-        if (accountGroupMasterRepository.count() > 0) {
-            return;
-        }
-        List<AccountGroupMaster> defaults = Arrays.stream(CountryMasterAccountTemplate.values())
+        List<AccountGroupMaster> toSave = Arrays.stream(CountryMasterAccountTemplate.values())
+                .filter(template -> accountGroupMasterRepository.findById(template.groupId()).isEmpty())
                 .map(template -> AccountGroupMaster.builder()
                         .groupId(template.groupId())
                         .name(template.displayName())
@@ -253,8 +251,10 @@ public class CountryChartOfAccountsService {
                         .systemRequired(template.systemRequired())
                         .build())
                 .toList();
-        accountGroupMasterRepository.saveAll(defaults);
-        log.info("account_groups_master_seeded count={}", defaults.size());
+        if (!toSave.isEmpty()) {
+            accountGroupMasterRepository.saveAll(toSave);
+            log.info("account_groups_master_seeded count={}", toSave.size());
+        }
     }
 
     private CountryChartAccount ensureMasterAccount(Country country, AccountGroupMaster master) {
