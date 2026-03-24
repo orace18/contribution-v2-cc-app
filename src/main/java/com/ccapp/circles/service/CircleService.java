@@ -95,7 +95,8 @@ public class CircleService {
 
     @Transactional
     public CircleResponse createCircle(UUID accountHolderId, CreateCircleRequest request) {
-        MlmHierarchy hierarchy = resolveMlmHierarchy(accountHolderId);
+        // TODO: MLM hierarchy resolution disabled temporarily — to be re-enabled once MLM tree is set up
+        // MlmHierarchy hierarchy = resolveMlmHierarchy(accountHolderId);
         String accountHolderCountry = resolveAccountHolderCountry(accountHolderId);
         CircleConfigLimits limits = resolveCircleConfigLimits(accountHolderCountry);
         if (circleRepository.existsActiveCircleForUser(accountHolderId)) {
@@ -104,7 +105,7 @@ public class CircleService {
 
         Circle circle = circleRepository.save(Circle.builder()
                 .name(request.name().trim())
-                .coachId(hierarchy.coachAccountHolderId())
+                .coachId(accountHolderId)
                 .countryCode(accountHolderCountry)
                 .configSnapshot(buildCircleConfigSnapshot(accountHolderCountry, limits.resolvedConfig()))
                 .configVersion(limits.resolvedConfig().version())
@@ -115,9 +116,10 @@ public class CircleService {
         List<CircleMember> toInsert = new ArrayList<>();
         Set<UUID> insertedAccountHolders = new HashSet<>();
 
-        addParticipant(toInsert, insertedAccountHolders, circle, hierarchy.coachAccountHolderId(), CircleMemberRole.COACH, false, now);
-        addParticipant(toInsert, insertedAccountHolders, circle, hierarchy.advisorGeneration1AccountHolderId(), CircleMemberRole.ADVISOR_G1, false, now);
-        addParticipant(toInsert, insertedAccountHolders, circle, hierarchy.advisorGeneration2AccountHolderId(), CircleMemberRole.ADVISOR_G2, false, now);
+        // TODO: MLM participants disabled temporarily — to be re-enabled once MLM tree is set up
+        // addParticipant(toInsert, insertedAccountHolders, circle, hierarchy.coachAccountHolderId(), CircleMemberRole.COACH, false, now);
+        // addParticipant(toInsert, insertedAccountHolders, circle, hierarchy.advisorGeneration1AccountHolderId(), CircleMemberRole.ADVISOR_G1, false, now);
+        // addParticipant(toInsert, insertedAccountHolders, circle, hierarchy.advisorGeneration2AccountHolderId(), CircleMemberRole.ADVISOR_G2, false, now);
 
         if (request.creatorRole() == CircleCreatorRole.MEMBER) {
             addParticipant(toInsert, insertedAccountHolders, circle, accountHolderId, CircleMemberRole.MEMBER, true, now);
