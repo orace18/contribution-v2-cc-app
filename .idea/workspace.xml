@@ -4,14 +4,14 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Correction du bug" />
+    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Fix 500 code status error" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
   <component name="EmbeddingIndexingInfo">
-    <option name="cachedIndexableFilesCount" value="988" />
+    <option name="cachedIndexableFilesCount" value="1040" />
   </component>
   <component name="FileTemplateManagerImpl">
     <option name="RECENT_TEMPLATES">
@@ -141,14 +141,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1772553173766</updated>
-    </task>
-    <task id="LOCAL-00027" summary="Config MinIO">
-      <option name="closed" value="true" />
-      <created>1772923865594</created>
-      <option name="number" value="00027" />
-      <option name="presentableId" value="LOCAL-00027" />
-      <option name="project" value="LOCAL" />
-      <updated>1772923865594</updated>
     </task>
     <task id="LOCAL-00028" summary="Revue du base name">
       <option name="closed" value="true" />
@@ -534,7 +526,15 @@
       <option name="project" value="LOCAL" />
       <updated>1774297431006</updated>
     </task>
-    <option name="localTasksCounter" value="76" />
+    <task id="LOCAL-00076" summary="Fix 500 code status error">
+      <option name="closed" value="true" />
+      <created>1774344767938</created>
+      <option name="number" value="00076" />
+      <option name="presentableId" value="LOCAL-00076" />
+      <option name="project" value="LOCAL" />
+      <updated>1774344767938</updated>
+    </task>
+    <option name="localTasksCounter" value="77" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -549,7 +549,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="Refact" />
     <MESSAGE value="Correction de la configuration firebase" />
     <MESSAGE value="Firebase location" />
     <MESSAGE value="Reajustement firebase" />
@@ -574,7 +573,8 @@
     <MESSAGE value="Config mail" />
     <MESSAGE value="Config mail revue" />
     <MESSAGE value="Correction du bug" />
-    <option name="LAST_COMMIT_MESSAGE" value="Correction du bug" />
+    <MESSAGE value="Fix 500 code status error" />
+    <option name="LAST_COMMIT_MESSAGE" value="Fix 500 code status error" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />
