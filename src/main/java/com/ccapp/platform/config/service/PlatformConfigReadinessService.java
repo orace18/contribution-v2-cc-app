@@ -24,6 +24,7 @@ public class PlatformConfigReadinessService {
     private static final BigDecimal ONE_HUNDRED = new BigDecimal("100");
 
     private final PlatformConfigurationService platformConfigurationService;
+    private final GlobalMlmConfigService globalMlmConfigService;
     private final ObjectMapper objectMapper;
 
     @Transactional(readOnly = true)
@@ -64,9 +65,7 @@ public class PlatformConfigReadinessService {
     }
 
     private boolean isGlobalMlmValid(ObjectNode mlm) {
-        BigDecimal unilevel = decimalField(mlm, "unilevel");
-        BigDecimal binary = decimalField(mlm, "binary");
-        return isPercentage(unilevel) && isPercentage(binary);
+        return globalMlmConfigService.isResolvable(mlm);
     }
 
     private boolean isAllocationValid(ObjectNode allocationPayload) {
@@ -128,14 +127,6 @@ public class PlatformConfigReadinessService {
             }
         }
         return true;
-    }
-
-    private BigDecimal decimalField(ObjectNode payload, String fieldName) {
-        JsonNode value = payload.get(fieldName);
-        if (value == null || value.isNull() || !value.isNumber()) {
-            return null;
-        }
-        return value.decimalValue();
     }
 
     private boolean hasNumericField(ObjectNode payload, String fieldName) {

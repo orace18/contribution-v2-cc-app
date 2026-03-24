@@ -21,7 +21,7 @@ import com.ccapp.payments.subscription.domain.enums.MembershipStatus;
 import com.ccapp.payments.subscription.domain.enums.SubscriptionGrade;
 import com.ccapp.payments.subscription.repository.MembershipRepository;
 import com.ccapp.payments.subscription.repository.SubscriptionPlanRepository;
-import com.ccapp.platform.config.domain.enums.PlatformConfigType;
+import com.ccapp.platform.config.service.GlobalMlmConfigService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -57,6 +57,7 @@ public class MlmCommissionService {
     private final MembershipRepository membershipRepository;
     private final SubscriptionPlanRepository subscriptionPlanRepository;
     private final CountryConfigResolver countryConfigResolver;
+    private final GlobalMlmConfigService globalMlmConfigService;
 
     @Value("${mlm.monitoring.commission-spike.threshold:10000}")
     private BigDecimal commissionSpikeThreshold;
@@ -199,11 +200,10 @@ public class MlmCommissionService {
             throw new BusinessException("commissionPool allocation percentage is required");
         }
 
-        var platformMlmConfig = countryConfigResolver.resolveActivePlatformConfig(PlatformConfigType.GLOBAL_MLM_BASE_RATES);
-        var mlmPayload = countryConfigResolver.payloadAsObjectNode(platformMlmConfig);
+        var globalMlmConfig = globalMlmConfigService.resolveActiveConfig();
         Map<Integer, BigDecimal> ratesByGeneration = new HashMap<>();
         for (int generation = 1; generation <= MAX_GENERATIONS; generation++) {
-            BigDecimal rate = readGenerationRate(mlmPayload, generation);
+            BigDecimal rate = globalMlmConfig.generationRate(generation);
             if (rate == null) {
                 throw new BusinessException("Missing global unilevel rate for generation G" + generation);
             }
@@ -273,25 +273,6 @@ public class MlmCommissionService {
             com.fasterxml.jackson.databind.JsonNode value = node.get(alias);
             if (value != null && value.isNumber()) {
                 return value.decimalValue();
-            }
-        }
-        return null;
-    }
-
-    private BigDecimal readGenerationRate(com.fasterxml.jackson.databind.node.ObjectNode payload, int generation) {
-        if (payload == null) {
-            return null;
-        }
-        String key = "g" + generation;
-        com.fasterxml.jackson.databind.JsonNode direct = payload.get(key);
-        if (direct != null && direct.isNumber()) {
-            return direct.decimalValue();
-        }
-        com.fasterxml.jackson.databind.JsonNode generations = payload.get("generations");
-        if (generations != null && generations.isObject()) {
-            com.fasterxml.jackson.databind.JsonNode nested = generations.get(key);
-            if (nested != null && nested.isNumber()) {
-                return nested.decimalValue();
             }
         }
         return null;

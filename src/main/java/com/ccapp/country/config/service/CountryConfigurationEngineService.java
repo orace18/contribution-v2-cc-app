@@ -544,31 +544,17 @@ public class CountryConfigurationEngineService {
             });
         }
 
-        JsonNode baseRatesOverrideNode = payload.get("baseRatesOverride");
-        if (baseRatesOverrideNode != null && !baseRatesOverrideNode.isNull()) {
-            if (!baseRatesOverrideNode.isObject()) {
-                throw new BusinessException("mlm_limits.baseRatesOverride must be an object");
-            }
-            ObjectNode baseRatesOverride = (ObjectNode) baseRatesOverrideNode;
-            optionalPercentageField(baseRatesOverride, "unilevel", "mlm_limits.baseRatesOverride.unilevel");
-            optionalPercentageField(baseRatesOverride, "binary", "mlm_limits.baseRatesOverride.binary");
-        }
+        rejectMlmRateOverride(payload, "baseRatesOverride");
+        rejectMlmRateOverride(payload, "commissionRates");
+        rejectMlmRateOverride(payload, "overrideUnilevelRate");
+        rejectMlmRateOverride(payload, "overrideBinaryRate");
+        rejectMlmRateOverride(payload, "usePlatformFallback");
+    }
 
-        JsonNode legacyCommissionRatesNode = payload.get("commissionRates");
-        if (legacyCommissionRatesNode != null && !legacyCommissionRatesNode.isNull()) {
-            if (!legacyCommissionRatesNode.isArray()) {
-                throw new BusinessException("mlm_limits.commissionRates must be an array");
-            }
-            legacyCommissionRatesNode.forEach(rateNode -> {
-                if (!rateNode.isObject()) {
-                    throw new BusinessException("mlm_limits.commissionRates entries must be objects");
-                }
-                ObjectNode rate = (ObjectNode) rateNode;
-                BigDecimal rateValue = requiredDecimalField(rate, "rate", BigDecimal.ZERO, ONE_HUNDRED);
-                if (rateValue.compareTo(ONE_HUNDRED) > 0) {
-                    throw new BusinessException("MLM rates must be <= 100");
-                }
-            });
+    private void rejectMlmRateOverride(ObjectNode payload, String fieldName) {
+        JsonNode fieldNode = payload.get(fieldName);
+        if (fieldNode != null && !fieldNode.isNull()) {
+            throw new BusinessException("mlm_limits." + fieldName + " is not allowed. MLM rates are global only");
         }
     }
 

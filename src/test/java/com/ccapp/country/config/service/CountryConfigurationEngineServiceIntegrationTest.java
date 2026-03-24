@@ -296,9 +296,16 @@ class CountryConfigurationEngineServiceIntegrationTest {
 
         ObjectNode membershipPayload = objectMapper.createObjectNode();
         ArrayNode membershipPlans = objectMapper.createArrayNode();
-        membershipPlans.add(buildMembershipPlan("CLASSIC", "Classic", 1000));
-        membershipPlans.add(buildMembershipPlan("GOLD", "Gold", 5000));
-        membershipPlans.add(buildMembershipPlan("DIAMOND", "Diamond", 10000));
+        membershipPlans.add(buildMembershipPlan("CLASSIC", 1, 1000));
+        membershipPlans.add(buildMembershipPlan("CLASSIC", 3, 3000));
+        membershipPlans.add(buildMembershipPlan("CLASSIC", 12, 12000));
+        membershipPlans.add(buildMembershipPlan("GOLD", 1, 5000));
+        membershipPlans.add(buildMembershipPlan("GOLD", 3, 15000));
+        membershipPlans.add(buildMembershipPlan("GOLD", 12, 60000));
+        membershipPlans.add(buildMembershipPlan("DIAMOND", 1, 10000));
+        membershipPlans.add(buildMembershipPlan("DIAMOND", 3, 30000));
+        membershipPlans.add(buildMembershipPlan("DIAMOND", 12, 120000));
+        membershipPlans.add(buildMembershipPlan("FREE", 1, 0));
         membershipPayload.set("plans", membershipPlans);
 
         ObjectNode mlmPayload = objectMapper.createObjectNode();
@@ -308,10 +315,6 @@ class CountryConfigurationEngineServiceIntegrationTest {
                 .add(buildTierCap("CLASSIC", 10000))
                 .add(buildTierCap("GOLD", 20000))
                 .add(buildTierCap("DIAMOND", 30000)));
-        ObjectNode baseRates = objectMapper.createObjectNode();
-        baseRates.put("unilevel", 12);
-        baseRates.put("binary", 8);
-        mlmPayload.set("baseRatesOverride", baseRates);
 
         ObjectNode financingPayload = objectMapper.createObjectNode();
         financingPayload.put("enabled", true);
@@ -381,16 +384,22 @@ class CountryConfigurationEngineServiceIntegrationTest {
                 .build());
     }
 
-    private ObjectNode buildMembershipPlan(String tier, String name, int amount) {
+    private ObjectNode buildMembershipPlan(String formulaType, int durationMonths, int totalPrice) {
         ObjectNode plan = objectMapper.createObjectNode();
-        plan.put("code", tier);
-        plan.put("tier", tier);
-        plan.put("name", name);
+        plan.put("code", formulaType);
+        plan.put("tier", formulaType);
+        plan.put("formulaType", formulaType);
+        plan.put("name", formulaType + (durationMonths == 1 ? "" : " " + durationMonths + "M"));
+        plan.put("durationMonths", durationMonths);
         ObjectNode pricing = objectMapper.createObjectNode();
-        pricing.put("amount", amount);
+        pricing.put("amount", totalPrice);
         pricing.put("currency", "XOF");
         plan.set("pricing", pricing);
-        plan.set("benefits", objectMapper.createArrayNode().add(name + " benefit"));
+        plan.put("currency", "XOF");
+        plan.put("totalPrice", totalPrice);
+        plan.put("monthlyPrice", durationMonths == 0 ? 0 : totalPrice / durationMonths);
+        plan.put("isActive", true);
+        plan.set("benefits", objectMapper.createArrayNode().add(formulaType + " benefit"));
         return plan;
     }
 

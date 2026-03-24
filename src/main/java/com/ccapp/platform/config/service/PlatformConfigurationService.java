@@ -37,6 +37,7 @@ public class PlatformConfigurationService {
 
     private final PlatformConfigVersionRepository platformConfigVersionRepository;
     private final ConfigAuditMetadataService configAuditMetadataService;
+    private final GlobalMlmConfigService globalMlmConfigService;
     private final ObjectMapper objectMapper;
 
     @Transactional(readOnly = true)
@@ -205,8 +206,7 @@ public class PlatformConfigurationService {
     }
 
     private void validateGlobalMlmBaseRates(ObjectNode payload) {
-        requiredPercentageField(payload, "unilevel", "global_mlm_base_rates.unilevel");
-        requiredPercentageField(payload, "binary", "global_mlm_base_rates.binary");
+        globalMlmConfigService.validateStrictPayload(payload);
     }
 
     private void validateGlobalAllocationConfig(ObjectNode payload) {
@@ -245,18 +245,6 @@ public class PlatformConfigurationService {
         }
         if (!value.isNumber()) {
             throw new BusinessException(errorPrefix + " must be numeric");
-        }
-        BigDecimal decimal = value.decimalValue();
-        if (decimal.compareTo(BigDecimal.ZERO) < 0 || decimal.compareTo(ONE_HUNDRED) > 0) {
-            throw new BusinessException(errorPrefix + " must be between 0 and 100");
-        }
-        return decimal;
-    }
-
-    private BigDecimal requiredPercentageField(ObjectNode payload, String fieldName, String errorPrefix) {
-        JsonNode value = payload.get(fieldName);
-        if (value == null || value.isNull() || !value.isNumber()) {
-            throw new BusinessException(errorPrefix + " is required and must be numeric");
         }
         BigDecimal decimal = value.decimalValue();
         if (decimal.compareTo(BigDecimal.ZERO) < 0 || decimal.compareTo(ONE_HUNDRED) > 0) {

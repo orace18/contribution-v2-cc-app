@@ -17,6 +17,8 @@ import com.ccapp.country.config.repository.CountryConfigVersionRepository;
 import com.ccapp.country.domain.entity.Country;
 import com.ccapp.country.repository.CountryRepository;
 import com.ccapp.financing.repository.OfferCountryConfigRepository;
+import com.ccapp.platform.config.domain.enums.PlatformConfigType;
+import com.ccapp.platform.config.service.GlobalMlmConfigService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -49,6 +51,7 @@ public class CountryConfigReadinessService {
     private final OfferCountryConfigRepository offerCountryConfigRepository;
     private final AdminUserRepository adminUserRepository;
     private final CountryConfigResolver countryConfigResolver;
+    private final GlobalMlmConfigService globalMlmConfigService;
     private final ObjectMapper objectMapper;
 
     @Transactional(readOnly = true)
@@ -312,14 +315,12 @@ public class CountryConfigReadinessService {
     }
 
     private SectionAccumulator evaluateMlmSection(String countryCode, ObjectNode mlmLimitsCountryPayload) {
-        SectionAccumulator section = new SectionAccumulator("mlm", 3);
-        ObjectNode resolvedMlm = countryConfigResolver.payloadAsObjectNode(
-                countryConfigResolver.resolveActiveConfig(countryCode, CountryConfigType.MLM_LIMITS)
+        SectionAccumulator section = new SectionAccumulator("mlm", 2);
+        ObjectNode globalMlm = countryConfigResolver.payloadAsObjectNode(
+                countryConfigResolver.resolveActivePlatformConfig(PlatformConfigType.GLOBAL_MLM_BASE_RATES)
         );
 
-        BigDecimal unilevel = readDecimal(resolvedMlm, "unilevel");
-        BigDecimal binary = readDecimal(resolvedMlm, "binary");
-        if (!isPercentage(unilevel) || !isPercentage(binary)) {
+        if (!globalMlmConfigService.isResolvable(globalMlm)) {
             section.miss("mlm.commission_rates");
         }
 
@@ -330,31 +331,7 @@ public class CountryConfigReadinessService {
         if (!hasLimits) {
             section.miss("mlm.limits");
         }
-
-        if (!isFallbackValid(resolvedMlm, mlmLimitsCountryPayload)) {
-            section.miss("mlm.fallback_rules");
-        }
         return section;
-    }
-
-    private boolean isFallbackValid(ObjectNode resolvedMlm, ObjectNode mlmCountryPayload) {
-        BigDecimal unilevel = readDecimal(resolvedMlm, "unilevel");
-        BigDecimal binary = readDecimal(resolvedMlm, "binary");
-        if (!isPercentage(unilevel) || !isPercentage(binary)) {
-            return false;
-        }
-        JsonNode overrideNode = mlmCountryPayload.get("baseRatesOverride");
-        if (overrideNode == null || overrideNode.isNull()) {
-            return true;
-        }
-        if (!overrideNode.isObject()) {
-            return false;
-        }
-        ObjectNode override = (ObjectNode) overrideNode;
-        BigDecimal overrideUnilevel = readDecimal(override, "unilevel");
-        BigDecimal overrideBinary = readDecimal(override, "binary");
-        return (overrideUnilevel == null || isPercentage(overrideUnilevel))
-                && (overrideBinary == null || isPercentage(overrideBinary));
     }
 
     private SectionAccumulator evaluateFinancingSection(String countryCode, ObjectNode financing) {
