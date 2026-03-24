@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -43,10 +44,21 @@ public class WalletBalanceService {
     private final WalletReservationRepository reservationRepository;
     private final WalletRepository walletRepository;
 
+    public Optional<Wallet> findActiveWallet(UUID accountHolderId) {
+        return walletRepository.findFirstByAccountHolderIdAndStatusOrderByCreatedAtDesc(accountHolderId, "ACTIVE");
+    }
+
     public WalletBalanceResponse getBalance(UUID accountHolderId, String currency) {
+        // TODO: re-enable once wallet creation is guaranteed at onboarding
+        // Wallet wallet = walletRepository
+        //         .findFirstByAccountHolderIdAndStatusOrderByCreatedAtDesc(accountHolderId, "ACTIVE")
+        //         .orElseThrow(() -> new BusinessException("No active wallet found for: " + accountHolderId));
         Wallet wallet = walletRepository
                 .findFirstByAccountHolderIdAndStatusOrderByCreatedAtDesc(accountHolderId, "ACTIVE")
-                .orElseThrow(() -> new BusinessException("No active wallet found for: " + accountHolderId));
+                .orElse(null);
+        if (wallet == null) {
+            return new WalletBalanceResponse(null, accountHolderId, currency, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO);
+        }
 
         BigDecimal main = computeMainBalance(wallet, currency);
         BigDecimal reserved = computeReservedBalance(wallet);

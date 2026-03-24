@@ -4,6 +4,7 @@ import com.ccapp.common.api.CommonResponse;
 import com.ccapp.common.security.SecurityUtils;
 import com.ccapp.wallet.dto.WalletAgentDepositRequest;
 import com.ccapp.wallet.dto.WalletBalanceResponse;
+import com.ccapp.wallet.dto.WalletStatusResponse;
 import com.ccapp.wallet.dto.WalletDepositResponse;
 import com.ccapp.wallet.dto.WalletPayRequest;
 import com.ccapp.wallet.dto.WalletPayResponse;
@@ -45,6 +46,24 @@ public class WalletController {
     private final WalletWithdrawalService walletWithdrawalService;
     private final WalletReservationService walletReservationService;
     private final WalletSecurityService walletSecurityService;
+
+    @GetMapping("/status")
+    @Operation(summary = "Vérifier si le wallet du user connecté est actif")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Statut récupéré",
+                    content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Non authentifié")
+    })
+    public ResponseEntity<CommonResponse<WalletStatusResponse>> status() {
+        UUID accountHolderId = SecurityUtils.currentAccountHolderId();
+        return walletBalanceService.findActiveWallet(accountHolderId)
+                .map(wallet -> ResponseEntity.ok(CommonResponse.success(
+                        "Wallet status",
+                        new WalletStatusResponse(wallet.getId(), true))))
+                .orElseGet(() -> ResponseEntity.ok(CommonResponse.success(
+                        "Wallet status",
+                        new WalletStatusResponse(null, false))));
+    }
 
     @GetMapping("/balance")
     @Operation(summary = "Get wallet balance (derived from ledger)")
