@@ -25,10 +25,18 @@ import com.ccapp.financing.repository.FinancingOfferRepository;
 import com.ccapp.financing.repository.LoanApplicationRepository;
 import com.ccapp.financing.repository.OfferCountryConfigRepository;
 import com.ccapp.identity.account_holder.service.AccountHolderService;
+import com.ccapp.identity.wallet.domain.entity.Wallet;
+import com.ccapp.identity.wallet.repository.WalletRepository;
 import com.ccapp.identity.delegation.domain.enums.PermissionLevel;
 import com.ccapp.identity.delegation.service.AccessControlService;
+import com.ccapp.ledger.service.AccountingPostingService;
+import com.ccapp.payments.operation.domain.entity.Operation;
+import com.ccapp.payments.operation.domain.enums.OperationStatus;
+import com.ccapp.payments.operation.domain.enums.OperationType;
+import com.ccapp.payments.operation.service.OperationService;
 import com.ccapp.progress.event.LoanApplicationSubmittedEvent;
 import com.ccapp.progress.event.LoanDisbursedEvent;
+import com.ccapp.wallet.event.WalletCreditedEvent;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -66,9 +74,12 @@ public class FinancingApplicationService {
     private final PartnerLedgerService partnerLedgerService;
     private final PartnerReportingService partnerReportingService;
     private final InstitutionLedgerService institutionLedgerService;
+    private final WalletRepository walletRepository;
     private final CountryConfigResolver countryConfigResolver;
     private final ObjectMapper objectMapper;
     private final DomainEventPublisher domainEventPublisher;
+    private final OperationService operationService;
+    private final AccountingPostingService accountingPostingService;
 
     @Transactional
     public LoanApplicationResponse createApplication(UUID actorUserId,
@@ -173,6 +184,7 @@ public class FinancingApplicationService {
 
     @Transactional
     public LoanApplicationResponse reviewApplication(UUID reviewerAccountHolderId,
+                                                     UUID reviewerActorUserId,
                                                      UUID applicationId,
                                                      ReviewLoanApplicationRequest request) {
         LoanApplication application = loanApplicationRepository.findById(applicationId)
@@ -230,6 +242,27 @@ public class FinancingApplicationService {
                         currency,
                         "Financing application disbursed"
                 );
+                Operation disbursementOperation = operationService.createInitiatedOperation(
+                        saved.getAccountHolderId(),
+                        reviewerActorUserId,
+                        OperationType.LOAN_DISBURSEMENT,
+                        effectiveAmount,
+                        currency,
+                        "financing-disbursement:" + saved.getId(),
+                        "Financing application disbursement " + saved.getId()
+                );
+                Operation confirmedDisbursement = disbursementOperation.getStatus() == OperationStatus.CONFIRMED
+                        ? disbursementOperation
+                        : operationService.confirmOperation(disbursementOperation.getId());
+                accountingPostingService.postConfirmedOperation(confirmedDisbursement.getId());
+                Wallet beneficiaryWallet = requireActiveWallet(saved.getAccountHolderId());
+                domainEventPublisher.publish(WalletCreditedEvent.create(
+                        beneficiaryWallet.getId(),
+                        saved.getAccountHolderId(),
+                        effectiveAmount,
+                        currency,
+                        confirmedDisbursement.getId()
+                ));
                 institutionLedgerService.recordEntry(
                         saved.getAccountHolderId(),
                         offer.getPartnerId(),
@@ -240,24 +273,7 @@ public class FinancingApplicationService {
                 );
                 domainEventPublisher.publish(LoanDisbursedEvent.create(saved.getAccountHolderId(), saved.getId()));
             }
-            case REPAID -> {
-                partnerLedgerService.recordEntry(
-                        offer.getPartnerId(),
-                        saved.getId(),
-                        PartnerLedgerEntryType.REPAYMENT,
-                        effectiveAmount,
-                        currency,
-                        "Financing application repaid"
-                );
-                institutionLedgerService.recordEntry(
-                        saved.getAccountHolderId(),
-                        offer.getPartnerId(),
-                        InstitutionLedgerEntryType.REPAYMENT,
-                        effectiveAmount,
-                        currency,
-                        "LOAN-APPLICATION-REPAYMENT:" + saved.getId()
-                );
-            }
+            case REPAID -> throw new BusinessException("Use the wallet loan repayment flow to mark financing applications as repaid");
             default -> {
             }
         }
@@ -428,6 +444,11 @@ public class FinancingApplicationService {
                 application.getCreatedAt(),
                 application.getUpdatedAt()
         );
+    }
+
+    private Wallet requireActiveWallet(UUID accountHolderId) {
+        return walletRepository.findFirstByAccountHolderIdAndStatusOrderByCreatedAtDesc(accountHolderId, "ACTIVE")
+                .orElseThrow(() -> new BusinessException("Active wallet not found for account holder"));
     }
 
     private Pageable normalizePageable(Integer page, Integer size) {

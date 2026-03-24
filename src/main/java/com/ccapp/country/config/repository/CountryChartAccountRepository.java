@@ -46,6 +46,13 @@ public interface CountryChartAccountRepository extends JpaRepository<CountryChar
                                                                                 String countryCode,
                                                                                 CountryChartAccountStatus status);
 
+    Optional<CountryChartAccount> findFirstByAccountCodeAndCurrencyAndStatus(String accountCode,
+                                                                              String currency,
+                                                                              CountryChartAccountStatus status);
+
+    Optional<CountryChartAccount> findFirstByAccountCodeAndStatus(String accountCode,
+                                                                  CountryChartAccountStatus status);
+
     boolean existsByAccountHolderIdAndCountryCode(UUID accountHolderId, String countryCode);
 
     boolean existsByCountryCodeAndAccountCode(String countryCode, String accountCode);

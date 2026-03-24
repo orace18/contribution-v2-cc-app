@@ -125,6 +125,8 @@ public class WalletAutoDebitService {
                         "Auto-debit wallet debit",
                         "Auto-debit destination credit",
                         null,
+                        null,
+                        WalletDebitFacade.SecureDebitPostingMode.STANDARD,
                         null
                 )
         );

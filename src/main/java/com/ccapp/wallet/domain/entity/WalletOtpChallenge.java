@@ -31,7 +31,7 @@ public class WalletOtpChallenge {
     @Column(name = "account_holder_id", nullable = false)
     private UUID accountHolderId;
 
-    @Column(name = "operation_id")
+    @Column(name = "operation_id", nullable = false)
     private UUID operationId;
 
     @Enumerated(EnumType.STRING)

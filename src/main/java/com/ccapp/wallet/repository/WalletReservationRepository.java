@@ -17,8 +17,10 @@ public interface WalletReservationRepository extends JpaRepository<WalletReserva
     List<WalletReservation> findByWalletIdAndStatus(UUID walletId, WalletReservationStatus status);
 
     @Query("SELECT COALESCE(SUM(r.amount), 0) FROM WalletReservation r " +
-            "WHERE r.walletId = :walletId AND r.status = 'ACTIVE'")
-    Optional<BigDecimal> sumActiveReservationsByWalletId(@Param("walletId") UUID walletId);
+            "WHERE r.walletId = :walletId AND r.status = 'ACTIVE' " +
+            "AND (r.expiryDate IS NULL OR r.expiryDate > :now)")
+    Optional<BigDecimal> sumSpendBlockingReservationsByWalletId(@Param("walletId") UUID walletId,
+                                                                @Param("now") OffsetDateTime now);
 
     @Query("SELECT r FROM WalletReservation r " +
             "WHERE r.status = 'ACTIVE' AND r.expiryDate IS NOT NULL AND r.expiryDate < :now")

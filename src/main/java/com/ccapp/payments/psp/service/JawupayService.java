@@ -13,6 +13,8 @@ import com.ccapp.payments.psp.domain.entity.PspCallbackEvent;
 import com.ccapp.payments.psp.dto.JawupayCallbackRequest;
 import com.ccapp.payments.psp.repository.PspCallbackEventRepository;
 import com.ccapp.payments.subscription.service.MembershipService;
+import com.ccapp.wallet.service.WalletDepositService;
+import com.ccapp.wallet.service.WalletWithdrawalService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -41,6 +43,8 @@ public class JawupayService {
     private final AccountingPostingService accountingPostingService;
     private final MlmCommissionService mlmCommissionService;
     private final MembershipService membershipService;
+    private final WalletDepositService walletDepositService;
+    private final WalletWithdrawalService walletWithdrawalService;
     private final PspCallbackEventRepository callbackEventRepository;
     private final SimpleRateLimiter simpleRateLimiter;
 
@@ -81,13 +85,11 @@ public class JawupayService {
             return;
         }
         if ("FAILED".equals(callbackStatus)) {
-            Operation failedOperation = operationService.failByPspReference(request.pspReference());
-            membershipService.cancelPendingMembership(failedOperation.getId());
+            handleFailedOperation(operationService.failByPspReference(request.pspReference()));
             return;
         }
         if ("EXPIRED".equals(callbackStatus) || "TIMEOUT".equals(callbackStatus)) {
-            Operation expiredOperation = operationService.expireByPspReference(request.pspReference());
-            membershipService.cancelPendingMembership(expiredOperation.getId());
+            handleExpiredOperation(operationService.expireByPspReference(request.pspReference()));
         }
     }
 
@@ -95,7 +97,7 @@ public class JawupayService {
     @Transactional
     public void pollPendingPspOperations() {
         List<Operation> pendingOperations = operationRepository
-                .findByTypeAndStatusOrderByCreatedAtAsc(OperationType.SUBSCRIPTION, OperationStatus.PENDING_PSP);
+                .findByStatusOrderByCreatedAtAsc(OperationStatus.PENDING_PSP);
         OffsetDateTime now = OffsetDateTime.now();
         for (Operation operation : pendingOperations) {
             if (operation.getPspReference() == null || operation.getPspReference().isBlank()) {
@@ -107,14 +109,8 @@ public class JawupayService {
             String normalizedStatus = status == null ? "PENDING" : status.trim().toUpperCase(Locale.ROOT);
             switch (normalizedStatus) {
                 case "SUCCESS", "CONFIRMED" -> finalizeConfirmedOperation(operationService.confirmOperation(operation.getId()));
-                case "FAILED" -> {
-                    Operation failedOperation = operationService.markFailed(operation.getId());
-                    membershipService.cancelPendingMembership(failedOperation.getId());
-                }
-                case "EXPIRED", "TIMEOUT" -> {
-                    Operation expiredOperation = operationService.markExpired(operation.getId());
-                    membershipService.cancelPendingMembership(expiredOperation.getId());
-                }
+                case "FAILED" -> handleFailedOperation(operationService.markFailed(operation.getId()));
+                case "EXPIRED", "TIMEOUT" -> handleExpiredOperation(operationService.markExpired(operation.getId()));
                 default -> expireIfTimedOut(operation, now);
             }
         }
@@ -123,17 +119,33 @@ public class JawupayService {
     private void expireIfTimedOut(Operation operation, OffsetDateTime now) {
         if (operation.getCreatedAt() != null
                 && operation.getCreatedAt().plusMinutes(pendingExpirationMinutes).isBefore(now)) {
-            Operation expiredOperation = operationService.markExpired(operation.getId());
-            membershipService.cancelPendingMembership(expiredOperation.getId());
+            handleExpiredOperation(operationService.markExpired(operation.getId()));
         }
     }
 
     private void finalizeConfirmedOperation(Operation operation) {
-        if (operation.getType() == OperationType.SUBSCRIPTION) {
-            membershipService.activateForConfirmedOperation(operation);
+        switch (operation.getType()) {
+            case WALLET_DEPOSIT_PSP -> walletDepositService.confirmPspDeposit(operation.getId());
+            case WALLET_WITHDRAWAL -> walletWithdrawalService.confirmPspWithdrawal(operation.getId());
+            case SUBSCRIPTION -> {
+                membershipService.activateForConfirmedOperation(operation);
+                accountingPostingService.postConfirmedOperation(operation.getId());
+                mlmCommissionService.calculateForOperation(operation);
+            }
+            default -> accountingPostingService.postConfirmedOperation(operation.getId());
         }
-        accountingPostingService.postConfirmedOperation(operation.getId());
-        mlmCommissionService.calculateForOperation(operation);
+    }
+
+    private void handleFailedOperation(Operation operation) {
+        if (operation.getType() == OperationType.SUBSCRIPTION) {
+            membershipService.cancelPendingMembership(operation.getId());
+        }
+    }
+
+    private void handleExpiredOperation(Operation operation) {
+        if (operation.getType() == OperationType.SUBSCRIPTION) {
+            membershipService.cancelPendingMembership(operation.getId());
+        }
     }
 
     private void validateReplay(JawupayCallbackRequest request) {

@@ -1,6 +1,7 @@
 package com.ccapp.wallet.listener;
 
 import com.ccapp.common.events.IdempotentEventListenerExecutor;
+import com.ccapp.common.exception.BusinessException;
 import com.ccapp.identity.wallet.domain.entity.Wallet;
 import com.ccapp.identity.wallet.repository.WalletRepository;
 import com.ccapp.progress.event.PhoneVerifiedEvent;
@@ -38,24 +39,39 @@ public class WalletPhoneBindingListener {
     }
 
     private void bindPhone(UUID accountHolderId, String phoneNumber) {
-        // Phone uniqueness: if another account already owns this wallet, warn and abort
-        if (walletRepository.findByMobileMoneyNumber(phoneNumber).isPresent()) {
-            log.warn("wallet_phone_binding_skip_duplicate phone={} accountHolderId={}",
-                    phoneNumber, accountHolderId);
+        String normalizedPhone = phoneNumber == null ? null : phoneNumber.trim();
+        Wallet walletByPhone = normalizedPhone == null || normalizedPhone.isBlank()
+                ? null
+                : walletRepository.findByMobileMoneyNumber(normalizedPhone).orElse(null);
+        Wallet activeWallet = walletRepository.findFirstByAccountHolderIdAndStatusOrderByCreatedAtDesc(
+                accountHolderId, "ACTIVE").orElse(null);
+
+        if (walletByPhone != null && !walletByPhone.getAccountHolderId().equals(accountHolderId)) {
+            throw new BusinessException("PHONE_ALREADY_BOUND_TO_ANOTHER_WALLET");
+        }
+
+        if (activeWallet != null) {
+            if (activeWallet.getMobileMoneyNumber() == null || activeWallet.getMobileMoneyNumber().isBlank()
+                    || !activeWallet.getMobileMoneyNumber().trim().equals(normalizedPhone)) {
+                activeWallet.setMobileMoneyNumber(normalizedPhone);
+                walletRepository.save(activeWallet);
+                log.info("wallet_phone_binding_reconciled walletId={} accountHolderId={} phone={}",
+                        activeWallet.getId(), accountHolderId, normalizedPhone);
+                return;
+            }
+            log.info("wallet_phone_binding_verified walletId={} accountHolderId={} phone={}",
+                    activeWallet.getId(), accountHolderId, normalizedPhone);
             return;
         }
 
-        // Idempotency: account holder may already have an active wallet
-        if (walletRepository.findFirstByAccountHolderIdAndStatusOrderByCreatedAtDesc(
-                accountHolderId, "ACTIVE").isPresent()) {
-            log.info("wallet_phone_binding_skip_exists accountHolderId={}", accountHolderId);
-            return;
+        if (walletByPhone != null) {
+            throw new BusinessException("WALLET_PHONE_BINDING_REQUIRES_MANUAL_REVIEW");
         }
 
         Wallet wallet = walletRepository.save(Wallet.builder()
                 .accountHolderId(accountHolderId)
                 .provider("MOBILE")
-                .mobileMoneyNumber(phoneNumber)
+                .mobileMoneyNumber(normalizedPhone)
                 .status("ACTIVE")
                 .walletType(WalletType.USER)
                 .build());

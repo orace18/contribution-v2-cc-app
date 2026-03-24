@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 /**
@@ -81,7 +82,7 @@ public class WalletBalanceService {
 
     private BigDecimal computeReservedBalance(Wallet wallet) {
         return reservationRepository
-                .sumActiveReservationsByWalletId(wallet.getId())
+                .sumSpendBlockingReservationsByWalletId(wallet.getId(), OffsetDateTime.now())
                 .orElse(BigDecimal.ZERO);
     }
 

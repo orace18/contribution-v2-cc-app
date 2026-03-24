@@ -76,7 +76,9 @@ public class WalletPaymentService {
                         "Wallet payment - sender debit",
                         "Wallet payment - destination credit",
                         destinationWallet.getId(),
-                        destinationWallet.getAccountHolderId()
+                        destinationWallet.getAccountHolderId(),
+                        WalletDebitFacade.SecureDebitPostingMode.STANDARD,
+                        null
                 )
         );
 

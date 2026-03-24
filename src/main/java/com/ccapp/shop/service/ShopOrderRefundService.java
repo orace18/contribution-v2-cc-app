@@ -1,7 +1,12 @@
 package com.ccapp.shop.service;
 
 import com.ccapp.financial.audit.service.FinancialAuditService;
+import com.ccapp.country.config.domain.enums.CountryAccountSystemTag;
+import com.ccapp.country.config.service.CountryChartOfAccountsService;
+import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
 import com.ccapp.identity.account_holder.repository.AccountHolderRepository;
+import com.ccapp.identity.wallet.domain.entity.Wallet;
+import com.ccapp.identity.wallet.repository.WalletRepository;
 import com.ccapp.ledger.service.AccountingPostingService;
 import com.ccapp.mlm.domain.entity.MlmVolumeLedger;
 import com.ccapp.mlm.repository.MlmVolumeLedgerRepository;
@@ -18,6 +23,10 @@ import com.ccapp.payments.operation.domain.enums.OperationType;
 import com.ccapp.payments.operation.repository.OperationRepository;
 import com.ccapp.payments.operation.service.OperationService;
 import com.ccapp.shop.event.ShopOrderRefundedEvent;
+import com.ccapp.shop.repository.ShopOrderRepository;
+import com.ccapp.wallet.event.WalletCreditedEvent;
+import com.ccapp.wallet.service.WalletDebitFacade;
+import com.ccapp.common.events.DomainEventPublisher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -45,11 +54,17 @@ public class ShopOrderRefundService {
     private final CommissionAdjustmentRepository commissionAdjustmentRepository;
     private final FinancialAuditService financialAuditService;
     private final AccountHolderRepository accountHolderRepository;
+    private final WalletRepository walletRepository;
+    private final CountryChartOfAccountsService countryChartOfAccountsService;
+    private final ShopOrderRepository shopOrderRepository;
+    private final WalletDebitFacade walletDebitFacade;
+    private final DomainEventPublisher domainEventPublisher;
 
     @Transactional
     public void processRefund(ShopOrderRefundedEvent event) {
         reverseMerchantPayoutIfPossible(event);
         reverseCommissionAllocationIfPossible(event);
+        refundBuyerWalletIfApplicable(event);
 
         List<MlmVolumeLedger> ledgerEntries = mlmVolumeLedgerRepository.findBySourceOrderIdOrderByAccountHolderIdAsc(event.orderId());
         Map<UUID, ReversalAggregate> reversalByAccountHolder = aggregateByAccountHolder(ledgerEntries);
@@ -112,23 +127,45 @@ public class ShopOrderRefundService {
         }
 
         String reversalKey = "marketplace-merchant-payout-reversal:" + event.orderId();
-        Operation reversal = operationService.createInitiatedOperation(
-                originalPayout.getAccountHolderId(),
-                originalPayout.getActorUserId(),
-                OperationType.MARKETPLACE_MERCHANT_PAYOUT_REVERSAL,
-                scale(event.merchantAmount()),
-                originalPayout.getCurrency(),
-                reversalKey,
-                "Marketplace merchant payout reversal for refund order " + event.orderId()
+        String countryCode = resolveCountryCode(originalPayout.getAccountHolderId());
+        String marketplacePoolCode = countryChartOfAccountsService
+                .resolveSystemAccount(countryCode, CountryAccountSystemTag.MARKETPLACE_POOL)
+                .getAccountCode();
+
+        WalletDebitFacade.WalletDebitExecutionResult reversal = walletDebitFacade.executeSecureDebit(
+                new WalletDebitFacade.SecureDebitRequest(
+                        originalPayout.getAccountHolderId(),
+                        originalPayout.getAccountHolderId(),
+                        originalPayout.getActorUserId() != null ? originalPayout.getActorUserId() : originalPayout.getAccountHolderId(),
+                        null,
+                        OperationType.MARKETPLACE_MERCHANT_PAYOUT_REVERSAL,
+                        scale(event.merchantAmount()),
+                        originalPayout.getCurrency(),
+                        reversalKey,
+                        "Marketplace merchant payout reversal for refund order " + event.orderId(),
+                        "marketplace-merchant-payout-reversal|"
+                                + event.orderId()
+                                + "|" + scale(event.merchantAmount()).stripTrailingZeros().toPlainString()
+                                + "|" + originalPayout.getCurrency().trim().toUpperCase(Locale.ROOT)
+                                + "|" + marketplacePoolCode,
+                        marketplacePoolCode,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        true,
+                        false,
+                        "Marketplace merchant payout reversal debit",
+                        "Marketplace pool recovery",
+                        null,
+                        null,
+                        WalletDebitFacade.SecureDebitPostingMode.STANDARD,
+                        null
+                )
         );
-        Operation confirmedReversal = reversal.getStatus() == OperationStatus.CONFIRMED
-                ? reversal
-                : operationService.confirmOperation(reversal.getId());
-        accountingPostingService.postMarketplaceMerchantPayoutReversal(
-                confirmedReversal,
-                originalPayout.getAccountHolderId(),
-                resolveCountryCode(originalPayout.getAccountHolderId())
-        );
+        Operation confirmedReversal = operationService.getById(reversal.operationId());
         if (!commissionAdjustmentRepository.existsByReferenceOrderIdAndAdjustmentType(
                 event.orderId(),
                 CommissionAdjustmentType.MERCHANT_PAYOUT_REVERSAL
@@ -185,6 +222,46 @@ public class ShopOrderRefundService {
                         "reversalOperationId", confirmedReversal.getId().toString()
                 )
         );
+    }
+
+    private void refundBuyerWalletIfApplicable(ShopOrderRefundedEvent event) {
+        var order = shopOrderRepository.findById(event.orderId()).orElse(null);
+        if (order == null || order.getPaymentMethod() == null
+                || !"WALLET".equalsIgnoreCase(order.getPaymentMethod().trim())) {
+            return;
+        }
+
+        AccountHolder buyer = accountHolderRepository.findById(event.buyerId())
+                .orElseThrow(() -> new IllegalStateException("Buyer account holder not found"));
+        String countryCode = order.getCountryCode() != null && !order.getCountryCode().isBlank()
+                ? order.getCountryCode().trim().toUpperCase(Locale.ROOT)
+                : resolveCountryCode(event.buyerId());
+        String poolAccountCode = countryChartOfAccountsService
+                .resolveSystemAccount(countryCode, CountryAccountSystemTag.MARKETPLACE_POOL)
+                .getAccountCode();
+        String buyerWalletCode = countryChartOfAccountsService.findOrCreateWallet(buyer).getAccountCode();
+
+        Operation refund = operationService.createInitiatedOperation(
+                event.buyerId(),
+                event.buyerId(),
+                OperationType.ADJUSTMENT,
+                scale(event.totalAmount()),
+                event.currency(),
+                "marketplace-buyer-refund:" + event.orderId(),
+                "Marketplace buyer refund for order " + event.orderId()
+        );
+        Operation confirmedRefund = refund.getStatus() == OperationStatus.CONFIRMED
+                ? refund
+                : operationService.confirmOperation(refund.getId());
+        accountingPostingService.postTreasuryTransfer(confirmedRefund, poolAccountCode, buyerWalletCode);
+        Wallet buyerWallet = requireActiveWallet(event.buyerId());
+        domainEventPublisher.publish(WalletCreditedEvent.create(
+                buyerWallet.getId(),
+                event.buyerId(),
+                scale(event.totalAmount()),
+                event.currency(),
+                confirmedRefund.getId()
+        ));
     }
 
     private void createMlmCommissionReversalIfAbsent(ShopOrderRefundedEvent event,
@@ -265,6 +342,11 @@ public class ShopOrderRefundService {
                     return "INT";
                 })
                 .orElse("INT");
+    }
+
+    private Wallet requireActiveWallet(UUID accountHolderId) {
+        return walletRepository.findFirstByAccountHolderIdAndStatusOrderByCreatedAtDesc(accountHolderId, "ACTIVE")
+                .orElseThrow(() -> new BusinessException("Active wallet not found for account holder"));
     }
 
     private BigDecimal scale(BigDecimal amount) {

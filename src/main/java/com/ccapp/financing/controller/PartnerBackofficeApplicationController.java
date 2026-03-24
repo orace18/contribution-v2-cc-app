@@ -64,6 +64,7 @@ public class PartnerBackofficeApplicationController {
         UUID accountHolderId = SecurityUtils.currentAccountHolderId();
         LoanApplicationResponse response = financingApplicationService.reviewApplication(
                 accountHolderId,
+                resolveActorUserId(),
                 applicationId,
                 request
         );

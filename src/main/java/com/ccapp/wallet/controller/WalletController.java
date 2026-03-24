@@ -88,9 +88,10 @@ public class WalletController {
     public ResponseEntity<CommonResponse<WalletPayResponse>> pay(
             @Valid @RequestBody WalletPayRequest request) {
         var principal = SecurityUtils.currentPrincipal();
+        UUID actorUserId = principal.userId() != null ? principal.userId() : SecurityUtils.currentAccountHolderId();
         WalletPayResponse response = walletPaymentService.pay(
                 SecurityUtils.currentAccountHolderId(),
-                principal.userId(),
+                actorUserId,
                 request);
         return ResponseEntity.ok(CommonResponse.success(
                 response.otpRequired() ? "OTP sent" : "Payment executed",
@@ -107,11 +108,12 @@ public class WalletController {
     public ResponseEntity<CommonResponse<WalletDepositResponse>> initiatePspDeposit(
             @Valid @RequestBody WalletWithdrawRequest request) {
         var principal = SecurityUtils.currentPrincipal();
+        UUID actorUserId = principal.userId() != null ? principal.userId() : SecurityUtils.currentAccountHolderId();
         return ResponseEntity.ok(CommonResponse.success(
                 "PSP deposit initiated",
                 walletDepositService.initiatePspDeposit(
                         SecurityUtils.currentAccountHolderId(),
-                        principal.userId(),
+                        actorUserId,
                         request.amount(),
                         request.currency().toUpperCase(),
                         request.idempotencyKey())));
@@ -128,9 +130,10 @@ public class WalletController {
     public ResponseEntity<CommonResponse<WalletDepositResponse>> agentDeposit(
             @Valid @RequestBody WalletAgentDepositRequest request) {
         var principal = SecurityUtils.currentPrincipal();
+        UUID actorUserId = principal.userId() != null ? principal.userId() : SecurityUtils.currentAccountHolderId();
         WalletDepositResponse response = walletDepositService.agentDeposit(
                 SecurityUtils.currentAccountHolderId(),
-                principal.userId(),
+                actorUserId,
                 request);
         return ResponseEntity.ok(CommonResponse.success(
                 response.otpRequired() ? "OTP sent" : "Agent cash-in executed",
@@ -147,12 +150,13 @@ public class WalletController {
     public ResponseEntity<CommonResponse<WalletWithdrawResponse>> withdraw(
             @Valid @RequestBody WalletWithdrawRequest request) {
         var principal = SecurityUtils.currentPrincipal();
+        UUID actorUserId = principal.userId() != null ? principal.userId() : SecurityUtils.currentAccountHolderId();
         WalletWithdrawResponse response = walletWithdrawalService.withdraw(
                 SecurityUtils.currentAccountHolderId(),
-                principal.userId(),
+                actorUserId,
                 request);
         return ResponseEntity.ok(CommonResponse.success(
-                response.otpRequired() ? "OTP sent" : "Withdrawal executed",
+                response.otpRequired() ? "OTP sent" : "Withdrawal sent to PSP",
                 response));
     }
 

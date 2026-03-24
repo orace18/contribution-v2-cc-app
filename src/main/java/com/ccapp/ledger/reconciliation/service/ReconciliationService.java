@@ -2,6 +2,7 @@ package com.ccapp.ledger.reconciliation.service;
 
 import com.ccapp.ledger.repository.AccountBalanceSnapshotRepository;
 import com.ccapp.ledger.service.AccountingPostingService;
+import com.ccapp.identity.account_holder.repository.AccountHolderRepository;
 import com.ccapp.payments.operation.domain.entity.Operation;
 import com.ccapp.payments.operation.domain.enums.OperationStatus;
 import com.ccapp.payments.operation.domain.enums.OperationType;
@@ -17,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 @Service
@@ -28,6 +30,7 @@ public class ReconciliationService {
     private final AccountingPostingService accountingPostingService;
     private final ReconciliationRecordRepository reconciliationRecordRepository;
     private final AccountBalanceSnapshotRepository snapshotRepository;
+    private final AccountHolderRepository accountHolderRepository;
 
     @Transactional
     public ReconciliationImportResponse importBatch(ReconciliationImportRequest request) {
@@ -66,8 +69,9 @@ public class ReconciliationService {
             String notes;
 
             if (operation != null && operation.getCurrency().equals(item.currency())) {
-                delta = item.amount().subtract(operation.getAmount()).abs();
-                if (delta.compareTo(BigDecimal.ZERO) > 0) {
+                BigDecimal signedDelta = item.amount().subtract(operation.getAmount());
+                delta = signedDelta.abs();
+                if (signedDelta.signum() != 0) {
                     Operation adjustment = operationService.createInitiatedOperation(
                             operation.getAccountHolderId(),
                             operation.getActorUserId(),
@@ -77,9 +81,12 @@ public class ReconciliationService {
                             "recon:" + batchId + ":" + item.pspReference(),
                             "Reconciliation adjustment"
                     );
-                    adjustment.setStatus(OperationStatus.CONFIRMED);
-                    operationRepository.save(adjustment);
-                    accountingPostingService.postAdjustment(adjustment);
+                    Operation confirmedAdjustment = operationService.confirmOperation(adjustment.getId());
+                    accountingPostingService.postPspReconciliationAdjustment(
+                            confirmedAdjustment,
+                            resolveCountryCode(operation),
+                            signedDelta
+                    );
                     adjustmentPosted = true;
                     adjustments++;
                     notes = "Mismatch with adjustment posted";
@@ -111,5 +118,19 @@ public class ReconciliationService {
         return snapshotRepository.findByCurrencyOrderByAccountCodeAsc(currency).stream()
                 .map(snapshot -> new SettlementSummaryItem(snapshot.getAccountCode(), snapshot.getCurrency(), snapshot.getBalance()))
                 .toList();
+    }
+
+    private String resolveCountryCode(Operation operation) {
+        return accountHolderRepository.findById(operation.getAccountHolderId())
+                .map(accountHolder -> {
+                    if (accountHolder.getServiceCountryCode() != null && !accountHolder.getServiceCountryCode().isBlank()) {
+                        return accountHolder.getServiceCountryCode().trim().toUpperCase(Locale.ROOT);
+                    }
+                    if (accountHolder.getCountryCode() != null && !accountHolder.getCountryCode().isBlank()) {
+                        return accountHolder.getCountryCode().trim().toUpperCase(Locale.ROOT);
+                    }
+                    return "INT";
+                })
+                .orElse("INT");
     }
 }

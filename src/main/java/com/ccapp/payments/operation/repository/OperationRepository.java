@@ -17,6 +17,8 @@ public interface OperationRepository extends JpaRepository<Operation, UUID> {
 
     List<Operation> findByTypeAndStatusOrderByCreatedAtAsc(OperationType type, OperationStatus status);
 
+    List<Operation> findByStatusOrderByCreatedAtAsc(OperationStatus status);
+
     Optional<Operation> findFirstByAccountHolderIdAndTypeAndStatusOrderByCreatedAtDesc(UUID accountHolderId,
                                                                                          OperationType type,
                                                                                          OperationStatus status);

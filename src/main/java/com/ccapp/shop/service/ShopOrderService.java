@@ -3,10 +3,14 @@ package com.ccapp.shop.service;
 import com.ccapp.common.events.DomainEventPublisher;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.common.exception.NotFoundException;
+import com.ccapp.country.config.domain.enums.CountryAccountSystemTag;
 import com.ccapp.country.config.domain.enums.CountryConfigType;
+import com.ccapp.country.config.service.CountryChartOfAccountsService;
 import com.ccapp.country.config.service.CountryConfigResolver;
 import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
 import com.ccapp.identity.account_holder.service.AccountHolderService;
+import com.ccapp.identity.wallet.domain.entity.Wallet;
+import com.ccapp.identity.wallet.repository.WalletRepository;
 import com.ccapp.ledger.service.AccountingPostingService;
 import com.ccapp.observability.PlatformMonitoringHooks;
 import com.ccapp.payments.operation.domain.entity.Operation;
@@ -25,6 +29,7 @@ import com.ccapp.shop.dto.RefundShopOrderRequest;
 import com.ccapp.shop.dto.ShopCommissionPoolResponse;
 import com.ccapp.shop.dto.ShopOrderItemResponse;
 import com.ccapp.shop.dto.ShopOrderResponse;
+import com.ccapp.shop.dto.UpdateShopOrderStatusRequest;
 import com.ccapp.shop.event.MarketplaceCommissionAllocatedEvent;
 import com.ccapp.shop.event.ShopOrderDeliveredEvent;
 import com.ccapp.shop.event.ShopOrderPaidEvent;
@@ -33,6 +38,8 @@ import com.ccapp.shop.repository.ShopCommissionPoolRepository;
 import com.ccapp.shop.repository.ShopOrderItemRepository;
 import com.ccapp.shop.repository.ShopOrderRepository;
 import com.ccapp.shop.repository.ShopProductRepository;
+import com.ccapp.wallet.event.WalletCreditedEvent;
+import com.ccapp.wallet.service.WalletDebitFacade;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -63,9 +70,12 @@ public class ShopOrderService {
     private final ShopProductRepository shopProductRepository;
     private final ShopCommissionPoolRepository shopCommissionPoolRepository;
     private final AccountHolderService accountHolderService;
+    private final WalletRepository walletRepository;
+    private final CountryChartOfAccountsService countryChartOfAccountsService;
     private final CountryConfigResolver countryConfigResolver;
     private final OperationService operationService;
     private final AccountingPostingService accountingPostingService;
+    private final WalletDebitFacade walletDebitFacade;
     private final DomainEventPublisher domainEventPublisher;
 
     @Transactional
@@ -73,6 +83,9 @@ public class ShopOrderService {
         AccountHolder buyer = accountHolderService.getById(buyerId);
         if (request.items() == null || request.items().isEmpty()) {
             throw new BusinessException("At least one item is required");
+        }
+        if (!isWalletPaymentMethod(request.paymentMethod())) {
+            throw new BusinessException("Marketplace orders must use WALLET as payment method");
         }
 
         Map<UUID, ShopProduct> productsById = resolveProducts(request.items());
@@ -125,7 +138,7 @@ public class ShopOrderService {
         log.info("marketplace_order_checkout orderId={} buyerId={} merchantId={} countryCode={} items={} totalAmount={}",
                 order.getId(), buyerId, orderContext.merchantId(), orderContext.countryCode(), items.size(), order.getTotalAmount());
 
-        return toResponse(order, items, pool);
+        return toResponse(order, items, pool, null);
     }
 
     @Transactional(readOnly = true)
@@ -146,8 +159,11 @@ public class ShopOrderService {
     }
 
     @Transactional
-    public ShopOrderResponse updateStatus(UUID orderId, ShopOrderStatus targetStatus) {
+    public ShopOrderResponse updateStatus(UUID orderId,
+                                          UUID actorUserId,
+                                          UpdateShopOrderStatusRequest request) {
         ShopOrder order = findOrder(orderId);
+        ShopOrderStatus targetStatus = request.status();
         ShopOrderStatus currentStatus = order.getStatus();
 
         if (currentStatus == targetStatus) {
@@ -157,17 +173,17 @@ public class ShopOrderService {
             throw new BusinessException("Invalid order status transition: " + currentStatus + " -> " + targetStatus);
         }
 
-        if (targetStatus == ShopOrderStatus.PAID && order.getPaidAt() == null) {
-            order.setPaidAt(OffsetDateTime.now());
-        }
-        if (targetStatus == ShopOrderStatus.DELIVERED && order.getDeliveredAt() == null) {
-            order.setDeliveredAt(OffsetDateTime.now());
-        }
-        order.setStatus(targetStatus);
-        ShopOrder saved = shopOrderRepository.save(order);
-
         if (targetStatus == ShopOrderStatus.PAID) {
-            recordMarketplacePayment(saved);
+            MarketplacePaymentAttempt paymentAttempt = recordMarketplacePayment(order, actorUserId, request);
+            if (paymentAttempt.otpRequired()) {
+                return toResponse(order, shopOrderItemRepository.findByOrderId(order.getId()), currentPool(order), paymentAttempt);
+            }
+
+            if (order.getPaidAt() == null) {
+                order.setPaidAt(OffsetDateTime.now());
+            }
+            order.setStatus(ShopOrderStatus.PAID);
+            ShopOrder saved = shopOrderRepository.save(order);
             domainEventPublisher.publish(ShopOrderPaidEvent.create(
                     saved.getId(),
                     saved.getBuyerId(),
@@ -177,10 +193,16 @@ public class ShopOrderService {
                     saved.getCurrency(),
                     saved.getPaymentMethod()
             ));
+            return toResponse(saved);
         }
 
         if (targetStatus == ShopOrderStatus.DELIVERED) {
-            recordMarketplacePayment(saved);
+            ensureMarketplacePaymentSettled(order);
+            if (order.getDeliveredAt() == null) {
+                order.setDeliveredAt(OffsetDateTime.now());
+            }
+            order.setStatus(ShopOrderStatus.DELIVERED);
+            ShopOrder saved = shopOrderRepository.save(order);
             MarketplaceSettlement settlement = settleDeliveredOrder(saved);
             PlatformMonitoringHooks.onMarketplaceOrderDelivered(settlement.businessVolume());
             log.info("marketplace_order_delivered orderId={} buyerId={} merchantId={} merchantAmount={} commission={} businessVolume={}",
@@ -203,8 +225,20 @@ public class ShopOrderService {
                     settlement.commissionAmount(),
                     settlement.businessVolume()
             ));
+            return toResponse(saved);
         }
 
+        if (targetStatus == ShopOrderStatus.CANCELLED) {
+            order.setStatus(ShopOrderStatus.CANCELLED);
+            return toResponse(shopOrderRepository.save(order));
+        }
+
+        if (targetStatus == ShopOrderStatus.SHIPPED) {
+            order.setStatus(ShopOrderStatus.SHIPPED);
+            return toResponse(shopOrderRepository.save(order));
+        }
+
+        ShopOrder saved = shopOrderRepository.save(order);
         return toResponse(saved);
     }
 
@@ -244,24 +278,66 @@ public class ShopOrderService {
                 .orElseThrow(() -> new NotFoundException("Order not found"));
     }
 
-    private void recordMarketplacePayment(ShopOrder order) {
-        Operation initiated = operationService.createInitiatedOperation(
-                order.getBuyerId(),
-                order.getBuyerId(),
-                OperationType.MARKETPLACE_PAYMENT,
-                scale(order.getTotalAmount()),
-                order.getCurrency(),
-                "marketplace-payment:" + order.getId(),
-                "Marketplace payment for order " + order.getId()
+    private MarketplacePaymentAttempt recordMarketplacePayment(ShopOrder order,
+                                                               UUID actorUserId,
+                                                               UpdateShopOrderStatusRequest request) {
+        if (!isWalletPaymentMethod(order.getPaymentMethod())) {
+            throw new BusinessException("Marketplace orders must use WALLET as payment method");
+        }
+
+        String countryCode = resolveOrderCountryCode(order);
+        String destinationAccountCode = countryChartOfAccountsService
+                .resolveSystemAccount(countryCode, CountryAccountSystemTag.MARKETPLACE_POOL)
+                .getAccountCode();
+
+        WalletDebitFacade.WalletDebitExecutionResult result = walletDebitFacade.executeSecureDebit(
+                new WalletDebitFacade.SecureDebitRequest(
+                        order.getBuyerId(),
+                        order.getBuyerId(),
+                        actorUserId,
+                        null,
+                        OperationType.MARKETPLACE_PAYMENT,
+                        scale(order.getTotalAmount()),
+                        order.getCurrency(),
+                        "marketplace-payment:" + order.getId(),
+                        "Marketplace payment for order " + order.getId(),
+                        buildMarketplaceFingerprint(order, destinationAccountCode),
+                        destinationAccountCode,
+                        null,
+                        null,
+                        null,
+                        request.pin(),
+                        request.otpChallengeId(),
+                        request.otpCode(),
+                        false,
+                        false,
+                        "Marketplace wallet debit",
+                        "Marketplace pool funding",
+                        null,
+                        null,
+                        WalletDebitFacade.SecureDebitPostingMode.MARKETPLACE_PAYMENT,
+                        countryCode
+                )
         );
-        Operation confirmed = initiated.getStatus() == OperationStatus.CONFIRMED
-                ? initiated
-                : operationService.confirmOperation(initiated.getId());
-        accountingPostingService.postMarketplacePayment(
-                confirmed,
+
+        return new MarketplacePaymentAttempt(
+                result.operationId(),
+                result.otpRequired(),
+                result.otpChallengeId(),
+                result.otpExpiresAt()
+        );
+    }
+
+    private void ensureMarketplacePaymentSettled(ShopOrder order) {
+        Operation paymentOperation = operationService.findByIdempotencyKey("marketplace-payment:" + order.getId())
+                .orElseThrow(() -> new BusinessException("Marketplace payment operation not found for order"));
+        if (paymentOperation.getStatus() != OperationStatus.CONFIRMED) {
+            throw new BusinessException("Marketplace payment is not confirmed");
+        }
+        accountingPostingService.postMarketplaceWalletPayment(
+                paymentOperation,
                 order.getBuyerId(),
-                resolveOrderCountryCode(order),
-                isWalletPaymentMethod(order.getPaymentMethod())
+                resolveOrderCountryCode(order)
         );
     }
 
@@ -310,6 +386,14 @@ public class ShopOrderService {
                     ? payout
                     : operationService.confirmOperation(payout.getId());
             accountingPostingService.postMarketplaceMerchantPayout(confirmedPayout, merchantId, countryCode);
+            Wallet merchantWallet = requireActiveWallet(merchantId);
+            domainEventPublisher.publish(WalletCreditedEvent.create(
+                    merchantWallet.getId(),
+                    merchantId,
+                    merchantNetAmount,
+                    order.getCurrency(),
+                    confirmedPayout.getId()
+            ));
         }
 
         if (commissionAmount.signum() > 0) {
@@ -512,16 +596,20 @@ public class ShopOrderService {
         return paymentMethod != null && WALLET_PAYMENT_METHOD.equalsIgnoreCase(paymentMethod.trim());
     }
 
+    private Wallet requireActiveWallet(UUID accountHolderId) {
+        return walletRepository.findFirstByAccountHolderIdAndStatusOrderByCreatedAtDesc(accountHolderId, "ACTIVE")
+                .orElseThrow(() -> new BusinessException("Active wallet not found for account holder"));
+    }
+
     private ShopOrderResponse toResponse(ShopOrder order) {
         List<ShopOrderItem> items = shopOrderItemRepository.findByOrderId(order.getId());
-        ShopCommissionPool pool = shopCommissionPoolRepository.findByOrderId(order.getId())
-                .orElse(null);
-        return toResponse(order, items, pool);
+        return toResponse(order, items, currentPool(order), null);
     }
 
     private ShopOrderResponse toResponse(ShopOrder order,
                                          List<ShopOrderItem> items,
-                                         ShopCommissionPool pool) {
+                                         ShopCommissionPool pool,
+                                         MarketplacePaymentAttempt paymentAttempt) {
         return new ShopOrderResponse(
                 order.getId(),
                 order.getBuyerId(),
@@ -536,8 +624,24 @@ public class ShopOrderService {
                         pool.getMerchantAmount(),
                         pool.getPlatformCommission(),
                         pool.getMlmVolume()
-                ) : null
+                ) : null,
+                paymentAttempt == null ? null : paymentAttempt.operationId(),
+                paymentAttempt != null && paymentAttempt.otpRequired(),
+                paymentAttempt == null ? null : paymentAttempt.otpChallengeId(),
+                paymentAttempt == null ? null : paymentAttempt.otpExpiresAt()
         );
+    }
+
+    private ShopCommissionPool currentPool(ShopOrder order) {
+        return shopCommissionPoolRepository.findByOrderId(order.getId()).orElse(null);
+    }
+
+    private String buildMarketplaceFingerprint(ShopOrder order, String destinationAccountCode) {
+        return "marketplace-payment|"
+                + order.getId()
+                + "|" + scale(order.getTotalAmount()).stripTrailingZeros().toPlainString()
+                + "|" + order.getCurrency().trim().toUpperCase(Locale.ROOT)
+                + "|" + destinationAccountCode;
     }
 
     private ShopOrderItemResponse toItemResponse(ShopOrderItem item) {
@@ -569,5 +673,11 @@ public class ShopOrderService {
     private record MarketplaceSettlement(BigDecimal merchantNetAmount,
                                          BigDecimal commissionAmount,
                                          BigDecimal businessVolume) {
+    }
+
+    private record MarketplacePaymentAttempt(UUID operationId,
+                                             boolean otpRequired,
+                                             UUID otpChallengeId,
+                                             OffsetDateTime otpExpiresAt) {
     }
 }

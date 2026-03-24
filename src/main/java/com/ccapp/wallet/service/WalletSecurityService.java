@@ -103,8 +103,7 @@ public class WalletSecurityService {
         return authorizeDebitIntent(
                 wallet,
                 accountHolderId,
-                operation.getType(),
-                operation.getAmount(),
+                operation,
                 pin,
                 otpChallengeId,
                 otpCode,
@@ -114,14 +113,18 @@ public class WalletSecurityService {
 
     public WalletAuthorizationResult authorizeDebitIntent(Wallet wallet,
                                                           UUID accountHolderId,
-                                                          OperationType operationType,
-                                                          BigDecimal amount,
+                                                          Operation operation,
                                                           String pin,
                                                           UUID otpChallengeId,
                                                           String otpCode,
                                                           String fingerprint) {
+        if (operation == null || operation.getId() == null) {
+            throw new BusinessException("WALLET_OPERATION_REQUIRED");
+        }
         AccountHolder holder = resolveAccountHolder(accountHolderId);
         WalletSecurityPolicy policy = resolvePolicy(holder);
+        OperationType operationType = operation.getType();
+        BigDecimal amount = operation.getAmount();
 
         if (policy.pinRequired()) {
             if (pin == null || pin.isBlank()) {
@@ -135,11 +138,11 @@ public class WalletSecurityService {
         }
 
         if (otpChallengeId == null || otpCode == null || otpCode.isBlank()) {
-            WalletOtpChallenge challenge = issueOtpChallenge(wallet, holder, operationType, fingerprint, policy);
+            WalletOtpChallenge challenge = issueOtpChallenge(wallet, holder, operation, fingerprint, policy);
             return WalletAuthorizationResult.challengeRequired(challenge.getId(), challenge.getExpiresAt());
         }
 
-        validateOtp(wallet, accountHolderId, operationType, otpChallengeId, otpCode, fingerprint);
+        validateOtp(wallet, accountHolderId, operation, otpChallengeId, otpCode, fingerprint);
         return WalletAuthorizationResult.approvedResult();
     }
 
@@ -244,9 +247,10 @@ public class WalletSecurityService {
 
     private WalletOtpChallenge issueOtpChallenge(Wallet wallet,
                                                  AccountHolder holder,
-                                                 OperationType operationType,
+                                                 Operation operation,
                                                  String fingerprint,
                                                  WalletSecurityPolicy policy) {
+        OperationType operationType = operation.getType();
         String fingerprintHash = hash(fingerprint);
         expirePendingChallenges(wallet.getId(), operationType, fingerprintHash);
 
@@ -257,7 +261,7 @@ public class WalletSecurityService {
         WalletOtpChallenge challenge = walletOtpChallengeRepository.save(WalletOtpChallenge.builder()
                 .walletId(wallet.getId())
                 .accountHolderId(holder.getId())
-                .operationId(null)
+                .operationId(operation.getId())
                 .operationType(operationType)
                 .fingerprintHash(fingerprintHash)
                 .otpHash(hash(otpCode))
@@ -273,7 +277,7 @@ public class WalletSecurityService {
         eventPublisher.publish(WalletOtpSentEvent.create(
                 wallet.getId(),
                 holder.getId(),
-                null,
+                operation.getId(),
                 challenge.getId(),
                 operationType,
                 challenge.getExpiresAt()
@@ -287,14 +291,16 @@ public class WalletSecurityService {
 
     private void validateOtp(Wallet wallet,
                              UUID accountHolderId,
-                             OperationType operationType,
+                             Operation operation,
                              UUID otpChallengeId,
                              String otpCode,
                              String fingerprint) {
+        OperationType operationType = operation.getType();
         WalletOtpChallenge challenge = walletOtpChallengeRepository.findByIdAndWalletId(otpChallengeId, wallet.getId())
                 .orElseThrow(() -> new BusinessException("WALLET_OTP_INVALID"));
 
-        if (!challenge.getAccountHolderId().equals(accountHolderId)
+        if (!challenge.getOperationId().equals(operation.getId())
+                || !challenge.getAccountHolderId().equals(accountHolderId)
                 || challenge.getOperationType() != operationType
                 || !challenge.getFingerprintHash().equals(hash(fingerprint))) {
             throw new BusinessException("WALLET_OTP_INVALID");

@@ -8,13 +8,16 @@ import com.ccapp.identity.account_holder.repository.AccountHolderRepository;
 import com.ccapp.identity.wallet.domain.entity.Wallet;
 import com.ccapp.identity.wallet.repository.WalletRepository;
 import com.ccapp.ledger.service.AccountingPostingService;
+import com.ccapp.payments.operation.domain.entity.Operation;
+import com.ccapp.payments.operation.domain.enums.OperationStatus;
 import com.ccapp.payments.operation.domain.enums.OperationType;
+import com.ccapp.payments.psp.dto.JawupayInitiateResponse;
 import com.ccapp.payments.operation.service.OperationService;
+import com.ccapp.payments.service.PaymentService;
 import com.ccapp.wallet.domain.enums.WalletType;
 import com.ccapp.wallet.dto.WalletAgentDepositRequest;
 import com.ccapp.wallet.dto.WalletDepositResponse;
 import com.ccapp.wallet.event.WalletCreditedEvent;
-import com.ccapp.wallet.event.WalletDebitedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -39,6 +42,7 @@ public class WalletDepositService {
     private final WalletLimitService walletLimitService;
     private final OperationService operationService;
     private final AccountingPostingService accountingPostingService;
+    private final PaymentService paymentService;
     private final WalletDebitFacade walletDebitFacade;
     private final CountryChartOfAccountsService countryChartOfAccountsService;
     private final AccountHolderRepository accountHolderRepository;
@@ -55,23 +59,63 @@ public class WalletDepositService {
                 OperationType.WALLET_DEPOSIT_PSP,
                 amount, currency, idempotencyKey,
                 "PSP wallet deposit");
+        if ("PENDING_PSP".equals(operation.getStatus().name())) {
+            return new WalletDepositResponse(
+                    operation.getId(),
+                    operation.getStatus().name(),
+                    amount,
+                    currency,
+                    false,
+                    null,
+                    null,
+                    operation.getPspReference(),
+                    null
+            );
+        }
+        if ("CONFIRMED".equals(operation.getStatus().name())) {
+            return new WalletDepositResponse(
+                    operation.getId(),
+                    operation.getStatus().name(),
+                    amount,
+                    currency,
+                    false,
+                    null,
+                    null,
+                    operation.getPspReference(),
+                    null
+            );
+        }
+        JawupayInitiateResponse pspResponse = paymentService.initiatePayment(
+                operation.getId(),
+                idempotencyKey,
+                amount,
+                currency,
+                accountHolderId,
+                actorUserId,
+                operation.getDescription()
+        );
+        operationService.markPendingPsp(operation.getId(), pspResponse.pspReference());
 
         log.info("wallet_psp_deposit_initiated operationId={} accountHolderId={} amount={} currency={}",
                 operation.getId(), accountHolderId, amount, currency);
 
         return new WalletDepositResponse(
                 operation.getId(),
-                operation.getStatus().name(),
+                "PENDING_PSP",
                 amount,
                 currency,
                 false,
                 null,
-                null
+                null,
+                pspResponse.pspReference(),
+                pspResponse.checkoutUrl()
         );
     }
 
     public void confirmPspDeposit(UUID operationId) {
-        Operation operation = operationService.confirmOperation(operationId);
+        Operation current = operationService.getById(operationId);
+        boolean alreadyConfirmed = current.getStatus() == OperationStatus.CONFIRMED;
+        Operation operation = alreadyConfirmed ? current : operationService.confirmOperation(operationId);
 
         Wallet wallet = walletGuardService.requireActiveWallet(operation.getAccountHolderId());
         AccountHolder holder = resolveHolder(operation.getAccountHolderId());
@@ -79,9 +123,11 @@ public class WalletDepositService {
 
         accountingPostingService.postWalletDepositPsp(operation, walletCode);
 
-        eventPublisher.publish(WalletCreditedEvent.create(
-                wallet.getId(), operation.getAccountHolderId(),
-                operation.getAmount(), operation.getCurrency(), operation.getId()));
+        if (!alreadyConfirmed) {
+            eventPublisher.publish(WalletCreditedEvent.create(
+                    wallet.getId(), operation.getAccountHolderId(),
+                    operation.getAmount(), operation.getCurrency(), operation.getId()));
+        }
 
         log.info("wallet_psp_deposit_confirmed operationId={} accountHolderId={} amount={} currency={}",
                 operation.getId(), operation.getAccountHolderId(),
@@ -127,7 +173,9 @@ public class WalletDepositService {
                         "Agent float debit - cash-in",
                         "User wallet credit - agent cash-in",
                         userWallet.getId(),
-                        request.targetAccountHolderId()
+                        request.targetAccountHolderId(),
+                        WalletDebitFacade.SecureDebitPostingMode.STANDARD,
+                        null
                 )
         );
 
@@ -139,7 +187,9 @@ public class WalletDepositService {
                     request.currency(),
                     true,
                     result.otpChallengeId(),
-                    result.otpExpiresAt()
+                    result.otpExpiresAt(),
+                    null,
+                    null
             );
         }
 
@@ -169,6 +219,8 @@ public class WalletDepositService {
                 amount,
                 currency,
                 false,
+                null,
+                null,
                 null,
                 null
         );

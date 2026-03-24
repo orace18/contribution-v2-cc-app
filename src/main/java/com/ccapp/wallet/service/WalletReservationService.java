@@ -12,6 +12,7 @@ import com.ccapp.wallet.event.WalletReservedEvent;
 import com.ccapp.wallet.repository.WalletReservationRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -97,6 +98,7 @@ public class WalletReservationService {
     }
 
     /** Marks all ACTIVE reservations past their expiry date as EXPIRED. */
+    @Scheduled(cron = "${wallet.reservations.expire.cron:0 */2 * * * *}", zone = "${wallet.reservations.zone:Europe/Paris}")
     public void expireStaleReservations() {
         List<WalletReservation> stale = reservationRepository
                 .findExpiredActiveReservations(OffsetDateTime.now());
@@ -110,7 +112,7 @@ public class WalletReservationService {
     /** Total reserved amount for a given wallet (used in balance calculation). */
     @Transactional(readOnly = true)
     public BigDecimal getTotalReserved(UUID walletId) {
-        return reservationRepository.sumActiveReservationsByWalletId(walletId)
+        return reservationRepository.sumSpendBlockingReservationsByWalletId(walletId, OffsetDateTime.now())
                 .orElse(BigDecimal.ZERO);
     }
 }

@@ -56,12 +56,14 @@ public class SubscriptionController {
     public ResponseEntity<CommonResponse<InitiateSubscriptionResponse>> initiate(
             @Valid @RequestBody InitiateSubscriptionRequest request) {
         var principal = SecurityUtils.currentPrincipal();
+        java.util.UUID actorUserId = principal.userId() != null ? principal.userId() : SecurityUtils.currentAccountHolderId();
+        InitiateSubscriptionResponse response = subscriptionService.initiate(
+                SecurityUtils.currentAccountHolderId(),
+                actorUserId,
+                request
+        );
         return ResponseEntity.ok(CommonResponse.success(
-                "Subscription initiated",
-                subscriptionService.initiate(
-                        SecurityUtils.currentAccountHolderId(),
-                        principal.userId(),
-                        request
-                )));
+                response.otpRequired() ? "Subscription OTP sent" : "Subscription paid from wallet",
+                response));
     }
 }

@@ -24,15 +24,23 @@ import com.ccapp.credit.dto.LoanResponse;
 import com.ccapp.credit.dto.RepaymentScheduleResponse;
 import com.ccapp.credit.repository.LoanRepository;
 import com.ccapp.credit.repository.RepaymentScheduleRepository;
+import com.ccapp.ledger.service.AccountingPostingService;
 import com.ccapp.financing.domain.entity.FinancialPartner;
 import com.ccapp.financing.domain.enums.FinancialPartnerStatus;
 import com.ccapp.financing.domain.enums.InstitutionLedgerEntryType;
 import com.ccapp.financing.repository.FinancialPartnerRepository;
 import com.ccapp.financing.service.InstitutionLedgerService;
 import com.ccapp.identity.account_holder.service.AccountHolderService;
+import com.ccapp.identity.wallet.domain.entity.Wallet;
+import com.ccapp.identity.wallet.repository.WalletRepository;
 import com.ccapp.identity.delegation.domain.enums.PermissionLevel;
 import com.ccapp.identity.delegation.service.AccessControlService;
+import com.ccapp.payments.operation.domain.entity.Operation;
+import com.ccapp.payments.operation.domain.enums.OperationStatus;
+import com.ccapp.payments.operation.domain.enums.OperationType;
+import com.ccapp.payments.operation.service.OperationService;
 import com.ccapp.progress.event.LoanDisbursedEvent;
+import com.ccapp.wallet.event.WalletCreditedEvent;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -72,6 +80,9 @@ public class LoanService {
     private final AdminPolicyRepository adminPolicyRepository;
     private final FinancialPartnerRepository financialPartnerRepository;
     private final InstitutionLedgerService institutionLedgerService;
+    private final WalletRepository walletRepository;
+    private final OperationService operationService;
+    private final AccountingPostingService accountingPostingService;
     private final DomainEventPublisher domainEventPublisher;
 
     @Transactional
@@ -149,6 +160,18 @@ public class LoanService {
         if (loan.getStatus() == LoanStatus.DISBURSED
                 && referenceId != null
                 && referenceId.equalsIgnoreCase(loan.getDisbursementReferenceId())) {
+            operationService.findByIdempotencyKey("loan-disbursement:" + loan.getId())
+                    .ifPresent(existing -> accountingPostingService.postConfirmedOperation(existing.getId()));
+            if (loan.getInstitutionId() != null && loan.getDisbursementReferenceId() != null) {
+                institutionLedgerService.recordEntry(
+                        loan.getAccountHolderId(),
+                        loan.getInstitutionId(),
+                        InstitutionLedgerEntryType.LOAN,
+                        loan.getAmount(),
+                        loan.getCurrency(),
+                        loan.getDisbursementReferenceId()
+                );
+            }
             return loan;
         }
         if (loan.getStatus() != LoanStatus.APPROVED) {
@@ -163,7 +186,27 @@ public class LoanService {
         loan.setDisbursementReferenceId(normalizedReferenceId);
         loan.setDisbursedAt(OffsetDateTime.now());
         Loan saved = loanRepository.save(loan);
-
+        Operation disbursementOperation = operationService.createInitiatedOperation(
+                saved.getAccountHolderId(),
+                actorUserId,
+                OperationType.LOAN_DISBURSEMENT,
+                saved.getAmount(),
+                saved.getCurrency(),
+                "loan-disbursement:" + saved.getId(),
+                "Loan disbursement for loan " + saved.getId()
+        );
+        Operation confirmedOperation = disbursementOperation.getStatus() == OperationStatus.CONFIRMED
+                ? disbursementOperation
+                : operationService.confirmOperation(disbursementOperation.getId());
+        accountingPostingService.postConfirmedOperation(confirmedOperation.getId());
+        Wallet beneficiaryWallet = requireActiveWallet(saved.getAccountHolderId());
+        domainEventPublisher.publish(WalletCreditedEvent.create(
+                beneficiaryWallet.getId(),
+                saved.getAccountHolderId(),
+                saved.getAmount(),
+                saved.getCurrency(),
+                confirmedOperation.getId()
+        ));
         institutionLedgerService.recordEntry(
                 saved.getAccountHolderId(),
                 institution.getId(),
@@ -172,6 +215,7 @@ public class LoanService {
                 saved.getCurrency(),
                 normalizedReferenceId
         );
+
         domainEventPublisher.publish(CircleActivityRequestedEvent.create(
                 saved.getCircleId(),
                 actorUserId,
@@ -290,6 +334,11 @@ public class LoanService {
             throw new BusinessException(message);
         }
         return referenceId.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private Wallet requireActiveWallet(UUID accountHolderId) {
+        return walletRepository.findFirstByAccountHolderIdAndStatusOrderByCreatedAtDesc(accountHolderId, "ACTIVE")
+                .orElseThrow(() -> new BusinessException("Active wallet not found for account holder"));
     }
 
     private LoanResponse toResponse(Loan loan, List<RepaymentSchedule> schedules) {

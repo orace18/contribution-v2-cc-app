@@ -17,6 +17,10 @@ public record LoanRepaymentResponse(
         String transactionId,
         OffsetDateTime paidAt,
         LoanStatus loanStatus,
-        long remainingInstallments
+        long remainingInstallments,
+        UUID operationId,
+        boolean otpRequired,
+        UUID otpChallengeId,
+        OffsetDateTime otpExpiresAt
 ) {
 }

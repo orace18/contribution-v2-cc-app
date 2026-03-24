@@ -64,9 +64,13 @@ public class ShopOrderController {
     @Operation(summary = "Update order status")
     public ResponseEntity<CommonResponse<ShopOrderResponse>> updateStatus(@PathVariable UUID orderId,
                                                                           @Valid @RequestBody UpdateShopOrderStatusRequest request) {
+        UUID actorUserId = SecurityUtils.currentPrincipal().userId() != null
+                ? SecurityUtils.currentPrincipal().userId()
+                : SecurityUtils.currentAccountHolderId();
+        ShopOrderResponse response = shopOrderService.updateStatus(orderId, actorUserId, request);
         return ResponseEntity.ok(CommonResponse.success(
-                "Shop order status updated",
-                shopOrderService.updateStatus(orderId, request.status())
+                response.otpRequired() ? "Marketplace payment OTP sent" : "Shop order status updated",
+                response
         ));
     }
 

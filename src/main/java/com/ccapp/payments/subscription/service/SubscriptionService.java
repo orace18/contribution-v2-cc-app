@@ -2,16 +2,17 @@ package com.ccapp.payments.subscription.service;
 
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.common.exception.NotFoundException;
+import com.ccapp.country.config.domain.enums.CountryAccountGroup;
+import com.ccapp.country.config.service.CountryChartOfAccountsService;
 import com.ccapp.country.domain.entity.Country;
 import com.ccapp.country.repository.CountryRepository;
 import com.ccapp.country.service.CountryContextService;
 import com.ccapp.identity.delegation.domain.enums.PermissionLevel;
 import com.ccapp.identity.delegation.service.AccessControlService;
+import com.ccapp.payments.commission.service.MlmCommissionService;
 import com.ccapp.payments.operation.domain.entity.Operation;
 import com.ccapp.payments.operation.domain.enums.OperationType;
 import com.ccapp.payments.operation.service.OperationService;
-import com.ccapp.payments.psp.dto.JawupayInitiateResponse;
-import com.ccapp.payments.service.PaymentService;
 import com.ccapp.payments.subscription.domain.entity.SubscriptionPlan;
 import com.ccapp.payments.subscription.domain.enums.SubscriptionGrade;
 import com.ccapp.payments.subscription.dto.InitiateSubscriptionRequest;
@@ -19,6 +20,7 @@ import com.ccapp.payments.subscription.dto.InitiateSubscriptionResponse;
 import com.ccapp.payments.subscription.dto.SubscriptionPlanResponse;
 import com.ccapp.payments.subscription.mapper.SubscriptionPlanMapper;
 import com.ccapp.payments.subscription.repository.SubscriptionPlanRepository;
+import com.ccapp.wallet.service.WalletDebitFacade;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,7 +46,9 @@ public class SubscriptionService {
     private final AccessControlService accessControlService;
     private final OperationService operationService;
     private final MembershipService membershipService;
-    private final PaymentService paymentService;
+    private final WalletDebitFacade walletDebitFacade;
+    private final CountryChartOfAccountsService countryChartOfAccountsService;
+    private final MlmCommissionService mlmCommissionService;
 
     @Transactional(readOnly = true)
     public List<SubscriptionPlanResponse> getPlans(UUID accountHolderId) {
@@ -123,36 +127,67 @@ public class SubscriptionService {
         String idempotencyKey = request.idempotencyKey() == null || request.idempotencyKey().isBlank()
                 ? "sub:" + UUID.randomUUID()
                 : request.idempotencyKey();
+        String destinationAccountCode = countryChartOfAccountsService.findOrCreate(
+                expectedCatalogCountryCode,
+                CountryAccountGroup.MEMBERSHIP_FEES,
+                "750001 Cotisations des membres"
+        ).getAccountCode();
 
-        Operation operation = operationService.createInitiatedOperation(
-                accountHolderId,
-                actorUserId,
-                OperationType.SUBSCRIPTION,
-                plan.getPrice(),
-                plan.getCurrency(),
-                idempotencyKey,
-                "Subscription " + plan.getCode(),
-                plan.getId()
+        WalletDebitFacade.WalletDebitExecutionResult result = walletDebitFacade.executeSecureDebit(
+                new WalletDebitFacade.SecureDebitRequest(
+                        accountHolderId,
+                        accountHolderId,
+                        actorUserId,
+                        null,
+                        OperationType.SUBSCRIPTION,
+                        plan.getPrice(),
+                        plan.getCurrency(),
+                        idempotencyKey,
+                        "Subscription " + plan.getCode(),
+                        buildOtpFingerprint(plan),
+                        destinationAccountCode,
+                        null,
+                        null,
+                        null,
+                        request.pin(),
+                        request.otpChallengeId(),
+                        request.otpCode(),
+                        false,
+                        false,
+                        "Subscription wallet debit",
+                        "Subscription revenue recognition",
+                        null,
+                        null,
+                        WalletDebitFacade.SecureDebitPostingMode.OPERATION_POSTING,
+                        expectedCatalogCountryCode
+                )
         );
 
-        JawupayInitiateResponse pspResponse = paymentService.initiatePayment(
-                operation.getId(),
-                idempotencyKey,
-                operation.getAmount(),
-                operation.getCurrency(),
-                accountHolderId,
-                actorUserId,
-                operation.getDescription()
-        );
+        membershipService.createPendingMembership(result.operationId(), accountHolderId, plan);
+        if (result.otpRequired()) {
+            return new InitiateSubscriptionResponse(
+                    result.operationId(),
+                    null,
+                    null,
+                    "OTP_REQUIRED",
+                    true,
+                    result.otpChallengeId(),
+                    result.otpExpiresAt()
+            );
+        }
 
-        operationService.markPendingPsp(operation.getId(), pspResponse.pspReference());
-        membershipService.createPendingMembership(operation.getId(), accountHolderId, plan);
+        Operation operation = operationService.getById(result.operationId());
+        membershipService.activateForConfirmedOperation(operation);
+        mlmCommissionService.calculateForOperation(operation);
 
         return new InitiateSubscriptionResponse(
                 operation.getId(),
-                pspResponse.pspReference(),
-                pspResponse.checkoutUrl(),
-                "PENDING_PSP"
+                null,
+                null,
+                operation.getStatus().name(),
+                false,
+                null,
+                null
         );
     }
 
@@ -163,5 +198,12 @@ public class SubscriptionService {
 
     private String normalizeCountryCode(String countryCode) {
         return countryCode.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private String buildOtpFingerprint(SubscriptionPlan plan) {
+        return "subscription|"
+                + plan.getId()
+                + "|" + plan.getPrice().stripTrailingZeros().toPlainString()
+                + "|" + plan.getCurrency().trim().toUpperCase(Locale.ROOT);
     }
 }

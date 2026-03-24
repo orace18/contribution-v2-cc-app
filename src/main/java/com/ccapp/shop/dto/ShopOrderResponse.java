@@ -17,6 +17,10 @@ public record ShopOrderResponse(
         UUID deliveryAddressId,
         OffsetDateTime createdAt,
         List<ShopOrderItemResponse> items,
-        ShopCommissionPoolResponse commissionPool
+        ShopCommissionPoolResponse commissionPool,
+        UUID paymentOperationId,
+        boolean otpRequired,
+        UUID otpChallengeId,
+        OffsetDateTime otpExpiresAt
 ) {
 }

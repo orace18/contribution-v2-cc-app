@@ -66,8 +66,7 @@ public class AccountingPostingService {
 
     @Transactional
     public AccountingEvent postAdjustment(Operation operation) {
-        return accountingEventRepository.findByOperationId(operation.getId())
-                .orElseGet(() -> doPost(operation));
+        throw new BusinessException("Generic ADJUSTMENT posting is forbidden; use an explicit adjustment posting flow");
     }
 
     @Transactional
@@ -127,6 +126,37 @@ public class AccountingPostingService {
                         operation.getAmount(),
                         operation.getCurrency(),
                         "Marketplace payment via PSP shadow"
+                ),
+                new PostingLine(
+                        resolveAccountCode(countryCode, CountryAccountSystemTag.MARKETPLACE_POOL),
+                        LedgerEntryType.CREDIT,
+                        operation.getAmount(),
+                        operation.getCurrency(),
+                        "Marketplace pool funding"
+                )
+        );
+        return accountingEventRepository.findByOperationId(operation.getId())
+                .orElseGet(() -> doPost(operation, lines, AccountingEventType.OPERATION_CONFIRMED));
+    }
+
+    @Transactional
+    public AccountingEvent postMarketplaceWalletPayment(Operation operation,
+                                                        UUID buyerAccountHolderId,
+                                                        String countryCode) {
+        if (operation.getType() != OperationType.MARKETPLACE_PAYMENT) {
+            throw new BusinessException("Operation type must be MARKETPLACE_PAYMENT");
+        }
+        if (operation.getStatus() != OperationStatus.CONFIRMED) {
+            throw new BusinessException("Only CONFIRMED marketplace payment operations can be posted");
+        }
+        AccountHolder buyer = resolveAccountHolder(buyerAccountHolderId);
+        List<PostingLine> lines = List.of(
+                new PostingLine(
+                        resolveWalletAccountCode(buyer),
+                        LedgerEntryType.DEBIT,
+                        operation.getAmount(),
+                        operation.getCurrency(),
+                        "Marketplace wallet payment"
                 ),
                 new PostingLine(
                         resolveAccountCode(countryCode, CountryAccountSystemTag.MARKETPLACE_POOL),
@@ -310,6 +340,88 @@ public class AccountingPostingService {
                 .orElseGet(() -> doPost(operation, lines, AccountingEventType.OPERATION_CONFIRMED));
     }
 
+    @Transactional
+    public AccountingEvent postTreasuryTransfer(Operation operation,
+                                                String sourceAccountCode,
+                                                String destinationAccountCode) {
+        return postExplicitAccountTransfer(
+                operation,
+                sourceAccountCode,
+                destinationAccountCode,
+                "Treasury transfer source debit",
+                "Treasury transfer destination credit"
+        );
+    }
+
+    @Transactional
+    public AccountingEvent postTreasuryCashout(Operation operation,
+                                               String sourceAccountCode,
+                                               String destinationAccountCode) {
+        return postExplicitAccountTransfer(
+                operation,
+                sourceAccountCode,
+                destinationAccountCode,
+                "Treasury cashout source debit",
+                "Treasury cashout destination credit"
+        );
+    }
+
+    @Transactional
+    public AccountingEvent postPspReconciliationAdjustment(Operation operation,
+                                                           String countryCode,
+                                                           BigDecimal signedDelta) {
+        if (operation.getType() != OperationType.ADJUSTMENT) {
+            throw new BusinessException("Operation type must be ADJUSTMENT");
+        }
+        if (operation.getStatus() != OperationStatus.CONFIRMED) {
+            throw new BusinessException("Only CONFIRMED adjustments can be posted");
+        }
+        if (signedDelta == null || signedDelta.signum() == 0) {
+            throw new BusinessException("Signed reconciliation delta is required");
+        }
+
+        BigDecimal amount = signedDelta.abs();
+        String pspClearing = resolveAccountCode(countryCode, CountryAccountSystemTag.PSP_CLEARING);
+        String platformAccount = resolveAccountCode(countryCode, CountryAccountSystemTag.PLATFORM_REVENUE);
+        List<PostingLine> lines = signedDelta.signum() > 0
+                ? List.of(
+                new PostingLine(pspClearing, LedgerEntryType.DEBIT, amount, operation.getCurrency(),
+                        "PSP reconciliation increase"),
+                new PostingLine(platformAccount, LedgerEntryType.CREDIT, amount, operation.getCurrency(),
+                        "PSP reconciliation counter-account")
+        )
+                : List.of(
+                new PostingLine(platformAccount, LedgerEntryType.DEBIT, amount, operation.getCurrency(),
+                        "PSP reconciliation counter-account"),
+                new PostingLine(pspClearing, LedgerEntryType.CREDIT, amount, operation.getCurrency(),
+                        "PSP reconciliation decrease")
+        );
+        return accountingEventRepository.findByOperationId(operation.getId())
+                .orElseGet(() -> doPost(operation, lines, AccountingEventType.ADJUSTMENT_POSTED));
+    }
+
+    private AccountingEvent postExplicitAccountTransfer(Operation operation,
+                                                        String sourceAccountCode,
+                                                        String destinationAccountCode,
+                                                        String debitDescription,
+                                                        String creditDescription) {
+        if (operation.getStatus() != OperationStatus.CONFIRMED) {
+            throw new BusinessException("Only CONFIRMED operations can be posted");
+        }
+        if (sourceAccountCode == null || sourceAccountCode.isBlank()
+                || destinationAccountCode == null || destinationAccountCode.isBlank()) {
+            throw new BusinessException("Explicit transfer account codes are required");
+        }
+        List<PostingLine> lines = List.of(
+                new PostingLine(sourceAccountCode.trim(), LedgerEntryType.DEBIT,
+                        operation.getAmount(), operation.getCurrency(), debitDescription),
+                new PostingLine(destinationAccountCode.trim(), LedgerEntryType.CREDIT,
+                        operation.getAmount(), operation.getCurrency(), creditDescription)
+        );
+        return accountingEventRepository.findByOperationId(operation.getId())
+                .orElseGet(() -> doPost(operation, lines, AccountingEventType.ADJUSTMENT_POSTED));
+    }
+
     private void validateWalletOperation(Operation operation, OperationType expected) {
         if (operation.getType() != expected) {
             throw new BusinessException("Operation type must be " + expected.name()
@@ -392,11 +504,8 @@ public class AccountingPostingService {
         String walletCode = resolveWalletAccountCode(accountHolder);
         return switch (operation.getType()) {
             case SUBSCRIPTION -> buildSubscriptionPostingLines(operation, countryCode, walletCode);
-            case ADJUSTMENT -> List.of(
-                    new PostingLine(resolveAccountCode(countryCode, CountryAccountSystemTag.PLATFORM_REVENUE), LedgerEntryType.DEBIT,
-                            operation.getAmount(), operation.getCurrency(), "Reconciliation adjustment"),
-                    new PostingLine(walletCode, LedgerEntryType.CREDIT,
-                            operation.getAmount(), operation.getCurrency(), "Adjustment against cash")
+            case ADJUSTMENT -> throw new BusinessException(
+                    "Generic ADJUSTMENT posting is forbidden; use an explicit adjustment posting flow"
             );
             case LOAN_DISBURSEMENT -> List.of(
                     new PostingLine(resolveAccountCode(countryCode, CountryAccountSystemTag.LOAN_PORTFOLIO), LedgerEntryType.DEBIT,

@@ -11,6 +11,7 @@ public record WalletWithdrawResponse(
         String currency,
         boolean otpRequired,
         UUID otpChallengeId,
-        OffsetDateTime otpExpiresAt
+        OffsetDateTime otpExpiresAt,
+        String pspReference
 ) {
 }

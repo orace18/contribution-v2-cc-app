@@ -96,7 +96,7 @@ public class MembershipService {
         membership.setDurationMonths(plan.getDurationMonths());
         membership.setActivatedAt(activatedAt);
         membership.setExpiresAt(baseExpiry.plusDays(durationDays));
-        membership.setConfigSnapshot(writeSnapshot(membershipConfig));
+        membership.setConfigSnapshot(writeSnapshot(membershipConfig, operation));
         membership.setConfigVersion(membershipConfig.version());
 
         return membershipRepository.save(membership);
@@ -128,17 +128,19 @@ public class MembershipService {
         return Math.toIntExact(Duration.ofDays(plan.getDurationMonths() * 30L).toDays());
     }
 
-    private String writeSnapshot(CountryConfigResolver.ResolvedConfig membershipConfig) {
+    private String writeSnapshot(CountryConfigResolver.ResolvedConfig membershipConfig, Operation operation) {
+        boolean walletBacked = operation.getPspReference() == null || operation.getPspReference().isBlank();
+        String paymentProvider = walletBacked ? "WALLET" : PaymentService.PSP_PROVIDER;
         ObjectNode root = objectMapper.createObjectNode();
         root.put("countryCode", membershipConfig.countryCode());
         root.put("membershipConfigVersion", membershipConfig.version());
         root.putNull("paymentConfigVersion");
-        root.put("paymentProvider", PaymentService.PSP_PROVIDER);
+        root.put("paymentProvider", paymentProvider);
         root.set("membership", countryConfigResolver.payloadAsObjectNode(membershipConfig));
         ObjectNode payment = objectMapper.createObjectNode();
-        payment.put("provider", PaymentService.PSP_PROVIDER);
-        payment.put("managedBy", PaymentService.PSP_PROVIDER);
-        payment.put("methodAvailabilitySource", "JAWUPAY_DYNAMIC");
+        payment.put("provider", paymentProvider);
+        payment.put("managedBy", paymentProvider);
+        payment.put("methodAvailabilitySource", walletBacked ? "WALLET_LEDGER" : "JAWUPAY_DYNAMIC");
         root.set("payment", payment);
         try {
             return objectMapper.writeValueAsString(root);

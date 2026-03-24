@@ -106,10 +106,11 @@ public class LoanController {
         UUID actorUserId = SecurityUtils.currentPrincipal().userId() != null
                 ? SecurityUtils.currentPrincipal().userId()
                 : accountHolderId;
+        LoanRepaymentResponse response = repaymentService.repay(actorUserId, loanId, request);
 
         return ResponseEntity.ok(CommonResponse.success(
-                "Loan repayment recorded",
-                repaymentService.repay(actorUserId, loanId, request)
+                response.otpRequired() ? "Loan repayment OTP sent" : "Loan repayment recorded",
+                response
         ));
     }
 }

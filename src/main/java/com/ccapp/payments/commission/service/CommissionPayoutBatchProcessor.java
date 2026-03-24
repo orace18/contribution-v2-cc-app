@@ -26,6 +26,7 @@ import com.ccapp.payments.operation.domain.enums.OperationStatus;
 import com.ccapp.payments.operation.domain.enums.OperationType;
 import com.ccapp.payments.operation.service.OperationService;
 import com.ccapp.platform.config.domain.enums.PlatformConfigType;
+import com.ccapp.wallet.event.WalletCreditedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -179,7 +180,7 @@ public class CommissionPayoutBatchProcessor {
     private int processSubscriptionCommissionGroup(CommissionPayoutBatch batch,
                                                    UUID accountHolderId,
                                                    List<MlmCommission> commissions) {
-        requireActiveWallet(accountHolderId);
+        Wallet beneficiaryWallet = requireActiveWallet(accountHolderId);
         BigDecimal grossAmount = commissions.stream()
                 .map(MlmCommission::getAmount)
                 .reduce(BigDecimal.ZERO.setScale(SCALE, RoundingMode.HALF_UP), BigDecimal::add)
@@ -198,6 +199,13 @@ public class CommissionPayoutBatchProcessor {
                 currency
         );
         accountingPostingService.postCommissionPayout(payoutOperation, accountHolderId, taxAmount, netAmount);
+        domainEventPublisher.publish(WalletCreditedEvent.create(
+                beneficiaryWallet.getId(),
+                accountHolderId,
+                netAmount,
+                currency,
+                payoutOperation.getId()
+        ));
 
         List<AmountSplit> splits = splitAcrossCommissions(commissions, taxAmount);
         OffsetDateTime paidAt = OffsetDateTime.now();
@@ -291,7 +299,7 @@ public class CommissionPayoutBatchProcessor {
                                    CommissionPayoutItem item,
                                    MlmCommission commission) {
         verifyPayoutIntegrity(item, commission);
-        requireActiveWallet(item.getAccountHolderId());
+        Wallet beneficiaryWallet = requireActiveWallet(item.getAccountHolderId());
         String currency = commission.getCurrency();
 
         Operation payoutOperation = resolveOrCreateConfirmedPayoutOperation(batch, item, commission, currency);
@@ -301,6 +309,13 @@ public class CommissionPayoutBatchProcessor {
                 item.getTaxAmount(),
                 item.getNetAmount()
         );
+        domainEventPublisher.publish(WalletCreditedEvent.create(
+                beneficiaryWallet.getId(),
+                item.getAccountHolderId(),
+                item.getNetAmount(),
+                currency,
+                payoutOperation.getId()
+        ));
 
         OffsetDateTime paidAt = OffsetDateTime.now();
         commission.setStatus(CommissionStatus.PAID);
@@ -381,12 +396,13 @@ public class CommissionPayoutBatchProcessor {
         }
     }
 
-    private void requireActiveWallet(UUID accountHolderId) {
+    private Wallet requireActiveWallet(UUID accountHolderId) {
         Wallet wallet = walletRepository.findFirstByAccountHolderIdAndStatusOrderByCreatedAtDesc(accountHolderId, "ACTIVE")
                 .orElseThrow(() -> new BusinessException("Active wallet not found for account holder"));
         if (wallet.getId() == null) {
             throw new BusinessException("Invalid wallet state for payout");
         }
+        return wallet;
     }
 
     private Operation resolveOrCreateGroupedPayoutOperation(int weekId,

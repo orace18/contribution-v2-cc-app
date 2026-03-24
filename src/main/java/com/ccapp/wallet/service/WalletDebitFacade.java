@@ -57,11 +57,32 @@ public class WalletDebitFacade {
                 ))
                 .orElse(null);
         if (existing != null && existing.getStatus() == OperationStatus.CONFIRMED) {
+            ensurePosting(existing, request);
             return WalletDebitExecutionResult.confirmed(existing);
+        }
+        if (existing != null && existing.getStatus() == OperationStatus.PENDING_PSP) {
+            return WalletDebitExecutionResult.pending(existing);
+        }
+        if (existing != null && existing.getStatus() != OperationStatus.INITIATED) {
+            throw new BusinessException("Secure debit idempotency key is bound to a closed operation");
         }
 
         Wallet sourceWallet = resolveSourceWallet(request);
         walletGuardService.checkDebitAllowed(sourceWallet, request.amount(), request.currency());
+
+        Operation operation = existing != null
+                ? existing
+                : operationService.createInitiatedOperation(
+                request.operationAccountHolderId(),
+                request.actorUserId(),
+                request.operationType(),
+                request.amount(),
+                request.currency(),
+                request.idempotencyKey(),
+                request.description(),
+                null,
+                routing
+        );
 
         WalletSecurityService.WalletAuthorizationResult securityResult = request.systemAuthorized()
                 ? walletSecurityService.authorizeSystemDebit(
@@ -75,8 +96,7 @@ public class WalletDebitFacade {
                 : walletSecurityService.authorizeDebitIntent(
                         sourceWallet,
                         request.sourceAccountHolderId(),
-                        request.operationType(),
-                        request.amount(),
+                        operation,
                         request.pin(),
                         request.otpChallengeId(),
                         request.otpCode(),
@@ -85,36 +105,22 @@ public class WalletDebitFacade {
 
         if (!securityResult.approved()) {
             return WalletDebitExecutionResult.challengeRequired(
+                    operation.getId(),
                     securityResult.otpChallengeId(),
                     securityResult.otpExpiresAt()
             );
         }
 
-        Operation operation = operationService.createInitiatedOperation(
-                request.operationAccountHolderId(),
-                request.actorUserId(),
-                request.operationType(),
-                request.amount(),
-                request.currency(),
-                request.idempotencyKey(),
-                request.description(),
-                null,
-                routing
-        );
-
         if (operation.getStatus() == OperationStatus.CONFIRMED) {
+            ensurePosting(operation, request);
             return WalletDebitExecutionResult.confirmed(operation);
         }
+        if (request.postingMode() == SecureDebitPostingMode.NONE) {
+            return WalletDebitExecutionResult.authorized(operation);
+        }
 
-        String sourceWalletCode = resolveWalletAccountCode(request.sourceAccountHolderId());
         operation = operationService.confirmOperation(operation.getId());
-        accountingPostingService.postSecureWalletDebit(
-                operation,
-                sourceWalletCode,
-                request.destinationAccountCode(),
-                request.debitDescription(),
-                request.creditDescription()
-        );
+        ensurePosting(operation, request);
 
         eventPublisher.publish(WalletDebitedEvent.create(
                 sourceWallet.getId(),
@@ -135,6 +141,26 @@ public class WalletDebitFacade {
         }
 
         return WalletDebitExecutionResult.confirmed(operation);
+    }
+
+    private void ensurePosting(Operation operation, SecureDebitRequest request) {
+        switch (request.postingMode()) {
+            case STANDARD -> accountingPostingService.postSecureWalletDebit(
+                    operation,
+                    resolveWalletAccountCode(request.sourceAccountHolderId()),
+                    request.destinationAccountCode(),
+                    request.debitDescription(),
+                    request.creditDescription()
+            );
+            case OPERATION_POSTING -> accountingPostingService.postConfirmedOperation(operation.getId());
+            case MARKETPLACE_PAYMENT -> accountingPostingService.postMarketplaceWalletPayment(
+                    operation,
+                    request.sourceAccountHolderId(),
+                    request.requiredCountryCode()
+            );
+            case NONE -> {
+            }
+        }
     }
 
     private Wallet resolveSourceWallet(SecureDebitRequest request) {
@@ -178,6 +204,10 @@ public class WalletDebitFacade {
         if (request.systemAuthorized() && request.pin() != null && !request.pin().isBlank()) {
             throw new BusinessException("System secure debit must not provide user PIN");
         }
+        if (request.postingMode() == SecureDebitPostingMode.MARKETPLACE_PAYMENT
+                && (request.countryCode() == null || request.countryCode().isBlank())) {
+            throw new BusinessException("Marketplace wallet debit country is required");
+        }
     }
 
     public record SecureDebitRequest(
@@ -203,23 +233,49 @@ public class WalletDebitFacade {
             String debitDescription,
             String creditDescription,
             UUID creditedWalletId,
-            UUID creditedAccountHolderId
+            UUID creditedAccountHolderId,
+            SecureDebitPostingMode postingMode,
+            String countryCode
     ) {
+        public String requiredCountryCode() {
+            if (countryCode == null || countryCode.isBlank()) {
+                throw new BusinessException("Secure debit country is required");
+            }
+            return countryCode.trim();
+        }
     }
 
     public record WalletDebitExecutionResult(
             boolean approved,
             boolean otpRequired,
             UUID operationId,
+            String status,
             OffsetDateTime otpExpiresAt,
             UUID otpChallengeId
     ) {
-        public static WalletDebitExecutionResult challengeRequired(UUID otpChallengeId, OffsetDateTime otpExpiresAt) {
-            return new WalletDebitExecutionResult(false, true, null, otpExpiresAt, otpChallengeId);
+        public static WalletDebitExecutionResult challengeRequired(UUID operationId,
+                                                                   UUID otpChallengeId,
+                                                                   OffsetDateTime otpExpiresAt) {
+            return new WalletDebitExecutionResult(false, true, operationId, OperationStatus.INITIATED.name(), otpExpiresAt, otpChallengeId);
         }
 
         public static WalletDebitExecutionResult confirmed(Operation operation) {
-            return new WalletDebitExecutionResult(true, false, operation.getId(), null, null);
+            return new WalletDebitExecutionResult(true, false, operation.getId(), operation.getStatus().name(), null, null);
         }
+
+        public static WalletDebitExecutionResult authorized(Operation operation) {
+            return new WalletDebitExecutionResult(true, false, operation.getId(), operation.getStatus().name(), null, null);
+        }
+
+        public static WalletDebitExecutionResult pending(Operation operation) {
+            return new WalletDebitExecutionResult(true, false, operation.getId(), operation.getStatus().name(), null, null);
+        }
+    }
+
+    public enum SecureDebitPostingMode {
+        STANDARD,
+        OPERATION_POSTING,
+        MARKETPLACE_PAYMENT,
+        NONE
     }
 }
