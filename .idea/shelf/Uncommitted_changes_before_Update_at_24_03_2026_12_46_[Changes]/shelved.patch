@@ -1,0 +1,2111 @@
+Index: src/main/java/com/ccapp/identity/service/IdentityService.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>package com.ccapp.identity.service;\n\nimport com.ccapp.identity.dto.LinkAssistedAccountRequest;\nimport com.ccapp.identity.dto.LinkAssistedAccountResponse;\nimport com.ccapp.identity.dto.MeResponse;\nimport com.ccapp.identity.dto.OnboardingRequest;\nimport com.ccapp.identity.dto.OnboardingStatusResponse;\nimport com.ccapp.identity.dto.OnboardingStep1Request;\nimport com.ccapp.identity.dto.OnboardingStep2Request;\nimport com.ccapp.identity.dto.OnboardingStep3Request;\nimport com.ccapp.identity.dto.RefreshTokenRequest;\nimport com.ccapp.identity.dto.RefreshTokenResponse;\nimport com.ccapp.identity.dto.RegisterDeviceRequest;\nimport com.ccapp.identity.dto.SyncRequest;\nimport com.ccapp.identity.dto.SyncResponse;\nimport com.ccapp.identity.dto.UserDeviceDto;\nimport lombok.RequiredArgsConstructor;\nimport org.springframework.stereotype.Service;\nimport org.springframework.transaction.annotation.Transactional;\n\nimport java.util.UUID;\n\n@Service\n@RequiredArgsConstructor\npublic class IdentityService {\n\n    private final IdentityAuthService identityAuthService;\n    private final IdentityOnboardingService identityOnboardingService;\n    private final IdentityProfileService identityProfileService;\n    private final IdentityDelegationService identityDelegationService;\n    private final IdentityDeviceSessionService identityDeviceSessionService;\n\n    @Transactional\n    public SyncResponse sync(FirebaseUserClaims claims, SyncRequest request) {\n        return identityDeviceSessionService.sync(claims, request);\n    }\n\n    @Transactional\n    public MeResponse onboarding(UUID userId, OnboardingRequest request) {\n        identityOnboardingService.onboardingStep1(userId, new OnboardingStep1Request(\n                request.firstName(),\n                request.lastName(),\n                request.country(),\n                request.phone()\n        ));\n        return identityProfileService.me(userId);\n    }\n\n    @Transactional\n    public OnboardingStatusResponse getOnboardingStatus(UUID userId) {\n        return identityOnboardingService.getOnboardingStatus(userId);\n    }\n\n    @Transactional\n    public OnboardingStatusResponse onboardingStep1(UUID userId, OnboardingStep1Request request) {\n        return identityOnboardingService.onboardingStep1(userId, request);\n    }\n\n    @Transactional\n    public OnboardingStatusResponse onboardingStep2(UUID userId, OnboardingStep2Request request) {\n        return identityOnboardingService.onboardingStep2(userId, request);\n    }\n\n    @Transactional\n    public OnboardingStatusResponse onboardingStep3(UUID userId, OnboardingStep3Request request) {\n        return identityOnboardingService.onboardingStep3(userId, request);\n    }\n\n    @Transactional(readOnly = true)\n    public MeResponse me(UUID userId) {\n        return identityProfileService.me(userId);\n    }\n\n    @Transactional\n    public UserDeviceDto registerDevice(UUID userId, RegisterDeviceRequest request) {\n        return identityDeviceSessionService.registerDevice(userId, request);\n    }\n\n    @Transactional\n    public void blockDevice(UUID userId, UUID deviceId) {\n        identityDeviceSessionService.blockDevice(userId, deviceId);\n    }\n\n    @Transactional\n    public RefreshTokenResponse rotateRefreshToken(RefreshTokenRequest request) {\n        return identityDeviceSessionService.rotateRefreshToken(request);\n    }\n\n    @Transactional\n    public void revokeSession(UUID userId, UUID sessionId) {\n        identityDeviceSessionService.revokeSession(userId, sessionId);\n    }\n\n    @Transactional\n    public LinkAssistedAccountResponse linkAssistedAccount(String firebaseUid,\n                                                           String email,\n                                                           LinkAssistedAccountRequest request) {\n        return identityDelegationService.linkAssistedAccount(firebaseUid, email, request);\n    }\n\n    @Transactional\n    public void blockAccount(UUID userId, String reason) {\n        identityAuthService.blockAccount(userId, reason);\n    }\n}\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/com/ccapp/identity/service/IdentityService.java b/src/main/java/com/ccapp/identity/service/IdentityService.java
+--- a/src/main/java/com/ccapp/identity/service/IdentityService.java	(revision c57b80e23d00fb6fbcd960a5297cc575163af3a0)
++++ b/src/main/java/com/ccapp/identity/service/IdentityService.java	(date 1774352333843)
+@@ -35,6 +35,11 @@
+         return identityDeviceSessionService.sync(claims, request);
+     }
+ 
++    @Transactional
++    public void selectCountry(UUID userId, String countryCode) {
++        identityOnboardingService.selectCountry(userId, countryCode);
++    }
++
+     @Transactional
+     public MeResponse onboarding(UUID userId, OnboardingRequest request) {
+         identityOnboardingService.onboardingStep1(userId, new OnboardingStep1Request(
+Index: src/main/java/com/ccapp/identity/service/IdentityOnboardingService.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>package com.ccapp.identity.service;\n\nimport com.ccapp.common.exception.BusinessException;\nimport com.ccapp.common.exception.NotFoundException;\nimport com.ccapp.identity.account_holder.domain.entity.AccountHolder;\nimport com.ccapp.identity.account_holder.service.AccountHolderService;\nimport com.ccapp.identity.domain.entity.User;\nimport com.ccapp.identity.domain.entity.UserProfile;\nimport com.ccapp.identity.domain.enums.AccountStatus;\nimport com.ccapp.identity.domain.enums.KycStatus;\nimport com.ccapp.identity.domain.enums.OnboardingStep;\nimport com.ccapp.identity.dto.OnboardingStatusResponse;\nimport com.ccapp.identity.dto.OnboardingStep1Request;\nimport com.ccapp.identity.dto.OnboardingStep2Request;\nimport com.ccapp.identity.dto.OnboardingStep3Request;\nimport com.ccapp.identity.mapper.IdentityMapper;\nimport com.ccapp.identity.repository.UserProfileRepository;\nimport com.ccapp.identity.repository.UserRepository;\nimport lombok.RequiredArgsConstructor;\nimport lombok.extern.slf4j.Slf4j;\nimport org.springframework.stereotype.Service;\nimport org.springframework.transaction.annotation.Transactional;\n\nimport java.math.BigDecimal;\nimport java.math.RoundingMode;\nimport java.time.OffsetDateTime;\nimport java.util.Locale;\nimport java.util.UUID;\n\n@Service\n@RequiredArgsConstructor\n@Slf4j\npublic class IdentityOnboardingService {\n\n    private static final int ONBOARDING_TOTAL_STEPS = 3;\n    private static final String DEFAULT_COUNTRY_CODE = \"INT\";\n\n    private final UserRepository userRepository;\n    private final UserProfileRepository userProfileRepository;\n    private final AccountHolderService accountHolderService;\n    private final OnboardingCatalogService onboardingCatalogService;\n    private final IdentityMapper identityMapper;\n\n    @Transactional\n    public OnboardingStatusResponse getOnboardingStatus(UUID userId) {\n        User user = findUser(userId);\n        ensureAccountActive(user);\n        UserProfile profile = userProfileRepository.findByUserId(userId)\n                .map(existing -> {\n                    updateOnboardingState(existing);\n                    return userProfileRepository.save(existing);\n                })\n                .orElse(null);\n        return buildOnboardingStatus(user, profile);\n    }\n\n    @Transactional\n    public OnboardingStatusResponse onboardingStep1(UUID userId, OnboardingStep1Request request) {\n        User user = findUser(userId);\n        ensureAccountActive(user);\n\n        AccountHolder accountHolder = accountHolderService.updateProfile(\n                user.getId(),\n                request.firstName().trim(),\n                request.lastName().trim(),\n                request.phone().trim(),\n                request.country().trim().toUpperCase(Locale.ROOT)\n        );\n        String canonicalCountryCode = accountHolder.getCountryCode();\n\n        UserProfile profile = getOrCreateProfile(user);\n        profile.setFirstName(request.firstName().trim());\n        profile.setLastName(request.lastName().trim());\n        profile.setCountry(canonicalCountryCode);\n        profile.setPhone(request.phone().trim());\n        updateOnboardingState(profile);\n\n        UserProfile saved = userProfileRepository.save(profile);\n        if (user.getKycStatus() == KycStatus.NOT_STARTED) {\n            user.setKycStatus(KycStatus.PENDING);\n            userRepository.save(user);\n        }\n\n        return buildOnboardingStatus(user, saved);\n    }\n\n    @Transactional\n    public OnboardingStatusResponse onboardingStep2(UUID userId, OnboardingStep2Request request) {\n        User user = findUser(userId);\n        ensureAccountActive(user);\n\n        UserProfile profile = userProfileRepository.findByUserId(userId)\n                .orElseThrow(() -> new BusinessException(\"Onboarding step 1 must be completed first\"));\n\n        if (!isStep1Completed(profile)) {\n            throw new BusinessException(\"Onboarding step 1 must be completed first\");\n        }\n\n        profile.setActivitySectorCode(onboardingCatalogService.normalizeAndValidateActivitySectorCode(request.activitySectorCode()));\n        profile.setBusinessExperience(request.businessExperience());\n        profile.setMonthlyIncomeBracketCode(onboardingCatalogService.normalizeAndValidateIncomeBracketCode(request.monthlyIncomeBracketCode()));\n        profile.setProjectDescription(request.projectDescription().trim());\n        updateOnboardingState(profile);\n\n        UserProfile saved = userProfileRepository.save(profile);\n        return buildOnboardingStatus(user, saved);\n    }\n\n    @Transactional\n    public OnboardingStatusResponse onboardingStep3(UUID userId, OnboardingStep3Request request) {\n        User user = findUser(userId);\n        ensureAccountActive(user);\n\n        UserProfile profile = userProfileRepository.findByUserId(userId)\n                .orElseThrow(() -> new BusinessException(\"Onboarding step 1 must be completed first\"));\n\n        if (!isStep1Completed(profile)) {\n            throw new BusinessException(\"Onboarding step 1 must be completed first\");\n        }\n        if (!isStep2Completed(profile)) {\n            throw new BusinessException(\"Onboarding step 2 must be completed first\");\n        }\n        if (!Boolean.TRUE.equals(request.solidarityGuaranteeAccepted())) {\n            throw new BusinessException(\"Solidarity guarantee acceptance is required\");\n        }\n        if (!Boolean.TRUE.equals(request.termsAccepted())) {\n            throw new BusinessException(\"Terms acceptance is required\");\n        }\n\n        profile.setAvailableCapital(request.availableCapital());\n        profile.setSolidarityGuaranteeAccepted(true);\n        profile.setTermsAccepted(true);\n        if (profile.getTermsAcceptedAt() == null) {\n            profile.setTermsAcceptedAt(OffsetDateTime.now());\n        }\n        updateOnboardingState(profile);\n\n        UserProfile saved = userProfileRepository.save(profile);\n        return buildOnboardingStatus(user, saved);\n    }\n\n    private User findUser(UUID userId) {\n        return userRepository.findById(userId)\n                .orElseThrow(() -> new NotFoundException(\"User not found\"));\n    }\n\n    private UserProfile getOrCreateProfile(User user) {\n        return userProfileRepository.findByUserId(user.getId())\n                .orElseGet(() -> UserProfile.builder()\n                        .user(user)\n                        .onboardingStep(OnboardingStep.STEP_1)\n                        .onboardingCompleted(false)\n                        .country(DEFAULT_COUNTRY_CODE)\n                        .phone(\"\")\n                        .build());\n    }\n\n    private void ensureAccountActive(User user) {\n        if (user.getAccountStatus() != AccountStatus.ACTIVE) {\n            throw new BusinessException(\"Account is not active\");\n        }\n    }\n\n    private void updateOnboardingState(UserProfile profile) {\n        boolean step1Completed = isStep1Completed(profile);\n        boolean step2Completed = step1Completed && isStep2Completed(profile);\n        boolean step3Completed = step2Completed && isStep3Completed(profile);\n\n        OnboardingStep onboardingStep = resolveOnboardingStep(step1Completed, step2Completed, step3Completed);\n        profile.setOnboardingStep(onboardingStep);\n        profile.setOnboardingCompleted(step3Completed);\n        if (step3Completed) {\n            if (profile.getOnboardingCompletedAt() == null) {\n                profile.setOnboardingCompletedAt(OffsetDateTime.now());\n            }\n        } else {\n            profile.setOnboardingCompletedAt(null);\n        }\n        if (!profile.isTermsAccepted()) {\n            profile.setTermsAcceptedAt(null);\n        }\n    }\n\n    private boolean isStep1Completed(UserProfile profile) {\n        return hasText(profile.getFirstName())\n                && hasText(profile.getLastName())\n                && hasText(profile.getPhone());\n    }\n\n    private boolean isStep2Completed(UserProfile profile) {\n        return hasText(profile.getActivitySectorCode())\n                && profile.getBusinessExperience() != null\n                && hasText(profile.getMonthlyIncomeBracketCode())\n                && hasText(profile.getProjectDescription())\n                && profile.getProjectDescription().trim().length() >= 20;\n    }\n\n    private boolean isStep3Completed(UserProfile profile) {\n        return profile.getAvailableCapital() != null\n                && profile.getAvailableCapital().compareTo(BigDecimal.ZERO) >= 0\n                && profile.isSolidarityGuaranteeAccepted()\n                && profile.isTermsAccepted();\n    }\n\n    private boolean hasText(String value) {\n        return value != null && !value.trim().isEmpty();\n    }\n\n    private OnboardingStep resolveOnboardingStep(boolean step1Completed, boolean step2Completed, boolean step3Completed) {\n        if (step3Completed) {\n            return OnboardingStep.COMPLETED;\n        }\n        if (step2Completed) {\n            return OnboardingStep.STEP_3;\n        }\n        if (step1Completed) {\n            return OnboardingStep.STEP_2;\n        }\n        return OnboardingStep.STEP_1;\n    }\n\n    private OnboardingStatusResponse buildOnboardingStatus(User user, UserProfile profile) {\n        boolean step1Completed = profile != null && isStep1Completed(profile);\n        boolean step2Completed = profile != null && step1Completed && isStep2Completed(profile);\n        boolean step3Completed = profile != null && step2Completed && isStep3Completed(profile);\n        OnboardingStep onboardingStep = resolveOnboardingStep(step1Completed, step2Completed, step3Completed);\n        BigDecimal progressPercentage = BigDecimal.valueOf(((step1Completed ? 1 : 0) + (step2Completed ? 1 : 0) + (step3Completed ? 1 : 0)) * 100L)\n                .divide(BigDecimal.valueOf(ONBOARDING_TOTAL_STEPS), 2, RoundingMode.HALF_UP);\n        int currentStep = step3Completed ? 3 : (step2Completed ? 3 : (step1Completed ? 2 : 1));\n\n        return new OnboardingStatusResponse(\n                user.getId(),\n                onboardingStep,\n                currentStep,\n                ONBOARDING_TOTAL_STEPS,\n                progressPercentage,\n                step1Completed,\n                step2Completed,\n                step3Completed,\n                step3Completed,\n                profile != null ? profile.getOnboardingCompletedAt() : null,\n                profile != null ? identityMapper.toDto(profile) : null\n        );\n    }\n}\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/com/ccapp/identity/service/IdentityOnboardingService.java b/src/main/java/com/ccapp/identity/service/IdentityOnboardingService.java
+--- a/src/main/java/com/ccapp/identity/service/IdentityOnboardingService.java	(revision c57b80e23d00fb6fbcd960a5297cc575163af3a0)
++++ b/src/main/java/com/ccapp/identity/service/IdentityOnboardingService.java	(date 1774352322194)
+@@ -54,6 +54,12 @@
+         return buildOnboardingStatus(user, profile);
+     }
+ 
++    @Transactional
++    public void selectCountry(UUID userId, String countryCode) {
++        User user = findUser(userId);
++        accountHolderService.selectCountry(user.getId(), countryCode.trim().toUpperCase(Locale.ROOT));
++    }
++
+     @Transactional
+     public OnboardingStatusResponse onboardingStep1(UUID userId, OnboardingStep1Request request) {
+         User user = findUser(userId);
+Index: src/main/java/com/ccapp/circles/service/CircleService.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>package com.ccapp.circles.service;\n\nimport com.ccapp.circles.domain.entity.Circle;\nimport com.ccapp.circles.domain.entity.CircleMember;\nimport com.ccapp.country.config.domain.enums.CountryConfigType;\nimport com.ccapp.country.config.service.CountryConfigResolver;\nimport com.ccapp.country.dto.CountryContext;\nimport com.ccapp.country.service.CountryContextService;\nimport com.ccapp.circlesocial.domain.enums.ActivityType;\nimport com.ccapp.circlesocial.event.CircleActivityRequestedEvent;\nimport com.ccapp.circles.domain.enums.CircleMemberRole;\nimport com.ccapp.circles.domain.enums.CircleStatus;\nimport com.ccapp.circles.dto.*;\nimport com.ccapp.common.events.DomainEventPublisher;\nimport com.ccapp.circles.repository.CircleMemberRepository;\nimport com.ccapp.circles.repository.CircleRepository;\nimport com.ccapp.common.exception.BusinessException;\nimport com.ccapp.common.exception.ConflictException;\nimport com.ccapp.common.exception.NotFoundException;\nimport com.ccapp.credit.domain.enums.LoanStatus;\nimport com.ccapp.credit.repository.LoanRepository;\nimport com.ccapp.identity.account_holder.domain.entity.AccountHolder;\nimport com.ccapp.identity.account_holder.domain.enums.AccountCreatedVia;\nimport com.ccapp.identity.account_holder.domain.enums.AccountType;\nimport com.ccapp.identity.account_holder.repository.AccountHolderRepository;\nimport com.ccapp.identity.app_user.domain.entity.AppUser;\nimport com.ccapp.identity.app_user.repository.AppUserRepository;\nimport com.ccapp.identity.delegation.domain.enums.DelegatedActionType;\nimport com.ccapp.identity.delegation.service.DelegatedActionService;\nimport com.ccapp.identity.delegation.service.DelegationService;\nimport com.ccapp.identity.domain.entity.User;\nimport com.ccapp.identity.domain.enums.AccountStatus;\nimport com.ccapp.identity.domain.enums.KycStatus;\nimport com.ccapp.identity.repository.UserRepository;\nimport com.ccapp.identity.verification.service.PhoneVerificationService;\nimport com.ccapp.mlm.domain.entity.MlmRelationship;\nimport com.ccapp.mlm.repository.MlmRelationshipRepository;\nimport com.ccapp.progress.event.AccountHolderCreatedEvent;\nimport com.ccapp.progress.event.CircleJoinedEvent;\nimport com.fasterxml.jackson.core.JsonProcessingException;\nimport com.fasterxml.jackson.databind.ObjectMapper;\nimport com.fasterxml.jackson.databind.node.ObjectNode;\nimport lombok.RequiredArgsConstructor;\nimport org.springframework.beans.factory.annotation.Value;\nimport org.springframework.stereotype.Service;\nimport org.springframework.transaction.annotation.Transactional;\n\nimport java.time.OffsetDateTime;\nimport java.util.ArrayList;\nimport java.util.Arrays;\nimport java.util.Comparator;\nimport java.util.EnumSet;\nimport java.util.HashSet;\nimport java.util.List;\nimport java.util.Objects;\nimport java.util.Optional;\nimport java.util.Set;\nimport java.util.UUID;\n\n@Service\n@RequiredArgsConstructor\npublic class CircleService {\n\n    private static final long DEFAULT_MAX_FINANCIAL_MEMBERS_PER_CIRCLE = 5;\n    private static final long DEFAULT_MAX_ASSISTED_MEMBERS_PER_CIRCLE = 2;\n    private static final String CROSS_COUNTRY_CIRCLE_NOT_ALLOWED = \"CROSS_COUNTRY_CIRCLE_NOT_ALLOWED\";\n    private static final String TOO_MANY_ASSISTED_MEMBERS = \"TOO_MANY_ASSISTED_MEMBERS\";\n    private static final String MEMBER_NOT_ACTIVE = \"MEMBER_NOT_ACTIVE\";\n    private static final String SPONSOR_NOT_FOUND = \"SPONSOR_NOT_FOUND\";\n    private static final String ASSISTED_MEMBERS_DISABLED_FOR_MVP = \"ASSISTED_MEMBERS_DISABLED_FOR_MVP\";\n    private static final String CIRCLE_LOCKED_BY_ACTIVE_LOAN = \"CIRCLE_LOCKED_BY_ACTIVE_LOAN\";\n    private static final EnumSet<LoanStatus> CIRCLE_LOCKING_LOAN_STATUSES = EnumSet.of(\n            LoanStatus.APPROVED,\n            LoanStatus.DISBURSED,\n            LoanStatus.ACTIVE\n    );\n\n    private final CircleRepository circleRepository;\n    private final CircleMemberRepository circleMemberRepository;\n    private final DomainEventPublisher domainEventPublisher;\n    private final CountryContextService countryContextService;\n    private final AccountHolderRepository accountHolderRepository;\n    private final LoanRepository loanRepository;\n    private final AppUserRepository appUserRepository;\n    private final UserRepository userRepository;\n    private final MlmRelationshipRepository mlmRelationshipRepository;\n    private final DelegationService delegationService;\n    private final DelegatedActionService delegatedActionService;\n    private final PhoneVerificationService phoneVerificationService;\n    private final CountryConfigResolver countryConfigResolver;\n    private final ObjectMapper objectMapper;\n\n    @Value(\"${circles.assisted-member.require-phone-verification:false}\")\n    private boolean requirePhoneVerification;\n\n    @Transactional\n    public CircleResponse createCircle(UUID accountHolderId, CreateCircleRequest request) {\n        ensureCreatorCanCreateCircle(accountHolderId);\n        MlmHierarchy hierarchy = resolveMlmHierarchy(accountHolderId);\n        String accountHolderCountry = resolveAccountHolderCountry(accountHolderId);\n        CircleConfigLimits limits = resolveCircleConfigLimits(accountHolderCountry);\n        if (circleRepository.existsActiveCircleForUser(accountHolderId)) {\n            throw new ConflictException(\"User already belongs to an active circle\");\n        }\n\n        Circle circle = circleRepository.save(Circle.builder()\n                .name(request.name().trim())\n                .coachId(hierarchy.coachAccountHolderId())\n                .countryCode(accountHolderCountry)\n                .configSnapshot(buildCircleConfigSnapshot(accountHolderCountry, limits.resolvedConfig()))\n                .configVersion(limits.resolvedConfig().version())\n                .status(CircleStatus.ACTIVE)\n                .build());\n\n        OffsetDateTime now = OffsetDateTime.now();\n        List<CircleMember> toInsert = new ArrayList<>();\n        Set<UUID> insertedAccountHolders = new HashSet<>();\n\n        addParticipant(toInsert, insertedAccountHolders, circle, hierarchy.coachAccountHolderId(), CircleMemberRole.COACH, false, now);\n        addParticipant(toInsert, insertedAccountHolders, circle, hierarchy.advisorGeneration1AccountHolderId(), CircleMemberRole.ADVISOR_G1, false, now);\n        addParticipant(toInsert, insertedAccountHolders, circle, hierarchy.advisorGeneration2AccountHolderId(), CircleMemberRole.ADVISOR_G2, false, now);\n\n        if (request.creatorRole() == CircleCreatorRole.MEMBER) {\n            addParticipant(toInsert, insertedAccountHolders, circle, accountHolderId, CircleMemberRole.MEMBER, true, now);\n        }\n\n        List<CircleMember> savedParticipants = circleMemberRepository.saveAll(toInsert);\n        CircleMember activityMember = savedParticipants.stream()\n                .filter(member -> Objects.equals(member.getAccountHolderId(), accountHolderId))\n                .findFirst()\n                .orElseGet(() -> savedParticipants.stream()\n                        .filter(member -> member.getRole() == CircleMemberRole.COACH)\n                        .findFirst()\n                        .orElse(null));\n\n        if (activityMember != null) {\n            domainEventPublisher.publish(CircleActivityRequestedEvent.create(\n                    circle.getId(),\n                    accountHolderId,\n                    ActivityType.MEMBER_JOINED,\n                    activityMember.getId(),\n                    \"Circle created with MLM participants\"\n            ));\n        }\n        if (request.creatorRole() == CircleCreatorRole.MEMBER) {\n            domainEventPublisher.publish(CircleJoinedEvent.create(accountHolderId, circle.getId()));\n        }\n\n        int membersCount = Math.toIntExact(circleMemberRepository.countByCircle_IdAndFinancialMemberTrue(circle.getId()));\n        return toCircleResponse(circle, membersCount);\n    }\n\n    @Transactional\n    public CircleMemberResponse joinCircle(UUID accountHolderId, UUID circleId, JoinCircleRequest request) {\n        String accountHolderCountry = resolveAccountHolderCountry(accountHolderId);\n        Circle circle = circleRepository.findByIdAndStatus(circleId, CircleStatus.ACTIVE)\n                .orElseThrow(() -> new NotFoundException(\"Active circle not found\"));\n\n        if (!accountHolderCountry.equalsIgnoreCase(circle.getCountryCode())) {\n            throw new BusinessException(CROSS_COUNTRY_CIRCLE_NOT_ALLOWED);\n        }\n\n        if (circleMemberRepository.existsByCircle_IdAndAccountHolderId(circleId, accountHolderId)) {\n            throw new ConflictException(\"User already in this circle\");\n        }\n        if (circleRepository.existsActiveCircleForUser(accountHolderId)) {\n            throw new ConflictException(\"User already belongs to an active circle\");\n        }\n\n        ensureCircleUnlocked(circleId);\n        CircleConfigLimits limits = resolveCircleConfigLimits(circle.getCountryCode());\n        long membersCount = circleMemberRepository.countByCircle_IdAndFinancialMemberTrue(circleId);\n        if (membersCount >= limits.maxFinancialMembers()) {\n            throw new BusinessException(\"Circle reached maximum members\");\n        }\n\n        CircleMember member = circleMemberRepository.save(CircleMember.builder()\n                .circle(circle)\n                .accountHolderId(accountHolderId)\n                .role(CircleMemberRole.MEMBER)\n                .financialMember(true)\n                .businessActivity(request.businessActivity())\n                .loanStatus(request.loanStatus())\n                .repaymentProgress(request.repaymentProgress())\n                .joinedAt(OffsetDateTime.now())\n                .build());\n\n        domainEventPublisher.publish(CircleActivityRequestedEvent.create(\n                circle.getId(),\n                accountHolderId,\n                ActivityType.MEMBER_JOINED,\n                member.getId(),\n                \"Member joined circle\"\n        ));\n        domainEventPublisher.publish(CircleJoinedEvent.create(accountHolderId, circleId));\n        return toMemberResponse(member);\n    }\n\n    @Transactional(readOnly = true)\n    public MyCircleResponse getMyCircle(UUID accountHolderId) {\n        List<Circle> activeCircles = circleRepository.findActiveCirclesForUser(accountHolderId);\n        if (activeCircles.isEmpty()) {\n            throw new NotFoundException(\"No active circle found for user\");\n        }\n\n        Circle circle = activeCircles.get(0);\n        List<CircleMemberResponse> members = circleMemberRepository.findByCircle_IdOrderByJoinedAtAsc(circle.getId())\n                .stream()\n                .map(this::toMemberResponse)\n                .toList();\n\n        return new MyCircleResponse(\n                circle.getId(),\n                circle.getName(),\n                circle.getCoachId(),\n                circle.getStatus(),\n                circle.getCreatedAt(),\n                members\n        );\n    }\n\n    @Transactional(readOnly = true)\n    public List<CircleMemberResponse> listMembers(UUID circleId) {\n        ensureCircleExists(circleId);\n        return circleMemberRepository.findByCircle_IdOrderByJoinedAtAsc(circleId)\n                .stream()\n                .map(this::toMemberResponse)\n                .toList();\n    }\n\n    @Transactional(readOnly = true)\n    public CircleParticipantsResponse getParticipants(UUID circleId) {\n        ensureCircleExists(circleId);\n        List<CircleMemberResponse> participants = circleMemberRepository.findByCircle_IdOrderByJoinedAtAsc(circleId)\n                .stream()\n                .map(this::toMemberResponse)\n                .toList();\n\n        List<CircleMemberResponse> members = participants.stream()\n                .filter(member -> member.role() == CircleMemberRole.MEMBER)\n                .toList();\n        CircleMemberResponse coach = participants.stream()\n                .filter(member -> member.role() == CircleMemberRole.COACH)\n                .findFirst()\n                .orElse(null);\n        List<CircleMemberResponse> advisors = participants.stream()\n                .filter(member -> isAdvisorRole(member.role()))\n                .sorted(Comparator.comparing(member -> member.role().ordinal()))\n                .toList();\n\n        return new CircleParticipantsResponse(members, coach, advisors);\n    }\n\n    @Transactional\n    public CircleMemberResponse createAssistedMember(UUID creatorAccountHolderId,\n                                                     UUID actorUserId,\n                                                     UUID circleId,\n                                                     CreateAssistedMemberRequest request) {\n        throw new BusinessException(ASSISTED_MEMBERS_DISABLED_FOR_MVP);\n    }\n\n    private String resolveAccountHolderCountry(UUID accountHolderId) {\n        CountryContext context = countryContextService.resolve(accountHolderId);\n        return context.serviceCountryCode();\n    }\n\n    private void ensureCreatorCanCreateCircle(UUID accountHolderId) {\n        boolean activeAppMember = appUserRepository.findByAccountHolderId(accountHolderId).stream()\n                .map(AppUser::getId)\n                .map(userRepository::findById)\n                .flatMap(Optional::stream)\n                .anyMatch(this::isActiveUser);\n        if (!activeAppMember) {\n            throw new BusinessException(MEMBER_NOT_ACTIVE);\n        }\n\n        boolean hasActiveMlmMembership = mlmRelationshipRepository.countByDescendantIdAndLevelGreaterThan(accountHolderId, 0) > 0;\n        if (!hasActiveMlmMembership) {\n            throw new BusinessException(MEMBER_NOT_ACTIVE);\n        }\n    }\n\n    private MlmHierarchy resolveMlmHierarchy(UUID accountHolderId) {\n        List<MlmRelationship> ancestors = mlmRelationshipRepository.findAncestors(accountHolderId);\n        UUID coachAccountHolderId = ancestorForLevel(ancestors, 1)\n                .orElseThrow(() -> new BusinessException(SPONSOR_NOT_FOUND));\n        UUID advisorGeneration1 = ancestorForLevel(ancestors, 2).orElse(null);\n        UUID advisorGeneration2 = ancestorForLevel(ancestors, 3).orElse(null);\n        return new MlmHierarchy(coachAccountHolderId, advisorGeneration1, advisorGeneration2);\n    }\n\n    private Optional<UUID> ancestorForLevel(List<MlmRelationship> ancestors, int level) {\n        return ancestors.stream()\n                .filter(ancestor -> ancestor.getLevel() == level)\n                .map(MlmRelationship::getAncestorId)\n                .findFirst();\n    }\n\n    private boolean isActiveUser(User user) {\n        return user.getAccountStatus() == AccountStatus.ACTIVE;\n    }\n\n    private void addParticipant(List<CircleMember> target,\n                                Set<UUID> insertedAccountHolders,\n                                Circle circle,\n                                UUID accountHolderId,\n                                CircleMemberRole role,\n                                boolean isFinancialMember,\n                                OffsetDateTime joinedAt) {\n        if (accountHolderId == null || !insertedAccountHolders.add(accountHolderId)) {\n            return;\n        }\n        target.add(CircleMember.builder()\n                .circle(circle)\n                .accountHolderId(accountHolderId)\n                .role(role)\n                .financialMember(isFinancialMember)\n                .joinedAt(joinedAt)\n                .build());\n    }\n\n    private boolean isAdvisorRole(CircleMemberRole role) {\n        return role == CircleMemberRole.ADVISOR_G1 || role == CircleMemberRole.ADVISOR_G2;\n    }\n\n    private void ensureCircleUnlocked(UUID circleId) {\n        if (loanRepository.existsByCircleIdAndStatusIn(circleId, CIRCLE_LOCKING_LOAN_STATUSES)) {\n            throw new BusinessException(CIRCLE_LOCKED_BY_ACTIVE_LOAN);\n        }\n    }\n\n    private void ensureCircleExists(UUID circleId) {\n        if (!circleRepository.existsById(circleId)) {\n            throw new NotFoundException(\"Circle not found\");\n        }\n    }\n\n    private CircleResponse toCircleResponse(Circle circle, int membersCount) {\n        return new CircleResponse(\n                circle.getId(),\n                circle.getName(),\n                circle.getCoachId(),\n                circle.getStatus(),\n                circle.getCreatedAt(),\n                membersCount\n        );\n    }\n\n    private CircleMemberResponse toMemberResponse(CircleMember member) {\n        AccountHolder accountHolder = accountHolderRepository.findById(member.getAccountHolderId())\n                .orElseThrow(() -> new NotFoundException(\"Account holder not found\"));\n        String memberName = displayName(accountHolder.getFirstName(), accountHolder.getLastName());\n        String memberType = accountHolder.getAccountType().name();\n        String managerName = resolveManagerName(accountHolder);\n\n        return new CircleMemberResponse(\n                member.getId(),\n                member.getAccountHolderId(),\n                member.getRole(),\n                memberName,\n                member.getBusinessActivity(),\n                memberType,\n                managerName,\n                member.getBusinessActivity(),\n                member.getLoanStatus(),\n                member.getRepaymentProgress(),\n                member.getJoinedAt()\n        );\n    }\n\n    private String resolveManagerName(AccountHolder accountHolder) {\n        if (accountHolder.getAccountType() != AccountType.ASSISTED) {\n            return null;\n        }\n        return delegationService.findActiveManagerDelegation(accountHolder.getId())\n                .flatMap(delegation -> appUserRepository.findById(delegation.getDelegateUserId()))\n                .flatMap(appUser -> accountHolderRepository.findById(appUser.getAccountHolderId()))\n                .map(manager -> displayName(manager.getFirstName(), manager.getLastName()))\n                .orElse(null);\n    }\n\n    private String displayName(String firstName, String lastName) {\n        String first = firstName == null ? \"\" : firstName.trim();\n        String last = lastName == null ? \"\" : lastName.trim();\n        String combined = (first + \" \" + last).trim();\n        return combined.isEmpty() ? \"Unknown\" : combined;\n    }\n\n    private String normalizePhone(String phoneNumber) {\n        return phoneNumber.trim();\n    }\n\n    private NameParts splitFullName(String fullName) {\n        String normalized = Arrays.stream(fullName.trim().split(\"\\\\s+\"))\n                .filter(token -> !token.isBlank())\n                .reduce((left, right) -> left + \" \" + right)\n                .orElseThrow(() -> new BusinessException(\"fullName is required\"));\n        String[] parts = normalized.split(\" \");\n        if (parts.length == 1) {\n            return new NameParts(parts[0], parts[0]);\n        }\n        String firstName = parts[0];\n        String lastName = normalized.substring(firstName.length()).trim();\n        return new NameParts(firstName, lastName);\n    }\n\n    private CircleConfigLimits resolveCircleConfigLimits(String countryCode) {\n        CountryConfigResolver.ResolvedConfig resolved = countryConfigResolver.resolveActiveConfig(\n                countryCode,\n                CountryConfigType.GENERAL\n        );\n        ObjectNode payload = countryConfigResolver.payloadAsObjectNode(resolved);\n        ObjectNode circlePayload = payload.has(\"circle\") && payload.get(\"circle\").isObject()\n                ? (ObjectNode) payload.get(\"circle\")\n                : payload;\n        long maxFinancialMembers = longField(circlePayload, \"maxMembers\", DEFAULT_MAX_FINANCIAL_MEMBERS_PER_CIRCLE);\n        long maxAssistedMembers = longField(circlePayload, \"maxAssistedMembers\", DEFAULT_MAX_ASSISTED_MEMBERS_PER_CIRCLE);\n        return new CircleConfigLimits(maxFinancialMembers, maxAssistedMembers, resolved);\n    }\n\n    private long longField(ObjectNode payload, String fieldName, long defaultValue) {\n        if (payload == null || !payload.has(fieldName) || payload.get(fieldName).isNull()) {\n            return defaultValue;\n        }\n        if (!payload.get(fieldName).canConvertToLong()) {\n            throw new BusinessException(fieldName + \" must be an integer\");\n        }\n        long value = payload.get(fieldName).longValue();\n        return value > 0 ? value : defaultValue;\n    }\n\n    private String buildCircleConfigSnapshot(String countryCode, CountryConfigResolver.ResolvedConfig circleConfig) {\n        ObjectNode root = objectMapper.createObjectNode();\n        root.put(\"countryCode\", countryCode);\n        root.put(\"circleConfigVersion\", circleConfig.version());\n        root.set(\"circle\", countryConfigResolver.payloadAsObjectNode(circleConfig));\n        try {\n            return objectMapper.writeValueAsString(root);\n        } catch (JsonProcessingException ex) {\n            throw new BusinessException(\"Unable to serialize circle configuration snapshot\");\n        }\n    }\n\n    private record CircleConfigLimits(long maxFinancialMembers,\n                                      long maxAssistedMembers,\n                                      CountryConfigResolver.ResolvedConfig resolvedConfig) {\n    }\n\n    private record NameParts(String firstName, String lastName) {\n    }\n\n    private record MlmHierarchy(UUID coachAccountHolderId,\n                                UUID advisorGeneration1AccountHolderId,\n                                UUID advisorGeneration2AccountHolderId) {\n    }\n}\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/com/ccapp/circles/service/CircleService.java b/src/main/java/com/ccapp/circles/service/CircleService.java
+--- a/src/main/java/com/ccapp/circles/service/CircleService.java	(revision c57b80e23d00fb6fbcd960a5297cc575163af3a0)
++++ b/src/main/java/com/ccapp/circles/service/CircleService.java	(date 1774351597429)
+@@ -95,7 +95,6 @@
+ 
+     @Transactional
+     public CircleResponse createCircle(UUID accountHolderId, CreateCircleRequest request) {
+-        ensureCreatorCanCreateCircle(accountHolderId);
+         MlmHierarchy hierarchy = resolveMlmHierarchy(accountHolderId);
+         String accountHolderCountry = resolveAccountHolderCountry(accountHolderId);
+         CircleConfigLimits limits = resolveCircleConfigLimits(accountHolderCountry);
+Index: src/main/java/com/ccapp/identity/account_holder/service/AccountHolderService.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>package com.ccapp.identity.account_holder.service;\n\nimport com.ccapp.common.exception.BusinessException;\nimport com.ccapp.common.exception.ConflictException;\nimport com.ccapp.common.exception.NotFoundException;\nimport com.ccapp.common.events.DomainEventPublisher;\nimport com.ccapp.country.config.service.CountryChartOfAccountsService;\nimport com.ccapp.country.service.CountryService;\nimport com.ccapp.identity.account_holder.domain.entity.AccountHolder;\nimport com.ccapp.identity.account_holder.domain.enums.AccountCreatedVia;\nimport com.ccapp.identity.account_holder.domain.enums.AccountType;\nimport com.ccapp.identity.account_holder.repository.AccountHolderRepository;\nimport com.ccapp.identity.domain.entity.User;\nimport com.ccapp.identity.domain.entity.UserProfile;\nimport com.ccapp.identity.domain.enums.KycStatus;\nimport com.ccapp.progress.event.AccountHolderCreatedEvent;\nimport lombok.RequiredArgsConstructor;\nimport lombok.extern.slf4j.Slf4j;\nimport org.springframework.stereotype.Service;\nimport org.springframework.transaction.annotation.Transactional;\n\nimport java.time.OffsetDateTime;\nimport java.util.UUID;\n\n@Service\n@RequiredArgsConstructor\n@Slf4j\npublic class AccountHolderService {\n\n    private final AccountHolderRepository accountHolderRepository;\n    private final CountryService countryService;\n    private final CountryChartOfAccountsService countryChartOfAccountsService;\n    private final DomainEventPublisher domainEventPublisher;\n\n    @Transactional(readOnly = true)\n    public AccountHolder getById(UUID accountHolderId) {\n        log.info(\"Identity account-holder getById accountHolderId={}\", accountHolderId);\n        return accountHolderRepository.findById(accountHolderId)\n                .orElseThrow(() -> new NotFoundException(\"Account holder not found\"));\n    }\n\n    @Transactional(readOnly = true)\n    public boolean exists(UUID accountHolderId) {\n        log.debug(\"Identity account-holder exists check accountHolderId={}\", accountHolderId);\n        return accountHolderRepository.existsById(accountHolderId);\n    }\n\n    @Transactional\n    public AccountHolder ensureFromLegacyUser(User user, UserProfile profile) {\n        log.info(\"Identity account-holder ensureFromLegacyUser userId={} firebaseUid={}\", user.getId(), user.getFirebaseUid());\n        String fallbackCountryCode = countryService.resolveFallbackCountry().getCode();\n        String selectedCountryCode = null;\n        String serviceCountryCode = fallbackCountryCode;\n\n        AccountHolder existing = accountHolderRepository.findById(user.getId()).orElse(null);\n        if (existing != null) {\n            log.debug(\"Identity account-holder already exists userId={} accountHolderId={}\", user.getId(), existing.getId());\n            return existing;\n        }\n\n        AccountHolder created = accountHolderRepository.save(AccountHolder.builder()\n                .id(user.getId())\n                .firstName(profile != null ? profile.getFirstName() : \"Unknown\")\n                .lastName(profile != null ? profile.getLastName() : \"Unknown\")\n                .phoneNumber(profile != null ? profile.getPhone() : null)\n                .countryCode(selectedCountryCode)\n                .serviceCountryCode(serviceCountryCode)\n                .accountType(AccountType.STANDARD)\n                .createdVia(AccountCreatedVia.SELF)\n                .kycStatus(user.getKycStatus() != null ? user.getKycStatus() : KycStatus.NOT_STARTED)\n                .kycVerifiedAt(user.getKycStatus() == KycStatus.VERIFIED ? OffsetDateTime.now() : null)\n                .createdAt(user.getCreatedAt())\n                .build());\n        log.info(\"Identity account-holder created from legacy user accountHolderId={} serviceCountryCode={}\", created.getId(), created.getServiceCountryCode());\n        countryChartOfAccountsService.findOrCreateWallet(created);\n        domainEventPublisher.publish(AccountHolderCreatedEvent.create(created.getId()));\n        return created;\n    }\n\n    @Transactional\n    public AccountHolder updateProfile(UUID accountHolderId,\n                                       String firstName,\n                                       String lastName,\n                                       String phoneNumber,\n                                       String requestedCountryCode) {\n        log.info(\"Identity account-holder updateProfile accountHolderId={} requestedCountryCode={}\", accountHolderId, requestedCountryCode);\n        AccountHolder accountHolder = getById(accountHolderId);\n        String selectedCountryCode = countryService.resolveSelectedCountryOrThrow(requestedCountryCode).getCode();\n        String serviceCountryCode = countryService.resolveServiceCountryForSelection(selectedCountryCode).getCode();\n        String normalizedPhone = phoneNumber == null ? null : phoneNumber.trim();\n\n        if (accountHolder.getCountryCode() != null && !accountHolder.getCountryCode().equalsIgnoreCase(selectedCountryCode)) {\n            log.warn(\"Identity account-holder updateProfile denied immutable country accountHolderId={} currentCountry={} requestedCountry={}\",\n                    accountHolderId, accountHolder.getCountryCode(), selectedCountryCode);\n            throw new BusinessException(\"Account holder country is immutable\");\n        }\n        if (normalizedPhone != null\n                && !normalizedPhone.isBlank()\n                && accountHolderRepository.existsByPhoneNumberAndIdNot(normalizedPhone, accountHolderId)) {\n            log.warn(\"Identity account-holder updateProfile denied phone conflict accountHolderId={} phone={}\", accountHolderId, normalizedPhone);\n            throw new ConflictException(\"Phone number already used\");\n        }\n\n        accountHolder.setFirstName(firstName);\n        accountHolder.setLastName(lastName);\n        accountHolder.setPhoneNumber(normalizedPhone);\n        accountHolder.setCountryCode(selectedCountryCode);\n        accountHolder.setServiceCountryCode(serviceCountryCode);\n        if (accountHolder.getKycStatus() == KycStatus.NOT_STARTED) {\n            accountHolder.setKycStatus(KycStatus.PENDING);\n        }\n        AccountHolder saved = accountHolderRepository.save(accountHolder);\n        log.info(\"Identity account-holder updateProfile success accountHolderId={} countryCode={} serviceCountryCode={}\",\n                saved.getId(), saved.getCountryCode(), saved.getServiceCountryCode());\n        countryChartOfAccountsService.findOrCreateWallet(saved);\n        return saved;\n    }\n}\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/com/ccapp/identity/account_holder/service/AccountHolderService.java b/src/main/java/com/ccapp/identity/account_holder/service/AccountHolderService.java
+--- a/src/main/java/com/ccapp/identity/account_holder/service/AccountHolderService.java	(revision c57b80e23d00fb6fbcd960a5297cc575163af3a0)
++++ b/src/main/java/com/ccapp/identity/account_holder/service/AccountHolderService.java	(date 1774352157178)
+@@ -77,6 +77,28 @@
+         return created;
+     }
+ 
++    @Transactional
++    public AccountHolder selectCountry(UUID accountHolderId, String requestedCountryCode) {
++        log.info("AccountHolderService selectCountry accountHolderId={} requestedCountryCode={}", accountHolderId, requestedCountryCode);
++        AccountHolder accountHolder = getById(accountHolderId);
++        String selectedCountryCode = countryService.resolveSelectedCountryOrThrow(requestedCountryCode).getCode();
++        String serviceCountryCode = countryService.resolveServiceCountryForSelection(selectedCountryCode).getCode();
++
++        if (accountHolder.getCountryCode() != null && !accountHolder.getCountryCode().equalsIgnoreCase(selectedCountryCode)) {
++            log.warn("AccountHolderService selectCountry denied immutable country accountHolderId={} currentCountry={} requestedCountry={}",
++                    accountHolderId, accountHolder.getCountryCode(), selectedCountryCode);
++            throw new BusinessException("Account holder country is immutable");
++        }
++
++        accountHolder.setCountryCode(selectedCountryCode);
++        accountHolder.setServiceCountryCode(serviceCountryCode);
++        AccountHolder saved = accountHolderRepository.save(accountHolder);
++        log.info("AccountHolderService selectCountry success accountHolderId={} countryCode={} serviceCountryCode={}",
++                saved.getId(), saved.getCountryCode(), saved.getServiceCountryCode());
++        countryChartOfAccountsService.findOrCreateWallet(saved);
++        return saved;
++    }
++
+     @Transactional
+     public AccountHolder updateProfile(UUID accountHolderId,
+                                        String firstName,
+Index: src/main/java/com/ccapp/identity/dto/SelectCountryRequest.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/com/ccapp/identity/dto/SelectCountryRequest.java b/src/main/java/com/ccapp/identity/dto/SelectCountryRequest.java
+new file mode 100644
+--- /dev/null	(date 1774352127916)
++++ b/src/main/java/com/ccapp/identity/dto/SelectCountryRequest.java	(date 1774352127916)
+@@ -0,0 +1,11 @@
++package com.ccapp.identity.dto;
++
++import jakarta.validation.constraints.NotBlank;
++import jakarta.validation.constraints.Pattern;
++
++public record SelectCountryRequest(
++        @NotBlank(message = "country is required")
++        @Pattern(regexp = "^[A-Z]{2}$", message = "country must be ISO-2 uppercase")
++        String country
++) {
++}
+Index: .idea/workspace.xml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+><?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<project version=\"4\">\n  <component name=\"AutoImportSettings\">\n    <option name=\"autoReloadType\" value=\"SELECTIVE\" />\n  </component>\n  <component name=\"ChangeListManager\">\n    <list default=\"true\" id=\"b353ea51-7e7b-473f-9dc0-91faa829de30\" name=\"Changes\" comment=\"Fix 500 code status error\" />\n    <option name=\"SHOW_DIALOG\" value=\"false\" />\n    <option name=\"HIGHLIGHT_CONFLICTS\" value=\"true\" />\n    <option name=\"HIGHLIGHT_NON_ACTIVE_CHANGELIST\" value=\"false\" />\n    <option name=\"LAST_RESOLUTION\" value=\"IGNORE\" />\n  </component>\n  <component name=\"EmbeddingIndexingInfo\">\n    <option name=\"cachedIndexableFilesCount\" value=\"1040\" />\n  </component>\n  <component name=\"FileTemplateManagerImpl\">\n    <option name=\"RECENT_TEMPLATES\">\n      <list>\n        <option value=\"Dockerfile\" />\n      </list>\n    </option>\n  </component>\n  <component name=\"Git.Settings\">\n    <option name=\"RECENT_GIT_ROOT_PATH\" value=\"$PROJECT_DIR$\" />\n  </component>\n  <component name=\"GitLabMergeRequestFiltersHistory\">{\n  &quot;lastFilter&quot;: {\n    &quot;state&quot;: &quot;OPENED&quot;,\n    &quot;assignee&quot;: {\n      &quot;type&quot;: &quot;org.jetbrains.plugins.gitlab.mergerequest.ui.filters.GitLabMergeRequestsFiltersValue.MergeRequestsMemberFilterValue.MergeRequestsAssigneeFilterValue&quot;,\n      &quot;username&quot;: &quot;smiledev229&quot;,\n      &quot;fullname&quot;: &quot;Orace EDJO&quot;\n    }\n  }\n}</component>\n  <component name=\"GitLabMergeRequestsSettings\">{\n  &quot;selectedUrlAndAccountId&quot;: {\n    &quot;first&quot;: &quot;https://repo.hesystems-group.com/club-chretien/cc-backend-monolitic.git&quot;,\n    &quot;second&quot;: &quot;bdc0fa4e-f75d-4a66-9991-7b4b0e4ef646&quot;\n  }\n}</component>\n  <component name=\"GitToolBoxStore\">\n    <option name=\"recentBranches\">\n      <RecentBranches>\n        <option name=\"branchesForRepo\">\n          <list>\n            <RecentBranchesForRepo>\n              <option name=\"branches\">\n                <list>\n                  <RecentBranch>\n                    <option name=\"branchName\" value=\"dev\" />\n                    <option name=\"lastUsedInstant\" value=\"1772617406\" />\n                  </RecentBranch>\n                  <RecentBranch>\n                    <option name=\"branchName\" value=\"master\" />\n                    <option name=\"lastUsedInstant\" value=\"1772617405\" />\n                  </RecentBranch>\n                </list>\n              </option>\n              <option name=\"repositoryRootUrl\" value=\"file://$PROJECT_DIR$\" />\n            </RecentBranchesForRepo>\n          </list>\n        </option>\n      </RecentBranches>\n    </option>\n  </component>\n  <component name=\"MavenImportPreferences\">\n    <option name=\"generalSettings\">\n      <MavenGeneralSettings>\n        <option name=\"mavenHomeTypeForPersistence\" value=\"WRAPPER\" />\n      </MavenGeneralSettings>\n    </option>\n  </component>\n  <component name=\"McpProjectServerCommands\">\n    <commands />\n    <urls />\n  </component>\n  <component name=\"ProjectColorInfo\">{\n  &quot;associatedIndex&quot;: 2\n}</component>\n  <component name=\"ProjectId\" id=\"3ARR0KLInnQxlk9jRd78dGlRQfn\" />\n  <component name=\"ProjectViewState\">\n    <option name=\"hideEmptyMiddlePackages\" value=\"true\" />\n    <option name=\"showLibraryContents\" value=\"true\" />\n  </component>\n  <component name=\"PropertiesComponent\">{\n  &quot;keyToString&quot;: {\n    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,\n    &quot;RunOnceActivity.MCP Project settings loaded&quot;: &quot;true&quot;,\n    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,\n    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,\n    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,\n    &quot;RunOnceActivity.restore.workspace.module&quot;: &quot;true&quot;,\n    &quot;Spring Boot.CcAppBackendApplication.executor&quot;: &quot;Run&quot;,\n    &quot;com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1&quot;: &quot;true&quot;,\n    &quot;git-widget-placeholder&quot;: &quot;dev&quot;,\n    &quot;junie.onboarding.icon.badge.shown&quot;: &quot;true&quot;,\n    &quot;kotlin-language-version-configured&quot;: &quot;true&quot;,\n    &quot;last_opened_file_path&quot;: &quot;/home/user/Documents/backoofice&quot;,\n    &quot;settings.editor.selected.configurable&quot;: &quot;preferences.pluginManager&quot;,\n    &quot;to.speed.mode.migration.done&quot;: &quot;true&quot;\n  }\n}</component>\n  <component name=\"RecentsManager\">\n    <key name=\"CopyFile.RECENT_KEYS\">\n      <recent name=\"$PROJECT_DIR$/src/main/resources/firebase\" />\n    </key>\n  </component>\n  <component name=\"RunManager\">\n    <configuration name=\"CcAppBackendApplication\" type=\"SpringBootApplicationConfigurationType\" factoryName=\"Spring Boot\" temporary=\"true\" nameIsGenerated=\"true\">\n      <option name=\"FRAME_DEACTIVATION_UPDATE_POLICY\" value=\"UnknownPolicyInFreeMode\" />\n      <module name=\"cc-app-backend\" />\n      <option name=\"SPRING_BOOT_MAIN_CLASS\" value=\"com.ccapp.CcAppBackendApplication\" />\n      <extension name=\"coverage\">\n        <pattern>\n          <option name=\"PATTERN\" value=\"com.ccapp.*\" />\n          <option name=\"ENABLED\" value=\"true\" />\n        </pattern>\n      </extension>\n      <method v=\"2\">\n        <option name=\"Make\" enabled=\"true\" />\n      </method>\n    </configuration>\n    <recent_temporary>\n      <list>\n        <item itemvalue=\"Spring Boot.CcAppBackendApplication\" />\n      </list>\n    </recent_temporary>\n  </component>\n  <component name=\"SharedIndexes\">\n    <attachedChunks>\n      <set>\n        <option value=\"bundled-jdk-30f59d01ecdd-2fc7cc6b9a17-intellij.indexing.shared.core-IU-253.32098.37\" />\n      </set>\n    </attachedChunks>\n  </component>\n  <component name=\"TaskManager\">\n    <task active=\"true\" id=\"Default\" summary=\"Default task\">\n      <changelist id=\"b353ea51-7e7b-473f-9dc0-91faa829de30\" name=\"Changes\" comment=\"\" />\n      <created>1772553173766</created>\n      <option name=\"number\" value=\"Default\" />\n      <option name=\"presentableId\" value=\"Default\" />\n      <updated>1772553173766</updated>\n    </task>\n    <task id=\"LOCAL-00028\" summary=\"Revue du base name\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773063816250</created>\n      <option name=\"number\" value=\"00028\" />\n      <option name=\"presentableId\" value=\"LOCAL-00028\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773063816250</updated>\n    </task>\n    <task id=\"LOCAL-00029\" summary=\"Revue du base name\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773064844077</created>\n      <option name=\"number\" value=\"00029\" />\n      <option name=\"presentableId\" value=\"LOCAL-00029\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773064844077</updated>\n    </task>\n    <task id=\"LOCAL-00030\" summary=\"Refact de onboarding\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773128986428</created>\n      <option name=\"number\" value=\"00030\" />\n      <option name=\"presentableId\" value=\"LOCAL-00030\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773128986428</updated>\n    </task>\n    <task id=\"LOCAL-00031\" summary=\"Configuration pays\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773131598588</created>\n      <option name=\"number\" value=\"00031\" />\n      <option name=\"presentableId\" value=\"LOCAL-00031\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773131598588</updated>\n    </task>\n    <task id=\"LOCAL-00032\" summary=\"Configuration pays\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773133762062</created>\n      <option name=\"number\" value=\"00032\" />\n      <option name=\"presentableId\" value=\"LOCAL-00032\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773133762062</updated>\n    </task>\n    <task id=\"LOCAL-00033\" summary=\"Refact de pays\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773136059107</created>\n      <option name=\"number\" value=\"00033\" />\n      <option name=\"presentableId\" value=\"LOCAL-00033\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773136059107</updated>\n    </task>\n    <task id=\"LOCAL-00034\" summary=\"Refact de retour api\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773137346445</created>\n      <option name=\"number\" value=\"00034\" />\n      <option name=\"presentableId\" value=\"LOCAL-00034\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773137346445</updated>\n    </task>\n    <task id=\"LOCAL-00035\" summary=\"Ajout de inscription sans phone\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773141624570</created>\n      <option name=\"number\" value=\"00035\" />\n      <option name=\"presentableId\" value=\"LOCAL-00035\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773141624570</updated>\n    </task>\n    <task id=\"LOCAL-00036\" summary=\"Ajout des apis de community\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773150348520</created>\n      <option name=\"number\" value=\"00036\" />\n      <option name=\"presentableId\" value=\"LOCAL-00036\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773150348520</updated>\n    </task>\n    <task id=\"LOCAL-00037\" summary=\"Ajout des apis de community\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773151430123</created>\n      <option name=\"number\" value=\"00037\" />\n      <option name=\"presentableId\" value=\"LOCAL-00037\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773151430123</updated>\n    </task>\n    <task id=\"LOCAL-00038\" summary=\"Revue des configs firebase\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773155647468</created>\n      <option name=\"number\" value=\"00038\" />\n      <option name=\"presentableId\" value=\"LOCAL-00038\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773155647468</updated>\n    </task>\n    <task id=\"LOCAL-00039\" summary=\"Revue des configs firebase\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773156976862</created>\n      <option name=\"number\" value=\"00039\" />\n      <option name=\"presentableId\" value=\"LOCAL-00039\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773156976862</updated>\n    </task>\n    <task id=\"LOCAL-00040\" summary=\"Revue des cors\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773159592488</created>\n      <option name=\"number\" value=\"00040\" />\n      <option name=\"presentableId\" value=\"LOCAL-00040\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773159592488</updated>\n    </task>\n    <task id=\"LOCAL-00041\" summary=\"Ajout de logs\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773161541860</created>\n      <option name=\"number\" value=\"00041\" />\n      <option name=\"presentableId\" value=\"LOCAL-00041\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773161541860</updated>\n    </task>\n    <task id=\"LOCAL-00042\" summary=\"Firebase\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773162136384</created>\n      <option name=\"number\" value=\"00042\" />\n      <option name=\"presentableId\" value=\"LOCAL-00042\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773162136384</updated>\n    </task>\n    <task id=\"LOCAL-00043\" summary=\"Firebase config\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773214146706</created>\n      <option name=\"number\" value=\"00043\" />\n      <option name=\"presentableId\" value=\"LOCAL-00043\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773214146706</updated>\n    </task>\n    <task id=\"LOCAL-00044\" summary=\"Refact\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773248158165</created>\n      <option name=\"number\" value=\"00044\" />\n      <option name=\"presentableId\" value=\"LOCAL-00044\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773248158166</updated>\n    </task>\n    <task id=\"LOCAL-00045\" summary=\"Correction de la configuration firebase\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773265272409</created>\n      <option name=\"number\" value=\"00045\" />\n      <option name=\"presentableId\" value=\"LOCAL-00045\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773265272409</updated>\n    </task>\n    <task id=\"LOCAL-00046\" summary=\"Correction de la configuration firebase\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773265784930</created>\n      <option name=\"number\" value=\"00046\" />\n      <option name=\"presentableId\" value=\"LOCAL-00046\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773265784931</updated>\n    </task>\n    <task id=\"LOCAL-00047\" summary=\"Firebase location\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773266805186</created>\n      <option name=\"number\" value=\"00047\" />\n      <option name=\"presentableId\" value=\"LOCAL-00047\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773266805186</updated>\n    </task>\n    <task id=\"LOCAL-00048\" summary=\"Reajustement firebase\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773267952307</created>\n      <option name=\"number\" value=\"00048\" />\n      <option name=\"presentableId\" value=\"LOCAL-00048\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773267952307</updated>\n    </task>\n    <task id=\"LOCAL-00049\" summary=\"Config smtp et secret key\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773302320648</created>\n      <option name=\"number\" value=\"00049\" />\n      <option name=\"presentableId\" value=\"LOCAL-00049\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773302320648</updated>\n    </task>\n    <task id=\"LOCAL-00050\" summary=\"Config des secrets key\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773303826976</created>\n      <option name=\"number\" value=\"00050\" />\n      <option name=\"presentableId\" value=\"LOCAL-00050\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773303826977</updated>\n    </task>\n    <task id=\"LOCAL-00051\" summary=\"Ajout de url su back-office\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773304382788</created>\n      <option name=\"number\" value=\"00051\" />\n      <option name=\"presentableId\" value=\"LOCAL-00051\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773304382788</updated>\n    </task>\n    <task id=\"LOCAL-00052\" summary=\"Revue du profil\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773305396216</created>\n      <option name=\"number\" value=\"00052\" />\n      <option name=\"presentableId\" value=\"LOCAL-00052\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773305396216</updated>\n    </task>\n    <task id=\"LOCAL-00053\" summary=\"Mise en place des base mlm\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773306858244</created>\n      <option name=\"number\" value=\"00053\" />\n      <option name=\"presentableId\" value=\"LOCAL-00053\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773306858245</updated>\n    </task>\n    <task id=\"LOCAL-00054\" summary=\"Mise en place des base mlm commissions\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773312360936</created>\n      <option name=\"number\" value=\"00054\" />\n      <option name=\"presentableId\" value=\"LOCAL-00054\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773312360938</updated>\n    </task>\n    <task id=\"LOCAL-00055\" summary=\"Revue des migrations flyway\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773656352150</created>\n      <option name=\"number\" value=\"00055\" />\n      <option name=\"presentableId\" value=\"LOCAL-00055\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773656352151</updated>\n    </task>\n    <task id=\"LOCAL-00056\" summary=\"Revue des migrations flyway\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773656970302</created>\n      <option name=\"number\" value=\"00056\" />\n      <option name=\"presentableId\" value=\"LOCAL-00056\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773656970302</updated>\n    </task>\n    <task id=\"LOCAL-00057\" summary=\"Ajout de fonctionnalités\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773673787607</created>\n      <option name=\"number\" value=\"00057\" />\n      <option name=\"presentableId\" value=\"LOCAL-00057\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773673787607</updated>\n    </task>\n    <task id=\"LOCAL-00058\" summary=\"Revue des configs\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773762631389</created>\n      <option name=\"number\" value=\"00058\" />\n      <option name=\"presentableId\" value=\"LOCAL-00058\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773762631389</updated>\n    </task>\n    <task id=\"LOCAL-00059\" summary=\"Revue des configs\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773838409831</created>\n      <option name=\"number\" value=\"00059\" />\n      <option name=\"presentableId\" value=\"LOCAL-00059\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773838409832</updated>\n    </task>\n    <task id=\"LOCAL-00060\" summary=\"Refactoring configs\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773841922271</created>\n      <option name=\"number\" value=\"00060\" />\n      <option name=\"presentableId\" value=\"LOCAL-00060\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773841922271</updated>\n    </task>\n    <task id=\"LOCAL-00061\" summary=\"Refactoring configs pays\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773845111981</created>\n      <option name=\"number\" value=\"00061\" />\n      <option name=\"presentableId\" value=\"LOCAL-00061\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773845111981</updated>\n    </task>\n    <task id=\"LOCAL-00062\" summary=\"Refactoring\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773908751919</created>\n      <option name=\"number\" value=\"00062\" />\n      <option name=\"presentableId\" value=\"LOCAL-00062\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773908751919</updated>\n    </task>\n    <task id=\"LOCAL-00063\" summary=\"Resolve error\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773911030186</created>\n      <option name=\"number\" value=\"00063\" />\n      <option name=\"presentableId\" value=\"LOCAL-00063\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773911030186</updated>\n    </task>\n    <task id=\"LOCAL-00064\" summary=\"chat et revue\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773918601729</created>\n      <option name=\"number\" value=\"00064\" />\n      <option name=\"presentableId\" value=\"LOCAL-00064\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773918601729</updated>\n    </task>\n    <task id=\"LOCAL-00065\" summary=\"revue de post\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773919792847</created>\n      <option name=\"number\" value=\"00065\" />\n      <option name=\"presentableId\" value=\"LOCAL-00065\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773919792848</updated>\n    </task>\n    <task id=\"LOCAL-00066\" summary=\"revue de countries\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773925927114</created>\n      <option name=\"number\" value=\"00066\" />\n      <option name=\"presentableId\" value=\"LOCAL-00066\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773925927114</updated>\n    </task>\n    <task id=\"LOCAL-00067\" summary=\"Revue model comptable\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773992896543</created>\n      <option name=\"number\" value=\"00067\" />\n      <option name=\"presentableId\" value=\"LOCAL-00067\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773992896544</updated>\n    </task>\n    <task id=\"LOCAL-00068\" summary=\"Revue model comptable\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773993829626</created>\n      <option name=\"number\" value=\"00068\" />\n      <option name=\"presentableId\" value=\"LOCAL-00068\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773993829626</updated>\n    </task>\n    <task id=\"LOCAL-00069\" summary=\"Revue model comptable\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1773999281401</created>\n      <option name=\"number\" value=\"00069\" />\n      <option name=\"presentableId\" value=\"LOCAL-00069\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1773999281401</updated>\n    </task>\n    <task id=\"LOCAL-00070\" summary=\"Gestion des admins\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1774017286650</created>\n      <option name=\"number\" value=\"00070\" />\n      <option name=\"presentableId\" value=\"LOCAL-00070\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1774017286650</updated>\n    </task>\n    <task id=\"LOCAL-00071\" summary=\"Gestion des admins\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1774018084800</created>\n      <option name=\"number\" value=\"00071\" />\n      <option name=\"presentableId\" value=\"LOCAL-00071\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1774018084800</updated>\n    </task>\n    <task id=\"LOCAL-00072\" summary=\"Config mail\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1774018603106</created>\n      <option name=\"number\" value=\"00072\" />\n      <option name=\"presentableId\" value=\"LOCAL-00072\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1774018603106</updated>\n    </task>\n    <task id=\"LOCAL-00073\" summary=\"Config mail revue\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1774019255113</created>\n      <option name=\"number\" value=\"00073\" />\n      <option name=\"presentableId\" value=\"LOCAL-00073\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1774019255113</updated>\n    </task>\n    <task id=\"LOCAL-00074\" summary=\"Config mail revue\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1774020347773</created>\n      <option name=\"number\" value=\"00074\" />\n      <option name=\"presentableId\" value=\"LOCAL-00074\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1774020347773</updated>\n    </task>\n    <task id=\"LOCAL-00075\" summary=\"Correction du bug\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1774297431005</created>\n      <option name=\"number\" value=\"00075\" />\n      <option name=\"presentableId\" value=\"LOCAL-00075\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1774297431006</updated>\n    </task>\n    <task id=\"LOCAL-00076\" summary=\"Fix 500 code status error\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1774344767938</created>\n      <option name=\"number\" value=\"00076\" />\n      <option name=\"presentableId\" value=\"LOCAL-00076\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1774344767938</updated>\n    </task>\n    <option name=\"localTasksCounter\" value=\"77\" />\n    <servers />\n  </component>\n  <component name=\"Vcs.Log.Tabs.Properties\">\n    <option name=\"TAB_STATES\">\n      <map>\n        <entry key=\"MAIN\">\n          <value>\n            <State />\n          </value>\n        </entry>\n      </map>\n    </option>\n  </component>\n  <component name=\"VcsManagerConfiguration\">\n    <MESSAGE value=\"Correction de la configuration firebase\" />\n    <MESSAGE value=\"Firebase location\" />\n    <MESSAGE value=\"Reajustement firebase\" />\n    <MESSAGE value=\"Config smtp et secret key\" />\n    <MESSAGE value=\"Config des secrets key\" />\n    <MESSAGE value=\"Ajout de url su back-office\" />\n    <MESSAGE value=\"Revue du profil\" />\n    <MESSAGE value=\"Mise en place des base mlm\" />\n    <MESSAGE value=\"Mise en place des base mlm commissions\" />\n    <MESSAGE value=\"Revue des migrations flyway\" />\n    <MESSAGE value=\"Ajout de fonctionnalités\" />\n    <MESSAGE value=\"Revue des configs\" />\n    <MESSAGE value=\"Refactoring configs\" />\n    <MESSAGE value=\"Refactoring configs pays\" />\n    <MESSAGE value=\"Refactoring\" />\n    <MESSAGE value=\"Resolve error\" />\n    <MESSAGE value=\"chat et revue\" />\n    <MESSAGE value=\"revue de post\" />\n    <MESSAGE value=\"revue de countries\" />\n    <MESSAGE value=\"Revue model comptable\" />\n    <MESSAGE value=\"Gestion des admins\" />\n    <MESSAGE value=\"Config mail\" />\n    <MESSAGE value=\"Config mail revue\" />\n    <MESSAGE value=\"Correction du bug\" />\n    <MESSAGE value=\"Fix 500 code status error\" />\n    <option name=\"LAST_COMMIT_MESSAGE\" value=\"Fix 500 code status error\" />\n  </component>\n  <component name=\"XSLT-Support.FileAssociations.UIState\">\n    <expand />\n    <select />\n  </component>\n</project>
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/.idea/workspace.xml b/.idea/workspace.xml
+--- a/.idea/workspace.xml	(revision c57b80e23d00fb6fbcd960a5297cc575163af3a0)
++++ b/.idea/workspace.xml	(date 1774352769143)
+@@ -4,7 +4,17 @@
+     <option name="autoReloadType" value="SELECTIVE" />
+   </component>
+   <component name="ChangeListManager">
+-    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Fix 500 code status error" />
++    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Le onbording ready for test">
++      <change afterPath="$PROJECT_DIR$/BACKEND_DOCUMENTATION.txt" afterDir="false" />
++      <change afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/dto/SelectCountryRequest.java" afterDir="false" />
++      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/service/CircleService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/service/CircleService.java" afterDir="false" />
++      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/account_holder/service/AccountHolderService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/account_holder/service/AccountHolderService.java" afterDir="false" />
++      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/controller/IdentityController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/controller/IdentityController.java" afterDir="false" />
++      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/service/IdentityOnboardingService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/service/IdentityOnboardingService.java" afterDir="false" />
++      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/service/IdentityService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/service/IdentityService.java" afterDir="false" />
++      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/mobile/home/dto/MobileHomeDashboardResponse.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/mobile/home/dto/MobileHomeDashboardResponse.java" afterDir="false" />
++      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/mobile/home/service/HomeFacadeService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/mobile/home/service/HomeFacadeService.java" afterDir="false" />
++    </list>
+     <option name="SHOW_DIALOG" value="false" />
+     <option name="HIGHLIGHT_CONFLICTS" value="true" />
+     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+@@ -141,14 +151,6 @@
+       <option name="number" value="Default" />
+       <option name="presentableId" value="Default" />
+       <updated>1772553173766</updated>
+-    </task>
+-    <task id="LOCAL-00028" summary="Revue du base name">
+-      <option name="closed" value="true" />
+-      <created>1773063816250</created>
+-      <option name="number" value="00028" />
+-      <option name="presentableId" value="LOCAL-00028" />
+-      <option name="project" value="LOCAL" />
+-      <updated>1773063816250</updated>
+     </task>
+     <task id="LOCAL-00029" summary="Revue du base name">
+       <option name="closed" value="true" />
+@@ -534,7 +536,15 @@
+       <option name="project" value="LOCAL" />
+       <updated>1774344767938</updated>
+     </task>
+-    <option name="localTasksCounter" value="77" />
++    <task id="LOCAL-00077" summary="Fix migrantion and beans error">
++      <option name="closed" value="true" />
++      <created>1774347879005</created>
++      <option name="number" value="00077" />
++      <option name="presentableId" value="LOCAL-00077" />
++      <option name="project" value="LOCAL" />
++      <updated>1774347879005</updated>
++    </task>
++    <option name="localTasksCounter" value="78" />
+     <servers />
+   </component>
+   <component name="Vcs.Log.Tabs.Properties">
+@@ -549,8 +559,6 @@
+     </option>
+   </component>
+   <component name="VcsManagerConfiguration">
+-    <MESSAGE value="Correction de la configuration firebase" />
+-    <MESSAGE value="Firebase location" />
+     <MESSAGE value="Reajustement firebase" />
+     <MESSAGE value="Config smtp et secret key" />
+     <MESSAGE value="Config des secrets key" />
+@@ -574,7 +582,9 @@
+     <MESSAGE value="Config mail revue" />
+     <MESSAGE value="Correction du bug" />
+     <MESSAGE value="Fix 500 code status error" />
+-    <option name="LAST_COMMIT_MESSAGE" value="Fix 500 code status error" />
++    <MESSAGE value="Fix migrantion and beans error" />
++    <MESSAGE value="Le onbording ready for test" />
++    <option name="LAST_COMMIT_MESSAGE" value="Le onbording ready for test" />
+   </component>
+   <component name="XSLT-Support.FileAssociations.UIState">
+     <expand />
+Index: src/main/java/com/ccapp/mobile/home/dto/MobileHomeDashboardResponse.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>package com.ccapp.mobile.home.dto;\n\nimport java.math.BigDecimal;\nimport java.time.OffsetDateTime;\nimport java.util.List;\nimport java.util.UUID;\n\npublic record MobileHomeDashboardResponse(\n        UserSection user,\n        WalletSection wallet,\n        EngagementSection engagement,\n        NextActionSection nextAction,\n        CircleSection circle,\n        List<QuickAction> quickActions,\n        FinancingSection financing\n) {\n    public record UserSection(\n            String firstName,\n            String profilePicture,\n            String membershipType\n    ) {\n    }\n\n    public record WalletSection(\n            BigDecimal balance,\n            String currency\n    ) {\n    }\n\n    public record EngagementSection(\n            int streakDays,\n            List<TodayTask> todayTasks,\n            ProgressSection progress\n    ) {\n    }\n\n    public record TodayTask(\n            UUID id,\n            String title,\n            boolean completed,\n            String type\n    ) {\n    }\n\n    public record ProgressSection(\n            int completed,\n            int total\n    ) {\n    }\n\n    public record NextActionSection(\n            String type,\n            String title,\n            String description,\n            String ctaLabel,\n            String ctaAction\n    ) {\n    }\n\n    public record CircleSection(\n            boolean hasCircle,\n            List<RecentActivity> recentActivities\n    ) {\n    }\n\n    public record RecentActivity(\n            String userName,\n            String message,\n            OffsetDateTime timestamp\n    ) {\n    }\n\n    public record QuickAction(\n            String type,\n            String label\n    ) {\n    }\n\n    public record FinancingSection(\n            int progressPercent,\n            BigDecimal remainingAmount,\n            BigDecimal targetAmount\n    ) {\n    }\n}\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/com/ccapp/mobile/home/dto/MobileHomeDashboardResponse.java b/src/main/java/com/ccapp/mobile/home/dto/MobileHomeDashboardResponse.java
+--- a/src/main/java/com/ccapp/mobile/home/dto/MobileHomeDashboardResponse.java	(revision c57b80e23d00fb6fbcd960a5297cc575163af3a0)
++++ b/src/main/java/com/ccapp/mobile/home/dto/MobileHomeDashboardResponse.java	(date 1774351602472)
+@@ -7,7 +7,6 @@
+ 
+ public record MobileHomeDashboardResponse(
+         UserSection user,
+-        WalletSection wallet,
+         EngagementSection engagement,
+         NextActionSection nextAction,
+         CircleSection circle,
+@@ -21,12 +20,6 @@
+     ) {
+     }
+ 
+-    public record WalletSection(
+-            BigDecimal balance,
+-            String currency
+-    ) {
+-    }
+-
+     public record EngagementSection(
+             int streakDays,
+             List<TodayTask> todayTasks,
+Index: BACKEND_DOCUMENTATION.txt
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/BACKEND_DOCUMENTATION.txt b/BACKEND_DOCUMENTATION.txt
+new file mode 100644
+--- /dev/null	(date 1774348301147)
++++ b/BACKEND_DOCUMENTATION.txt	(date 1774348301147)
+@@ -0,0 +1,1777 @@
++================================================================================
++          CC-APP BACKEND — DOCUMENTATION TECHNIQUE COMPLÈTE
++          cc-app-backend-v2-monolitic
++================================================================================
++
++Date de rédaction : 2026-03-24
++Auteur de la doc   : Claude Code (basé sur analyse complète du code source)
++Branche analysée   : dev
++
++================================================================================
++TABLE DES MATIÈRES
++================================================================================
++
++  1.  Vue d'ensemble du projet
++  2.  Stack technique & dépendances
++  3.  Architecture générale
++  4.  Configuration & démarrage
++  5.  Sécurité & authentification
++  6.  Module Admin
++  7.  Module Identity
++  8.  Module Wallet
++  9.  Module Circles (Tontines)
++  10. Module Circle Social
++  11. Module Community
++  12. Module Credit & Scoring
++  13. Module Financing (Partenaires)
++  14. Module Payments & PSP
++  15. Module Commissions MLM
++  16. Module Subscriptions
++  17. Module MLM
++  18. Module Capital
++  19. Module Ledger (Comptabilité)
++  20. Module Country
++  21. Module Platform
++  22. Module Progress & Tâches
++  23. Module Media & KYC
++  24. Module Chat
++  25. Module Notifications
++  26. Module Agent
++  27. Module Mobile
++  28. Module Common (Partagé)
++  29. Événements & Listeners
++  30. Jobs planifiés (Scheduled Jobs)
++  31. Flux métier principaux
++  32. Statistiques du projet
++
++================================================================================
++1. VUE D'ENSEMBLE DU PROJET
++================================================================================
++
++Nom          : CC-APP Backend (Club Chrétien Application)
++Type         : Monolithe modulaire fintech
++Rôle         : API backend pour application mobile de tontines, microfinance,
++               MLM, épargne rotative et financement communautaire
++Déploiement  : Dockerisé, derrière API Gateway (api-gateway.clubchretien.org)
++Chemin API   : /cc-backend-monolitic/
++
++Le backend est organisé en modules (packages) thématiques, chacun avec ses
++propres controllers, services, entités, repositories et DTOs.
++
++================================================================================
++2. STACK TECHNIQUE & DÉPENDANCES
++================================================================================
++
++  Langage         : Java 21
++  Framework       : Spring Boot 3.5.11
++  Base de données : PostgreSQL
++  Migrations DB   : Flyway
++  ORM             : Spring Data JPA / Hibernate
++  Sécurité        : Spring Security
++  Auth mobile     : Firebase Admin SDK 9.2.0
++  Stockage objet  : Minio (compatible S3) + AWS S3 SDK 2.25.66
++  Mapping DTO     : MapStruct 1.5.5.Final
++  Réduction code  : Project Lombok
++  Documentation   : SpringDoc OpenAPI 2.8.16 (Swagger UI)
++  WebSocket       : Spring WebSocket (chat temps réel)
++  SMS/WhatsApp    : Africa's Talking
++  Tests           : Spring Boot Test, H2 (in-memory pour tests)
++  Build           : Maven
++  Conteneur       : Docker (image spotify-docker-maven-plugin)
++
++Profils disponibles : dev, prod, staging
++
++================================================================================
++3. ARCHITECTURE GÉNÉRALE
++================================================================================
++
++Le projet suit une architecture "Modular Monolith" (monolithe modulaire) :
++- Un seul déploiement (pas de microservices)
++- Modules séparés par domaine métier avec frontières claires
++- Communication interne via événements Spring (ApplicationEvent)
++- Pas de couplage direct entre modules (via interfaces ou events)
++
++Structure des packages :
++  com.ccapp
++  ├── admin/           → Back-office administrateur
++  ├── identity/        → Identité, authentification, wallets, délégation
++  ├── wallet/          → Transactions wallet
++  ├── circles/         → Tontines (ROSCA)
++  ├── circlesocial/    → Social & engagement dans les cercles
++  ├── community/       → Posts, commentaires, chat communautaire
++  ├── credit/          → Scoring crédit & prêts internes
++  ├── financing/       → Partenaires financiers & dossiers externes
++  ├── payments/        → PSP, commissions, abonnements
++  ├── mlm/             → Réseau MLM multi-niveau
++  ├── capital/         → Pool de capital
++  ├── ledger/          → Comptabilité double entrée
++  ├── country/         → Configuration multi-pays
++  ├── platform/        → Configuration plateforme
++  ├── progress/        → Suivi progression utilisateur
++  ├── media/           → Fichiers, KYC
++  ├── chat/            → Messagerie temps réel
++  ├── notifications/   → Notifications multi-canaux
++  ├── agent/           → Agents terrain
++  ├── mobile/          → Endpoints spécifiques mobile
++  ├── observability/   → Traces HTTP
++  └── common/          → Utilitaires partagés
++
++Statistiques du code source :
++  - Fichiers Java totaux    : ~877
++  - Controllers             : 53
++  - Services                : 119
++  - Repositories            : 109
++  - Entités JPA             : 100+
++  - DTOs (Records/Classes)  : 200+
++  - Enums                   : 80+
++  - Événements              : 15+
++  - Classes de config       : 10+
++
++================================================================================
++4. CONFIGURATION & DÉMARRAGE
++================================================================================
++
++Point d'entrée : com.ccapp.CcAppBackendApplication
++  - @SpringBootApplication
++  - @EnableCaching
++  - Lance l'application Spring Boot standard
++
++Fichiers de configuration :
++  src/main/resources/
++  ├── application.properties         → Config principale (toutes env)
++  ├── application-dev.properties     → Overrides développement
++  └── application-prod.properties    → Overrides production
++
++Propriétés principales :
++
++  # Base de données
++  spring.datasource.url=jdbc:postgresql://...
++  spring.jpa.hibernate.ddl-auto=validate      ← ne modifie pas le schéma
++  spring.flyway.enabled=true                  ← migrations automatiques
++
++  # Admin JWT
++  admin.jwt.secret=<secret>
++  admin.jwt.access-token-ttl-minutes=480      ← 8 heures de session admin
++
++  # TOTP (2FA)
++  admin.totp.issuer=CC-APP Back Office
++
++  # Firebase
++  firebase.credentials.path=<chemin JSON>
++  firebase.project-id=<project_id>
++
++  # Minio (stockage fichiers)
++  media.storage.endpoint=<url_minio>
++  media.bucket.public=cc-media-public
++  media.bucket.private=cc-media-private
++  media.bucket.kyc=cc-media-kyc
++  media.upload-url-ttl-minutes=15
++
++  # SMS/WhatsApp (Africa's Talking)
++  africas-talking.api-key=<key>
++  africas-talking.username=<username>
++
++  # MLM Bonus hebdomadaire
++  mlm.group-bonus.currency=XOF
++  mlm.group-bonus.cron=0 55 23 * * SUN     ← dimanche 23h55
++
++  # Invitations admin
++  admin.invitation.default-expiration-hours=72
++
++  # Cercles
++  circles.invite.default-expiration-hours=72
++  circles.invite.base-url=https://app.ccapp.com/circles/join
++
++  # Vérification téléphone
++  identity.phone-verification.code-length=6
++  identity.phone-verification.ttl-seconds=300
++
++  # CORS
++  app.cors.allowed-origins=http://localhost:4200,...
++
++  # PSP Jawupay
++  psp.jawupay.hmac-secret=<secret>
++  psp.jawupay.mock-enabled=false
++
++Migrations Flyway :
++  Répertoire : src/main/resources/db/migration/
++  Format     : V{version}__{description}.sql
++  Dialecte   : PostgreSQL
++
++================================================================================
++5. SÉCURITÉ & AUTHENTIFICATION
++================================================================================
++
++Classe principale : com.ccapp.config.SecurityConfig
++
++Le backend utilise 3 mécanismes d'authentification distincts selon le type
++de client :
++
++--- 5.1 Firebase Authentication (utilisateurs mobiles) ---
++
++  Filtre  : FirebaseAuthenticationFilter
++  Fonctionnement :
++    - Le client mobile envoie un token Firebase dans le header Authorization
++    - Le filtre valide le token via Firebase Admin SDK
++    - Extrait les claims (uid, email, rôles)
++    - Crée un SecurityContext Spring pour la requête
++
++  Services :
++    - FirebaseTokenVerifier      → vérifie les tokens utilisateurs
++    - FirebaseAdminTokenVerifier → vérifie les tokens admin Firebase
++
++--- 5.2 Admin JWT (back-office administrateur) ---
++
++  Filtre  : AdminJwtAuthenticationFilter
++  Fonctionnement :
++    - Admin se connecte via POST /api/admin/auth/login (email + password)
++    - Reçoit un temporaryToken si 2FA requis
++    - Valide le code TOTP (Google Authenticator) via POST /api/admin/auth/verify-2fa
++    - Reçoit un JWT signé (TTL : 480 min = 8h)
++    - Le filtre vérifie ce JWT sur chaque requête admin
++    - Extrait le rôle admin du payload JWT
++
++  Service 2FA : TotpService
++    - Génère un secret TOTP par admin (stocké en base, hashé)
++    - Compatible Google Authenticator / Authy
++
++--- 5.3 API Key (APIs internes et partenaires) ---
++
++  Filtre : ApiKeyAuthenticationFilter
++  Fonctionnement :
++    - Clé API dans le header X-Api-Key (ou similaire)
++    - Utilisé pour les appels internes et les intégrations partenaires
++
++--- 5.4 Rôles admin ---
++
++  ROLE_SUPER_ADMIN    → Accès total, gestion des autres admins
++  ROLE_COUNTRY_ADMIN  → Gestion d'un pays spécifique
++  ROLE_IMF_ADMIN      → Gestion des IMF/partenaires financiers
++  ROLE_OPERATIONS     → Opérations courantes
++  ROLE_SUPPORT        → Support client, lecture seule
++  INTERNAL            → APIs internes machine-à-machine
++
++--- 5.5 Règles d'accès ---
++
++  - CSRF désactivé (API REST stateless)
++  - Sessions : STATELESS (pas de session serveur)
++  - CORS configuré pour les origines autorisées
++  - Endpoints publics : /public/**, /api/admin/auth/**,
++    /psp/jawupay/callback, /ws/**
++
++================================================================================
++6. MODULE ADMIN
++================================================================================
++
++Package : com.ccapp.admin
++
++Rôle : Fournit tous les endpoints du back-office administrateur pour gérer
++la plateforme, les utilisateurs, les finances, les pays, et les admins.
++
++--- 6.1 AdminAuthController ---
++  Base URL : /api/admin/auth
++
++  POST /login
++    - Body : { email, password }
++    - Retourne : { temporaryToken, requiresTwoFactor, requiresTwoFactorSetup }
++    - Vérifie les credentials de l'admin en base
++    - Si 2FA activé → retourne temporaryToken pour étape suivante
++
++  POST /verify-2fa
++    - Body : { temporaryToken, code }
++    - Valide le code TOTP de 6 chiffres
++    - Retourne le JWT définitif : { token, user }
++
++  POST /setup-2fa
++    - Body : { challengeToken, code }
++    - Pour les admins qui configurent leur 2FA pour la première fois
++    - Retourne : { secret, qrCodeUrl, otpAuthUrl, manualEntryKey }
++
++  POST /accept-invitation
++    - Body : { invitationToken, password }
++    - Permet à un admin invité de créer son compte
++    - Active l'account (status → ACTIVE)
++
++--- 6.2 AdminInvitationController ---
++  Base URL : /api/admin/invitations
++  Auth requise : Admin JWT
++  Note : La plupart des actions nécessitent ROLE_SUPER_ADMIN
++
++  GET /admin-accounts
++    - Liste tous les comptes admin existants (AdminAccountSummaryResponse[])
++    - Inclut : id, email, role, countryId, countryCode, status, twoFactorEnabled,
++               createdAt, activatedAt
++    - Accessible à tous les rôles admin
++
++  POST /
++    - Body : { email, role, countryId, expiresInHours? }
++    - Crée une invitation par email pour un nouvel admin
++    - Validation : SUPER_ADMIN sans countryId, autres rôles avec countryId
++    - Expire après 72h par défaut
++    - Envoie un email d'invitation (AdminInvitationNotifier)
++    - Requiert ROLE_SUPER_ADMIN
++
++  GET /
++    - Liste toutes les invitations (AdminInvitationResponse[])
++    - Inclut : id, email, role, countryId, status (PENDING/ACCEPTED/EXPIRED),
++               expiresAt, createdAt
++
++  POST /{id}/resend
++    - Renvoie l'email d'invitation (régénère le token)
++    - Requiert ROLE_SUPER_ADMIN + invitation PENDING et non expirée
++
++  POST /{id}/revoke
++    - Révoque une invitation (status → EXPIRED, expiresAt → maintenant)
++    - Ne peut pas révoquer une invitation déjà ACCEPTED
++    - Requiert ROLE_SUPER_ADMIN
++
++  POST /admin-accounts/{id}/disable   ← AJOUTÉ (session courante)
++    - Désactive un compte admin (status → DISABLED)
++    - Erreur si déjà DISABLED
++    - Requiert ROLE_SUPER_ADMIN
++    - Log audit : DISABLE_ADMIN_ACCOUNT
++
++  POST /admin-accounts/{id}/enable    ← AJOUTÉ (session courante)
++    - Réactive un compte admin désactivé (status → ACTIVE)
++    - Erreur si status != DISABLED
++    - Requiert ROLE_SUPER_ADMIN
++    - Log audit : ENABLE_ADMIN_ACCOUNT
++
++  PUT /admin-accounts/{id}/role       ← AJOUTÉ (session courante)
++    - Change le rôle d'un admin existant
++    - Body : { role, countryId }
++    - Validation : SUPER_ADMIN → countryId null, autres → countryId obligatoire
++    - Requiert ROLE_SUPER_ADMIN
++    - Log audit : CHANGE_ADMIN_ROLE
++
++--- 6.3 AdminUserController ---
++  Base URL : /api/admin/users
++
++  GET /
++    - Liste tous les utilisateurs de la plateforme
++    - Retourne : AdminPlatformUserResponse[] (paginé)
++
++  GET /{accountHolderId}
++    - Détail complet d'un utilisateur
++    - Inclut : profil, statut KYC, prêts actifs, cercles, wallets
++
++  POST /{accountHolderId}/block
++    - Bloque un compte utilisateur
++    - Status → BLOCKED, raison : "Blocked by admin back office"
++
++  POST /{accountHolderId}/unblock
++    - Débloque un compte utilisateur
++    - Status → ACTIVE
++
++--- 6.4 AdminLedgerExplorerController ---
++  Base URL : /api/admin/finance
++
++  GET /ledger
++    - Explore les écritures comptables avec filtres
++    - Params : accountCode?, operationType?, fromDate?, toDate?, page=0, size=20
++    - MAX size : 100 entrées par page
++    - Requête JPQL avec join fetch sur Event et Operation
++    - Fix appliqué : countQuery explicite pour éviter l'erreur 500 sur pagination
++      (le join fetch ne peut pas être dans la count query automatique)
++
++--- 6.5 AdminDashboardController ---
++  Base URL : /api/admin/dashboard
++
++  GET /
++    - Métriques globales de la plateforme :
++      nombre d'utilisateurs actifs, volume de transactions,
++      cercles actifs, dossiers de financement en attente, etc.
++
++--- 6.6 AdminCircleController ---
++  Gestion et surveillance des cercles de tontine :
++  - Liste de tous les cercles (avec filtres pays, statut)
++  - Détail d'un cercle et de ses membres
++  - Actions d'administration sur les cercles
++
++--- 6.7 AdminWalletMonitoringController ---
++  Surveillance des wallets et transactions :
++  - Volume de transactions par période
++  - Alertes AML (anti-blanchiment)
++  - Réconciliation des soldes
++
++--- 6.8 AdminMlmMonitoringController ---
++  Monitoring du réseau MLM :
++  - Santé du réseau, métriques d'activité
++  - Volume hebdomadaire par leg
++  - Reconstruction du ledger MLM si nécessaire
++
++--- 6.9 AdminCountryConfigController ---
++  Configuration par pays :
++  - Activation/désactivation de pays
++  - Plan comptable par pays
++  - Mapping des comptes systèmes
++
++--- 6.10 AdminTreasuryController ---
++  Gestion de la trésorerie :
++  - Comptes de trésorerie
++  - Mouvements de fonds
++  - Réconciliation bancaire
++
++--- 6.11 AdminCapitalController ---
++  Gestion des pools de capital :
++  - Création et suivi des fonds
++  - Allocation aux cercles
++
++--- 6.12 AdminLookupController ---
++  Données de référence :
++  - Types de documents, codes pays, devises, etc.
++
++--- Entités Admin ---
++
++  AdminUser
++    - id (UUID, PK)
++    - email (VARCHAR 320, UNIQUE)
++    - passwordHash (VARCHAR 255)
++    - role (AdminRole enum)
++    - countryId (UUID, nullable)
++    - status (AdminUserStatus : INVITED | ACTIVE | DISABLED)
++    - twoFactorEnabled (boolean)
++    - twoFactorSecret (VARCHAR 128, nullable)
++    - createdAt (OffsetDateTime)
++    - activatedAt (OffsetDateTime, nullable)
++    - Index : (role, status), (country_id)
++
++  AdminInvitation
++    - id (UUID, PK)
++    - email (VARCHAR)
++    - role (AdminRole)
++    - countryId (UUID, nullable)
++    - invitationToken (VARCHAR, unique, régénéré à chaque resend)
++    - status (AdminInvitationStatus : PENDING | ACCEPTED | EXPIRED)
++    - expiresAt (OffsetDateTime)
++    - createdAt (OffsetDateTime)
++
++--- Service AdminInvitationService (détail) ---
++
++  createInvitation(request)
++    1. Valide le rôle/countryId
++    2. Vérifie qu'il n'existe pas déjà un admin ACTIF avec cet email
++    3. Expire les invitations PENDING existantes pour cet email
++    4. Crée l'invitation avec token sécurisé (SecureRandom, Base64, 32 bytes)
++    5. Calcule l'expiration (défaut 72h ou custom)
++    6. Envoie l'email (AdminInvitationNotifier)
++
++  disableAccount(id)  ← NOUVEAU
++    1. Charge l'AdminUser (NotFoundException si absent)
++    2. Vérifie que status != DISABLED (BusinessException sinon)
++    3. Met status = DISABLED
++    4. Retourne AdminAccountSummaryResponse avec countryCode résolu
++
++  enableAccount(id)  ← NOUVEAU
++    1. Charge l'AdminUser (NotFoundException si absent)
++    2. Vérifie que status == DISABLED (BusinessException sinon)
++    3. Met status = ACTIVE
++    4. Retourne AdminAccountSummaryResponse avec countryCode résolu
++
++  changeRole(id, newRole, newCountryId)  ← NOUVEAU
++    1. Valide la cohérence rôle/countryId
++    2. Charge l'AdminUser (NotFoundException si absent)
++    3. Met à jour role et countryId
++    4. Retourne AdminAccountSummaryResponse avec countryCode résolu
++
++--- Service AdminAuditService ---
++  Enregistre chaque action admin en base :
++  logAction(adminUserId, action, resourceType, resourceId, details)
++  Exemples : LIST_ADMIN_ACCOUNTS, DISABLE_ADMIN_ACCOUNT, CHANGE_ADMIN_ROLE,
++             BLOCK_USER, CREATE_FINANCING_OFFER, etc.
++
++================================================================================
++7. MODULE IDENTITY
++================================================================================
++
++Package : com.ccapp.identity
++
++Rôle : Gestion complète de l'identité utilisateur, de l'onboarding multi-étapes,
++de la vérification téléphone, des wallets, et de la délégation de compte.
++
++--- 7.1 Structure interne ---
++
++  identity/           → Identité core, onboarding, profil
++  identity/account_holder/  → Entité AccountHolder
++  identity/app_user/  → AppUser (représentation mobile)
++  identity/delegation/ → Délégation de compte (parent/enfant)
++  identity/verification/ → Vérification OTP téléphone
++  identity/wallet/    → Wallet lié au compte
++
++--- 7.2 IdentityController ---
++  Base URL : /identity
++
++  POST /sync
++    - Synchronise l'identité Firebase ↔ base de données
++    - Crée AccountHolder + User si premier accès
++
++  GET /me
++    - Retourne le profil complet de l'utilisateur connecté
++
++  POST /onboarding + GET /onboarding
++    - Démarre / consulte l'état d'onboarding
++
++  PATCH /onboarding/step-1
++    - Étape 1 : Nom, prénom, date de naissance, genre
++
++  PATCH /onboarding/step-2
++    - Étape 2 : Activité, situation professionnelle
++
++  PATCH /onboarding/step-3
++    - Étape 3 : Capital initial, consentement
++
++--- 7.3 AccountHolder (Entité centrale) ---
++
++  Table : account_holders
++  Champs :
++    - id (UUID, PK)
++    - firstName (VARCHAR)
++    - lastName (VARCHAR)
++    - phoneNumber (VARCHAR)
++    - countryCode (VARCHAR)
++    - serviceCountryCode (VARCHAR)
++    - accountType (AccountType : STANDARD | MERCHANT | AGENT | IMF)
++    - kycStatus (KycStatus : NOT_STARTED | IN_PROGRESS | VERIFIED | REJECTED)
++    - kycVerifiedAt (OffsetDateTime, nullable)
++    - createdAt (OffsetDateTime)
++
++--- 7.4 Délégation de compte ---
++
++  AccountDelegation
++    - Relation parent-enfant entre comptes (famille, tuteur)
++    - Rôles : PARENT, CHILD, GUARDIAN
++    - Statuts : ACTIVE, SUSPENDED, REVOKED
++    - Permet à un parent de gérer le compte d'un enfant
++
++  DelegatedAction
++    - Traçabilité des actions effectuées par délégation
++    - Types : TRANSACTION, LOAN_APPLICATION, etc.
++    - Niveaux de permission : READ, WRITE, EXECUTE
++
++  AssistedMemberVerification
++    - Vérification des membres assistés (agents terrain)
++    - Types : PHONE, BIO, DOCUMENT
++
++--- 7.5 Vérification téléphone ---
++
++  PhoneVerification
++    - Code OTP 6 chiffres
++    - TTL : 300 secondes (5 min)
++    - Canaux : SMS, WHATSAPP, VOICE
++    - Statuts : PENDING, VERIFIED, FAILED, EXPIRED
++
++  Service PhoneVerificationService :
++    1. Génère code aléatoire (length configurable)
++    2. Envoie via Africa's Talking (SMS ou WhatsApp)
++    3. Valide le code soumis
++    4. Expire automatiquement après TTL
++
++================================================================================
++8. MODULE WALLET
++================================================================================
++
++Package : com.ccapp.wallet
++
++Rôle : Opérations financières sur les wallets utilisateurs (solde, paiement,
++dépôt, retrait, réservation de fonds, PIN de sécurité).
++
++--- 8.1 WalletController ---
++  Base URL : /wallet
++  Auth : Firebase JWT
++
++  GET /balance?currency=XOF
++    - Calcule le solde réel depuis le ledger comptable
++    - Retourne : { available, reserved, currency }
++
++  POST /pin
++    - Configure ou modifie le PIN de sécurité
++    - Body : { currentPin?, newPin, confirmPin }
++
++  POST /pay
++    - Paiement P2P wallet-à-wallet par numéro de téléphone
++    - Body : { recipientPhone, amount, currency, description, pin }
++    - Flux : validate PIN → check AML limits → debit ledger → credit dest → notify
++
++  POST /deposit/psp
++    - Initie un dépôt via PSP (Jawupay)
++    - Body : { amount, currency, pspReference }
++
++  POST /withdraw
++    - Retrait vers mobile money
++    - Body : { amount, currency, mobileMoneyNumber, pin }
++
++  POST /reserve
++    - Réserve des fonds (avant confirmation d'une transaction)
++    - Body : { amount, currency, reference }
++
++--- 8.2 Entité Wallet ---
++  Table : wallets
++  Champs :
++    - id (UUID, PK)
++    - accountHolderId (UUID, FK)
++    - mobileMoneyNumber (VARCHAR)
++    - currency (VARCHAR 3)
++    - status (WalletStatus : ACTIVE | FROZEN | CLOSED)
++    - createdAt (OffsetDateTime)
++
++--- 8.3 Services Wallet ---
++
++  WalletBalanceService
++    - Calcule le solde depuis le ledger (somme CREDIT - DEBIT)
++    - Séparation solde disponible / solde réservé
++
++  WalletPaymentService
++    - Vérifie le PIN via WalletSecurityService
++    - Vérifie les limites AML via WalletLimitService
++    - Effectue le débit via WalletDebitFacade
++    - Poste au ledger comptable
++    - Publie un événement de notification
++
++  WalletDepositService
++    - Traite les callbacks PSP
++    - Crédite le wallet via le ledger
++
++  WalletWithdrawalService
++    - Vérifie les fonds disponibles
++    - Initie le virement mobile money
++    - Débite le wallet via le ledger
++
++  WalletGuardService
++    - Règles métier : montant min/max, devises autorisées, limites journalières
++
++  WalletLimitService
++    - Contrôles AML (anti-blanchiment)
++    - Limites configurées par pays
++
++================================================================================
++9. MODULE CIRCLES (TONTINES)
++================================================================================
++
++Package : com.ccapp.circles
++
++Rôle : Gestion complète des cercles d'épargne rotative (ROSCA - Rotating Savings
++and Credit Associations), aussi appelés "tontines".
++
++--- 9.1 CircleController ---
++  Base URL : /circles
++  Auth : Firebase JWT
++
++  POST /
++    - Crée un nouveau cercle
++    - Body : { name, countryCode, configSnapshot }
++
++  GET /
++    - Liste les cercles de l'utilisateur connecté
++
++  GET /my-circle
++    - Retourne le cercle actif principal de l'utilisateur
++
++  POST /{circleId}/join
++    - Rejoint un cercle (via code d'invitation ou lien)
++
++  GET /{circleId}/members
++    - Liste les membres du cercle
++
++  GET /{circleId}/members/{memberId}
++    - Profil détaillé d'un membre
++
++  GET /{circleId}/members/{memberId}/financials
++    - Situation financière d'un membre dans le cercle
++
++  GET /{circleId}/members/{memberId}/history
++    - Historique des transactions d'un membre
++
++  POST /{circleId}/members/{memberId}/interactions
++    - Enregistre une interaction sociale (encouragement, soutien, préoccupation)
++
++--- 9.2 CircleFinanceController ---
++
++  POST /circles/{circleId}/cycles
++    - Crée un nouveau cycle de cotisation
++    - Body : CreateCircleCycleRequest
++
++  GET /circles/{circleId}/cycles
++    - Liste les cycles d'un cercle
++
++  POST /circles/{circleId}/loans
++    - Crée un prêt intra-cercle
++    - Body : CreateCircleLoanRequest
++
++--- 9.3 CircleInviteController ---
++
++  POST /circles/{circleId}/invites
++    - Génère un lien/code d'invitation
++    - TTL : 72h par défaut (configurable)
++
++--- 9.4 CircleLoanRepaymentController ---
++
++  POST /circles/{circleId}/loans/{loanId}/repayments
++    - Enregistre un remboursement de prêt
++    - Met à jour le statut du prêt si entièrement remboursé
++
++--- 9.5 Entités Circles ---
++
++  Circle
++    - id, name, coachId (UUID du coach/animateur), countryCode
++    - configSnapshot (JSON, version figée de la config au moment de création)
++    - configVersion (INT)
++    - status (CircleStatus : ACTIVE | PAUSED | COMPLETED | CANCELLED)
++    - createdAt
++
++  CircleMember
++    - id, circleId, accountHolderId
++    - role (CircleMemberRole : COACH | MEMBER | ASSISTED_MEMBER)
++    - joinedAt, leftAt
++
++  CircleContribution
++    - id, circleId, memberId, cycleId
++    - amount, currency
++    - status (PENDING | PAID | MISSED | WAIVED)
++    - dueDate, paidAt
++
++  CircleCycle
++    - id, circleId, cycleNumber
++    - startDate, endDate
++    - status (ACTIVE | COMPLETED)
++    - beneficiaryMemberId (qui reçoit la collecte ce cycle)
++
++  CircleLoan
++    - id, circleId, borrowerMemberId
++    - amount, currency, interestRate
++    - status (ACTIVE | REPAID | DEFAULT | CANCELLED)
++    - issuedAt, dueDate
++
++  CircleRepayment
++    - id, loanId, memberId
++    - amount, currency
++    - status (PENDING | COMPLETED | OVERDUE)
++    - paidAt
++
++  CircleInvite
++    - id, circleId, createdByMemberId
++    - inviteCode, status (ACTIVE | USED | EXPIRED)
++    - expiresAt, usedAt, usedByAccountHolderId
++
++  CircleMemberInteraction
++    - id, circleId, fromMemberId, toMemberId
++    - type (ENCOURAGEMENT | SUPPORT | CONCERN)
++    - message, createdAt
++
++--- 9.6 Services Circles ---
++
++  CircleService
++    - Création de cercle, ajout/retrait de membres
++    - Gestion du cycle de vie (activation, pause, clôture)
++    - Vérification des règles métier (limite de membres, etc.)
++
++  CircleFinanceService
++    - Création de cycles de cotisation
++    - Calcul des montants dus par membre
++    - Enregistrement des paiements
++    - Génération des prêts intra-cercle
++
++  CircleLoanRepaymentService
++    - Traitement des remboursements
++    - Calcul des intérêts
++    - Mise à jour du statut du prêt
++    - Publication d'événement LoanRepaidEvent si soldé
++
++  CircleInviteService
++    - Génération de codes uniques sécurisés
++    - Validation des invitations (expiration, usage unique)
++    - Tracking des utilisations
++
++  CircleMobileQueryService
++    - Requêtes optimisées pour l'app mobile
++    - Agrégation des données d'affichage
++
++================================================================================
++10. MODULE CIRCLE SOCIAL
++================================================================================
++
++Package : com.ccapp.circlesocial
++
++Rôle : Suivi de l'engagement social, activités et scores des membres dans les cercles.
++
++  CircleActivity   → Journalisation des actions (cotisation, prêt, remboursement)
++  CircleProgress   → Indicateurs de progression par membre
++  CircleScore      → Score d'engagement calculé
++
++  Listeners actifs :
++    - CircleActivityRequestedListener    → crée une activité sur événement
++    - CircleContributionActivityListener → trace les cotisations
++    - LoanRepaidCircleActivityListener   → trace les remboursements de prêts
++
++================================================================================
++11. MODULE COMMUNITY
++================================================================================
++
++Package : com.ccapp.community
++
++Rôle : Réseau social communautaire intégré (posts, commentaires, chat de cercle).
++
++  Entités :
++    - CommunityPost       → Publication d'un utilisateur
++    - PostComment         → Commentaire sur un post
++    - PostLike            → Like/réaction
++    - CircleChatMessage   → Message dans le chat de groupe du cercle
++    - CircleChatReadReceipt → Statut de lecture
++
++  Contrôleurs :
++    - MobileCommunityController → Feed, création de posts, likes, commentaires
++    - CircleChatController      → Chat de groupe en temps réel (WebSocket)
++
++  Services :
++    - CommunityFeedService      → Génération du fil d'actualité
++    - CommunityEngagementService → Suivi des interactions
++    - CommunityAdminService     → Modération (suppression, signalement)
++    - CircleChatService         → Gestion des messages de groupe
++    - PostCreatedNotificationListener → Notifie les membres lors d'un nouveau post
++
++  WebSocket :
++    - Endpoint : /ws/**
++    - Chat en temps réel pour les cercles
++    - Config : ChatWebSocketConfig
++
++================================================================================
++12. MODULE CREDIT & SCORING
++================================================================================
++
++Package : com.ccapp.credit
++
++Rôle : Calcul du score de crédit des utilisateurs et gestion des prêts internes.
++
++--- 12.1 Credit Scoring ---
++
++  Le score est calculé à partir de 5 facteurs pondérés :
++
++  1. ActivityScoreFactor
++     - Analyse l'historique d'activité de l'utilisateur (fréquence, régularité)
++
++  2. CircleGlobalScoreFactor
++     - Performance dans les cercles (taux de participation, historique paiements)
++
++  3. ProgressScoreFactor
++     - Taux de complétion des tâches d'onboarding et formation
++
++  4. RmsScoreFactor
++     - Score de gestion des risques (Risk Management Score)
++
++  5. TrainingScoreFactor
++     - Complétion des modules de formation financière
++
++  CreditEligibility
++    - Stocke le score calculé par compte
++    - Champs : circleId, rmsScore, circleScore, eligibilityScore,
++               maxEligibleAmount, evaluatedAt
++
++--- 12.2 Prêts (Loan) ---
++
++  Entités :
++    - Loan             → Prêt individuel
++    - LoanRepayment    → Remboursement individuel
++    - RepaymentSchedule → Échéancier généré à l'octroi du prêt
++
++  Statuts Loan : ACTIVE | REPAID | DEFAULT | CANCELLED
++  Statuts Installment : PENDING | PAID | OVERDUE | WAIVED
++
++  Flux :
++    1. Calcul du score d'éligibilité
++    2. Vérification du montant maximum éligible
++    3. Création du prêt avec échéancier
++    4. Suivi des remboursements
++    5. Clôture du prêt (publication LoanRepaidEvent)
++
++================================================================================
++13. MODULE FINANCING (PARTENAIRES FINANCIERS)
++================================================================================
++
++Package : com.ccapp.financing
++
++Rôle : Gestion des partenaires financiers externes (banques, IMF, fintechs),
++de leurs offres de prêt/épargne, et des dossiers de financement des utilisateurs.
++
++--- 13.1 AdminFinancialPartnerController ---
++  Base URL : /api/admin/partners
++
++  GET /
++    - Liste les partenaires avec filtres (status, type, countryCode, search, page, size)
++    - Max 100 par page
++
++  POST /
++    - Crée un partenaire financier
++    - Body : { name, type, countryCode, currency, contactEmail, description,
++               supportedProducts[], apiIntegrationType, settlementAccount,
++               apiEndpoint? }
++    - Validation : pays doit exister, compte de règlement doit être actif dans
++                   le plan comptable du pays, au moins 1 produit supporté
++
++  GET /{partnerId}
++    - Détail d'un partenaire
++
++  PUT /{partnerId}
++    - Met à jour un partenaire existant
++
++  PUT /{partnerId}/status
++    - Change le statut (ACTIVE | INACTIVE)
++
++--- 13.2 AdminFinancingOfferController ---
++  Base URL : /api/admin/offers
++
++  GET /
++    - Liste les offres avec filtres (partnerId, status, countryCode, search)
++
++  POST /
++    - Crée une offre de financement
++    - Body : { partnerId, name, type (CREDIT|SAVINGS), minAmount, maxAmount,
++               interestRate, durationMonths, currency, countryCode, description,
++               feesJson, eligibilityRulesJson, requiredDocumentsJson, scoringRulesJson }
++
++  GET /{offerId}
++    - Détail d'une offre
++
++  PUT /{offerId}
++    - Met à jour une offre
++
++  PUT /{offerId}/status
++    - Active ou désactive une offre (ACTIVE | INACTIVE)
++
++  POST /{offerId}/duplicate
++    - Duplique une offre existante (utile pour créer des variantes)
++
++  PUT /{offerId}/countries
++    - Configure les pays pour lesquels l'offre est disponible
++
++--- 13.3 AdminFinancingApplicationController ---
++  Base URL : /api/admin/financing/applications
++
++  GET /
++    - Liste les dossiers avec filtres (countryCode, partnerId, status)
++    - Charge en parallèle : offres, partenaires, demandeurs, KYC
++    - Statuts : SUBMITTED | UNDER_REVIEW | APPROVED | REJECTED | DISBURSED | REPAID
++
++  GET /{applicationId}
++    - Détail complet : demandeur, scoring, documents KYC, historique
++
++  PUT /{applicationId}/review
++    - Décision admin sur un dossier
++    - Body : { status, approvedAmount?, partnerReference?, reviewComment? }
++
++--- 13.4 PartnerBackofficeApplicationController ---
++  - Accès partenaire au portail back-office
++  - Gestion des dossiers pour les utilisateurs du partenaire
++
++--- 13.5 Entités Financing ---
++
++  FinancialPartner
++    - id, name, type (IMF | BANK | FINTECH)
++    - countryCode, currency, contactEmail, description
++    - status (ACTIVE | INACTIVE | PENDING)
++    - supportedProducts (CSV : "CREDIT,SAVINGS")
++    - apiIntegrationType (MANUAL | API)
++    - settlementAccount (code compte comptable)
++    - apiEndpoint (URL, nullable)
++    - createdAt
++
++  FinancingOffer
++    - id, partnerId, name
++    - type (CREDIT | SAVINGS)
++    - minAmount, maxAmount, interestRate, durationMonths
++    - currency, countryCode, description
++    - feesJson, eligibilityRulesJson, requiredDocumentsJson, scoringRulesJson
++    - status (ACTIVE | INACTIVE)
++    - createdAt
++
++  LoanApplication
++    - id, offerId, accountHolderId
++    - requestedAmount, approvedAmount, currency
++    - status (SUBMITTED | UNDER_REVIEW | APPROVED | REJECTED | DISBURSED | REPAID)
++    - partnerReference, decisionNote
++    - configSnapshot (JSON, snapshot de l'offre au moment de la demande)
++    - createdAt, updatedAt
++
++  PartnerUser / PartnerRole → Utilisateurs du portail partenaire
++  PartnerLedgerEntry / PartnerLedgerAccount → Comptabilité partenaire
++  PartnerSettlementBatch / PartnerSettlementItem → Règlement en batch
++  InstitutionLedgerEntry → Comptabilité institution
++  LoanPortfolioSnapshot → Snapshots pour reporting
++
++--- 13.6 Service AdminFinancingApplicationService ---
++
++  listApplications(countryCode, partnerId, status, page, size)
++    1. Requête paginée en base (LoanApplicationRepository.searchForAdmin)
++    2. Charge en batch : offres, partenaires, demandeurs (findAllById)
++    3. Construit la réponse en résolvant les noms (tolérant aux nulls)
++
++  getApplication(applicationId)
++    1. Charge le dossier (NotFoundException si absent)
++    2. Charge l'offre, le partenaire, le demandeur
++    3. Charge le scoring crédit (optionnel)
++    4. Charge les documents KYC
++    5. Retourne la réponse complète
++
++  reviewApplication(adminUserId, applicationId, request)
++    1. Délègue à FinancingApplicationService.adminReviewApplication()
++    2. Recharge le dossier mis à jour
++    3. Retourne le détail complet
++
++================================================================================
++14. MODULE PAYMENTS & PSP
++================================================================================
++
++Package : com.ccapp.payments
++
++--- 14.1 PSP Jawupay ---
++
++  PspController
++    Base URL : /psp/jawupay/callback (public, protégé par HMAC)
++
++    POST /callback
++      - Reçoit les notifications de paiement du PSP Jawupay
++      - Valide la signature HMAC
++      - Traite : dépôt confirmé, retrait confirmé, échec
++      - Rate limité (SimpleRateLimiter)
++
++  JawupayService
++    - Initie les dépôts et retraits via API Jawupay
++    - Gestion des erreurs et retry
++    - Mode mock configurable pour tests
++
++  PspCallbackEvent
++    - Trace tous les callbacks reçus du PSP
++
++--- 14.2 Opérations ---
++
++  Operation
++    - Enregistrement générique d'une opération de paiement
++    - Types : WALLET_PAYMENT | DEPOSIT | WITHDRAWAL | TRANSFER
++    - Statuts : PENDING | COMPLETED | FAILED | CANCELLED
++    - Lié aux LedgerEntry via AccountingEvent
++
++================================================================================
++15. MODULE COMMISSIONS MLM
++================================================================================
++
++Package : com.ccapp.payments.commission
++
++Rôle : Calcul et distribution des commissions du réseau MLM.
++
++  Entités :
++    MlmCommission
++      - id, beneficiaryId, sourceId
++      - type (DOWNLINE | MATCHING | BONUS)
++      - amount, currency
++      - status (PENDING | APPROVED | PAID | CANCELLED)
++      - generatedAt
++
++    CommissionPayoutBatch
++      - Batch de paiements groupés
++      - status (PENDING | PROCESSING | COMPLETED | FAILED)
++
++    CommissionPayoutItem
++      - Item individuel dans un batch
++      - status (PENDING | PAID | FAILED)
++
++    CommissionAdjustment
++      - Correction manuelle ou annulation
++      - Types : CORRECTION | REVERSAL | BONUS
++
++  Services :
++    MlmCommissionService
++      - Calcule les commissions à partir des volumes MLM
++      - Détermine le type (downline, matching, bonus)
++      - Crée les enregistrements en base
++
++    CommissionPayoutBatchProcessor
++      - Traite les batches de paiement
++      - Crédite les wallets des bénéficiaires
++      - Marque les items comme payés ou en échec
++
++    CommissionEventRateLimiter
++      - Protège contre les publications d'événements en rafale
++
++================================================================================
++16. MODULE SUBSCRIPTIONS
++================================================================================
++
++Package : com.ccapp.payments.subscription
++
++Rôle : Gestion des abonnements (membership) et des plans tarifaires.
++
++  SubscriptionPlan
++    - Grades : BRONZE | SILVER | GOLD | PLATINUM
++    - Prix, avantages, durée
++
++  Membership
++    - Abonnement actif d'un utilisateur
++    - status (ACTIVE | EXPIRED | CANCELLED)
++    - startDate, endDate
++
++  Services :
++    SubscriptionService → Souscription, renouvellement, annulation
++    SubscriptionPlanCatalogService → Gestion du catalogue de plans
++    MembershipService → Cycle de vie des abonnements
++
++  Job planifié :
++    SubscriptionExpirationJob
++      - Notifie les utilisateurs dont l'abonnement expire bientôt
++
++================================================================================
++17. MODULE MLM
++================================================================================
++
++Package : com.ccapp.mlm
++
++Rôle : Réseau de vente multi-niveaux. Gestion de la hiérarchie, du placement
++automatique dans l'arbre, du suivi des volumes, et des bonus hebdomadaires.
++
++--- 17.1 Structure du réseau ---
++
++  MlmRelationship
++    - Relation sponsor → filleul
++    - Arbre binaire ou matriciel selon config
++    - Grades : MEMBER | AGENT | SUPERVISOR | DISTRIBUTOR
++
++  MlmVolumeLedger
++    - Suivi des volumes de vente par membre et par leg
++    - Mis à jour à chaque transaction qualifiante
++
++  MlmMemberGradeProfile
++    - Grade actuel du membre et historique de progression
++
++  MlmMemberMetrics
++    - KPIs : volume personnel, volume de groupe, nombre de filleuls actifs
++
++  MlmWeeklySnapshot
++    - Agrégation hebdomadaire pour calcul des bonus
++
++  MlmLegCarryover
++    - Report du volume non utilisé au cycle suivant
++
++--- 17.2 Placement ---
++
++  MLMPlacementService
++    - Place un nouveau membre dans l'arbre MLM
++    - Respecte les règles de placement (leg balance, profondeur)
++    - Publie MlmPlacementCreatedEvent
++
++  AutoPlacementService
++    - Placement automatique si le sponsor ne choisit pas manuellement
++
++  MlmPlacementAuditService
++    - Log d'audit de chaque placement
++
++--- 17.3 Volumes & Bonus ---
++
++  MlmVolumeLedgerService
++    - Enregistre les volumes à chaque vente/transaction qualifiante
++    - Recalcule les cumuls de groupe
++
++  WeeklyGroupBonusService
++    - Calcule les bonus hebdomadaires selon grade et volume de groupe
++    - Crée les enregistrements de commission
++
++  MlmLedgerRebuildService
++    - Reconstruit les ledgers MLM si incohérence détectée
++    - Exécuté toutes les 2 minutes (configurable)
++
++--- 17.4 Dashboard Mobile ---
++
++  MobileMlmDashboardService
++    - Données pour le tableau de bord MLM de l'app mobile :
++      position dans l'arbre, volumes, commissions en attente, bonus historique
++
++--- 17.5 Jobs planifiés ---
++
++  WeeklyGroupBonusJob
++    - Cron : 0 55 23 * * SUN (dimanche 23h55, fuseau Africa/Porto-Novo)
++    - Lance le calcul des bonus hebdomadaires
++
++  MlmWeeklySnapshotJob
++    - Cron : 0 59 23 * * SUN (dimanche 23h59)
++    - Génère les snapshots hebdomadaires
++
++  MlmLedgerRebuildJob
++    - Cron : toutes les 2 minutes par défaut
++    - Vérifie et corrige les incohérences du ledger MLM
++
++--- 17.6 Événements MLM ---
++
++  MlmPlacementCreatedEvent → déclencheurs : onboarding, invitation acceptée
++  MlmVolumeUpdatedEvent    → déclencheurs : vente, transaction qualifiante
++  WeeklyBonusCalculatedEvent → déclencheur : WeeklyGroupBonusJob
++  BonusPaidEvent             → déclencheur : CommissionPayoutBatchProcessor
++
++================================================================================
++18. MODULE CAPITAL
++================================================================================
++
++Package : com.ccapp.capital
++
++Rôle : Gestion des pools de capital pour le financement des cercles de tontine.
++
++  CapitalPool  → Pool de fonds (ex: fonds gouvernemental, ONG, privé)
++  Fund         → Fonds individuels dans un pool
++  LoanFunding  → Allocation d'un fonds à un prêt spécifique
++
++  FundProviderType : GOVERNMENT | NGO | PRIVATE | BANK
++
++  Services :
++    CapitalPoolService  → Création et gestion des pools
++    FundService         → Gestion des fonds individuels
++    CapitalFundingService → Allocation aux prêts et cercles
++
++================================================================================
++19. MODULE LEDGER (COMPTABILITÉ)
++================================================================================
++
++Package : com.ccapp.ledger
++
++Rôle : Comptabilité en partie double (double-entry accounting). Toutes les
++transactions financières de la plateforme sont enregistrées ici.
++
++--- 19.1 Principe ---
++
++  Chaque opération financière génère :
++    1. Un AccountingEvent (source)
++    2. Deux LedgerEntry minimum (débit + crédit) équilibrées
++
++--- 19.2 Entités ---
++
++  AccountingEvent
++    - id, type (PAYMENT | DEPOSIT | WITHDRAWAL | COMMISSION | ADJUSTMENT)
++    - operationId (lien vers Operation)
++    - postedAt (date comptable)
++    - description
++
++  LedgerEntry
++    - id, eventId (FK → AccountingEvent)
++    - accountCode (code du compte comptable)
++    - entryType (DEBIT | CREDIT)
++    - amount, currency
++    - description
++    - lineNo (numéro de ligne pour tri déterministe)
++    - createdAt
++
++  AccountBalanceSnapshot
++    - Snapshot périodique des soldes par compte
++    - Utilisé pour accélérer les calculs de solde
++
++--- 19.3 LedgerEntryRepository ---
++
++  findByAccountCodeOrderByCreatedAtAsc(accountCode)
++    → Toutes les écritures d'un compte, chronologique
++
++  findByAccountCodeAndCurrencyOrderByCreatedAtAsc(accountCode, currency)
++    → Filtrées par devise
++
++  searchExplorer(accountCode, operationType, fromDate, toDate, pageable)
++    → Recherche admin avec join fetch sur Event et Operation
++    → Fix appliqué : countQuery séparé sans "join fetch" pour éviter l'erreur
++      Hibernate avec la pagination (la count query auto-dérivée avec join fetch
++      est invalide et causait une erreur 500 sur /admin/finance/ledger)
++
++--- 19.4 AccountingPostingService ---
++
++  Méthode principale : postTransaction(event, entries[])
++    1. Vérifie l'équilibre DEBIT = CREDIT
++    2. Sauvegarde l'AccountingEvent
++    3. Sauvegarde toutes les LedgerEntry
++    4. Met à jour les snapshots de solde
++
++--- 19.5 Module Réconciliation ---
++
++  ReconciliationController → /reconciliation
++  ReconciliationRecord     → Enregistrements de réconciliation bancaire/PSP
++  ReconciliationService    → Processus de rapprochement
++
++================================================================================
++20. MODULE COUNTRY
++================================================================================
++
++Package : com.ccapp.country
++
++Rôle : Support multi-pays avec configuration spécifique par pays (plan comptable,
++mapping des comptes systèmes, paramètres locaux).
++
++--- 20.1 Entités core ---
++
++  Country
++    - id (UUID), code (ISO 2 lettres), name
++    - status (ACTIVE | INACTIVE | SETUP_PENDING)
++    - currency (code ISO)
++
++--- 20.2 Configuration comptable ---
++
++  CountryChartAccount
++    - Plan comptable par pays (ex: 1001 - Caisse, 4001 - Clients, etc.)
++    - Type : CURRENT_ASSET | FIXED_ASSET | LIABILITY | etc.
++    - Status : ACTIVE | INACTIVE | DEPRECATED
++
++  CountryAccountSystemMapping
++    - Associe un tag système (WALLET, COMMISSION, CAPITAL, etc.)
++      à un code compte du plan comptable
++    - Clé composite : (countryCode, systemTag, accountType)
++
++  CountryAccountSystemTag
++    - WALLET, COMMISSION, CAPITAL, FEES, TREASURY, etc.
++
++  CountryConfigVersion
++    - Versionnement de la configuration pays
++    - Permet rollback si problème de config
++
++--- 20.3 Services ---
++
++  CountryConfigurationEngineService
++    - Crée et valide la configuration complète d'un pays
++    - Vérifie la cohérence du plan comptable
++
++  CountryChartOfAccountsService
++    - Gestion du plan comptable
++
++  CountryConfigResolver
++    - Résout la configuration active pour un pays donné à runtime
++
++  CountryConfigReadinessService
++    - Vérifie si un pays est prêt à traiter des transactions
++
++  CountrySetupBootstrapService + CountryMasterDataBootstrapInitializer
++    - Initialisation des données de référence au démarrage
++
++--- 20.4 Controller public ---
++
++  PublicCountryController → GET /public/countries
++    - Retourne la liste des pays actifs (pour l'app mobile, inscription, etc.)
++
++================================================================================
++21. MODULE PLATFORM
++================================================================================
++
++Package : com.ccapp.platform
++
++Rôle : Configuration globale de la plateforme (feature flags, limites, intégrations).
++
++  PlatformConfigVersion → versionnement de la config globale
++  PlatformConfigType    → FEATURES | LIMITS | INTEGRATIONS
++  PlatformConfigurationService → CRUD de la config
++  PlatformConfigReadinessService → vérification de l'état de la plateforme
++
++================================================================================
++22. MODULE PROGRESS & TÂCHES
++================================================================================
++
++Package : com.ccapp.progress
++
++Rôle : Gamification et suivi de progression des utilisateurs via des tâches
++et objectifs.
++
++  TaskDefinition
++    - Définition d'une tâche (créée par admin)
++    - Déclencheur (TaskTriggerEvent) : ACCOUNT_CREATED | CIRCLE_JOINED |
++                                       LOAN_REPAID | etc.
++    - Type : ONBOARDING | ACTIVITY | SOCIAL
++
++  UserTask
++    - Instance d'une tâche pour un utilisateur
++    - Statuts : NOT_STARTED | IN_PROGRESS | COMPLETED
++
++  UserProgress
++    - Progression globale de l'utilisateur
++    - Score de progression (contribue au score de crédit)
++
++  TaskAuditLog → historique des changements de statut
++
++  Listeners :
++    - AccountHolderCreatedEvent → crée les tâches d'onboarding
++    - CircleJoinedEvent         → marque la tâche "rejoindre un cercle"
++
++================================================================================
++23. MODULE MEDIA & KYC
++================================================================================
++
++Package : com.ccapp.media
++
++Rôle : Gestion des fichiers uploadés, documents KYC, et stockage objet.
++
++--- 23.1 Stockage ---
++
++  Minio (compatible S3) configuré avec 3 buckets :
++    - cc-media-public  → images de profil, contenu communautaire
++    - cc-media-private → documents confidentiels
++    - cc-media-kyc     → pièces d'identité et documents KYC
++
++  URLs pré-signées : TTL 15 minutes (configurable)
++
++--- 23.2 Entités ---
++
++  MediaFile
++    - id, filename, contentType, size
++    - bucket, storageKey (chemin dans Minio)
++    - status (UPLOADING | COMPLETED | FAILED | DELETED)
++    - uploadedByAccountHolderId
++    - createdAt
++
++  KycDocument
++    - id, accountHolderId, mediaFileId
++    - documentType (NATIONAL_ID | PASSPORT | DRIVER_LICENSE | UTILITY_BILL)
++    - status (PENDING | VERIFIED | REJECTED | EXPIRED)
++    - submittedAt
++
++--- 23.3 Services ---
++
++  MediaService → upload, download, suppression, URL pré-signée
++  KycSubmissionService → soumission et suivi des documents KYC
++  MinioObjectStorageService → client Minio (S3)
++  MediaBucketInitializer → crée les buckets au démarrage si absents
++
++--- 23.4 Contrôleurs ---
++
++  MediaController → /media
++    - POST /upload          → upload d'un fichier
++    - GET /{fileId}/url     → génère URL pré-signée
++
++  MobileKycController → /kyc
++    - POST /documents       → soumet un document KYC
++    - GET /documents        → liste les documents soumis
++    - GET /status           → statut global du KYC
++
++================================================================================
++24. MODULE CHAT
++================================================================================
++
++Package : com.ccapp.chat
++
++Rôle : Messagerie instantanée pour le support et les échanges entre utilisateurs.
++
++  ChatConversation
++    - Types : SUPPORT | USER_TO_USER | NOTIFICATION
++    - Participants multiples
++
++  ChatMessage
++    - Contenu, type, statut d'envoi (SENT | DELIVERED | READ | FAILED)
++
++  ChatMessageDeliveryStatus → statut par destinataire
++  ChatReadReceipt → confirmation de lecture
++
++  WebSocket :
++    - Config : ChatWebSocketConfig → /ws/**
++    - Temps réel via STOMP/SockJS
++
++  Services :
++    ChatConversationService → gestion des conversations
++    ChatMessageService → envoi, réception, statut
++
++================================================================================
++25. MODULE NOTIFICATIONS
++================================================================================
++
++Package : com.ccapp.notifications
++
++Rôle : Système de notification multi-canaux (email, SMS, WhatsApp, push, in-app).
++
++--- 25.1 Canaux ---
++
++  EMAIL      → via serveur SMTP configuré
++  SMS        → Africa's Talking API
++  WHATSAPP   → Africa's Talking WhatsApp Business API
++  PUSH       → Firebase Cloud Messaging (FCM)
++  IN_APP     → Stocké en base, lu par l'app au démarrage
++
++--- 25.2 Entités ---
++
++  Notification
++    - id, recipientId, channel, type, status
++    - title, body, data (JSON)
++    - scheduledAt, sentAt
++
++  NotificationAttempt
++    - Chaque tentative d'envoi (succès ou échec + message d'erreur)
++
++  NotificationTemplate
++    - Modèles de messages par type et langue
++
++--- 25.3 Services & Dispatchers ---
++
++  NotificationService → orchestration, choix du canal, persistance
++  EmailNotificationProvider → envoi email
++  SmsNotificationProvider → SMS via Africa's Talking
++  PushNotificationProvider → Push via Firebase FCM
++  InAppNotificationProvider → stockage pour lecture mobile
++  AfricasTalkingPhoneMessageGateway → client AT pour SMS/WhatsApp
++  LoggingPhoneMessageGateway → gateway de log (dev/test)
++
++--- 25.4 Listeners ---
++
++  NotificationRequestedListener → reçoit les événements NotificationRequested
++  LoanRepaidNotificationListener → notifie après remboursement de prêt
++  MessageSentNotificationListener → notifie après envoi de message
++  PostCreatedNotificationListener → notifie les membres d'un cercle
++
++--- 25.5 Job planifié ---
++
++  SubscriptionExpirationJob
++    - Notifie les utilisateurs dont l'abonnement expire bientôt
++
++================================================================================
++26. MODULE AGENT
++================================================================================
++
++Package : com.ccapp.agent
++
++Rôle : Gestion des agents terrain qui accompagnent les membres dans leurs
++transactions (modèle bancaire à correspondant).
++
++  AgentProfile
++    - Profil de l'agent, type (INDIVIDUAL | ORGANIZATION)
++    - Permissions accordées
++
++  AssistedSession
++    - Session d'accompagnement entre agent et membre
++    - Types : ONLINE | OFFLINE
++
++  OfflineTransaction
++    - Transaction réalisée offline par l'agent
++    - Synchronisée quand la connectivité est restaurée
++    - Types : DEPOSIT | WITHDRAWAL | PAYMENT
++
++  Services :
++    AgentService → gestion des agents
++    AssistedSessionService → sessions d'accompagnement
++    OfflineTransactionService → transactions offline
++
++================================================================================
++27. MODULE MOBILE
++================================================================================
++
++Package : com.ccapp.mobile
++
++Rôle : Endpoints optimisés pour l'application mobile (agrégation de données
++pour réduire les appels API).
++
++  MobileHomeController → /mobile/home
++    - Dashboard principal : solde wallet, cercle actif, notifications,
++      résumé MLM, tâches en cours
++
++  MobileOnboardingController → /mobile/onboarding
++    - Flow d'onboarding adapté mobile
++
++  HomeFacadeService
++    - Agrège les données de plusieurs modules en un seul appel
++
++================================================================================
++28. MODULE COMMON (PARTAGÉ)
++================================================================================
++
++Package : com.ccapp.common
++
++Rôle : Utilitaires et composants partagés entre tous les modules.
++
++--- 28.1 Réponses API standardisées ---
++
++  CommonResponse<T>
++    - Enveloppe toutes les réponses API
++    - Champs : success (boolean), message (String), data (T),
++               timestamp (OffsetDateTime)
++    - Factory methods : success(message, data), error(message)
++
++  PageResponse<T>
++    - Réponse paginée
++    - Champs : content (List<T>), page, size, totalElements,
++               totalPages, hasNext
++
++--- 28.2 Exceptions ---
++
++  BusinessException      → 400 Bad Request (règle métier violée)
++  NotFoundException      → 404 Not Found (ressource introuvable)
++  ConflictException      → 409 Conflict (doublon, état incohérent)
++  UnauthorizedException  → 401 Unauthorized (accès refusé)
++
++  GlobalExceptionHandler → gère toutes ces exceptions + catch-all 500
++
++--- 28.3 Système d'événements ---
++
++  DomainEvent → classe de base pour tous les événements métier
++  DomainEventPublisher → interface de publication
++  SpringDomainEventPublisher → implémentation via ApplicationEventPublisher
++  IdempotentEventListenerExecutor → garantit l'idempotence des listeners
++  EventListenerCheckpoint → trace les événements déjà traités
++
++--- 28.4 Sécurité ---
++
++  SecurityUtils → récupère l'AccountHolder/User courant depuis le SecurityContext
++  AdminSecurityUtils → récupère l'AdminUser courant + son rôle
++  AuthenticatedPrincipal → représentation du principal authentifié
++
++--- 28.5 Entité de base ---
++
++  AuditableEntity (base class pour les entités)
++    - createdAt (OffsetDateTime, @PrePersist)
++    - updatedAt (OffsetDateTime, @PreUpdate)
++    - createdBy, updatedBy (nullable, UUID)
++
++--- 28.6 Observabilité ---
++
++  Tracing HTTP : log des requêtes/réponses (configurable)
++  Payload max-length configurable
++  Auth tokens masqués dans les logs
++
++================================================================================
++29. ÉVÉNEMENTS & LISTENERS
++================================================================================
++
++Événements publiés dans le système :
++
++  AccountHolderCreatedEvent   → identity → progress (crée les tâches initiales)
++  CircleJoinedEvent           → circles  → progress, circlesocial
++  CircleActivityRequestedEvent → circles → circlesocial
++  CircleContributionEvent     → circles  → circlesocial, notifications
++  LoanRepaidEvent             → credit   → circlesocial, notifications, mlm
++  PostCreatedEvent            → community → notifications
++  MlmPlacementCreatedEvent    → mlm       → mlm volume, notifications
++  MlmVolumeUpdatedEvent       → mlm       → commissions
++  CommissionGeneratedEvent    → commissions → notifications
++  WeeklyBonusCalculatedEvent  → mlm       → payout batch
++  BonusPaidEvent              → commissions → notifications
++  MessageSentEvent            → chat      → notifications
++  NotificationRequestedEvent  → n'importe quel module → notifications
++
++Listeners nommés (garantis idempotents) :
++  - NotificationRequestedListener
++  - LoanRepaidNotificationListener
++  - MessageSentNotificationListener
++  - PostCreatedNotificationListener
++  - CircleActivityRequestedListener
++  - CircleContributionActivityListener
++  - LoanRepaidCircleActivityListener
++  - CommissionGeneratedNotificationListener
++  - ShopOrderDeliveredMlmVolumeListener
++  - ShopOrderRefundedMlmAdjustmentListener
++  - ShopOrderDeliveredFinancialAuditListener
++
++================================================================================
++30. JOBS PLANIFIÉS (SCHEDULED JOBS)
++================================================================================
++
++  1. WeeklyGroupBonusJob
++     Cron     : 0 55 23 * * SUN (dimanche 23h55)
++     Fuseau   : Africa/Porto-Novo
++     Action   : Calcule les bonus MLM hebdomadaires et crée les commissions
++
++  2. MlmWeeklySnapshotJob
++     Cron     : 0 59 23 * * SUN (dimanche 23h59)
++     Action   : Génère les snapshots hebdomadaires MLM
++
++  3. MlmLedgerRebuildJob
++     Cron     : 0 */2 * * * * (toutes les 2 minutes, configurable)
++     Prop     : mlm.ledger-rebuild.cron
++     Action   : Vérifie et corrige les incohérences du ledger MLM
++
++  4. SubscriptionExpirationJob
++     Action   : Notifie les utilisateurs dont l'abonnement expire prochainement
++
++  5. AdminInvitationExpiryJob
++     Action   : Expire les invitations admin dont la date est dépassée
++     Méthode  : AdminInvitationService.expireOutdatedInvitations()
++
++================================================================================
++31. FLUX MÉTIER PRINCIPAUX
++================================================================================
++
++--- Flux 1 : Inscription et onboarding utilisateur ---
++
++  1. L'utilisateur s'inscrit via Firebase Auth (app mobile)
++  2. L'app appelle POST /identity/sync avec le token Firebase
++  3. Le backend crée un AccountHolder + un User en base
++  4. L'AccountHolder est placé dans le réseau MLM (MLMPlacementService)
++  5. Les tâches d'onboarding sont créées (AccountHolderCreatedEvent → progress)
++  6. L'utilisateur complète l'onboarding en 3 étapes (PATCH /identity/onboarding/step-*)
++  7. La vérification téléphone est déclenchée (OTP SMS/WhatsApp)
++  8. Le wallet est activé après vérification
++  9. Les documents KYC sont uploadés via POST /kyc/documents
++  10. Un admin vérifie les documents et change kycStatus → VERIFIED
++
++--- Flux 2 : Tontine (Cercle) ---
++
++  1. Un coach crée un cercle (POST /circles)
++  2. Invite des membres (POST /circles/{id}/invites → lien partageable)
++  3. Les membres rejoignent (POST /circles/{id}/join)
++  4. Le coach crée un cycle de cotisation (POST /circles/{id}/cycles)
++  5. Chaque membre effectue sa cotisation via le wallet
++  6. Le bénéficiaire du cycle reçoit le paquot (WalletPaymentService)
++  7. Le cycle est clôturé, le suivant commence
++  8. Des prêts intra-cercle peuvent être octroyés (POST /circles/{id}/loans)
++  9. Les remboursements sont trackés (POST /circles/{id}/loans/{id}/repayments)
++  10. À la clôture du prêt : LoanRepaidEvent → notifications + score crédit
++
++--- Flux 3 : MLM et commissions ---
++
++  1. Nouvel utilisateur → placement dans l'arbre MLM (parent = sponsor)
++  2. Chaque transaction qualifiante met à jour MlmVolumeLedger
++  3. MlmVolumeUpdatedEvent est publié
++  4. Chaque dimanche 23h55 : WeeklyGroupBonusJob calcule les bonus
++  5. CommissionGeneratedEvent est publié pour chaque bénéficiaire
++  6. Un batch de paiement est créé (CommissionPayoutBatch)
++  7. CommissionPayoutBatchProcessor crédite les wallets
++  8. BonusPaidEvent → notification aux bénéficiaires
++
++--- Flux 4 : Scoring crédit et dossier de financement ---
++
++  1. L'app appelle GET /credit/eligibility
++  2. CreditScoringService calcule un score composite (5 facteurs)
++  3. L'utilisateur choisit une offre (GET /api/admin/offers)
++  4. Soumet une demande (POST /financing/applications)
++  5. Uploade les documents requis (POST /kyc/documents)
++  6. Un admin examine le dossier (PUT /api/admin/financing/applications/{id}/review)
++  7. Si approuvé : le partenaire est notifié, le montant est versé
++  8. L'utilisateur rembourse selon l'échéancier
++  9. À la clôture : LoanRepaidEvent
++
++--- Flux 5 : Paiement wallet P2P ---
++
++  1. POST /wallet/pay avec { recipientPhone, amount, pin }
++  2. WalletSecurityService.validatePin() → vérifie le PIN hashé
++  3. WalletGuardService → vérifie montant min/max, devises autorisées
++  4. WalletLimitService → vérifie les limites AML journalières/mensuelles
++  5. WalletDebitFacade.debit() → débite le compte source
++  6. AccountingPostingService.postTransaction() → écrit dans le ledger
++  7. WalletDebitFacade.credit() → crédite le compte destinataire
++  8. NotificationRequestedEvent → notification à l'envoyeur et au receveur
++
++--- Flux 6 : Callback PSP (dépôt) ---
++
++  1. Jawupay appelle POST /psp/jawupay/callback
++  2. Validation HMAC de la signature
++  3. Rate limiting (SimpleRateLimiter)
++  4. JawupayService traite le type d'événement
++  5. Si dépôt confirmé : WalletDepositService.confirmDeposit()
++  6. Écriture au ledger + notification utilisateur
++
++================================================================================
++32. STATISTIQUES DU PROJET
++================================================================================
++
++  Fichiers Java totaux    : ~877
++  Controllers             : 53
++  Services                : 119
++  Repositories            : 109
++  Entités JPA             : 100+
++  DTOs (Records/Classes)  : 200+
++  Enums                   : 80+
++  Événements              : 15+
++  Classes de config       : 10+
++  Jobs planifiés          : 5
++  Listeners d'événements  : 11+
++
++  Modules principaux      : 22 packages de domaine
++
++  Authentification        : 3 mécanismes (Firebase, Admin JWT, API Key)
++  Canaux de notification  : 5 (Email, SMS, WhatsApp, Push, In-App)
++  Devises supportées      : Multi-devises (XOF, XAF, NGN, GHS, ...)
++  Multi-pays              : Oui (config par pays avec plan comptable dédié)
++  Comptabilité            : Double entrée (LedgerEntry DEBIT/CREDIT)
++  Base de données         : PostgreSQL avec Flyway migrations
++  Stockage fichiers       : Minio (S3-compatible)
++
++================================================================================
++FIN DE LA DOCUMENTATION
++================================================================================
+Index: src/main/java/com/ccapp/mobile/home/service/HomeFacadeService.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>package com.ccapp.mobile.home.service;\n\nimport com.ccapp.circles.dto.MyCircleResponse;\nimport com.ccapp.circles.service.CircleService;\nimport com.ccapp.circlesocial.dto.CircleActivityResponse;\nimport com.ccapp.circlesocial.service.CircleActivityService;\nimport com.ccapp.common.exception.NotFoundException;\nimport com.ccapp.country.dto.CountryContext;\nimport com.ccapp.country.service.CountryContextService;\nimport com.ccapp.credit.dto.CreditEligibilityResponse;\nimport com.ccapp.credit.service.CreditScoringService;\nimport com.ccapp.identity.account_holder.domain.entity.AccountHolder;\nimport com.ccapp.identity.account_holder.repository.AccountHolderRepository;\nimport com.ccapp.identity.account_holder.service.AccountHolderService;\nimport com.ccapp.identity.app_user.domain.entity.AppUser;\nimport com.ccapp.identity.app_user.repository.AppUserRepository;\nimport com.ccapp.identity.delegation.domain.enums.PermissionLevel;\nimport com.ccapp.identity.delegation.service.AccessControlService;\nimport com.ccapp.identity.domain.entity.UserProfile;\nimport com.ccapp.identity.domain.enums.KycStatus;\nimport com.ccapp.identity.repository.UserProfileRepository;\nimport com.ccapp.mobile.home.dto.MobileHomeDashboardResponse;\nimport com.ccapp.mobile.onboarding.domain.entity.MobilePlanSelection;\nimport com.ccapp.mobile.onboarding.domain.enums.MobilePlanSelectionStatus;\nimport com.ccapp.mobile.onboarding.repository.MobilePlanSelectionRepository;\nimport com.ccapp.payments.subscription.domain.entity.Membership;\nimport com.ccapp.payments.subscription.domain.enums.MembershipStatus;\nimport com.ccapp.payments.subscription.service.MembershipService;\nimport com.ccapp.progress.domain.entity.UserTask;\nimport com.ccapp.progress.domain.enums.TaskStatus;\nimport com.ccapp.progress.domain.enums.TaskType;\nimport com.ccapp.progress.dto.TaskResponse;\nimport com.ccapp.progress.repository.UserTaskRepository;\nimport com.ccapp.progress.service.TaskEngineService;\nimport com.ccapp.wallet.dto.WalletBalanceResponse;\nimport com.ccapp.wallet.service.WalletBalanceService;\nimport lombok.RequiredArgsConstructor;\nimport org.springframework.stereotype.Service;\nimport org.springframework.transaction.annotation.Transactional;\n\nimport java.math.BigDecimal;\nimport java.math.RoundingMode;\nimport java.time.LocalDate;\nimport java.time.OffsetDateTime;\nimport java.util.Comparator;\nimport java.util.List;\nimport java.util.Map;\nimport java.util.Objects;\nimport java.util.Optional;\nimport java.util.Set;\nimport java.util.UUID;\nimport java.util.function.Function;\nimport java.util.stream.Collectors;\n\n@Service\n@RequiredArgsConstructor\npublic class HomeFacadeService {\n\n    private static final int TODAY_TASK_LIMIT = 3;\n    private static final int CIRCLE_ACTIVITY_LIMIT = 3;\n    private static final List<MobileHomeDashboardResponse.QuickAction> DEFAULT_QUICK_ACTIONS = List.of(\n            new MobileHomeDashboardResponse.QuickAction(\"CREATE_CIRCLE\", \"Creer un cercle\"),\n            new MobileHomeDashboardResponse.QuickAction(\"JOIN_CIRCLE\", \"Rejoindre un cercle\"),\n            new MobileHomeDashboardResponse.QuickAction(\"APPLY_FINANCING\", \"Financement\")\n    );\n\n    private final AccessControlService accessControlService;\n    private final AccountHolderService accountHolderService;\n    private final AccountHolderRepository accountHolderRepository;\n    private final CountryContextService countryContextService;\n    private final WalletBalanceService walletBalanceService;\n    private final TaskEngineService taskEngineService;\n    private final UserTaskRepository userTaskRepository;\n    private final MembershipService membershipService;\n    private final CircleService circleService;\n    private final CircleActivityService circleActivityService;\n    private final AppUserRepository appUserRepository;\n    private final UserProfileRepository userProfileRepository;\n    private final CreditScoringService creditScoringService;\n    private final MobilePlanSelectionRepository mobilePlanSelectionRepository;\n\n    @Transactional\n    public MobileHomeDashboardResponse getHome(UUID actorUserId, UUID accountHolderId) {\n        accessControlService.assertCanActOnAccountHolder(actorUserId, accountHolderId, PermissionLevel.VIEW);\n\n        AccountHolder accountHolder = accountHolderService.getById(accountHolderId);\n        CountryContext countryContext = countryContextService.resolve(accountHolderId);\n        UserProfile profile = resolveProfile(accountHolderId);\n        Optional<Membership> activeMembership = membershipService.findLatestMembership(accountHolderId)\n                .filter(this::isActiveMembership);\n        Optional<MobilePlanSelection> planSelection = mobilePlanSelectionRepository.findByAccountHolderId(accountHolderId);\n        WalletBalanceResponse walletBalance = walletBalanceService.getBalance(accountHolderId, countryContext.currency());\n        List<TaskResponse> allTasks = taskEngineService.getAllUserTasks(accountHolderId);\n        MyCircleResponse myCircle = findMyCircle(accountHolderId);\n        CreditEligibilityResponse eligibility = creditScoringService.getEligibility(actorUserId, accountHolderId);\n\n        return new MobileHomeDashboardResponse(\n                buildUser(accountHolder, profile, activeMembership.orElse(null)),\n                new MobileHomeDashboardResponse.WalletSection(walletBalance.availableBalance(), walletBalance.currency()),\n                buildEngagement(accountHolderId, allTasks),\n                buildNextAction(accountHolder, profile, myCircle, activeMembership.isPresent(), planSelection.orElse(null), allTasks),\n                buildCircle(myCircle),\n                DEFAULT_QUICK_ACTIONS,\n                buildFinancing(profile, eligibility)\n        );\n    }\n\n    private MobileHomeDashboardResponse.UserSection buildUser(AccountHolder accountHolder,\n                                                              UserProfile profile,\n                                                              Membership activeMembership) {\n        String membershipType = activeMembership == null\n                ? \"NONE\"\n                : activeMembership.getPlanGrade() != null\n                ? activeMembership.getPlanGrade().name()\n                : activeMembership.getPlanCode();\n        return new MobileHomeDashboardResponse.UserSection(\n                accountHolder.getFirstName(),\n                profile != null && profile.getProfilePhotoMediaId() != null ? profile.getProfilePhotoMediaId().toString() : null,\n                membershipType\n        );\n    }\n\n    private MobileHomeDashboardResponse.EngagementSection buildEngagement(UUID accountHolderId, List<TaskResponse> allTasks) {\n        List<MobileHomeDashboardResponse.TodayTask> todayTasks = allTasks.stream()\n                .filter(task -> task.type() != null && task.type().progressTracked())\n                .limit(TODAY_TASK_LIMIT)\n                .map(task -> new MobileHomeDashboardResponse.TodayTask(\n                        task.id(),\n                        task.title(),\n                        task.status() == TaskStatus.COMPLETED,\n                        task.type().name()\n                ))\n                .toList();\n\n        int completed = Math.toIntExact(todayTasks.stream()\n                .filter(MobileHomeDashboardResponse.TodayTask::completed)\n                .count());\n\n        return new MobileHomeDashboardResponse.EngagementSection(\n                calculateStreakDays(accountHolderId),\n                todayTasks,\n                new MobileHomeDashboardResponse.ProgressSection(completed, todayTasks.size())\n        );\n    }\n\n    private MobileHomeDashboardResponse.NextActionSection buildNextAction(AccountHolder accountHolder,\n                                                                          UserProfile profile,\n                                                                          MyCircleResponse myCircle,\n                                                                          boolean hasActiveMembership,\n                                                                          MobilePlanSelection planSelection,\n                                                                          List<TaskResponse> allTasks) {\n        List<TaskResponse> rankedActiveTasks = allTasks.stream()\n                .filter(task -> task.status() != null && task.status().active())\n                .sorted(Comparator.comparingInt(TaskResponse::priority).reversed()\n                        .thenComparing(TaskResponse::dueDate, Comparator.nullsLast(Comparator.naturalOrder()))\n                        .thenComparing(TaskResponse::title, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)))\n                .toList();\n\n        if (rankedActiveTasks.stream().anyMatch(task -> task.type() == TaskType.REPAY_INSTALLMENT)) {\n            return new MobileHomeDashboardResponse.NextActionSection(\n                    \"PAY_REPAYMENT\",\n                    \"Rembourser ton echeance\",\n                    \"Une echeance est en attente de paiement.\",\n                    \"Payer maintenant\",\n                    \"OPEN_REPAYMENT\"\n            );\n        }\n\n        if (accountHolder.getKycStatus() != KycStatus.VERIFIED) {\n            return new MobileHomeDashboardResponse.NextActionSection(\n                    \"COMPLETE_KYC\",\n                    \"Finaliser ton KYC\",\n                    \"Verifie ton identite pour debloquer toutes les fonctionnalites.\",\n                    \"Completer\",\n                    \"OPEN_KYC\"\n            );\n        }\n\n        if (myCircle == null) {\n            return new MobileHomeDashboardResponse.NextActionSection(\n                    \"JOIN_CIRCLE\",\n                    \"Rejoins un cercle\",\n                    \"Entre dans un cercle pour avancer avec ta communaute.\",\n                    \"Voir les cercles\",\n                    \"OPEN_CIRCLES\"\n            );\n        }\n\n        if (!hasActiveMembership) {\n            if (profile == null || !profile.isOnboardingCompleted()) {\n                return new MobileHomeDashboardResponse.NextActionSection(\n                        \"COMPLETE_ONBOARDING\",\n                        \"Complete ton onboarding\",\n                        \"Ajoute les informations manquantes pour terminer ton inscription.\",\n                        \"Continuer\",\n                        \"OPEN_ONBOARDING\"\n                );\n            }\n            if (planSelection == null) {\n                return new MobileHomeDashboardResponse.NextActionSection(\n                        \"SELECT_PLAN\",\n                        \"Choisir une formule\",\n                        \"Selectionne la formule qui correspond a ton parcours.\",\n                        \"Choisir\",\n                        \"OPEN_SUBSCRIPTION_PLANS\"\n                );\n            }\n            if (planSelection.getStatus() == MobilePlanSelectionStatus.PENDING_PAYMENT) {\n                return new MobileHomeDashboardResponse.NextActionSection(\n                        \"PAY_SUBSCRIPTION\",\n                        \"Payer ta formule\",\n                        \"Finalise ton abonnement pour continuer.\",\n                        \"Payer\",\n                        \"OPEN_SUBSCRIPTION_PAYMENT\"\n                );\n            }\n            if (planSelection.getStatus() == MobilePlanSelectionStatus.READY_FOR_ACTIVATION) {\n                return new MobileHomeDashboardResponse.NextActionSection(\n                        \"ACTIVATE_FREE_PLAN\",\n                        \"Activer ta formule gratuite\",\n                        \"Ta formule gratuite est selectionnee et peut etre activee.\",\n                        \"Activer\",\n                        \"ACTIVATE_FREE_PLAN\"\n                );\n            }\n        }\n\n        return rankedActiveTasks.stream()\n                .findFirst()\n                .map(this::mapTaskToNextAction)\n                .orElse(null);\n    }\n\n    private MobileHomeDashboardResponse.CircleSection buildCircle(MyCircleResponse myCircle) {\n        if (myCircle == null) {\n            return new MobileHomeDashboardResponse.CircleSection(false, List.of());\n        }\n\n        List<CircleActivityResponse> recentActivities = circleActivityService.getCircleActivity(myCircle.id()).stream()\n                .limit(CIRCLE_ACTIVITY_LIMIT)\n                .toList();\n\n        Map<UUID, AppUser> appUsersById = appUserRepository.findAllById(recentActivities.stream()\n                        .map(CircleActivityResponse::actorUserId)\n                        .filter(Objects::nonNull)\n                        .collect(Collectors.toSet()))\n                .stream()\n                .collect(Collectors.toMap(AppUser::getId, Function.identity()));\n\n        Set<UUID> accountHolderIds = appUsersById.values().stream()\n                .map(AppUser::getAccountHolderId)\n                .collect(Collectors.toSet());\n\n        Map<UUID, AccountHolder> accountHoldersById = accountHolderRepository.findAllById(accountHolderIds).stream()\n                .collect(Collectors.toMap(AccountHolder::getId, Function.identity()));\n\n        List<MobileHomeDashboardResponse.RecentActivity> mappedActivities = recentActivities.stream()\n                .map(activity -> new MobileHomeDashboardResponse.RecentActivity(\n                        resolveActivityUserName(activity.actorUserId(), appUsersById, accountHoldersById),\n                        activity.message(),\n                        activity.createdAt()\n                ))\n                .toList();\n\n        return new MobileHomeDashboardResponse.CircleSection(true, mappedActivities);\n    }\n\n    private MobileHomeDashboardResponse.FinancingSection buildFinancing(UserProfile profile,\n                                                                        CreditEligibilityResponse eligibility) {\n        BigDecimal targetAmount = defaultAmount(eligibility.maxEligibleAmount());\n        BigDecimal availableCapital = profile != null && profile.getAvailableCapital() != null\n                ? profile.getAvailableCapital()\n                : BigDecimal.ZERO;\n        BigDecimal remainingAmount = targetAmount.subtract(availableCapital);\n        if (remainingAmount.signum() < 0) {\n            remainingAmount = BigDecimal.ZERO;\n        }\n\n        return new MobileHomeDashboardResponse.FinancingSection(\n                defaultAmount(eligibility.eligibilityScore()).setScale(0, RoundingMode.HALF_UP).intValue(),\n                remainingAmount,\n                targetAmount\n        );\n    }\n\n    private MobileHomeDashboardResponse.NextActionSection mapTaskToNextAction(TaskResponse task) {\n        return switch (task.type()) {\n            case COMPLETE_KYC -> new MobileHomeDashboardResponse.NextActionSection(\n                    \"COMPLETE_KYC\",\n                    task.title(),\n                    task.description(),\n                    \"Completer\",\n                    \"OPEN_KYC\"\n            );\n            case JOIN_CIRCLE -> new MobileHomeDashboardResponse.NextActionSection(\n                    \"JOIN_CIRCLE\",\n                    task.title(),\n                    task.description(),\n                    \"Voir les cercles\",\n                    \"OPEN_CIRCLES\"\n            );\n            case MAKE_FIRST_CONTRIBUTION -> new MobileHomeDashboardResponse.NextActionSection(\n                    \"MAKE_CONTRIBUTION\",\n                    task.title(),\n                    task.description(),\n                    \"Contribuer\",\n                    \"OPEN_CONTRIBUTION\"\n            );\n            case INVITE_MEMBER -> new MobileHomeDashboardResponse.NextActionSection(\n                    \"INVITE_MEMBER\",\n                    task.title(),\n                    task.description(),\n                    \"Inviter\",\n                    \"OPEN_INVITES\"\n            );\n            case APPLY_LOAN -> new MobileHomeDashboardResponse.NextActionSection(\n                    \"APPLY_FINANCING\",\n                    task.title(),\n                    task.description(),\n                    \"Demander\",\n                    \"OPEN_FINANCING\"\n            );\n            case REPAY_INSTALLMENT -> new MobileHomeDashboardResponse.NextActionSection(\n                    \"PAY_REPAYMENT\",\n                    task.title(),\n                    task.description(),\n                    \"Payer maintenant\",\n                    \"OPEN_REPAYMENT\"\n            );\n            case COMPLETE_PROFILE -> new MobileHomeDashboardResponse.NextActionSection(\n                    \"COMPLETE_ONBOARDING\",\n                    task.title(),\n                    task.description(),\n                    \"Continuer\",\n                    \"OPEN_ONBOARDING\"\n            );\n            case VERIFY_PHONE -> new MobileHomeDashboardResponse.NextActionSection(\n                    \"VERIFY_PHONE\",\n                    task.title(),\n                    task.description(),\n                    \"Verifier\",\n                    \"OPEN_PHONE_VERIFICATION\"\n            );\n            default -> null;\n        };\n    }\n\n    private MyCircleResponse findMyCircle(UUID accountHolderId) {\n        try {\n            return circleService.getMyCircle(accountHolderId);\n        } catch (NotFoundException ex) {\n            return null;\n        }\n    }\n\n    private UserProfile resolveProfile(UUID accountHolderId) {\n        return appUserRepository.findFirstByAccountHolderIdOrderByCreatedAtAsc(accountHolderId)\n                .flatMap(appUser -> userProfileRepository.findByUserId(appUser.getId()))\n                .orElse(null);\n    }\n\n    private boolean isActiveMembership(Membership membership) {\n        return membership.getStatus() == MembershipStatus.ACTIVE\n                && (membership.getExpiresAt() == null || membership.getExpiresAt().isAfter(OffsetDateTime.now()));\n    }\n\n    private int calculateStreakDays(UUID accountHolderId) {\n        Set<LocalDate> completedDates = userTaskRepository.findByAccountHolderIdOrderByCreatedAtAsc(accountHolderId).stream()\n                .map(UserTask::getCompletedAt)\n                .filter(Objects::nonNull)\n                .map(OffsetDateTime::toLocalDate)\n                .collect(Collectors.toSet());\n\n        if (completedDates.isEmpty()) {\n            return 0;\n        }\n\n        LocalDate cursor = LocalDate.now();\n        if (!completedDates.contains(cursor)) {\n            cursor = cursor.minusDays(1);\n            if (!completedDates.contains(cursor)) {\n                return 0;\n            }\n        }\n\n        int streak = 0;\n        while (completedDates.contains(cursor)) {\n            streak++;\n            cursor = cursor.minusDays(1);\n        }\n        return streak;\n    }\n\n    private String resolveActivityUserName(UUID actorUserId,\n                                           Map<UUID, AppUser> appUsersById,\n                                           Map<UUID, AccountHolder> accountHoldersById) {\n        if (actorUserId == null) {\n            return \"Unknown\";\n        }\n        AppUser appUser = appUsersById.get(actorUserId);\n        if (appUser == null) {\n            return \"Unknown\";\n        }\n        AccountHolder accountHolder = accountHoldersById.get(appUser.getAccountHolderId());\n        if (accountHolder == null) {\n            return \"Unknown\";\n        }\n        return displayName(accountHolder.getFirstName(), accountHolder.getLastName());\n    }\n\n    private String displayName(String firstName, String lastName) {\n        String first = firstName == null ? \"\" : firstName.trim();\n        String last = lastName == null ? \"\" : lastName.trim();\n        String combined = (first + \" \" + last).trim();\n        return combined.isEmpty() ? \"Unknown\" : combined;\n    }\n\n    private BigDecimal defaultAmount(BigDecimal amount) {\n        return amount == null ? BigDecimal.ZERO : amount;\n    }\n}\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/com/ccapp/mobile/home/service/HomeFacadeService.java b/src/main/java/com/ccapp/mobile/home/service/HomeFacadeService.java
+--- a/src/main/java/com/ccapp/mobile/home/service/HomeFacadeService.java	(revision c57b80e23d00fb6fbcd960a5297cc575163af3a0)
++++ b/src/main/java/com/ccapp/mobile/home/service/HomeFacadeService.java	(date 1774351696947)
+@@ -5,8 +5,6 @@
+ import com.ccapp.circlesocial.dto.CircleActivityResponse;
+ import com.ccapp.circlesocial.service.CircleActivityService;
+ import com.ccapp.common.exception.NotFoundException;
+-import com.ccapp.country.dto.CountryContext;
+-import com.ccapp.country.service.CountryContextService;
+ import com.ccapp.credit.dto.CreditEligibilityResponse;
+ import com.ccapp.credit.service.CreditScoringService;
+ import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
+@@ -32,8 +30,6 @@
+ import com.ccapp.progress.dto.TaskResponse;
+ import com.ccapp.progress.repository.UserTaskRepository;
+ import com.ccapp.progress.service.TaskEngineService;
+-import com.ccapp.wallet.dto.WalletBalanceResponse;
+-import com.ccapp.wallet.service.WalletBalanceService;
+ import lombok.RequiredArgsConstructor;
+ import org.springframework.stereotype.Service;
+ import org.springframework.transaction.annotation.Transactional;
+@@ -67,8 +63,6 @@
+     private final AccessControlService accessControlService;
+     private final AccountHolderService accountHolderService;
+     private final AccountHolderRepository accountHolderRepository;
+-    private final CountryContextService countryContextService;
+-    private final WalletBalanceService walletBalanceService;
+     private final TaskEngineService taskEngineService;
+     private final UserTaskRepository userTaskRepository;
+     private final MembershipService membershipService;
+@@ -84,19 +78,16 @@
+         accessControlService.assertCanActOnAccountHolder(actorUserId, accountHolderId, PermissionLevel.VIEW);
+ 
+         AccountHolder accountHolder = accountHolderService.getById(accountHolderId);
+-        CountryContext countryContext = countryContextService.resolve(accountHolderId);
+         UserProfile profile = resolveProfile(accountHolderId);
+         Optional<Membership> activeMembership = membershipService.findLatestMembership(accountHolderId)
+                 .filter(this::isActiveMembership);
+         Optional<MobilePlanSelection> planSelection = mobilePlanSelectionRepository.findByAccountHolderId(accountHolderId);
+-        WalletBalanceResponse walletBalance = walletBalanceService.getBalance(accountHolderId, countryContext.currency());
+         List<TaskResponse> allTasks = taskEngineService.getAllUserTasks(accountHolderId);
+         MyCircleResponse myCircle = findMyCircle(accountHolderId);
+         CreditEligibilityResponse eligibility = creditScoringService.getEligibility(actorUserId, accountHolderId);
+ 
+         return new MobileHomeDashboardResponse(
+                 buildUser(accountHolder, profile, activeMembership.orElse(null)),
+-                new MobileHomeDashboardResponse.WalletSection(walletBalance.availableBalance(), walletBalance.currency()),
+                 buildEngagement(accountHolderId, allTasks),
+                 buildNextAction(accountHolder, profile, myCircle, activeMembership.isPresent(), planSelection.orElse(null), allTasks),
+                 buildCircle(myCircle),
+Index: src/main/java/com/ccapp/identity/controller/IdentityController.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>package com.ccapp.identity.controller;\n\nimport com.ccapp.common.api.CommonResponse;\nimport com.ccapp.common.security.AuthenticatedPrincipal;\nimport com.ccapp.common.security.SecurityUtils;\nimport com.ccapp.identity.dto.*;\nimport com.ccapp.identity.service.FirebaseUserClaims;\nimport com.ccapp.identity.service.IdentityService;\nimport io.swagger.v3.oas.annotations.Operation;\nimport io.swagger.v3.oas.annotations.media.Content;\nimport io.swagger.v3.oas.annotations.media.Schema;\nimport io.swagger.v3.oas.annotations.responses.ApiResponse;\nimport io.swagger.v3.oas.annotations.responses.ApiResponses;\nimport io.swagger.v3.oas.annotations.security.SecurityRequirement;\nimport io.swagger.v3.oas.annotations.tags.Tag;\nimport jakarta.validation.Valid;\nimport lombok.RequiredArgsConstructor;\nimport lombok.extern.slf4j.Slf4j;\nimport org.springframework.http.ResponseEntity;\nimport org.springframework.security.core.Authentication;\nimport org.springframework.web.bind.annotation.*;\n\nimport java.util.UUID;\n\n@RestController\n@RequestMapping(\"/identity\")\n@RequiredArgsConstructor\n@Tag(name = \"Identity\", description = \"Gestion de l'identite, devices et sessions utilisateur\")\n@SecurityRequirement(name = \"bearerAuth\")\n@Slf4j\npublic class IdentityController {\n\n    private final IdentityService identityService;\n\n    @PostMapping(\"/sync\")\n    @Operation(summary = \"Synchroniser l'identite utilisateur\")\n    @ApiResponses(value = {\n            @ApiResponse(responseCode = \"200\", description = \"Succes\", content = @Content(schema = @Schema(implementation = CommonResponse.class))),\n            @ApiResponse(responseCode = \"400\", description = \"Erreur de validation/regle metier\", content = @Content(schema = @Schema(implementation = CommonResponse.class))),\n            @ApiResponse(responseCode = \"401\", description = \"Token invalide ou absent\", content = @Content(schema = @Schema(implementation = CommonResponse.class)))\n    })\n    public ResponseEntity<CommonResponse<SyncResponse>> sync(@Valid @RequestBody SyncRequest request, Authentication authentication) {\n        FirebaseUserClaims claims = toClaims(authentication);\n        log.info(\"IdentityController sync firebaseUid={} platform={} deviceIdentifier={}\",\n                claims.uid(), request.platform(), request.deviceIdentifier());\n        return ResponseEntity.ok(CommonResponse.success(\"Identity synced\", identityService.sync(claims, request)));\n    }\n\n    @PostMapping(\"/onboarding\")\n    @Operation(summary = \"Mettre a jour les informations d'onboarding\")\n    @ApiResponses(value = {\n            @ApiResponse(responseCode = \"200\", description = \"Succes\", content = @Content(schema = @Schema(implementation = CommonResponse.class))),\n            @ApiResponse(responseCode = \"400\", description = \"Validation invalide\", content = @Content(schema = @Schema(implementation = CommonResponse.class))),\n            @ApiResponse(responseCode = \"401\", description = \"Non authentifie\", content = @Content(schema = @Schema(implementation = CommonResponse.class))),\n            @ApiResponse(responseCode = \"404\", description = \"Utilisateur introuvable\", content = @Content(schema = @Schema(implementation = CommonResponse.class)))\n    })\n    public ResponseEntity<CommonResponse<MeResponse>> onboarding(@Valid @RequestBody OnboardingRequest request) {\n        UUID userId = SecurityUtils.currentUserId();\n        log.info(\"IdentityController onboarding userId={}\", userId);\n        return ResponseEntity.ok(CommonResponse.success(\"Onboarding updated\", identityService.onboarding(userId, request)));\n    }\n\n    @GetMapping(\"/onboarding\")\n    @Operation(summary = \"Recuperer le statut d'onboarding multi-etapes\")\n    @ApiResponses(value = {\n            @ApiResponse(responseCode = \"200\", description = \"Succes\", content = @Content(schema = @Schema(implementation = CommonResponse.class))),\n            @ApiResponse(responseCode = \"401\", description = \"Non authentifie\", content = @Content(schema = @Schema(implementation = CommonResponse.class))),\n            @ApiResponse(responseCode = \"404\", description = \"Utilisateur introuvable\", content = @Content(schema = @Schema(implementation = CommonResponse.class)))\n    })\n    public ResponseEntity<CommonResponse<OnboardingStatusResponse>> onboardingStatus() {\n        UUID userId = SecurityUtils.currentUserId();\n        log.debug(\"IdentityController onboardingStatus userId={}\", userId);\n        return ResponseEntity.ok(CommonResponse.success(\"Onboarding status\", identityService.getOnboardingStatus(userId)));\n    }\n\n    @PatchMapping(\"/onboarding/step-1\")\n    @Operation(summary = \"Onboarding etape 1: profil\")\n    @ApiResponses(value = {\n            @ApiResponse(responseCode = \"200\", description = \"Succes\", content = @Content(schema = @Schema(implementation = CommonResponse.class))),\n            @ApiResponse(responseCode = \"400\", description = \"Validation invalide\", content = @Content(schema = @Schema(implementation = CommonResponse.class))),\n            @ApiResponse(responseCode = \"401\", description = \"Non authentifie\", content = @Content(schema = @Schema(implementation = CommonResponse.class))),\n            @ApiResponse(responseCode = \"404\", description = \"Utilisateur introuvable\", content = @Content(schema = @Schema(implementation = CommonResponse.class)))\n    })\n    public ResponseEntity<CommonResponse<OnboardingStatusResponse>> onboardingStep1(@Valid @RequestBody OnboardingStep1Request request) {\n        UUID userId = SecurityUtils.currentUserId();\n        log.info(\"IdentityController onboardingStep1 userId={}\", userId);\n        return ResponseEntity.ok(CommonResponse.success(\"Onboarding step 1 updated\", identityService.onboardingStep1(userId, request)));\n    }\n\n    @PatchMapping(\"/onboarding/step-2\")\n    @Operation(summary = \"Onboarding etape 2: activite\")\n    @ApiResponses(value = {\n            @ApiResponse(responseCode = \"200\", description = \"Succes\", content = @Content(schema = @Schema(implementation = CommonResponse.class))),\n            @ApiResponse(responseCode = \"400\", description = \"Validation invalide\", content = @Content(schema = @Schema(implementation = CommonResponse.class))),\n            @ApiResponse(responseCode = \"401\", description = \"Non authentifie\", content = @Content(schema = @Schema(implementation = CommonResponse.class))),\n            @ApiResponse(responseCode = \"404\", description = \"Utilisateur introuvable\", content = @Content(schema = @Schema(implementation = CommonResponse.class)))\n    })\n    public ResponseEntity<CommonResponse<OnboardingStatusResponse>> onboardingStep2(@Valid @RequestBody OnboardingStep2Request request) {\n        UUID userId = SecurityUtils.currentUserId();\n        log.info(\"IdentityController onboardingStep2 userId={}\", userId);\n        return ResponseEntity.ok(CommonResponse.success(\"Onboarding step 2 updated\", identityService.onboardingStep2(userId, request)));\n    }\n\n    @PatchMapping(\"/onboarding/step-3\")\n    @Operation(summary = \"Onboarding etape 3: capital et consentements\")\n    @ApiResponses(value = {\n            @ApiResponse(responseCode = \"200\", description = \"Succes\", content = @Content(schema = @Schema(implementation = CommonResponse.class))),\n            @ApiResponse(responseCode = \"400\", description = \"Validation invalide\", content = @Content(schema = @Schema(implementation = CommonResponse.class))),\n            @ApiResponse(responseCode = \"401\", description = \"Non authentifie\", content = @Content(schema = @Schema(implementation = CommonResponse.class))),\n            @ApiResponse(responseCode = \"404\", description = \"Utilisateur introuvable\", content = @Content(schema = @Schema(implementation = CommonResponse.class)))\n    })\n    public ResponseEntity<CommonResponse<OnboardingStatusResponse>> onboardingStep3(@Valid @RequestBody OnboardingStep3Request request) {\n        UUID userId = SecurityUtils.currentUserId();\n        log.info(\"IdentityController onboardingStep3 userId={}\", userId);\n        return ResponseEntity.ok(CommonResponse.success(\"Onboarding step 3 updated\", identityService.onboardingStep3(userId, request)));\n    }\n\n    @GetMapping(\"/me\")\n    @Operation(summary = \"Recuperer le profil de l'utilisateur courant\")\n    @ApiResponses(value = {\n            @ApiResponse(responseCode = \"200\", description = \"Succes\", content = @Content(schema = @Schema(implementation = CommonResponse.class))),\n            @ApiResponse(responseCode = \"401\", description = \"Non authentifie\", content = @Content(schema = @Schema(implementation = CommonResponse.class))),\n            @ApiResponse(responseCode = \"404\", description = \"Utilisateur introuvable\", content = @Content(schema = @Schema(implementation = CommonResponse.class)))\n    })\n    public ResponseEntity<CommonResponse<MeResponse>> me() {\n        UUID userId = SecurityUtils.currentUserId();\n        log.debug(\"IdentityController me userId={}\", userId);\n        return ResponseEntity.ok(CommonResponse.success(\"Current user\", identityService.me(userId)));\n    }\n\n    @PostMapping(\"/devices\")\n    @Operation(summary = \"Enregistrer ou mettre a jour un device\")\n    @ApiResponses(value = {\n            @ApiResponse(responseCode = \"200\", description = \"Succes\", content = @Content(schema = @Schema(implementation = CommonResponse.class))),\n            @ApiResponse(responseCode = \"400\", description = \"Validation invalide\", content = @Content(schema = @Schema(implementation = CommonResponse.class))),\n            @ApiResponse(responseCode = \"401\", description = \"Non authentifie\", content = @Content(schema = @Schema(implementation = CommonResponse.class)))\n    })\n    public ResponseEntity<CommonResponse<UserDeviceDto>> registerDevice(@Valid @RequestBody RegisterDeviceRequest request) {\n        UUID userId = SecurityUtils.currentUserId();\n        log.info(\"IdentityController registerDevice userId={} platform={} deviceIdentifier={}\",\n                userId, request.platform(), request.deviceIdentifier());\n        return ResponseEntity.ok(CommonResponse.success(\"Device upserted\", identityService.registerDevice(userId, request)));\n    }\n\n    @PostMapping(\"/devices/{deviceId}/block\")\n    @Operation(summary = \"Bloquer un device utilisateur\")\n    @ApiResponses(value = {\n            @ApiResponse(responseCode = \"200\", description = \"Succes\", content = @Content(schema = @Schema(implementation = CommonResponse.class))),\n            @ApiResponse(responseCode = \"401\", description = \"Non autorise\", content = @Content(schema = @Schema(implementation = CommonResponse.class))),\n            @ApiResponse(responseCode = \"404\", description = \"Device introuvable\", content = @Content(schema = @Schema(implementation = CommonResponse.class)))\n    })\n    public ResponseEntity<CommonResponse<Void>> blockDevice(@PathVariable UUID deviceId) {\n        UUID userId = SecurityUtils.currentUserId();\n        log.info(\"IdentityController blockDevice userId={} deviceId={}\", userId, deviceId);\n        identityService.blockDevice(userId, deviceId);\n        return ResponseEntity.ok(CommonResponse.success(\"Device blocked\"));\n    }\n\n    @PostMapping(\"/sessions/refresh\")\n    @Operation(summary = \"Faire une rotation du refresh token\")\n    @ApiResponses(value = {\n            @ApiResponse(responseCode = \"200\", description = \"Succes\", content = @Content(schema = @Schema(implementation = CommonResponse.class))),\n            @ApiResponse(responseCode = \"400\", description = \"Validation invalide\", content = @Content(schema = @Schema(implementation = CommonResponse.class))),\n            @ApiResponse(responseCode = \"401\", description = \"Refresh token invalide/expire\", content = @Content(schema = @Schema(implementation = CommonResponse.class)))\n    })\n    public ResponseEntity<CommonResponse<RefreshTokenResponse>> refresh(@Valid @RequestBody RefreshTokenRequest request) {\n        log.info(\"IdentityController refresh\");\n        return ResponseEntity.ok(CommonResponse.success(\"Refresh token rotated\", identityService.rotateRefreshToken(request)));\n    }\n\n    @PostMapping(\"/sessions/{sessionId}/revoke\")\n    @Operation(summary = \"Revoquer une session active\")\n    @ApiResponses(value = {\n            @ApiResponse(responseCode = \"200\", description = \"Succes\", content = @Content(schema = @Schema(implementation = CommonResponse.class))),\n            @ApiResponse(responseCode = \"401\", description = \"Non autorise\", content = @Content(schema = @Schema(implementation = CommonResponse.class))),\n            @ApiResponse(responseCode = \"404\", description = \"Session introuvable\", content = @Content(schema = @Schema(implementation = CommonResponse.class)))\n    })\n    public ResponseEntity<CommonResponse<Void>> revokeSession(@PathVariable UUID sessionId) {\n        UUID userId = SecurityUtils.currentUserId();\n        log.info(\"IdentityController revokeSession userId={} sessionId={}\", userId, sessionId);\n        identityService.revokeSession(userId, sessionId);\n        return ResponseEntity.ok(CommonResponse.success(\"Session revoked\"));\n    }\n\n    private FirebaseUserClaims toClaims(Authentication authentication) {\n        if (authentication == null || !(authentication.getPrincipal() instanceof AuthenticatedPrincipal principal)) {\n            throw new IllegalStateException(\"Invalid authentication context\");\n        }\n        return new FirebaseUserClaims(principal.firebaseUid(), principal.email());\n    }\n}\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/com/ccapp/identity/controller/IdentityController.java b/src/main/java/com/ccapp/identity/controller/IdentityController.java
+--- a/src/main/java/com/ccapp/identity/controller/IdentityController.java	(revision c57b80e23d00fb6fbcd960a5297cc575163af3a0)
++++ b/src/main/java/com/ccapp/identity/controller/IdentityController.java	(date 1774352258047)
+@@ -46,6 +46,21 @@
+         return ResponseEntity.ok(CommonResponse.success("Identity synced", identityService.sync(claims, request)));
+     }
+ 
++    @PatchMapping("/country")
++    @Operation(summary = "Enregistrer le pays de l'utilisateur")
++    @ApiResponses(value = {
++            @ApiResponse(responseCode = "204", description = "Pays enregistre"),
++            @ApiResponse(responseCode = "400", description = "Code pays invalide ou pays immuable", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
++            @ApiResponse(responseCode = "401", description = "Non authentifie", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
++            @ApiResponse(responseCode = "404", description = "Utilisateur introuvable", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
++    })
++    public ResponseEntity<Void> selectCountry(@Valid @RequestBody SelectCountryRequest request) {
++        UUID userId = SecurityUtils.currentUserId();
++        log.info("IdentityController selectCountry userId={} country={}", userId, request.country());
++        identityService.selectCountry(userId, request.country());
++        return ResponseEntity.noContent().build();
++    }
++
+     @PostMapping("/onboarding")
+     @Operation(summary = "Mettre a jour les informations d'onboarding")
+     @ApiResponses(value = {
