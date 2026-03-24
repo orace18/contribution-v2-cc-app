@@ -4,21 +4,14 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Config mail revue">
-      <change beforePath="$PROJECT_DIR$/.idea/compiler.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/compiler.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/wallet/domain/entity/Wallet.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/wallet/domain/entity/Wallet.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/wallet/repository/WalletRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/wallet/repository/WalletRepository.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/ledger/service/AccountingPostingService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/ledger/service/AccountingPostingService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/payments/operation/domain/enums/OperationType.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/payments/operation/domain/enums/OperationType.java" afterDir="false" />
-    </list>
+    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Correction du bug" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
   <component name="EmbeddingIndexingInfo">
-    <option name="cachedIndexableFilesCount" value="893" />
+    <option name="cachedIndexableFilesCount" value="988" />
   </component>
   <component name="FileTemplateManagerImpl">
     <option name="RECENT_TEMPLATES">
@@ -148,14 +141,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1772553173766</updated>
-    </task>
-    <task id="LOCAL-00026" summary="Ajout de MinIO pour les images">
-      <option name="closed" value="true" />
-      <created>1772923440342</created>
-      <option name="number" value="00026" />
-      <option name="presentableId" value="LOCAL-00026" />
-      <option name="project" value="LOCAL" />
-      <updated>1772923440342</updated>
     </task>
     <task id="LOCAL-00027" summary="Config MinIO">
       <option name="closed" value="true" />
@@ -541,7 +526,15 @@
       <option name="project" value="LOCAL" />
       <updated>1774020347773</updated>
     </task>
-    <option name="localTasksCounter" value="75" />
+    <task id="LOCAL-00075" summary="Correction du bug">
+      <option name="closed" value="true" />
+      <created>1774297431005</created>
+      <option name="number" value="00075" />
+      <option name="presentableId" value="LOCAL-00075" />
+      <option name="project" value="LOCAL" />
+      <updated>1774297431006</updated>
+    </task>
+    <option name="localTasksCounter" value="76" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -556,7 +549,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="Firebase config" />
     <MESSAGE value="Refact" />
     <MESSAGE value="Correction de la configuration firebase" />
     <MESSAGE value="Firebase location" />
@@ -581,7 +573,8 @@
     <MESSAGE value="Gestion des admins" />
     <MESSAGE value="Config mail" />
     <MESSAGE value="Config mail revue" />
-    <option name="LAST_COMMIT_MESSAGE" value="Config mail revue" />
+    <MESSAGE value="Correction du bug" />
+    <option name="LAST_COMMIT_MESSAGE" value="Correction du bug" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />
