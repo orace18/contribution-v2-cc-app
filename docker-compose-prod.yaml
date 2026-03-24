@@ -3,8 +3,10 @@ services:
     image: ${IMAGE_FULL}
     container_name: ${CI_PROJECT_NAME}
     restart: unless-stopped
+    expose:
+      - "8080"
     ports:
-      - "9901:${APP_PORT}"
+      - "9901:8080"
 
     environment:
       - SPRING_PROFILES_ACTIVE=prod

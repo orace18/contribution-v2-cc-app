@@ -3,6 +3,8 @@ services:
     image: ${IMAGE_FULL}
     container_name: ${CI_PROJECT_NAME}
     restart: unless-stopped
+    expose:
+      - "8080"
     environment:
       - SPRING_PROFILES_ACTIVE=dev
 
@@ -58,10 +60,14 @@ services:
       - "traefik.http.routers.cc-app-backend-dev.rule=Host(`${API_DOMAIN}`) && PathPrefix(`/${CI_PROJECT_NAME}`)"
       - "traefik.http.routers.cc-app-backend-dev.entrypoints=websecure"
       - "traefik.http.routers.cc-app-backend-dev.tls.certresolver=myresolver"
-      - "traefik.http.services.cc-app-backend-dev.loadbalancer.server.port=${APP_PORT}"
+      - "traefik.http.services.cc-app-backend-dev.loadbalancer.server.port=8080"
       - "traefik.http.routers.cc-app-backend-dev.middlewares=cc-app-backend-dev-strip,cc-app-backend-dev-addctx"
       - "traefik.http.middlewares.cc-app-backend-dev-strip.stripprefix.prefixes=/${CI_PROJECT_NAME}"
       - "traefik.http.middlewares.cc-app-backend-dev-addctx.addprefix.prefix=/cc-app-backend"
+      - "traefik.http.routers.cc-app-backend-dev-direct.rule=Host(`${API_DOMAIN}`) && PathPrefix(`/cc-app-backend`)"
+      - "traefik.http.routers.cc-app-backend-dev-direct.entrypoints=websecure"
+      - "traefik.http.routers.cc-app-backend-dev-direct.tls.certresolver=myresolver"
+      - "traefik.http.routers.cc-app-backend-dev-direct.service=cc-app-backend-dev"
       - "traefik.http.routers.cc-app-backend-dev-docs.rule=Host(`${API_DOMAIN}`) && (PathPrefix(`/cc-app-backend/v3/api-docs`) || PathPrefix(`/cc-app-backend/swagger-ui`) || Path(`/cc-app-backend/swagger-ui.html`))"
       - "traefik.http.routers.cc-app-backend-dev-docs.entrypoints=websecure"
       - "traefik.http.routers.cc-app-backend-dev-docs.tls.certresolver=myresolver"
