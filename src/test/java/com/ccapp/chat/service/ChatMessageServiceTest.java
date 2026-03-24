@@ -64,6 +64,7 @@ class ChatMessageServiceTest {
         UUID messageId = UUID.randomUUID();
         UUID conversationId = UUID.randomUUID();
         SendChatMessageRequest request = new SendChatMessageRequest(
+                null,
                 recipientId,
                 "Hello",
                 "IN_APP_CHAT",
@@ -128,6 +129,7 @@ class ChatMessageServiceTest {
                 .thenReturn(Optional.of(existing));
 
         chatMessageService.sendMessage(actorUserId, senderId, new SendChatMessageRequest(
+                null,
                 recipientId,
                 "Hello",
                 "IN_APP_CHAT",

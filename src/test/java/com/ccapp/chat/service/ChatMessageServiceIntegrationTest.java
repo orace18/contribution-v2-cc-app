@@ -76,12 +76,14 @@ class ChatMessageServiceIntegrationTest {
         UUID recipientId = createAccountHolder("Recipient", "One");
 
         var first = chatMessageService.sendMessage(actorUserId, senderId, new SendChatMessageRequest(
+                null,
                 recipientId,
                 "Hello 1",
                 "IN_APP_CHAT",
                 "client-1"
         ));
         var second = chatMessageService.sendMessage(actorUserId, senderId, new SendChatMessageRequest(
+                null,
                 recipientId,
                 "Hello 2",
                 "IN_APP_CHAT",
