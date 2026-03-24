@@ -12,6 +12,8 @@ import java.util.UUID;
 
 public interface ChatConversationRepository extends JpaRepository<ChatConversation, UUID> {
 
+    Optional<ChatConversation> findByCircleId(UUID circleId);
+
     Optional<ChatConversation> findByParticipantAAccountHolderIdAndParticipantBAccountHolderId(
             UUID participantAAccountHolderId,
             UUID participantBAccountHolderId

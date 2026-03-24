@@ -28,7 +28,7 @@ public class MessageSentNotificationListener implements DomainEventListener<Mess
             listenerExecutor.execute(LISTENER_KEY, event, () -> notificationService.createNotification(new CreateNotificationRequest(
                     event.recipientAccountHolderId(),
                     null,
-                    NotificationType.AGENT_ACTION,
+                    NotificationType.CHAT_MESSAGE,
                     NotificationChannel.IN_APP,
                     "CHAT_MESSAGE_RECEIVED",
                     "You received a new chat message.",

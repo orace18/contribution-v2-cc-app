@@ -35,6 +35,7 @@ import com.ccapp.identity.repository.UserRepository;
 import com.ccapp.identity.verification.service.PhoneVerificationService;
 import com.ccapp.mlm.domain.entity.MlmRelationship;
 import com.ccapp.mlm.repository.MlmRelationshipRepository;
+import com.ccapp.chat.service.ChatConversationService;
 import com.ccapp.progress.event.AccountHolderCreatedEvent;
 import com.ccapp.progress.event.CircleJoinedEvent;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -89,6 +90,7 @@ public class CircleService {
     private final PhoneVerificationService phoneVerificationService;
     private final CountryConfigResolver countryConfigResolver;
     private final ObjectMapper objectMapper;
+    private final ChatConversationService chatConversationService;
 
     @Value("${circles.assisted-member.require-phone-verification:false}")
     private boolean requirePhoneVerification;
@@ -147,8 +149,9 @@ public class CircleService {
             domainEventPublisher.publish(CircleJoinedEvent.create(accountHolderId, circle.getId()));
         }
 
+        UUID conversationId = chatConversationService.getOrCreateCircleConversationId(circle.getId());
         int membersCount = Math.toIntExact(circleMemberRepository.countByCircle_IdAndFinancialMemberTrue(circle.getId()));
-        return toCircleResponse(circle, membersCount);
+        return toCircleResponse(circle, conversationId, membersCount);
     }
 
     @Transactional
@@ -205,6 +208,7 @@ public class CircleService {
         }
 
         Circle circle = activeCircles.get(0);
+        UUID conversationId = chatConversationService.getOrCreateCircleConversationId(circle.getId());
         List<CircleMemberResponse> members = circleMemberRepository.findByCircle_IdOrderByJoinedAtAsc(circle.getId())
                 .stream()
                 .map(this::toMemberResponse)
@@ -216,6 +220,7 @@ public class CircleService {
                 circle.getCoachId(),
                 circle.getStatus(),
                 circle.getCreatedAt(),
+                conversationId,
                 members
         );
     }
@@ -336,13 +341,14 @@ public class CircleService {
         }
     }
 
-    private CircleResponse toCircleResponse(Circle circle, int membersCount) {
+    private CircleResponse toCircleResponse(Circle circle, UUID conversationId, int membersCount) {
         return new CircleResponse(
                 circle.getId(),
                 circle.getName(),
                 circle.getCoachId(),
                 circle.getStatus(),
                 circle.getCreatedAt(),
+                conversationId,
                 membersCount
         );
     }

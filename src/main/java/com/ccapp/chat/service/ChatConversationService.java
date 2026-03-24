@@ -104,6 +104,16 @@ public class ChatConversationService {
     }
 
     @Transactional
+    public UUID getOrCreateCircleConversationId(UUID circleId) {
+        return chatConversationRepository.findByCircleId(circleId)
+                .orElseGet(() -> chatConversationRepository.save(ChatConversation.builder()
+                        .type(com.ccapp.chat.domain.enums.ChatConversationType.CIRCLE)
+                        .circleId(circleId)
+                        .build()))
+                .getId();
+    }
+
+    @Transactional
     public ChatConversation resolveDirectConversation(UUID participantOneAccountHolderId,
                                                       UUID participantTwoAccountHolderId) {
         UUID participantA = participantOneAccountHolderId.compareTo(participantTwoAccountHolderId) <= 0

@@ -4,6 +4,7 @@ import com.ccapp.chat.domain.entity.ChatConversation;
 import com.ccapp.chat.domain.entity.ChatMessage;
 import com.ccapp.chat.domain.entity.ChatMessageDeliveryStatus;
 import com.ccapp.chat.domain.entity.ChatReadReceipt;
+import com.ccapp.chat.domain.enums.ChatConversationType;
 import com.ccapp.chat.domain.enums.ChatMessageStatus;
 import com.ccapp.chat.dto.ChatRealtimeEvent;
 import com.ccapp.chat.dto.ChatMessageResponse;
@@ -14,6 +15,8 @@ import com.ccapp.chat.repository.ChatConversationRepository;
 import com.ccapp.chat.repository.ChatMessageDeliveryStatusRepository;
 import com.ccapp.chat.repository.ChatMessageRepository;
 import com.ccapp.chat.repository.ChatReadReceiptRepository;
+import com.ccapp.circles.domain.entity.CircleMember;
+import com.ccapp.circles.repository.CircleMemberRepository;
 import com.ccapp.common.events.DomainEventPublisher;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.common.exception.NotFoundException;
@@ -48,6 +51,7 @@ public class ChatMessageService {
     private final ChatConversationService chatConversationService;
     private final AccountHolderService accountHolderService;
     private final AccessControlService accessControlService;
+    private final CircleMemberRepository circleMemberRepository;
     private final DomainEventPublisher domainEventPublisher;
     private final SimpMessagingTemplate messagingTemplate;
 
@@ -55,8 +59,24 @@ public class ChatMessageService {
     public ChatMessageResponse sendMessage(UUID actorUserId, UUID senderAccountHolderId, SendChatMessageRequest request) {
         accessControlService.assertCanActOnAccountHolder(actorUserId, senderAccountHolderId, PermissionLevel.TRANSACT);
         accountHolderService.getById(senderAccountHolderId);
-        accountHolderService.getById(request.recipientAccountHolderId());
 
+        if (request.conversationId() != null) {
+            ChatConversation conversation = chatConversationRepository.findById(request.conversationId())
+                    .orElseThrow(() -> new NotFoundException("Conversation not found"));
+            if (conversation.getType() == ChatConversationType.CIRCLE) {
+                assertCircleMember(conversation, senderAccountHolderId);
+                return sendCircleMessage(senderAccountHolderId, conversation, request);
+            }
+            // DIRECT with explicit conversationId
+            assertParticipant(conversation, senderAccountHolderId);
+            return persistAndPublish(senderAccountHolderId, conversation, request, normalizeClientMessageId(request.clientMessageId()));
+        }
+
+        // Legacy DIRECT: resolve by recipientAccountHolderId
+        if (request.recipientAccountHolderId() == null) {
+            throw new BusinessException("Either conversationId or recipientAccountHolderId is required");
+        }
+        accountHolderService.getById(request.recipientAccountHolderId());
         ChatConversation conversation = chatConversationService.resolveDirectConversation(
                 senderAccountHolderId,
                 request.recipientAccountHolderId()
@@ -68,7 +88,6 @@ public class ChatMessageService {
                     .map(this::toResponse)
                     .orElseGet(() -> persistAndPublish(senderAccountHolderId, conversation, request, normalizedClientMessageId));
         }
-
         return persistAndPublish(senderAccountHolderId, conversation, request, null);
     }
 
@@ -104,7 +123,8 @@ public class ChatMessageService {
         accessControlService.assertCanActOnAccountHolder(actorUserId, recipientAccountHolderId, PermissionLevel.VIEW);
         ChatMessage message = chatMessageRepository.findById(messageId)
                 .orElseThrow(() -> new NotFoundException("Chat message not found"));
-        if (!recipientAccountHolderId.equals(message.getRecipientAccountHolderId())) {
+        if (message.getRecipientAccountHolderId() != null
+                && !recipientAccountHolderId.equals(message.getRecipientAccountHolderId())) {
             throw new BusinessException("Only recipient can mark message as delivered");
         }
         if (message.getMessageStatus() == ChatMessageStatus.READ
@@ -116,7 +136,9 @@ public class ChatMessageService {
         message.setMessageStatus(ChatMessageStatus.DELIVERED);
         message.setDeliveredAt(now);
         ChatMessage saved = chatMessageRepository.save(message);
-        upsertDeliveryStatus(saved.getId(), saved.getRecipientAccountHolderId(), ChatMessageStatus.DELIVERED);
+        if (saved.getRecipientAccountHolderId() != null) {
+            upsertDeliveryStatus(saved.getId(), saved.getRecipientAccountHolderId(), ChatMessageStatus.DELIVERED);
+        }
         domainEventPublisher.publish(ChatMessageStatusUpdatedEvent.create(
                 saved.getId(),
                 saved.getConversationId(),
@@ -132,7 +154,8 @@ public class ChatMessageService {
         accessControlService.assertCanActOnAccountHolder(actorUserId, recipientAccountHolderId, PermissionLevel.VIEW);
         ChatMessage message = chatMessageRepository.findById(messageId)
                 .orElseThrow(() -> new NotFoundException("Chat message not found"));
-        if (!recipientAccountHolderId.equals(message.getRecipientAccountHolderId())) {
+        if (message.getRecipientAccountHolderId() != null
+                && !recipientAccountHolderId.equals(message.getRecipientAccountHolderId())) {
             throw new BusinessException("Only recipient can mark message as read");
         }
         if (message.getMessageStatus() == ChatMessageStatus.READ) {
@@ -146,8 +169,10 @@ public class ChatMessageService {
         }
         message.setReadAt(now);
         ChatMessage saved = chatMessageRepository.save(message);
-        upsertDeliveryStatus(saved.getId(), saved.getRecipientAccountHolderId(), ChatMessageStatus.READ);
-        upsertReadReceipt(saved.getId(), saved.getRecipientAccountHolderId(), now);
+        if (saved.getRecipientAccountHolderId() != null) {
+            upsertDeliveryStatus(saved.getId(), saved.getRecipientAccountHolderId(), ChatMessageStatus.READ);
+            upsertReadReceipt(saved.getId(), saved.getRecipientAccountHolderId(), now);
+        }
         domainEventPublisher.publish(ChatMessageStatusUpdatedEvent.create(
                 saved.getId(),
                 saved.getConversationId(),
@@ -155,6 +180,39 @@ public class ChatMessageService {
                 saved.getRecipientAccountHolderId()
         ));
         publishRealtime(EVENT_MESSAGE_READ, saved);
+        return toResponse(saved);
+    }
+
+    // -------------------------------------------------------------------------
+
+    private ChatMessageResponse sendCircleMessage(UUID senderAccountHolderId,
+                                                  ChatConversation conversation,
+                                                  SendChatMessageRequest request) {
+        String normalizedClientMessageId = normalizeClientMessageId(request.clientMessageId());
+        if (normalizedClientMessageId != null) {
+            return chatMessageRepository.findBySenderAccountHolderIdAndClientMessageId(senderAccountHolderId, normalizedClientMessageId)
+                    .map(this::toResponse)
+                    .orElseGet(() -> persistCircleMessage(senderAccountHolderId, conversation, request, normalizedClientMessageId));
+        }
+        return persistCircleMessage(senderAccountHolderId, conversation, request, null);
+    }
+
+    private ChatMessageResponse persistCircleMessage(UUID senderAccountHolderId,
+                                                     ChatConversation conversation,
+                                                     SendChatMessageRequest request,
+                                                     String normalizedClientMessageId) {
+        ChatMessage saved = chatMessageRepository.save(ChatMessage.builder()
+                .senderAccountHolderId(senderAccountHolderId)
+                .recipientAccountHolderId(null)
+                .conversationId(conversation.getId())
+                .content(request.content().trim())
+                .channel(normalizeChannel(request.channel()))
+                .clientMessageId(normalizedClientMessageId)
+                .messageStatus(ChatMessageStatus.SENT)
+                .build());
+
+        publishCircleRealtime(EVENT_MESSAGE_SENT, saved);
+        notifyCircleMembers(saved, senderAccountHolderId, conversation.getCircleId());
         return toResponse(saved);
     }
 
@@ -178,7 +236,9 @@ public class ChatMessageService {
                 saved.getRecipientAccountHolderId(),
                 saved.getChannel()
         ));
-        upsertDeliveryStatus(saved.getId(), saved.getRecipientAccountHolderId(), ChatMessageStatus.SENT);
+        if (saved.getRecipientAccountHolderId() != null) {
+            upsertDeliveryStatus(saved.getId(), saved.getRecipientAccountHolderId(), ChatMessageStatus.SENT);
+        }
         publishRealtime(EVENT_MESSAGE_SENT, saved);
 
         return toResponse(saved);
@@ -192,11 +252,33 @@ public class ChatMessageService {
         return chatMessageRepository.save(message);
     }
 
+    private void notifyCircleMembers(ChatMessage message, UUID senderAccountHolderId, UUID circleId) {
+        circleMemberRepository.findByCircle_IdOrderByJoinedAtAsc(circleId).stream()
+                .map(CircleMember::getAccountHolderId)
+                .filter(memberId -> !memberId.equals(senderAccountHolderId))
+                .forEach(memberId -> domainEventPublisher.publish(MessageSentEvent.create(
+                        message.getId(),
+                        senderAccountHolderId,
+                        memberId,
+                        message.getChannel()
+                )));
+    }
+
     private void assertParticipant(ChatConversation conversation, UUID accountHolderId) {
+        if (conversation.getType() == ChatConversationType.CIRCLE) {
+            assertCircleMember(conversation, accountHolderId);
+            return;
+        }
         boolean participant = accountHolderId.equals(conversation.getParticipantAAccountHolderId())
                 || accountHolderId.equals(conversation.getParticipantBAccountHolderId());
         if (!participant) {
             throw new BusinessException("Account holder is not a participant of this conversation");
+        }
+    }
+
+    private void assertCircleMember(ChatConversation conversation, UUID accountHolderId) {
+        if (!circleMemberRepository.existsByCircle_IdAndAccountHolderId(conversation.getCircleId(), accountHolderId)) {
+            throw new BusinessException("Account holder is not a member of this circle");
         }
     }
 
@@ -214,17 +296,31 @@ public class ChatMessageService {
                 "/topic/chat/events/conversations/" + message.getConversationId(),
                 realtimeEvent
         );
-        messagingTemplate.convertAndSend(
-                "/topic/chat/events/users/" + message.getRecipientAccountHolderId(),
-                realtimeEvent
-        );
-
+        if (message.getRecipientAccountHolderId() != null) {
+            messagingTemplate.convertAndSend(
+                    "/topic/chat/events/users/" + message.getRecipientAccountHolderId(),
+                    realtimeEvent
+            );
+            messagingTemplate.convertAndSend(
+                    "/topic/chat/users/" + message.getRecipientAccountHolderId(),
+                    payload
+            );
+        }
         messagingTemplate.convertAndSend(
                 "/topic/chat/conversations/" + message.getConversationId(),
                 payload
         );
+    }
+
+    private void publishCircleRealtime(String eventType, ChatMessage message) {
+        ChatMessageResponse payload = toResponse(message);
+        ChatRealtimeEvent realtimeEvent = new ChatRealtimeEvent(eventType, payload);
         messagingTemplate.convertAndSend(
-                "/topic/chat/users/" + message.getRecipientAccountHolderId(),
+                "/topic/chat/events/conversations/" + message.getConversationId(),
+                realtimeEvent
+        );
+        messagingTemplate.convertAndSend(
+                "/topic/chat/conversations/" + message.getConversationId(),
                 payload
         );
     }

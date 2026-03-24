@@ -11,6 +11,7 @@ public record CircleResponse(
         UUID coachId,
         CircleStatus status,
         OffsetDateTime createdAt,
+        UUID conversationId,
         int membersCount
 ) {
 }

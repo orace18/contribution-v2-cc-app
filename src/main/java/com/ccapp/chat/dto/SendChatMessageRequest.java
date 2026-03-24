@@ -1,13 +1,13 @@
 package com.ccapp.chat.dto;
 
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 import java.util.UUID;
 
 public record SendChatMessageRequest(
-        @NotNull(message = "recipientAccountHolderId is required")
+        UUID conversationId,
+
         UUID recipientAccountHolderId,
 
         @NotBlank(message = "content is required")

@@ -8,5 +8,6 @@ public enum NotificationType {
     CIRCLE_ACTIVITY,
     TASK_AVAILABLE,
     TASK_COMPLETED,
-    AGENT_ACTION
+    AGENT_ACTION,
+    CHAT_MESSAGE
 }
