@@ -95,7 +95,6 @@ public class CircleService {
 
     @Transactional
     public CircleResponse createCircle(UUID accountHolderId, CreateCircleRequest request) {
-        ensureCreatorCanCreateCircle(accountHolderId);
         MlmHierarchy hierarchy = resolveMlmHierarchy(accountHolderId);
         String accountHolderCountry = resolveAccountHolderCountry(accountHolderId);
         CircleConfigLimits limits = resolveCircleConfigLimits(accountHolderCountry);

@@ -4,7 +4,17 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Fix 500 code status error" />
+    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Le onbording ready for test">
+      <change afterPath="$PROJECT_DIR$/BACKEND_DOCUMENTATION.txt" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/dto/SelectCountryRequest.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/service/CircleService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/service/CircleService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/account_holder/service/AccountHolderService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/account_holder/service/AccountHolderService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/controller/IdentityController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/controller/IdentityController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/service/IdentityOnboardingService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/service/IdentityOnboardingService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/service/IdentityService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/service/IdentityService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/mobile/home/dto/MobileHomeDashboardResponse.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/mobile/home/dto/MobileHomeDashboardResponse.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/mobile/home/service/HomeFacadeService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/mobile/home/service/HomeFacadeService.java" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -141,14 +151,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1772553173766</updated>
-    </task>
-    <task id="LOCAL-00028" summary="Revue du base name">
-      <option name="closed" value="true" />
-      <created>1773063816250</created>
-      <option name="number" value="00028" />
-      <option name="presentableId" value="LOCAL-00028" />
-      <option name="project" value="LOCAL" />
-      <updated>1773063816250</updated>
     </task>
     <task id="LOCAL-00029" summary="Revue du base name">
       <option name="closed" value="true" />
@@ -534,7 +536,15 @@
       <option name="project" value="LOCAL" />
       <updated>1774344767938</updated>
     </task>
-    <option name="localTasksCounter" value="77" />
+    <task id="LOCAL-00077" summary="Fix migrantion and beans error">
+      <option name="closed" value="true" />
+      <created>1774347879005</created>
+      <option name="number" value="00077" />
+      <option name="presentableId" value="LOCAL-00077" />
+      <option name="project" value="LOCAL" />
+      <updated>1774347879005</updated>
+    </task>
+    <option name="localTasksCounter" value="78" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -549,8 +559,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="Correction de la configuration firebase" />
-    <MESSAGE value="Firebase location" />
     <MESSAGE value="Reajustement firebase" />
     <MESSAGE value="Config smtp et secret key" />
     <MESSAGE value="Config des secrets key" />
@@ -574,7 +582,9 @@
     <MESSAGE value="Config mail revue" />
     <MESSAGE value="Correction du bug" />
     <MESSAGE value="Fix 500 code status error" />
-    <option name="LAST_COMMIT_MESSAGE" value="Fix 500 code status error" />
+    <MESSAGE value="Fix migrantion and beans error" />
+    <MESSAGE value="Le onbording ready for test" />
+    <option name="LAST_COMMIT_MESSAGE" value="Le onbording ready for test" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />

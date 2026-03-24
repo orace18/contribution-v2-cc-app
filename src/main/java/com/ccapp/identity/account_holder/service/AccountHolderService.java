@@ -78,6 +78,28 @@ public class AccountHolderService {
     }
 
     @Transactional
+    public AccountHolder selectCountry(UUID accountHolderId, String requestedCountryCode) {
+        log.info("AccountHolderService selectCountry accountHolderId={} requestedCountryCode={}", accountHolderId, requestedCountryCode);
+        AccountHolder accountHolder = getById(accountHolderId);
+        String selectedCountryCode = countryService.resolveSelectedCountryOrThrow(requestedCountryCode).getCode();
+        String serviceCountryCode = countryService.resolveServiceCountryForSelection(selectedCountryCode).getCode();
+
+        if (accountHolder.getCountryCode() != null && !accountHolder.getCountryCode().equalsIgnoreCase(selectedCountryCode)) {
+            log.warn("AccountHolderService selectCountry denied immutable country accountHolderId={} currentCountry={} requestedCountry={}",
+                    accountHolderId, accountHolder.getCountryCode(), selectedCountryCode);
+            throw new BusinessException("Account holder country is immutable");
+        }
+
+        accountHolder.setCountryCode(selectedCountryCode);
+        accountHolder.setServiceCountryCode(serviceCountryCode);
+        AccountHolder saved = accountHolderRepository.save(accountHolder);
+        log.info("AccountHolderService selectCountry success accountHolderId={} countryCode={} serviceCountryCode={}",
+                saved.getId(), saved.getCountryCode(), saved.getServiceCountryCode());
+        countryChartOfAccountsService.findOrCreateWallet(saved);
+        return saved;
+    }
+
+    @Transactional
     public AccountHolder updateProfile(UUID accountHolderId,
                                        String firstName,
                                        String lastName,

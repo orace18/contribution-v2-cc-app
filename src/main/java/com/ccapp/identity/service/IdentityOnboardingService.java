@@ -55,6 +55,12 @@ public class IdentityOnboardingService {
     }
 
     @Transactional
+    public void selectCountry(UUID userId, String countryCode) {
+        User user = findUser(userId);
+        accountHolderService.selectCountry(user.getId(), countryCode.trim().toUpperCase(Locale.ROOT));
+    }
+
+    @Transactional
     public OnboardingStatusResponse onboardingStep1(UUID userId, OnboardingStep1Request request) {
         User user = findUser(userId);
         ensureAccountActive(user);

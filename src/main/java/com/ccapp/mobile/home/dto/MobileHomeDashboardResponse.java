@@ -7,7 +7,6 @@ import java.util.UUID;
 
 public record MobileHomeDashboardResponse(
         UserSection user,
-        WalletSection wallet,
         EngagementSection engagement,
         NextActionSection nextAction,
         CircleSection circle,
@@ -18,12 +17,6 @@ public record MobileHomeDashboardResponse(
             String firstName,
             String profilePicture,
             String membershipType
-    ) {
-    }
-
-    public record WalletSection(
-            BigDecimal balance,
-            String currency
     ) {
     }
 

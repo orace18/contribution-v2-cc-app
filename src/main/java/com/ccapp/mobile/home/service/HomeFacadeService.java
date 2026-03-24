@@ -5,8 +5,6 @@ import com.ccapp.circles.service.CircleService;
 import com.ccapp.circlesocial.dto.CircleActivityResponse;
 import com.ccapp.circlesocial.service.CircleActivityService;
 import com.ccapp.common.exception.NotFoundException;
-import com.ccapp.country.dto.CountryContext;
-import com.ccapp.country.service.CountryContextService;
 import com.ccapp.credit.dto.CreditEligibilityResponse;
 import com.ccapp.credit.service.CreditScoringService;
 import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
@@ -32,8 +30,6 @@ import com.ccapp.progress.domain.enums.TaskType;
 import com.ccapp.progress.dto.TaskResponse;
 import com.ccapp.progress.repository.UserTaskRepository;
 import com.ccapp.progress.service.TaskEngineService;
-import com.ccapp.wallet.dto.WalletBalanceResponse;
-import com.ccapp.wallet.service.WalletBalanceService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -67,8 +63,6 @@ public class HomeFacadeService {
     private final AccessControlService accessControlService;
     private final AccountHolderService accountHolderService;
     private final AccountHolderRepository accountHolderRepository;
-    private final CountryContextService countryContextService;
-    private final WalletBalanceService walletBalanceService;
     private final TaskEngineService taskEngineService;
     private final UserTaskRepository userTaskRepository;
     private final MembershipService membershipService;
@@ -84,19 +78,16 @@ public class HomeFacadeService {
         accessControlService.assertCanActOnAccountHolder(actorUserId, accountHolderId, PermissionLevel.VIEW);
 
         AccountHolder accountHolder = accountHolderService.getById(accountHolderId);
-        CountryContext countryContext = countryContextService.resolve(accountHolderId);
         UserProfile profile = resolveProfile(accountHolderId);
         Optional<Membership> activeMembership = membershipService.findLatestMembership(accountHolderId)
                 .filter(this::isActiveMembership);
         Optional<MobilePlanSelection> planSelection = mobilePlanSelectionRepository.findByAccountHolderId(accountHolderId);
-        WalletBalanceResponse walletBalance = walletBalanceService.getBalance(accountHolderId, countryContext.currency());
         List<TaskResponse> allTasks = taskEngineService.getAllUserTasks(accountHolderId);
         MyCircleResponse myCircle = findMyCircle(accountHolderId);
         CreditEligibilityResponse eligibility = creditScoringService.getEligibility(actorUserId, accountHolderId);
 
         return new MobileHomeDashboardResponse(
                 buildUser(accountHolder, profile, activeMembership.orElse(null)),
-                new MobileHomeDashboardResponse.WalletSection(walletBalance.availableBalance(), walletBalance.currency()),
                 buildEngagement(accountHolderId, allTasks),
                 buildNextAction(accountHolder, profile, myCircle, activeMembership.isPresent(), planSelection.orElse(null), allTasks),
                 buildCircle(myCircle),

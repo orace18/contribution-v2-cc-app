@@ -36,6 +36,11 @@ public class IdentityService {
     }
 
     @Transactional
+    public void selectCountry(UUID userId, String countryCode) {
+        identityOnboardingService.selectCountry(userId, countryCode);
+    }
+
+    @Transactional
     public MeResponse onboarding(UUID userId, OnboardingRequest request) {
         identityOnboardingService.onboardingStep1(userId, new OnboardingStep1Request(
                 request.firstName(),

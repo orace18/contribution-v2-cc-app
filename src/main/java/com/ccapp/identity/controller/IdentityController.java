@@ -46,6 +46,21 @@ public class IdentityController {
         return ResponseEntity.ok(CommonResponse.success("Identity synced", identityService.sync(claims, request)));
     }
 
+    @PatchMapping("/country")
+    @Operation(summary = "Enregistrer le pays de l'utilisateur")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "204", description = "Pays enregistre"),
+            @ApiResponse(responseCode = "400", description = "Code pays invalide ou pays immuable", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Non authentifie", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Utilisateur introuvable", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
+    })
+    public ResponseEntity<Void> selectCountry(@Valid @RequestBody SelectCountryRequest request) {
+        UUID userId = SecurityUtils.currentUserId();
+        log.info("IdentityController selectCountry userId={} country={}", userId, request.country());
+        identityService.selectCountry(userId, request.country());
+        return ResponseEntity.noContent().build();
+    }
+
     @PostMapping("/onboarding")
     @Operation(summary = "Mettre a jour les informations d'onboarding")
     @ApiResponses(value = {
