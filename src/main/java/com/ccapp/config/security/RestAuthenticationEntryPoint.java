@@ -1,5 +1,6 @@
 package com.ccapp.config.security;
 
+import com.ccapp.common.api.ApiEnvelope;
 import com.ccapp.common.api.CommonResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.ServletException;
@@ -25,6 +26,10 @@ public class RestAuthenticationEntryPoint implements AuthenticationEntryPoint {
                          AuthenticationException authException) throws IOException, ServletException {
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        if (request.getServletPath().startsWith("/api/mobile/")) {
+            objectMapper.writeValue(response.getOutputStream(), ApiEnvelope.error(messageFor(request)));
+            return;
+        }
         objectMapper.writeValue(response.getOutputStream(), CommonResponse.error(messageFor(request)));
     }
 

@@ -1,10 +1,10 @@
 package com.ccapp.mobile.home.controller;
 
-import com.ccapp.common.api.CommonResponse;
+import com.ccapp.common.api.ApiEnvelope;
 import com.ccapp.common.security.AuthenticatedPrincipal;
 import com.ccapp.common.security.SecurityUtils;
-import com.ccapp.mobile.home.dto.MobileHomeResponse;
-import com.ccapp.mobile.home.service.MobileHomeService;
+import com.ccapp.mobile.home.dto.MobileHomeDashboardResponse;
+import com.ccapp.mobile.home.service.HomeFacadeService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -27,20 +27,20 @@ import java.util.UUID;
 @SecurityRequirement(name = "bearerAuth")
 public class MobileHomeController {
 
-    private final MobileHomeService mobileHomeService;
+    private final HomeFacadeService homeFacadeService;
 
     @GetMapping
     @Operation(summary = "Aggregate mobile home data")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Success", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
-            @ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
-            @ApiResponse(responseCode = "404", description = "Account holder not found", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
+            @ApiResponse(responseCode = "200", description = "Success", content = @Content(schema = @Schema(implementation = ApiEnvelope.class))),
+            @ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content(schema = @Schema(implementation = ApiEnvelope.class))),
+            @ApiResponse(responseCode = "404", description = "Account holder not found", content = @Content(schema = @Schema(implementation = ApiEnvelope.class)))
     })
-    public ResponseEntity<CommonResponse<MobileHomeResponse>> getHome() {
+    public ResponseEntity<ApiEnvelope<MobileHomeDashboardResponse>> getHome() {
         UUID accountHolderId = SecurityUtils.currentAccountHolderId();
-        return ResponseEntity.ok(CommonResponse.success(
+        return ResponseEntity.ok(ApiEnvelope.success(
                 "Mobile home",
-                mobileHomeService.getHome(resolveActorUserId(), accountHolderId)
+                homeFacadeService.getHome(resolveActorUserId(), accountHolderId)
         ));
     }
 

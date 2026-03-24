@@ -1,0 +1,71 @@
+package com.ccapp.mobile.onboarding.controller;
+
+import com.ccapp.common.api.ApiEnvelope;
+import com.ccapp.common.security.AuthenticatedPrincipal;
+import com.ccapp.common.security.SecurityUtils;
+import com.ccapp.mobile.onboarding.dto.MobileOnboardingPlanResponse;
+import com.ccapp.mobile.onboarding.dto.MobilePlanSelectionResponse;
+import com.ccapp.mobile.onboarding.dto.SelectMobilePlanRequest;
+import com.ccapp.mobile.onboarding.service.MobileOnboardingService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
+import java.util.UUID;
+
+@RestController
+@RequestMapping("/api/mobile/onboarding")
+@RequiredArgsConstructor
+@Tag(name = "Mobile Onboarding", description = "Mobile onboarding APIs")
+public class MobileOnboardingController {
+
+    private final MobileOnboardingService mobileOnboardingService;
+
+    @GetMapping("/plans")
+    @Operation(summary = "List onboarding plans for the requested country catalog")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Success", content = @Content(schema = @Schema(implementation = ApiEnvelope.class))),
+            @ApiResponse(responseCode = "400", description = "Invalid catalog configuration", content = @Content(schema = @Schema(implementation = ApiEnvelope.class)))
+    })
+    public ResponseEntity<ApiEnvelope<List<MobileOnboardingPlanResponse>>> getPlans(@RequestParam(name = "country", required = false) String country) {
+        return ResponseEntity.ok(ApiEnvelope.success(
+                "Onboarding plans",
+                mobileOnboardingService.getPlans(country)
+        ));
+    }
+
+    @PostMapping("/select-plan")
+    @Operation(summary = "Store the selected onboarding plan")
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Success", content = @Content(schema = @Schema(implementation = ApiEnvelope.class))),
+            @ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content(schema = @Schema(implementation = ApiEnvelope.class))),
+            @ApiResponse(responseCode = "404", description = "Subscription plan not found", content = @Content(schema = @Schema(implementation = ApiEnvelope.class)))
+    })
+    public ResponseEntity<ApiEnvelope<MobilePlanSelectionResponse>> selectPlan(@Valid @RequestBody SelectMobilePlanRequest request) {
+        UUID accountHolderId = SecurityUtils.currentAccountHolderId();
+        return ResponseEntity.ok(ApiEnvelope.success(
+                "Plan selected",
+                mobileOnboardingService.selectPlan(resolveActorUserId(), accountHolderId, request)
+        ));
+    }
+
+    private UUID resolveActorUserId() {
+        AuthenticatedPrincipal principal = SecurityUtils.currentPrincipal();
+        return principal.userId() != null ? principal.userId() : SecurityUtils.currentAccountHolderId();
+    }
+}

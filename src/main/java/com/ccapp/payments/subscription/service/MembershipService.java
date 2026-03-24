@@ -20,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.OffsetDateTime;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -110,6 +111,12 @@ public class MembershipService {
                     membership.setStatus(MembershipStatus.CANCELED);
                     membershipRepository.save(membership);
                 });
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<Membership> findLatestMembership(UUID accountHolderId) {
+        return membershipRepository.findFirstByAccountHolderIdAndExpiresAtIsNotNullOrderByExpiresAtDescCreatedAtDesc(accountHolderId)
+                .or(() -> membershipRepository.findFirstByAccountHolderIdOrderByExpiresAtDescCreatedAtDesc(accountHolderId));
     }
 
     private SubscriptionPlan resolvePlanForOperation(Operation operation, Membership membership) {
