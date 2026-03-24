@@ -3,6 +3,12 @@ package com.ccapp.credit.service;
 import com.ccapp.common.events.DomainEvent;
 import com.ccapp.common.events.DomainEventPublisher;
 import com.ccapp.common.exception.BusinessException;
+import com.ccapp.country.config.domain.entity.CountryChartAccount;
+import com.ccapp.country.config.domain.enums.CountryAccountGroup;
+import com.ccapp.country.config.domain.enums.CountryAccountSystemTag;
+import com.ccapp.country.config.domain.enums.CountryChartAccountStatus;
+import com.ccapp.country.config.domain.enums.CountryChartAccountType;
+import com.ccapp.country.config.service.CountryChartOfAccountsService;
 import com.ccapp.credit.domain.entity.Loan;
 import com.ccapp.credit.domain.entity.LoanRepayment;
 import com.ccapp.credit.domain.entity.RepaymentSchedule;
@@ -20,6 +26,7 @@ import com.ccapp.identity.delegation.domain.enums.DelegatedActionType;
 import com.ccapp.identity.delegation.domain.enums.PermissionLevel;
 import com.ccapp.identity.delegation.service.AccessControlService;
 import com.ccapp.identity.delegation.service.DelegatedActionService;
+import com.ccapp.wallet.service.WalletDebitFacade;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -61,6 +68,10 @@ class RepaymentWorkflowRegressionTest {
     private DelegatedActionService delegatedActionService;
     @Mock
     private DomainEventPublisher domainEventPublisher;
+    @Mock
+    private WalletDebitFacade walletDebitFacade;
+    @Mock
+    private CountryChartOfAccountsService countryChartOfAccountsService;
 
     @InjectMocks
     private RepaymentService repaymentService;
@@ -79,6 +90,7 @@ class RepaymentWorkflowRegressionTest {
                 .circleId(circleId)
                 .institutionId(institutionId)
                 .currency("XOF")
+                .countryCode("BJ")
                 .status(LoanStatus.ACTIVE)
                 .build();
         RepaymentSchedule nextInstallment = RepaymentSchedule.builder()
@@ -110,11 +122,32 @@ class RepaymentWorkflowRegressionTest {
         when(repaymentScheduleRepository.save(any(RepaymentSchedule.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(repaymentScheduleRepository.countByLoan_IdAndStatusIn(eq(loanId), any())).thenReturn(0L);
         when(loanRepository.save(any(Loan.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(countryChartOfAccountsService.resolveSystemAccount("BJ", CountryAccountSystemTag.LOAN_PORTFOLIO))
+                .thenReturn(CountryChartAccount.builder()
+                        .countryCode("BJ")
+                        .accountCode("720001")
+                        .accountNumber("720001")
+                        .accountName("Loan Portfolio")
+                        .accountGroup(CountryAccountGroup.LOAN_PORTFOLIO)
+                        .accountType(CountryChartAccountType.ASSET)
+                        .currency("XOF")
+                        .openingBalance(BigDecimal.ZERO)
+                        .status(CountryChartAccountStatus.ACTIVE)
+                        .build());
+        when(walletDebitFacade.executeSecureDebit(any()))
+                .thenReturn(new WalletDebitFacade.WalletDebitExecutionResult(
+                        true,
+                        false,
+                        UUID.randomUUID(),
+                        "CONFIRMED",
+                        null,
+                        null
+                ));
 
         LoanRepaymentResponse response = repaymentService.repay(
                 actorUserId,
                 loanId,
-                new RepayLoanRequest(new BigDecimal("10000.00"), "XOF", "MOBILE_MONEY", institutionId, "TX-1")
+                new RepayLoanRequest(new BigDecimal("10000.00"), "XOF", "WALLET", institutionId, "TX-1", null, null, null)
         );
 
         assertEquals(loanId, response.loanId());
@@ -158,6 +191,7 @@ class RepaymentWorkflowRegressionTest {
                 .accountHolderId(accountHolderId)
                 .circleId(UUID.randomUUID())
                 .currency("XOF")
+                .countryCode("BJ")
                 .status(LoanStatus.DISBURSED)
                 .build();
         RepaymentSchedule nextInstallment = RepaymentSchedule.builder()
@@ -181,7 +215,7 @@ class RepaymentWorkflowRegressionTest {
                 () -> repaymentService.repay(
                         actorUserId,
                         loanId,
-                        new RepayLoanRequest(new BigDecimal("9500.00"), "XOF", "MOBILE_MONEY", UUID.randomUUID(), "TX-2")
+                        new RepayLoanRequest(new BigDecimal("9500.00"), "XOF", "WALLET", UUID.randomUUID(), "TX-2", null, null, null)
                 )
         );
 

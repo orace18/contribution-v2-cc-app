@@ -12,6 +12,7 @@ import com.ccapp.financing.domain.entity.PartnerLedgerAccount;
 import com.ccapp.financing.domain.entity.InstitutionLedgerEntry;
 import com.ccapp.financing.domain.enums.FinancialPartnerStatus;
 import com.ccapp.financing.domain.enums.FinancialPartnerType;
+import com.ccapp.financing.domain.enums.FinancialProductType;
 import com.ccapp.financing.domain.enums.FinancingOfferStatus;
 import com.ccapp.financing.domain.enums.InstitutionLedgerEntryType;
 import com.ccapp.financing.domain.enums.LoanApplicationStatus;
@@ -27,6 +28,8 @@ import com.ccapp.financing.repository.PartnerLedgerEntryRepository;
 import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
 import com.ccapp.identity.account_holder.service.AccountHolderService;
 import com.ccapp.identity.delegation.service.AccessControlService;
+import com.ccapp.ledger.service.AccountingPostingService;
+import com.ccapp.payments.operation.service.OperationService;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -79,6 +82,10 @@ class FinancingApplicationServiceIntegrationTest {
     private CountryConfigResolver countryConfigResolver;
     @MockBean
     private DomainEventPublisher domainEventPublisher;
+    @MockBean
+    private OperationService operationService;
+    @MockBean
+    private AccountingPostingService accountingPostingService;
 
     private UUID accountHolderId;
     private FinancingOffer offer;
@@ -114,14 +121,19 @@ class FinancingApplicationServiceIntegrationTest {
                 .build());
         offer = financingOfferRepository.save(FinancingOffer.builder()
                 .partnerId(partner.getId())
+                .type(FinancialProductType.CREDIT)
                 .name("SME Loan")
                 .description("Working capital")
-                .loanType("SME")
+                .countryCode("BJ")
                 .minAmount(new BigDecimal("10.00"))
                 .maxAmount(new BigDecimal("1000.00"))
                 .interestRate(new BigDecimal("5.00"))
                 .durationMonths(6)
                 .currency("XOF")
+                .feesJson("{}")
+                .eligibilityRulesJson("{}")
+                .requiredDocumentsJson("[]")
+                .scoringRulesJson("{}")
                 .status(FinancingOfferStatus.ACTIVE)
                 .build());
     }

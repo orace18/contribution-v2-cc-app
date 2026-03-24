@@ -1,10 +1,12 @@
 package com.ccapp.financing.service;
 
+import com.ccapp.config.TestJacksonAndCachingConfig;
 import com.ccapp.country.domain.entity.Country;
 import com.ccapp.country.repository.CountryRepository;
 import com.ccapp.financing.domain.entity.FinancialPartner;
 import com.ccapp.financing.domain.enums.FinancialPartnerStatus;
 import com.ccapp.financing.domain.enums.FinancialPartnerType;
+import com.ccapp.financing.domain.enums.FinancialProductType;
 import com.ccapp.financing.domain.enums.FinancingOfferStatus;
 import com.ccapp.financing.domain.enums.OfferRequirementType;
 import com.ccapp.financing.domain.enums.OfferVerificationType;
@@ -31,7 +33,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
         "spring.flyway.enabled=false",
         "spring.jpa.hibernate.ddl-auto=create-drop"
 })
-@Import({FinancingOfferAdminService.class, OfferRequirementService.class})
+@Import({FinancingOfferAdminService.class, OfferRequirementService.class, TestJacksonAndCachingConfig.class})
 class FinancingOfferAdminServiceIntegrationTest {
 
     @Autowired
@@ -64,14 +66,19 @@ class FinancingOfferAdminServiceIntegrationTest {
 
         FinancingOfferResponse created = financingOfferAdminService.createOffer(new CreateFinancingOfferRequest(
                 partner.getId(),
+                FinancialProductType.CREDIT,
                 "SME Growth",
                 "Offer for SMEs",
-                "BUSINESS",
+                "BJ",
                 new BigDecimal("100.00"),
                 new BigDecimal("1000.00"),
                 new BigDecimal("4.50"),
                 12,
                 "xof",
+                "{\"originationFeePercent\":2}",
+                "{\"minimumScore\":65}",
+                "[\"ID_CARD\"]",
+                "{\"segment\":\"SME\"}",
                 FinancingOfferStatus.ACTIVE,
                 List.of(
                         new OfferRequirementUpsertRequest(OfferRequirementType.KYC_DOCUMENT, true, OfferVerificationType.DOCUMENT_UPLOAD),

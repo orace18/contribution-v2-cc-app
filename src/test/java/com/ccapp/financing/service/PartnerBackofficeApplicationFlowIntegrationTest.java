@@ -11,6 +11,7 @@ import com.ccapp.financing.domain.entity.LoanApplication;
 import com.ccapp.financing.domain.entity.PartnerLedgerAccount;
 import com.ccapp.financing.domain.enums.FinancialPartnerStatus;
 import com.ccapp.financing.domain.enums.FinancialPartnerType;
+import com.ccapp.financing.domain.enums.FinancialProductType;
 import com.ccapp.financing.domain.enums.FinancingOfferStatus;
 import com.ccapp.financing.domain.enums.InstitutionLedgerEntryType;
 import com.ccapp.financing.domain.enums.LoanApplicationStatus;
@@ -25,7 +26,15 @@ import com.ccapp.financing.repository.PartnerLedgerAccountRepository;
 import com.ccapp.financing.repository.PartnerLedgerEntryRepository;
 import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
 import com.ccapp.identity.account_holder.service.AccountHolderService;
+import com.ccapp.identity.wallet.domain.entity.Wallet;
+import com.ccapp.identity.wallet.repository.WalletRepository;
 import com.ccapp.identity.delegation.service.AccessControlService;
+import com.ccapp.ledger.service.AccountingPostingService;
+import com.ccapp.payments.operation.domain.entity.Operation;
+import com.ccapp.payments.operation.domain.enums.OperationStatus;
+import com.ccapp.payments.operation.domain.enums.OperationType;
+import com.ccapp.payments.operation.service.OperationService;
+import com.ccapp.wallet.domain.enums.WalletType;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -35,10 +44,13 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 
 import java.math.BigDecimal;
+import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.times;
@@ -67,6 +79,8 @@ class PartnerBackofficeApplicationFlowIntegrationTest {
     private PartnerLedgerAccountRepository partnerLedgerAccountRepository;
     @Autowired
     private InstitutionLedgerEntryRepository institutionLedgerEntryRepository;
+    @Autowired
+    private WalletRepository walletRepository;
 
     @MockBean
     private AccountHolderService accountHolderService;
@@ -80,6 +94,10 @@ class PartnerBackofficeApplicationFlowIntegrationTest {
     private CountryConfigResolver countryConfigResolver;
     @MockBean
     private DomainEventPublisher domainEventPublisher;
+    @MockBean
+    private OperationService operationService;
+    @MockBean
+    private AccountingPostingService accountingPostingService;
 
     private FinancingOffer offer;
     private LoanApplication application;
@@ -115,14 +133,19 @@ class PartnerBackofficeApplicationFlowIntegrationTest {
                 .build());
         offer = financingOfferRepository.save(FinancingOffer.builder()
                 .partnerId(partner.getId())
+                .type(FinancialProductType.CREDIT)
                 .name("Women Enterprise Loan")
                 .description("Growth financing")
-                .loanType("BUSINESS")
+                .countryCode("BJ")
                 .minAmount(new BigDecimal("50.00"))
                 .maxAmount(new BigDecimal("5000.00"))
                 .interestRate(new BigDecimal("6.50"))
                 .durationMonths(12)
                 .currency("XOF")
+                .feesJson("{}")
+                .eligibilityRulesJson("{}")
+                .requiredDocumentsJson("[]")
+                .scoringRulesJson("{}")
                 .status(FinancingOfferStatus.ACTIVE)
                 .build());
         application = loanApplicationRepository.save(LoanApplication.builder()
@@ -131,6 +154,26 @@ class PartnerBackofficeApplicationFlowIntegrationTest {
                 .requestedAmount(new BigDecimal("120.00"))
                 .status(LoanApplicationStatus.SUBMITTED)
                 .build());
+        walletRepository.save(Wallet.builder()
+                .accountHolderId(application.getAccountHolderId())
+                .provider("TEST")
+                .mobileMoneyNumber("22970000000")
+                .status("ACTIVE")
+                .walletType(WalletType.USER)
+                .build());
+        when(operationService.createInitiatedOperation(any(), any(), any(OperationType.class), any(), any(), any(), any()))
+                .thenAnswer(invocation -> Operation.builder()
+                        .id(UUID.randomUUID())
+                        .accountHolderId(invocation.getArgument(0))
+                        .actorUserId(invocation.getArgument(1))
+                        .type(invocation.getArgument(2))
+                        .status(OperationStatus.CONFIRMED)
+                        .amount(invocation.getArgument(3))
+                        .currency(invocation.getArgument(4))
+                        .idempotencyKey(invocation.getArgument(5))
+                        .description(invocation.getArgument(6))
+                        .build());
+        when(operationService.findByIdempotencyKey(any())).thenReturn(Optional.empty());
     }
 
     @Test
@@ -138,11 +181,13 @@ class PartnerBackofficeApplicationFlowIntegrationTest {
         UUID reviewerId = UUID.randomUUID();
         LoanApplicationResponse approved = financingApplicationService.reviewApplication(
                 reviewerId,
+                reviewerId,
                 application.getId(),
                 new ReviewLoanApplicationRequest(
                         LoanApplicationStatus.APPROVED,
                         new BigDecimal("100.00"),
-                        "REF-100"
+                        "REF-100",
+                        "Approved for disbursement"
                 )
         );
         assertEquals(LoanApplicationStatus.APPROVED, approved.status());
@@ -150,25 +195,31 @@ class PartnerBackofficeApplicationFlowIntegrationTest {
 
         LoanApplicationResponse disbursed = financingApplicationService.reviewApplication(
                 reviewerId,
+                reviewerId,
                 application.getId(),
                 new ReviewLoanApplicationRequest(
                         LoanApplicationStatus.DISBURSED,
+                        null,
                         null,
                         null
                 )
         );
         assertEquals(LoanApplicationStatus.DISBURSED, disbursed.status());
 
-        LoanApplicationResponse repaid = financingApplicationService.reviewApplication(
-                reviewerId,
-                application.getId(),
-                new ReviewLoanApplicationRequest(
-                        LoanApplicationStatus.REPAID,
-                        null,
-                        null
+        assertThrows(
+                com.ccapp.common.exception.BusinessException.class,
+                () -> financingApplicationService.reviewApplication(
+                        reviewerId,
+                        reviewerId,
+                        application.getId(),
+                        new ReviewLoanApplicationRequest(
+                                LoanApplicationStatus.REPAID,
+                                null,
+                                null,
+                                null
+                        )
                 )
         );
-        assertEquals(LoanApplicationStatus.REPAID, repaid.status());
 
         List<PartnerLedgerEntryType> entryTypes = partnerLedgerEntryRepository
                 .findByApplicationIdOrderByCreatedAtAsc(application.getId()).stream()
@@ -176,8 +227,7 @@ class PartnerBackofficeApplicationFlowIntegrationTest {
                 .toList();
         assertEquals(List.of(
                 PartnerLedgerEntryType.APPLICATION_APPROVED,
-                PartnerLedgerEntryType.DISBURSEMENT,
-                PartnerLedgerEntryType.REPAYMENT
+                PartnerLedgerEntryType.DISBURSEMENT
         ), entryTypes);
 
         PartnerLedgerAccount ledgerAccount = partnerLedgerAccountRepository
@@ -189,8 +239,7 @@ class PartnerBackofficeApplicationFlowIntegrationTest {
                 .map(InstitutionLedgerEntry::getEntryType)
                 .toList();
         assertEquals(List.of(
-                InstitutionLedgerEntryType.LOAN,
-                InstitutionLedgerEntryType.REPAYMENT
+                InstitutionLedgerEntryType.LOAN
         ), institutionEntryTypes);
     }
 }

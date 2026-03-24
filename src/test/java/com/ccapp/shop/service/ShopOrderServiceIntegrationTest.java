@@ -3,12 +3,20 @@ package com.ccapp.shop.service;
 import com.ccapp.common.events.DomainEvent;
 import com.ccapp.common.events.DomainEventPublisher;
 import com.ccapp.common.exception.BusinessException;
+import com.ccapp.country.config.domain.entity.CountryChartAccount;
+import com.ccapp.country.config.domain.enums.CountryAccountGroup;
+import com.ccapp.country.config.domain.enums.CountryAccountSystemTag;
+import com.ccapp.country.config.domain.enums.CountryChartAccountStatus;
+import com.ccapp.country.config.domain.enums.CountryChartAccountType;
+import com.ccapp.country.config.service.CountryChartOfAccountsService;
 import com.ccapp.country.config.domain.enums.CountryConfigType;
 import com.ccapp.country.config.service.CountryConfigResolver;
 import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
 import com.ccapp.identity.account_holder.domain.enums.AccountType;
 import com.ccapp.identity.account_holder.repository.AccountHolderRepository;
 import com.ccapp.identity.account_holder.service.AccountHolderService;
+import com.ccapp.identity.wallet.domain.entity.Wallet;
+import com.ccapp.identity.wallet.repository.WalletRepository;
 import com.ccapp.ledger.service.AccountingPostingService;
 import com.ccapp.payments.operation.domain.entity.Operation;
 import com.ccapp.payments.operation.domain.enums.OperationStatus;
@@ -22,6 +30,7 @@ import com.ccapp.shop.domain.enums.ShopOrderStatus;
 import com.ccapp.shop.dto.CheckoutItemRequest;
 import com.ccapp.shop.dto.CheckoutRequest;
 import com.ccapp.shop.dto.ShopOrderResponse;
+import com.ccapp.shop.dto.UpdateShopOrderStatusRequest;
 import com.ccapp.shop.event.MarketplaceCommissionAllocatedEvent;
 import com.ccapp.shop.event.ShopOrderDeliveredEvent;
 import com.ccapp.shop.event.ShopOrderPaidEvent;
@@ -29,6 +38,8 @@ import com.ccapp.shop.repository.ShopCommissionPoolRepository;
 import com.ccapp.shop.repository.ShopOrderItemRepository;
 import com.ccapp.shop.repository.ShopOrderRepository;
 import com.ccapp.shop.repository.ShopProductRepository;
+import com.ccapp.wallet.domain.enums.WalletType;
+import com.ccapp.wallet.service.WalletDebitFacade;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.junit.jupiter.api.BeforeEach;
@@ -42,6 +53,7 @@ import org.springframework.context.annotation.Import;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -72,6 +84,8 @@ class ShopOrderServiceIntegrationTest {
     private ShopCommissionPoolRepository shopCommissionPoolRepository;
     @Autowired
     private AccountHolderRepository accountHolderRepository;
+    @Autowired
+    private WalletRepository walletRepository;
 
     @MockBean
     private AccountHolderService accountHolderService;
@@ -83,6 +97,10 @@ class ShopOrderServiceIntegrationTest {
     private OperationService operationService;
     @MockBean
     private AccountingPostingService accountingPostingService;
+    @MockBean
+    private CountryChartOfAccountsService countryChartOfAccountsService;
+    @MockBean
+    private WalletDebitFacade walletDebitFacade;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -110,6 +128,27 @@ class ShopOrderServiceIntegrationTest {
         when(countryConfigResolver.resolveActivePlatformConfig(PlatformConfigType.GLOBAL_GENERAL)).thenReturn(platformGeneral);
         when(countryConfigResolver.payloadAsObjectNode(countryGeneral)).thenReturn(countryPayload);
         when(countryConfigResolver.payloadAsObjectNode(platformGeneral)).thenReturn(platformPayload);
+        when(countryChartOfAccountsService.resolveSystemAccount(any(), eq(CountryAccountSystemTag.MARKETPLACE_POOL)))
+                .thenReturn(CountryChartAccount.builder()
+                        .countryCode("BJ")
+                        .accountCode("211000")
+                        .accountNumber("211000")
+                        .accountName("Marketplace Pool")
+                        .accountGroup(CountryAccountGroup.MARKETPLACE_POOL)
+                        .accountType(CountryChartAccountType.LIABILITY)
+                        .currency("XOF")
+                        .openingBalance(BigDecimal.ZERO)
+                        .status(CountryChartAccountStatus.ACTIVE)
+                        .build());
+        when(walletDebitFacade.executeSecureDebit(any()))
+                .thenReturn(new WalletDebitFacade.WalletDebitExecutionResult(
+                        true,
+                        false,
+                        UUID.randomUUID(),
+                        "CONFIRMED",
+                        null,
+                        null
+                ));
         when(operationService.createInitiatedOperation(any(), any(), any(OperationType.class), any(), anyString(), anyString(), anyString()))
                 .thenAnswer(invocation -> Operation.builder()
                         .id(UUID.randomUUID())
@@ -143,7 +182,7 @@ class ShopOrderServiceIntegrationTest {
                 buyerId,
                 new CheckoutRequest(
                         List.of(new CheckoutItemRequest(product.getId(), 2)),
-                        "MOBILE_MONEY",
+                        "WALLET",
                         UUID.randomUUID()
                 )
         );
@@ -181,15 +220,27 @@ class ShopOrderServiceIntegrationTest {
                 buyerId,
                 new CheckoutRequest(
                         List.of(new CheckoutItemRequest(product.getId(), 1)),
-                        "CARD",
+                        "WALLET",
                         UUID.randomUUID()
                 )
         );
 
-        shopOrderService.updateStatus(created.id(), ShopOrderStatus.PAID);
-        shopOrderService.updateStatus(created.id(), ShopOrderStatus.SHIPPED);
-        shopOrderService.updateStatus(created.id(), ShopOrderStatus.DELIVERED);
-        shopOrderService.updateStatus(created.id(), ShopOrderStatus.DELIVERED);
+        when(operationService.findByIdempotencyKey("marketplace-payment:" + created.id()))
+                .thenReturn(Optional.of(Operation.builder()
+                        .id(UUID.randomUUID())
+                        .accountHolderId(buyerId)
+                        .actorUserId(buyerId)
+                        .type(OperationType.MARKETPLACE_PAYMENT)
+                        .status(OperationStatus.CONFIRMED)
+                        .amount(new BigDecimal("10000.0000"))
+                        .currency("XOF")
+                        .idempotencyKey("marketplace-payment:" + created.id())
+                        .build()));
+
+        shopOrderService.updateStatus(created.id(), buyerId, new UpdateShopOrderStatusRequest(ShopOrderStatus.PAID, null, null, null));
+        shopOrderService.updateStatus(created.id(), buyerId, new UpdateShopOrderStatusRequest(ShopOrderStatus.SHIPPED, null, null, null));
+        shopOrderService.updateStatus(created.id(), buyerId, new UpdateShopOrderStatusRequest(ShopOrderStatus.DELIVERED, null, null, null));
+        shopOrderService.updateStatus(created.id(), buyerId, new UpdateShopOrderStatusRequest(ShopOrderStatus.DELIVERED, null, null, null));
 
         ArgumentCaptor<DomainEvent> eventCaptor = ArgumentCaptor.forClass(DomainEvent.class);
         Mockito.verify(domainEventPublisher, Mockito.times(3)).publish(eventCaptor.capture());
@@ -231,14 +282,18 @@ class ShopOrderServiceIntegrationTest {
                 buyerId,
                 new CheckoutRequest(
                         List.of(new CheckoutItemRequest(product.getId(), 1)),
-                        "CARD",
+                        "WALLET",
                         UUID.randomUUID()
                 )
         );
 
         BusinessException ex = assertThrows(
                 BusinessException.class,
-                () -> shopOrderService.updateStatus(created.id(), ShopOrderStatus.DELIVERED)
+                () -> shopOrderService.updateStatus(
+                        created.id(),
+                        buyerId,
+                        new UpdateShopOrderStatusRequest(ShopOrderStatus.DELIVERED, null, null, null)
+                )
         );
         assertTrue(ex.getMessage().contains("Invalid order status transition"));
         Mockito.verify(domainEventPublisher, Mockito.never()).publish(any());
@@ -253,6 +308,13 @@ class ShopOrderServiceIntegrationTest {
                 .countryCode("BJ")
                 .serviceCountryCode("BJ")
                 .accountType(AccountType.STANDARD)
+                .build());
+        walletRepository.save(Wallet.builder()
+                .accountHolderId(saved.getId())
+                .provider("TEST")
+                .mobileMoneyNumber("229" + UUID.randomUUID().toString().replace("-", "").substring(0, 8))
+                .status("ACTIVE")
+                .walletType(WalletType.USER)
                 .build());
         return saved.getId();
     }
