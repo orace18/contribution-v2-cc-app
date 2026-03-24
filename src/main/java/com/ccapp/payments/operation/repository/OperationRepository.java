@@ -5,6 +5,7 @@ import com.ccapp.payments.operation.domain.enums.OperationStatus;
 import com.ccapp.payments.operation.domain.enums.OperationType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.domain.Pageable;
 
 import java.util.List;
 import java.util.Optional;
@@ -41,4 +42,13 @@ public interface OperationRepository extends JpaRepository<Operation, UUID> {
               )
             """)
     List<Operation> findLatestByTypeAndStatus(OperationType type, OperationStatus status);
+
+    @Query("""
+            select o
+            from Operation o
+            where o.accountHolderId = :accountHolderId
+               or o.destinationAccountHolderId = :accountHolderId
+            order by o.createdAt desc
+            """)
+    List<Operation> findRecentForAccountHolder(UUID accountHolderId, Pageable pageable);
 }

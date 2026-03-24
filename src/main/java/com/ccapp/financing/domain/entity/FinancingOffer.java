@@ -1,6 +1,7 @@
 package com.ccapp.financing.domain.entity;
 
 import com.ccapp.financing.domain.enums.FinancingOfferStatus;
+import com.ccapp.financing.domain.enums.FinancialProductType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -45,8 +46,12 @@ public class FinancingOffer {
     @Column(name = "description", length = 2000)
     private String description;
 
-    @Column(name = "loan_type", nullable = false, length = 64)
-    private String loanType;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "loan_type", nullable = false, length = 16)
+    private FinancialProductType type;
+
+    @Column(name = "country_code", nullable = false, length = 3)
+    private String countryCode;
 
     @Column(name = "min_amount", nullable = false, precision = 19, scale = 4)
     private BigDecimal minAmount;
@@ -63,6 +68,18 @@ public class FinancingOffer {
     @Column(name = "currency", nullable = false, length = 3)
     private String currency;
 
+    @Column(name = "fees_json", nullable = false, columnDefinition = "TEXT")
+    private String feesJson;
+
+    @Column(name = "eligibility_rules_json", nullable = false, columnDefinition = "TEXT")
+    private String eligibilityRulesJson;
+
+    @Column(name = "required_documents_json", nullable = false, columnDefinition = "TEXT")
+    private String requiredDocumentsJson;
+
+    @Column(name = "scoring_rules_json", nullable = false, columnDefinition = "TEXT")
+    private String scoringRulesJson;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 16)
     private FinancingOfferStatus status;
@@ -77,6 +94,18 @@ public class FinancingOffer {
         }
         if (status == null) {
             status = FinancingOfferStatus.ACTIVE;
+        }
+        if (feesJson == null || feesJson.isBlank()) {
+            feesJson = "{}";
+        }
+        if (eligibilityRulesJson == null || eligibilityRulesJson.isBlank()) {
+            eligibilityRulesJson = "{}";
+        }
+        if (requiredDocumentsJson == null || requiredDocumentsJson.isBlank()) {
+            requiredDocumentsJson = "{}";
+        }
+        if (scoringRulesJson == null || scoringRulesJson.isBlank()) {
+            scoringRulesJson = "{}";
         }
     }
 }

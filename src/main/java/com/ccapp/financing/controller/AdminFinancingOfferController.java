@@ -9,6 +9,7 @@ import com.ccapp.financing.dto.CreateFinancingOfferRequest;
 import com.ccapp.financing.dto.FinancingOfferResponse;
 import com.ccapp.financing.dto.OfferCountryConfigResponse;
 import com.ccapp.financing.dto.OfferCountryConfigUpdateRequest;
+import com.ccapp.financing.dto.UpdateFinancingOfferStatusRequest;
 import com.ccapp.financing.dto.UpdateFinancingOfferRequest;
 import com.ccapp.financing.service.FinancingOfferAdminService;
 import jakarta.validation.Valid;
@@ -38,18 +39,20 @@ public class AdminFinancingOfferController {
     public ResponseEntity<CommonResponse<PageResponse<FinancingOfferResponse>>> listOffers(
             @RequestParam(required = false) UUID partnerId,
             @RequestParam(required = false) FinancingOfferStatus status,
+            @RequestParam(required = false) String countryCode,
             @RequestParam(required = false) String search,
             @RequestParam(defaultValue = "0") Integer page,
             @RequestParam(defaultValue = "20") Integer size) {
         PageResponse<FinancingOfferResponse> response = financingOfferAdminService.listOffers(
                 partnerId,
                 status,
+                countryCode,
                 search,
                 page,
                 size
         );
         adminAuditService.logAction(AdminSecurityUtils.currentAdminUserId(), "LIST_FINANCING_OFFERS", "FINANCING_OFFER", null,
-                "filters(partnerId=" + partnerId + ",status=" + status + ")");
+                "filters(partnerId=" + partnerId + ",status=" + status + ",countryCode=" + countryCode + ")");
         return ResponseEntity.ok(CommonResponse.success("Financing offers", response));
     }
 
@@ -73,6 +76,21 @@ public class AdminFinancingOfferController {
         FinancingOfferResponse response = financingOfferAdminService.getOffer(offerId);
         adminAuditService.logAction(AdminSecurityUtils.currentAdminUserId(), "VIEW_FINANCING_OFFER", "FINANCING_OFFER", offerId.toString(), null);
         return ResponseEntity.ok(CommonResponse.success("Financing offer", response));
+    }
+
+    @PutMapping("/{offerId}/status")
+    public ResponseEntity<CommonResponse<FinancingOfferResponse>> updateOfferStatus(@PathVariable UUID offerId,
+                                                                                     @Valid @RequestBody UpdateFinancingOfferStatusRequest request) {
+        FinancingOfferResponse response = financingOfferAdminService.updateOfferStatus(offerId, request.status());
+        adminAuditService.logAction(AdminSecurityUtils.currentAdminUserId(), "UPDATE_FINANCING_OFFER_STATUS", "FINANCING_OFFER", offerId.toString(), request);
+        return ResponseEntity.ok(CommonResponse.success("Financing offer status updated", response));
+    }
+
+    @PostMapping("/{offerId}/duplicate")
+    public ResponseEntity<CommonResponse<FinancingOfferResponse>> duplicateOffer(@PathVariable UUID offerId) {
+        FinancingOfferResponse response = financingOfferAdminService.duplicateOffer(offerId);
+        adminAuditService.logAction(AdminSecurityUtils.currentAdminUserId(), "DUPLICATE_FINANCING_OFFER", "FINANCING_OFFER", offerId.toString(), null);
+        return ResponseEntity.ok(CommonResponse.success("Financing offer duplicated", response));
     }
 
     @PutMapping("/{offerId}/countries")

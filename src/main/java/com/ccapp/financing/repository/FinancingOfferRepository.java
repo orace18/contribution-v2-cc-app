@@ -21,11 +21,15 @@ public interface FinancingOfferRepository extends JpaRepository<FinancingOffer, 
             from FinancingOffer fo
             where (:partnerId is null or fo.partnerId = :partnerId)
               and (:status is null or fo.status = :status)
+              and (:countryCode is null or upper(fo.countryCode) = upper(:countryCode))
               and (:search is null or lower(fo.name) like concat('%', :search, '%'))
             order by fo.createdAt desc
             """)
     Page<FinancingOffer> search(UUID partnerId,
                                 FinancingOfferStatus status,
+                                String countryCode,
                                 String search,
                                 Pageable pageable);
+
+    List<FinancingOffer> findByCountryCodeAndStatusOrderByCreatedAtDesc(String countryCode, FinancingOfferStatus status);
 }

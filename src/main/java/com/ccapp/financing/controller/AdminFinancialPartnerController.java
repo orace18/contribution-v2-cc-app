@@ -8,6 +8,7 @@ import com.ccapp.financing.domain.enums.FinancialPartnerStatus;
 import com.ccapp.financing.domain.enums.FinancialPartnerType;
 import com.ccapp.financing.dto.CreateFinancialPartnerRequest;
 import com.ccapp.financing.dto.FinancialPartnerResponse;
+import com.ccapp.financing.dto.UpdateFinancialPartnerStatusRequest;
 import com.ccapp.financing.dto.UpdateFinancialPartnerRequest;
 import com.ccapp.financing.service.FinancialPartnerAdminService;
 import jakarta.validation.Valid;
@@ -66,6 +67,14 @@ public class AdminFinancialPartnerController {
         FinancialPartnerResponse response = financialPartnerAdminService.updatePartner(partnerId, request);
         adminAuditService.logAction(AdminSecurityUtils.currentAdminUserId(), "UPDATE_FINANCIAL_PARTNER", "FINANCIAL_PARTNER", partnerId.toString(), request);
         return ResponseEntity.ok(CommonResponse.success("Financial partner updated", response));
+    }
+
+    @PutMapping("/{partnerId}/status")
+    public ResponseEntity<CommonResponse<FinancialPartnerResponse>> updatePartnerStatus(@PathVariable UUID partnerId,
+                                                                                         @Valid @RequestBody UpdateFinancialPartnerStatusRequest request) {
+        FinancialPartnerResponse response = financialPartnerAdminService.updatePartnerStatus(partnerId, request.status());
+        adminAuditService.logAction(AdminSecurityUtils.currentAdminUserId(), "UPDATE_FINANCIAL_PARTNER_STATUS", "FINANCIAL_PARTNER", partnerId.toString(), request);
+        return ResponseEntity.ok(CommonResponse.success("Financial partner status updated", response));
     }
 
     @GetMapping("/{partnerId}")

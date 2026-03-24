@@ -20,6 +20,8 @@ public interface FinancialPartnerRepository extends JpaRepository<FinancialPartn
 
     Optional<FinancialPartner> findByNameIgnoreCaseAndCountryCodeIgnoreCase(String name, String countryCode);
 
+    Optional<FinancialPartner> findByIdAndCountryCode(UUID id, String countryCode);
+
     @Query("""
             select fp
             from FinancialPartner fp

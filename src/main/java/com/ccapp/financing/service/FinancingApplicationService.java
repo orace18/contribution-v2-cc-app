@@ -197,10 +197,28 @@ public class FinancingApplicationService {
                 Set.of(PartnerBackofficeRole.PARTNER_ADMIN, PartnerBackofficeRole.PARTNER_ANALYST)
         );
 
+        return reviewApplicationInternal(application, offer, reviewerActorUserId, request);
+    }
+
+    @Transactional
+    public LoanApplicationResponse adminReviewApplication(UUID reviewerActorUserId,
+                                                          UUID applicationId,
+                                                          ReviewLoanApplicationRequest request) {
+        LoanApplication application = loanApplicationRepository.findById(applicationId)
+                .orElseThrow(() -> new NotFoundException("Loan application not found"));
+        FinancingOffer offer = loadOffer(application.getOfferId());
+        return reviewApplicationInternal(application, offer, reviewerActorUserId, request);
+    }
+
+    private LoanApplicationResponse reviewApplicationInternal(LoanApplication application,
+                                                              FinancingOffer offer,
+                                                              UUID reviewerActorUserId,
+                                                              ReviewLoanApplicationRequest request) {
         ensureAllowedTransition(application.getStatus(), request.status());
         if (request.partnerReference() != null && !request.partnerReference().isBlank()) {
             application.setPartnerReference(request.partnerReference().trim());
         }
+        application.setDecisionNote(normalizeNullable(request.reviewComment()));
 
         if (request.status() == LoanApplicationStatus.APPROVED
                 || request.status() == LoanApplicationStatus.DISBURSED
@@ -398,6 +416,9 @@ public class FinancingApplicationService {
 
     private String resolveCreationCurrency(FinancingOffer offer, UUID accountHolderId) {
         CountryContext countryContext = countryContextService.resolve(accountHolderId);
+        if (!offer.getCountryCode().equalsIgnoreCase(countryContext.serviceCountryCode())) {
+            throw new BusinessException("Offer is not configured for this country");
+        }
         List<OfferCountryConfig> configs = offerCountryConfigRepository.findByOfferIdOrderByCountryCodeAsc(offer.getId());
         if (configs.isEmpty()) {
             return offer.getCurrency();
@@ -418,10 +439,13 @@ public class FinancingApplicationService {
             return null;
         }
         List<OfferCountryConfig> configs = offerCountryConfigRepository.findByOfferIdOrderByCountryCodeAsc(offer.getId());
+        String serviceCountryCode = countryContextService.resolve(application.getAccountHolderId()).serviceCountryCode();
+        if (!offer.getCountryCode().equalsIgnoreCase(serviceCountryCode)) {
+            return offer.getCurrency();
+        }
         if (configs.isEmpty()) {
             return offer.getCurrency();
         }
-        String serviceCountryCode = countryContextService.resolve(application.getAccountHolderId()).serviceCountryCode();
         return configs.stream()
                 .filter(config -> config.getCountryCode().equalsIgnoreCase(serviceCountryCode))
                 .map(OfferCountryConfig::getCurrency)
@@ -457,5 +481,12 @@ public class FinancingApplicationService {
                 ? DEFAULT_PAGE_SIZE
                 : Math.min(size, MAX_PAGE_SIZE);
         return PageRequest.of(normalizedPage, normalizedSize);
+    }
+
+    private String normalizeNullable(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
     }
 }

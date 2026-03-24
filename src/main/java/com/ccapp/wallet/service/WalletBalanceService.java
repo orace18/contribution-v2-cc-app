@@ -68,6 +68,11 @@ public class WalletBalanceService {
         return computeMainBalance(wallet, currency).subtract(computeReservedBalance(wallet));
     }
 
+    /** Returns the total amount currently blocked by active reservations. */
+    public BigDecimal getReservedBalance(Wallet wallet) {
+        return computeReservedBalance(wallet);
+    }
+
     // -------------------------------------------------------------------------
 
     private BigDecimal computeMainBalance(Wallet wallet, String currency) {

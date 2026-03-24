@@ -3,19 +3,25 @@ package com.ccapp.financing.service;
 import com.ccapp.common.api.PageResponse;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.common.exception.NotFoundException;
+import com.ccapp.country.config.domain.enums.CountryChartAccountStatus;
+import com.ccapp.country.config.repository.CountryChartAccountRepository;
 import com.ccapp.country.repository.CountryRepository;
 import com.ccapp.financing.domain.entity.FinancialPartner;
 import com.ccapp.financing.domain.enums.FinancialPartnerStatus;
 import com.ccapp.financing.domain.enums.FinancialPartnerType;
+import com.ccapp.financing.domain.enums.FinancialProductType;
 import com.ccapp.financing.dto.CreateFinancialPartnerRequest;
 import com.ccapp.financing.dto.FinancialPartnerResponse;
 import com.ccapp.financing.dto.UpdateFinancialPartnerRequest;
 import com.ccapp.financing.repository.FinancialPartnerRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
@@ -29,6 +35,7 @@ public class FinancialPartnerAdminService {
 
     private final FinancialPartnerRepository financialPartnerRepository;
     private final CountryRepository countryRepository;
+    private final CountryChartAccountRepository countryChartAccountRepository;
 
     @Transactional(readOnly = true)
     public PageResponse<FinancialPartnerResponse> listPartners(FinancialPartnerStatus status,
@@ -37,33 +44,17 @@ public class FinancialPartnerAdminService {
                                                                String search,
                                                                Integer page,
                                                                Integer size) {
-        int normalizedPage = page == null || page < 0 ? 0 : page;
-        int normalizedSize = size == null || size <= 0
-                ? DEFAULT_PAGE_SIZE
-                : Math.min(size, MAX_PAGE_SIZE);
+        Pageable pageable = normalizePageable(page, size);
         String normalizedCountryCode = normalizeNullableCountry(countryCode);
         String normalizedSearch = normalizeSearch(search);
-        List<FinancialPartnerResponse> filteredPartners = financialPartnerRepository.findAll(Sort.by(Sort.Direction.DESC, "createdAt")).stream()
-                .filter(partner -> status == null || partner.getStatus() == status)
-                .filter(partner -> type == null || partner.getType() == type)
-                .filter(partner -> normalizedCountryCode == null || partner.getCountryCode().equalsIgnoreCase(normalizedCountryCode))
-                .filter(partner -> normalizedSearch == null || partner.getName().toLowerCase(Locale.ROOT).contains(normalizedSearch))
-                .map(this::toResponse)
-                .toList();
-
-        int totalElements = filteredPartners.size();
-        int fromIndex = Math.min(normalizedPage * normalizedSize, totalElements);
-        int toIndex = Math.min(fromIndex + normalizedSize, totalElements);
-        int totalPages = totalElements == 0 ? 0 : (int) Math.ceil((double) totalElements / normalizedSize);
-
-        return new PageResponse<>(
-                filteredPartners.subList(fromIndex, toIndex),
-                normalizedPage,
-                normalizedSize,
-                totalElements,
-                totalPages,
-                toIndex < totalElements
-        );
+        Page<FinancialPartnerResponse> responsePage = financialPartnerRepository.search(
+                status,
+                type,
+                normalizedCountryCode,
+                normalizedSearch,
+                pageable
+        ).map(this::toResponse);
+        return PageResponse.from(responsePage);
     }
 
     @Transactional(readOnly = true)
@@ -91,6 +82,9 @@ public class FinancialPartnerAdminService {
                 .contactEmail(normalizeNullableEmail(request.contactEmail()))
                 .description(normalizeNullableDescription(request.description()))
                 .status(request.status() == null ? FinancialPartnerStatus.ACTIVE : request.status())
+                .supportedProducts(serializeSupportedProducts(request.supportedProducts()))
+                .apiIntegrationType(request.apiIntegrationType())
+                .settlementAccount(normalizeSettlementAccount(normalizedCountryCode, request.settlementAccount()))
                 .apiEndpoint(normalizeNullableEndpoint(request.apiEndpoint()))
                 .build());
         return toResponse(saved);
@@ -117,7 +111,18 @@ public class FinancialPartnerAdminService {
         partner.setContactEmail(normalizeNullableEmail(request.contactEmail()));
         partner.setDescription(normalizeNullableDescription(request.description()));
         partner.setStatus(request.status());
+        partner.setSupportedProducts(serializeSupportedProducts(request.supportedProducts()));
+        partner.setApiIntegrationType(request.apiIntegrationType());
+        partner.setSettlementAccount(normalizeSettlementAccount(normalizedCountryCode, request.settlementAccount()));
         partner.setApiEndpoint(normalizeNullableEndpoint(request.apiEndpoint()));
+        return toResponse(financialPartnerRepository.save(partner));
+    }
+
+    @Transactional
+    public FinancialPartnerResponse updatePartnerStatus(UUID partnerId, FinancialPartnerStatus status) {
+        FinancialPartner partner = financialPartnerRepository.findById(partnerId)
+                .orElseThrow(() -> new NotFoundException("Financial partner not found"));
+        partner.setStatus(status);
         return toResponse(financialPartnerRepository.save(partner));
     }
 
@@ -137,9 +142,20 @@ public class FinancialPartnerAdminService {
                 partner.getContactEmail(),
                 partner.getDescription(),
                 partner.getStatus(),
+                deserializeSupportedProducts(partner.getSupportedProducts()),
+                partner.getApiIntegrationType(),
+                partner.getSettlementAccount(),
                 partner.getApiEndpoint(),
                 partner.getCreatedAt()
         );
+    }
+
+    private Pageable normalizePageable(Integer page, Integer size) {
+        int normalizedPage = page == null || page < 0 ? 0 : page;
+        int normalizedSize = size == null || size <= 0
+                ? DEFAULT_PAGE_SIZE
+                : Math.min(size, MAX_PAGE_SIZE);
+        return PageRequest.of(normalizedPage, normalizedSize);
     }
 
     private String normalizeSearch(String search) {
@@ -172,6 +188,22 @@ public class FinancialPartnerAdminService {
         return countryCode.trim().toUpperCase(Locale.ROOT);
     }
 
+    private String normalizeSettlementAccount(String countryCode, String settlementAccount) {
+        if (settlementAccount == null || settlementAccount.isBlank()) {
+            throw new BusinessException("Settlement account is required");
+        }
+        String normalized = settlementAccount.trim().toUpperCase(Locale.ROOT);
+        boolean exists = countryChartAccountRepository.existsByCountryCodeAndAccountCodeAndStatus(
+                countryCode,
+                normalized,
+                CountryChartAccountStatus.ACTIVE
+        );
+        if (!exists) {
+            throw new BusinessException("Settlement account must be an active ledger account for the selected country");
+        }
+        return normalized;
+    }
+
     private String normalizeNullableEndpoint(String apiEndpoint) {
         if (apiEndpoint == null || apiEndpoint.isBlank()) {
             return null;
@@ -198,5 +230,28 @@ public class FinancialPartnerAdminService {
             return null;
         }
         return description.trim();
+    }
+
+    private String serializeSupportedProducts(List<FinancialProductType> supportedProducts) {
+        if (supportedProducts == null || supportedProducts.isEmpty()) {
+            throw new BusinessException("At least one supported product is required");
+        }
+        return supportedProducts.stream()
+                .distinct()
+                .map(FinancialProductType::name)
+                .sorted()
+                .reduce((left, right) -> left + "," + right)
+                .orElseThrow(() -> new BusinessException("At least one supported product is required"));
+    }
+
+    private List<FinancialProductType> deserializeSupportedProducts(String supportedProducts) {
+        if (supportedProducts == null || supportedProducts.isBlank()) {
+            return List.of(FinancialProductType.CREDIT);
+        }
+        return Arrays.stream(supportedProducts.split(","))
+                .map(String::trim)
+                .filter(value -> !value.isEmpty())
+                .map(value -> FinancialProductType.valueOf(value.toUpperCase(Locale.ROOT)))
+                .toList();
     }
 }

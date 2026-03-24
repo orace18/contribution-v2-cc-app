@@ -60,6 +60,9 @@ public class LoanApplication {
     @Column(name = "partner_reference", length = 128)
     private String partnerReference;
 
+    @Column(name = "decision_note", length = 1000)
+    private String decisionNote;
+
     @Column(name = "config_snapshot", columnDefinition = "TEXT")
     private String configSnapshot;
 

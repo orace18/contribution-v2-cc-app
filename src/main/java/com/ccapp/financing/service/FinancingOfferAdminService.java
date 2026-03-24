@@ -3,7 +3,7 @@ package com.ccapp.financing.service;
 import com.ccapp.common.api.PageResponse;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.common.exception.NotFoundException;
-import com.ccapp.country.repository.CountryRepository;
+import com.ccapp.financing.domain.entity.FinancialPartner;
 import com.ccapp.financing.domain.entity.FinancingOffer;
 import com.ccapp.financing.domain.entity.OfferCountryConfig;
 import com.ccapp.financing.domain.entity.OfferRequirement;
@@ -20,6 +20,10 @@ import com.ccapp.financing.repository.FinancialPartnerRepository;
 import com.ccapp.financing.repository.FinancingOfferRepository;
 import com.ccapp.financing.repository.OfferCountryConfigRepository;
 import com.ccapp.financing.repository.OfferRequirementRepository;
+import com.ccapp.country.repository.CountryRepository;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -28,11 +32,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
@@ -47,109 +50,180 @@ public class FinancingOfferAdminService {
     private final OfferCountryConfigRepository offerCountryConfigRepository;
     private final OfferRequirementRepository offerRequirementRepository;
     private final CountryRepository countryRepository;
+    private final ObjectMapper objectMapper;
 
     @Transactional(readOnly = true)
     public PageResponse<FinancingOfferResponse> listOffers(UUID partnerId,
                                                            FinancingOfferStatus status,
+                                                           String countryCode,
                                                            String search,
                                                            Integer page,
                                                            Integer size) {
         Pageable pageable = normalizePageable(page, size);
         String normalizedSearch = normalizeSearch(search);
-        Page<FinancingOffer> offerPage = financingOfferRepository.search(partnerId, status, normalizedSearch, pageable);
-        Page<FinancingOfferResponse> responsePage = offerPage.map(this::toResponse);
-        return PageResponse.from(responsePage);
+        String normalizedCountryCode = normalizeNullableCountry(countryCode);
+        Page<FinancingOffer> offerPage = financingOfferRepository.search(
+                partnerId,
+                status,
+                normalizedCountryCode,
+                normalizedSearch,
+                pageable
+        );
+        Map<UUID, String> partnerNames = loadPartnerNames(offerPage.getContent());
+        return new PageResponse<>(
+                offerPage.getContent().stream()
+                        .map(offer -> toResponse(offer, partnerNames.get(offer.getPartnerId())))
+                        .toList(),
+                offerPage.getNumber(),
+                offerPage.getSize(),
+                offerPage.getTotalElements(),
+                offerPage.getTotalPages(),
+                offerPage.hasNext()
+        );
     }
 
     @Transactional(readOnly = true)
     public FinancingOfferResponse getOffer(UUID offerId) {
         FinancingOffer offer = financingOfferRepository.findById(offerId)
                 .orElseThrow(() -> new NotFoundException("Financing offer not found"));
-        return toResponse(offer);
+        return toResponse(offer, loadPartner(offer.getPartnerId()).getName());
     }
 
     @Transactional
     public FinancingOfferResponse createOffer(CreateFinancingOfferRequest request) {
-        validateFinancialPartnerExists(request.partnerId());
+        FinancialPartner partner = loadPartner(request.partnerId());
+        String normalizedCountryCode = normalizeCountry(request.countryCode());
+        validatePartnerCountry(partner, normalizedCountryCode);
         validateAmounts(request.minAmount(), request.maxAmount(), request.interestRate());
         String normalizedCurrency = normalizeCurrency(request.currency());
 
         FinancingOffer saved = financingOfferRepository.save(FinancingOffer.builder()
                 .partnerId(request.partnerId())
+                .type(request.type())
                 .name(normalizeName(request.name()))
                 .description(normalizeNullable(request.description()))
-                .loanType(normalizeLoanType(request.loanType()))
+                .countryCode(normalizedCountryCode)
                 .minAmount(request.minAmount())
                 .maxAmount(request.maxAmount())
                 .interestRate(request.interestRate())
                 .durationMonths(request.durationMonths())
                 .currency(normalizedCurrency)
+                .feesJson(normalizeJson(request.feesJson(), "feesJson"))
+                .eligibilityRulesJson(normalizeJson(request.eligibilityRulesJson(), "eligibilityRulesJson"))
+                .requiredDocumentsJson(normalizeJson(request.requiredDocumentsJson(), "requiredDocumentsJson"))
+                .scoringRulesJson(normalizeJson(request.scoringRulesJson(), "scoringRulesJson"))
                 .status(request.status() == null ? FinancingOfferStatus.ACTIVE : request.status())
                 .build());
 
+        syncCountryConfiguration(saved);
         upsertOfferRequirements(saved.getId(), request.requirements());
-        return toResponse(saved);
+        return toResponse(saved, partner.getName());
     }
 
     @Transactional
     public FinancingOfferResponse updateOffer(UUID offerId, UpdateFinancingOfferRequest request) {
         FinancingOffer offer = financingOfferRepository.findById(offerId)
                 .orElseThrow(() -> new NotFoundException("Financing offer not found"));
+        FinancialPartner partner = loadPartner(offer.getPartnerId());
+        String normalizedCountryCode = normalizeCountry(request.countryCode());
+        validatePartnerCountry(partner, normalizedCountryCode);
         validateAmounts(request.minAmount(), request.maxAmount(), request.interestRate());
 
+        offer.setType(request.type());
         offer.setName(normalizeName(request.name()));
         offer.setDescription(normalizeNullable(request.description()));
-        offer.setLoanType(normalizeLoanType(request.loanType()));
+        offer.setCountryCode(normalizedCountryCode);
         offer.setMinAmount(request.minAmount());
         offer.setMaxAmount(request.maxAmount());
         offer.setInterestRate(request.interestRate());
         offer.setDurationMonths(request.durationMonths());
         offer.setCurrency(normalizeCurrency(request.currency()));
+        offer.setFeesJson(normalizeJson(request.feesJson(), "feesJson"));
+        offer.setEligibilityRulesJson(normalizeJson(request.eligibilityRulesJson(), "eligibilityRulesJson"));
+        offer.setRequiredDocumentsJson(normalizeJson(request.requiredDocumentsJson(), "requiredDocumentsJson"));
+        offer.setScoringRulesJson(normalizeJson(request.scoringRulesJson(), "scoringRulesJson"));
         offer.setStatus(request.status());
 
         FinancingOffer saved = financingOfferRepository.save(offer);
+        syncCountryConfiguration(saved);
         upsertOfferRequirements(saved.getId(), request.requirements());
-        return toResponse(saved);
+        return toResponse(saved, partner.getName());
+    }
+
+    @Transactional
+    public FinancingOfferResponse updateOfferStatus(UUID offerId, FinancingOfferStatus status) {
+        FinancingOffer offer = financingOfferRepository.findById(offerId)
+                .orElseThrow(() -> new NotFoundException("Financing offer not found"));
+        offer.setStatus(status);
+        FinancingOffer saved = financingOfferRepository.save(offer);
+        syncCountryConfiguration(saved);
+        return toResponse(saved, loadPartner(saved.getPartnerId()).getName());
+    }
+
+    @Transactional
+    public FinancingOfferResponse duplicateOffer(UUID offerId) {
+        FinancingOffer source = financingOfferRepository.findById(offerId)
+                .orElseThrow(() -> new NotFoundException("Financing offer not found"));
+        FinancialPartner partner = loadPartner(source.getPartnerId());
+        FinancingOffer duplicated = financingOfferRepository.save(FinancingOffer.builder()
+                .partnerId(source.getPartnerId())
+                .type(source.getType())
+                .name(buildDuplicateName(source.getName()))
+                .description(source.getDescription())
+                .countryCode(source.getCountryCode())
+                .minAmount(source.getMinAmount())
+                .maxAmount(source.getMaxAmount())
+                .interestRate(source.getInterestRate())
+                .durationMonths(source.getDurationMonths())
+                .currency(source.getCurrency())
+                .feesJson(source.getFeesJson())
+                .eligibilityRulesJson(source.getEligibilityRulesJson())
+                .requiredDocumentsJson(source.getRequiredDocumentsJson())
+                .scoringRulesJson(source.getScoringRulesJson())
+                .status(FinancingOfferStatus.INACTIVE)
+                .build());
+        syncCountryConfiguration(duplicated);
+
+        List<OfferRequirementUpsertRequest> requirements = offerRequirementRepository
+                .findByOfferIdOrderByRequirementTypeAsc(source.getId())
+                .stream()
+                .map(requirement -> new OfferRequirementUpsertRequest(
+                        requirement.getRequirementType(),
+                        requirement.isRequired(),
+                        requirement.getVerificationType()
+                ))
+                .toList();
+        upsertOfferRequirements(duplicated.getId(), requirements);
+        return toResponse(duplicated, partner.getName());
     }
 
     @Transactional
     public List<OfferCountryConfigResponse> updateOfferCountries(UUID offerId, OfferCountryConfigUpdateRequest request) {
+        if (request.countries().size() != 1) {
+            throw new BusinessException("Offers are country-specific and must contain exactly one country configuration");
+        }
         FinancingOffer offer = financingOfferRepository.findById(offerId)
                 .orElseThrow(() -> new NotFoundException("Financing offer not found"));
-
-        if (request.countries().isEmpty()) {
-            throw new BusinessException("At least one country configuration is required");
-        }
-
-        List<OfferCountryConfig> existing = offerCountryConfigRepository.findByOfferIdOrderByCountryCodeAsc(offerId);
-        var existingByCountry = existing.stream()
-                .collect(Collectors.toMap(item -> item.getCountryCode().toUpperCase(Locale.ROOT), Function.identity()));
-
-        List<OfferCountryConfig> toSave = new ArrayList<>();
-        for (OfferCountryConfigItemRequest countryItem : request.countries()) {
-            String countryCode = normalizeCountry(countryItem.countryCode());
-            String currency = normalizeCurrency(countryItem.currency());
-            ensureCountryExists(countryCode);
-
-            OfferCountryConfig config = existingByCountry.get(countryCode);
-            if (config == null) {
-                config = OfferCountryConfig.builder()
-                        .offerId(offer.getId())
-                        .countryCode(countryCode)
-                        .enabled(countryItem.enabled())
-                        .currency(currency)
-                        .build();
-            } else {
-                config.setEnabled(countryItem.enabled());
-                config.setCurrency(currency);
-            }
-            toSave.add(config);
-        }
-
-        offerCountryConfigRepository.deleteByOfferId(offerId);
-        return offerCountryConfigRepository.saveAll(toSave).stream()
+        OfferCountryConfigItemRequest countryItem = request.countries().get(0);
+        offer.setCountryCode(normalizeCountry(countryItem.countryCode()));
+        offer.setCurrency(normalizeCurrency(countryItem.currency()));
+        offer.setStatus(countryItem.enabled() ? FinancingOfferStatus.ACTIVE : FinancingOfferStatus.INACTIVE);
+        FinancingOffer saved = financingOfferRepository.save(offer);
+        syncCountryConfiguration(saved);
+        return offerCountryConfigRepository.findByOfferIdOrderByCountryCodeAsc(offerId).stream()
                 .map(this::toCountryResponse)
                 .toList();
+    }
+
+    private void syncCountryConfiguration(FinancingOffer offer) {
+        offerCountryConfigRepository.deleteByOfferId(offer.getId());
+        OfferCountryConfig config = OfferCountryConfig.builder()
+                .offerId(offer.getId())
+                .countryCode(offer.getCountryCode())
+                .enabled(offer.getStatus() == FinancingOfferStatus.ACTIVE)
+                .currency(offer.getCurrency())
+                .build();
+        offerCountryConfigRepository.save(config);
     }
 
     private void upsertOfferRequirements(UUID offerId, List<OfferRequirementUpsertRequest> requirements) {
@@ -172,9 +246,21 @@ public class FinancingOfferAdminService {
         offerRequirementRepository.saveAll(toSave);
     }
 
-    private void validateFinancialPartnerExists(UUID partnerId) {
-        if (financialPartnerRepository.findById(partnerId).isEmpty()) {
-            throw new BusinessException("Financial partner not found");
+    private FinancialPartner loadPartner(UUID partnerId) {
+        return financialPartnerRepository.findById(partnerId)
+                .orElseThrow(() -> new BusinessException("Financial partner not found"));
+    }
+
+    private Map<UUID, String> loadPartnerNames(List<FinancingOffer> offers) {
+        return financialPartnerRepository.findAllById(
+                        offers.stream().map(FinancingOffer::getPartnerId).distinct().toList()
+                ).stream()
+                .collect(Collectors.toMap(FinancialPartner::getId, FinancialPartner::getName));
+    }
+
+    private void validatePartnerCountry(FinancialPartner partner, String countryCode) {
+        if (!partner.getCountryCode().equalsIgnoreCase(countryCode)) {
+            throw new BusinessException("Offer country must match the selected partner country");
         }
     }
 
@@ -187,7 +273,7 @@ public class FinancingOfferAdminService {
         }
     }
 
-    private FinancingOfferResponse toResponse(FinancingOffer offer) {
+    private FinancingOfferResponse toResponse(FinancingOffer offer, String partnerName) {
         List<OfferCountryConfigResponse> countryConfigs = offerCountryConfigRepository.findByOfferIdOrderByCountryCodeAsc(offer.getId()).stream()
                 .map(this::toCountryResponse)
                 .toList();
@@ -198,15 +284,22 @@ public class FinancingOfferAdminService {
         return new FinancingOfferResponse(
                 offer.getId(),
                 offer.getPartnerId(),
+                partnerName,
+                offer.getType(),
                 offer.getName(),
                 offer.getDescription(),
-                offer.getLoanType(),
+                offer.getCountryCode(),
                 offer.getMinAmount(),
                 offer.getMaxAmount(),
                 offer.getInterestRate(),
                 offer.getDurationMonths(),
                 offer.getCurrency(),
+                offer.getFeesJson(),
+                offer.getEligibilityRulesJson(),
+                offer.getRequiredDocumentsJson(),
+                offer.getScoringRulesJson(),
                 offer.getStatus(),
+                offer.getStatus() == FinancingOfferStatus.ACTIVE,
                 offer.getCreatedAt(),
                 countryConfigs,
                 requirements
@@ -265,19 +358,20 @@ public class FinancingOfferAdminService {
         return normalized;
     }
 
-    private String normalizeLoanType(String loanType) {
-        String normalized = loanType == null ? "" : loanType.trim();
-        if (normalized.isEmpty()) {
-            throw new BusinessException("Loan type is required");
-        }
-        return normalized.toUpperCase(Locale.ROOT);
-    }
-
     private String normalizeCountry(String countryCode) {
         if (countryCode == null || countryCode.isBlank()) {
             throw new BusinessException("Country code is required");
         }
-        return countryCode.trim().toUpperCase(Locale.ROOT);
+        String normalized = countryCode.trim().toUpperCase(Locale.ROOT);
+        ensureCountryExists(normalized);
+        return normalized;
+    }
+
+    private String normalizeNullableCountry(String countryCode) {
+        if (countryCode == null || countryCode.isBlank()) {
+            return null;
+        }
+        return normalizeCountry(countryCode);
     }
 
     private String normalizeCurrency(String currency) {
@@ -292,5 +386,27 @@ public class FinancingOfferAdminService {
             return null;
         }
         return value.trim();
+    }
+
+    private String normalizeJson(String rawValue, String fieldName) {
+        if (rawValue == null || rawValue.isBlank()) {
+            throw new BusinessException(fieldName + " is required");
+        }
+        try {
+            JsonNode jsonNode = objectMapper.readTree(rawValue);
+            if (!jsonNode.isObject() && !jsonNode.isArray()) {
+                throw new BusinessException(fieldName + " must contain a JSON object or array");
+            }
+            return objectMapper.writeValueAsString(jsonNode);
+        } catch (JsonProcessingException ex) {
+            throw new BusinessException(fieldName + " must contain valid JSON");
+        }
+    }
+
+    private String buildDuplicateName(String name) {
+        String normalized = normalizeName(name);
+        return normalized.length() > 160
+                ? normalized.substring(0, 160) + " Copy"
+                : normalized + " Copy";
     }
 }

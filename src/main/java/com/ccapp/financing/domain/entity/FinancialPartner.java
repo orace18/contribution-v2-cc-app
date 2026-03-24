@@ -2,6 +2,7 @@ package com.ccapp.financing.domain.entity;
 
 import com.ccapp.financing.domain.enums.FinancialPartnerStatus;
 import com.ccapp.financing.domain.enums.FinancialPartnerType;
+import com.ccapp.financing.domain.enums.PartnerApiIntegrationType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -59,8 +60,18 @@ public class FinancialPartner {
     @Column(name = "status", nullable = false, length = 16)
     private FinancialPartnerStatus status;
 
+    @Column(name = "supported_products", nullable = false, length = 64)
+    private String supportedProducts;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "api_integration_type", nullable = false, length = 16)
+    private PartnerApiIntegrationType apiIntegrationType;
+
     @Column(name = "api_endpoint", length = 512)
     private String apiEndpoint;
+
+    @Column(name = "settlement_account", length = 64)
+    private String settlementAccount;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
@@ -72,6 +83,12 @@ public class FinancialPartner {
         }
         if (status == null) {
             status = FinancialPartnerStatus.ACTIVE;
+        }
+        if (supportedProducts == null || supportedProducts.isBlank()) {
+            supportedProducts = "CREDIT";
+        }
+        if (apiIntegrationType == null) {
+            apiIntegrationType = PartnerApiIntegrationType.MANUAL;
         }
     }
 }

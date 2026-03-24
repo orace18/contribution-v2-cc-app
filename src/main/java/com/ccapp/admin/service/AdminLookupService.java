@@ -2,11 +2,12 @@ package com.ccapp.admin.service;
 
 import com.ccapp.admin.dto.LookupItemResponse;
 import com.ccapp.common.exception.BusinessException;
-import com.ccapp.country.config.repository.CountryConfigVersionRepository;
 import com.ccapp.country.config.repository.CountryChartAccountRepository;
+import com.ccapp.country.config.repository.CountryConfigVersionRepository;
 import com.ccapp.country.config.service.CountrySetupBootstrapService;
 import com.ccapp.country.domain.entity.Country;
 import com.ccapp.country.repository.CountryRepository;
+import com.ccapp.financing.domain.entity.FinancingOffer;
 import com.ccapp.financing.domain.enums.FinancialPartnerStatus;
 import com.ccapp.financing.domain.enums.FinancingOfferStatus;
 import com.ccapp.financing.repository.FinancialPartnerRepository;
@@ -92,7 +93,7 @@ public class AdminLookupService {
                     .map(partner -> new LookupItemResponse(
                             partner.getId().toString(),
                             partner.getName(),
-                            partner.getCountryCode() + " • " + partner.getType().name()
+                            partner.getCountryCode() + " - " + partner.getType().name()
                     ))
                     .toList();
         }
@@ -101,7 +102,7 @@ public class AdminLookupService {
                 .map(partner -> new LookupItemResponse(
                         partner.getId().toString(),
                         partner.getName(),
-                        partner.getCountryCode() + " • " + partner.getType().name()
+                        partner.getCountryCode() + " - " + partner.getType().name()
                 ))
                 .toList();
     }
@@ -113,20 +114,20 @@ public class AdminLookupService {
                 .findByCountryCodeAndEnabledTrueOrderByCreatedAtDesc(normalizedCountryCode)
                 .stream()
                 .map(config -> config.getOfferId())
-                .collect(java.util.stream.Collectors.toSet());
+                .collect(Collectors.toSet());
 
         Map<UUID, String> partnerNameById = new HashMap<>();
         financialPartnerRepository.findAll().forEach(partner -> partnerNameById.put(partner.getId(), partner.getName()));
 
         return financingOfferRepository.findByStatusOrderByCreatedAtDesc(FinancingOfferStatus.ACTIVE)
                 .stream()
-                .filter(offer -> enabledOfferIds.contains(offer.getId()))
+                .filter(offer -> matchesCountry(offer, normalizedCountryCode, enabledOfferIds))
                 .map(offer -> {
                     String partnerName = partnerNameById.getOrDefault(offer.getPartnerId(), "Unknown partner");
                     return new LookupItemResponse(
                             offer.getId().toString(),
                             offer.getName(),
-                            partnerName + " • " + offer.getCurrency()
+                            partnerName + " - " + offer.getCurrency()
                     );
                 })
                 .toList();
@@ -138,9 +139,9 @@ public class AdminLookupService {
         return countryChartAccountRepository.findByCountryCodeOrderByAccountCodeAsc(normalizedCountryCode)
                 .stream()
                 .map(account -> new LookupItemResponse(
-                        account.getId().toString(),
+                        account.getAccountCode(),
                         account.getAccountCode() + " - " + account.getAccountName(),
-                        account.getAccountType().name() + " • " + account.getStatus().name()
+                        account.getAccountType().name() + " - " + account.getStatus().name()
                 ))
                 .toList();
     }
@@ -150,6 +151,10 @@ public class AdminLookupService {
         String normalizedCountryCode = normalizeCountryCode(countryCode);
         assertCountryExists(normalizedCountryCode);
         return List.of(new LookupItemResponse("JAWUPAY", "JawuPay", "Single PSP managed centrally"));
+    }
+
+    private boolean matchesCountry(FinancingOffer offer, String countryCode, Set<UUID> enabledOfferIds) {
+        return countryCode.equalsIgnoreCase(offer.getCountryCode()) || enabledOfferIds.contains(offer.getId());
     }
 
     private void assertCountryExists(String countryCode) {
@@ -162,5 +167,4 @@ public class AdminLookupService {
         }
         return countryCode.trim().toUpperCase(Locale.ROOT);
     }
-
 }
