@@ -2,6 +2,7 @@ package com.ccapp.country.config.dto;
 
 public enum CountryConfigReadinessStatus {
     DRAFT,
-    PARTIAL,
+    IN_PROGRESS,
+    CONFIGURED,
     READY
 }

@@ -93,9 +93,17 @@ public class CountryConfigReadinessService {
                 .toList();
         boolean configured = configMissingItems.isEmpty() && country != null;
 
-        CountryConfigReadinessStatus status = configured && missingItems.isEmpty()
-                ? CountryConfigReadinessStatus.READY
-                : (score == 0 ? CountryConfigReadinessStatus.DRAFT : CountryConfigReadinessStatus.PARTIAL);
+        CountryConfigReadinessStatus status;
+        if (configured && missingItems.isEmpty()) {
+            status = CountryConfigReadinessStatus.READY;
+        } else if (configured) {
+            // All 6 config sections passed (wizard complete) but operational checks (e.g. RBAC) pending.
+            status = CountryConfigReadinessStatus.CONFIGURED;
+        } else if (score == 0) {
+            status = CountryConfigReadinessStatus.DRAFT;
+        } else {
+            status = CountryConfigReadinessStatus.IN_PROGRESS;
+        }
 
         List<CountryConfigReadinessSectionResponse> sectionResponses = allSections.stream()
                 .map(section -> new CountryConfigReadinessSectionResponse(

@@ -63,11 +63,14 @@ public class CountryConfigurationStatusService {
 
             configAttemptsCount++;
             CountryConfigReadinessResponse readiness = countryConfigReadinessService.evaluateReadiness(countryCode);
-            if (readiness.status() == CountryConfigReadinessStatus.READY || readiness.configured() || country.isConfigured()) {
+            boolean isConfigured = readiness.configured() || country.isConfigured()
+                    || readiness.status() == CountryConfigReadinessStatus.CONFIGURED
+                    || readiness.status() == CountryConfigReadinessStatus.READY;
+            if (isConfigured) {
                 configured.add(new CountryConfigurationStatusCountryResponse(
                         countryCode,
                         country.getName(),
-                        CountryConfigReadinessStatus.READY.name(),
+                        readiness.status().name(),
                         readiness.score()
                 ));
             } else {
