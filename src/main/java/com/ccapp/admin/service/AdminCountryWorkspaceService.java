@@ -72,7 +72,7 @@ public class AdminCountryWorkspaceService {
                     progress.status(),
                     progress.readinessPercentage(),
                     detailPath(normalizedCountryCode),
-                    buildPrimaryAction(progress.status(), normalizedCountryCode)
+                    buildPrimaryAction(progress.status(), initialized, normalizedCountryCode)
             );
 
             if (progress.status() == AdminCountryWorkspaceStatus.NOT_CONFIGURED) {
@@ -146,6 +146,7 @@ public class AdminCountryWorkspaceService {
                         (left, right) -> right,
                         LinkedHashMap::new
                 ));
+        boolean configured = countryConfigurationEngineService.refreshCountryConfiguredState(countryCode);
 
         Map<String, TabProgress> tabProgressByKey = new LinkedHashMap<>();
         int totalChecks = 0;
@@ -158,11 +159,9 @@ public class AdminCountryWorkspaceService {
             int readinessPercentage = tabTotalChecks == 0
                     ? 0
                     : (int) Math.round((tabPassedChecks * 100.0d) / tabTotalChecks);
-            AdminCountryWorkspaceStatus status = tabPassedChecks == 0
-                    ? AdminCountryWorkspaceStatus.NOT_CONFIGURED
-                    : (tabPassedChecks == tabTotalChecks
-                    ? AdminCountryWorkspaceStatus.READY
-                    : AdminCountryWorkspaceStatus.DRAFT);
+            AdminCountryWorkspaceStatus status = tabPassedChecks == tabTotalChecks && tabTotalChecks > 0
+                    ? AdminCountryWorkspaceStatus.CONFIGURED
+                    : AdminCountryWorkspaceStatus.NOT_CONFIGURED;
 
             List<String> missingItems = section == null ? List.of() : section.missing();
             tabProgressByKey.put(tab.key(), new TabProgress(status, readinessPercentage, missingItems));
@@ -171,12 +170,12 @@ public class AdminCountryWorkspaceService {
             passedChecks += tabPassedChecks;
         }
 
-        int readinessPercentage = totalChecks == 0
-                ? 0
-                : (int) Math.round((passedChecks * 100.0d) / totalChecks);
-        AdminCountryWorkspaceStatus status = passedChecks == totalChecks && totalChecks > 0
-                ? AdminCountryWorkspaceStatus.READY
-                : AdminCountryWorkspaceStatus.DRAFT;
+        int readinessPercentage = configured
+                ? 100
+                : (totalChecks == 0 ? 0 : (int) Math.round((passedChecks * 100.0d) / totalChecks));
+        AdminCountryWorkspaceStatus status = configured
+                ? AdminCountryWorkspaceStatus.CONFIGURED
+                : AdminCountryWorkspaceStatus.NOT_CONFIGURED;
         return new WorkspaceProgress(status, readinessPercentage, tabProgressByKey);
     }
 
@@ -186,6 +185,13 @@ public class AdminCountryWorkspaceService {
         TabProgress resolvedProgress = progress == null
                 ? new TabProgress(AdminCountryWorkspaceStatus.NOT_CONFIGURED, 0, List.of())
                 : progress;
+        if ("financing".equals(tab.key()) && isOptionalFinancingMissing(snapshot)) {
+            resolvedProgress = new TabProgress(
+                    AdminCountryWorkspaceStatus.NOT_CONFIGURED,
+                    0,
+                    List.of("Financing not configured (optional)")
+            );
+        }
         return new AdminCountryWorkspaceTabResponse(
                 tab.key(),
                 tab.label(),
@@ -198,15 +204,17 @@ public class AdminCountryWorkspaceService {
         );
     }
 
-    private AdminCountryWorkspaceActionResponse buildPrimaryAction(AdminCountryWorkspaceStatus status, String countryCode) {
-        if (status == AdminCountryWorkspaceStatus.READY) {
+    private AdminCountryWorkspaceActionResponse buildPrimaryAction(AdminCountryWorkspaceStatus status,
+                                                                   boolean initialized,
+                                                                   String countryCode) {
+        if (status == AdminCountryWorkspaceStatus.CONFIGURED) {
             return new AdminCountryWorkspaceActionResponse(
                     AdminCountryWorkspaceAction.VIEW,
                     "View",
                     detailPath(countryCode)
             );
         }
-        if (status == AdminCountryWorkspaceStatus.DRAFT) {
+        if (initialized) {
             return new AdminCountryWorkspaceActionResponse(
                     AdminCountryWorkspaceAction.CONTINUE,
                     "Continue",
@@ -218,6 +226,24 @@ public class AdminCountryWorkspaceService {
                 "Configure",
                 setupPath(countryCode)
         );
+    }
+
+    private boolean isOptionalFinancingMissing(CountryConfigSnapshotItemResponse snapshot) {
+        if (snapshot == null || snapshot.payload() == null || !snapshot.payload().isObject()) {
+            return true;
+        }
+        boolean enabled = snapshot.payload().has("enabled") && snapshot.payload().get("enabled").isBoolean()
+                && snapshot.payload().get("enabled").booleanValue();
+        boolean hasOffers = snapshot.payload().has("offers")
+                && snapshot.payload().get("offers").isArray()
+                && !snapshot.payload().get("offers").isEmpty();
+        boolean hasSeedRequirement = snapshot.payload().has("seedCapitalRequired")
+                && snapshot.payload().get("seedCapitalRequired").isBoolean()
+                && snapshot.payload().get("seedCapitalRequired").booleanValue();
+        boolean hasAmountRules = snapshot.payload().has("minAmount")
+                || snapshot.payload().has("maxAmount")
+                || snapshot.payload().has("maxInterestRate");
+        return !enabled && !hasOffers && !hasSeedRequirement && !hasAmountRules;
     }
 
     private Country resolveCountry(String countryCode) {

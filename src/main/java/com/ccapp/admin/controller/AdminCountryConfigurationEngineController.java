@@ -35,6 +35,7 @@ import com.ccapp.country.config.service.CountryConfigurationStatusService;
 import com.ccapp.country.config.service.CountryConfigurationEngineService;
 import com.ccapp.country.config.service.CountrySetupBootstrapService;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -384,7 +385,7 @@ public class AdminCountryConfigurationEngineController {
     @GetMapping("/{countryCode}/readiness")
     public ResponseEntity<CommonResponse<CountryConfigReadinessResponse>> getCountryReadiness(@PathVariable String countryCode) {
         AdminSecurityUtils.assertCountryAccess(countryCode);
-        CountryConfigReadinessResponse response = countryConfigReadinessService.refreshCountryConfiguredStatus(countryCode);
+        CountryConfigReadinessResponse response = countryConfigurationEngineService.getCountryReadiness(countryCode);
         adminAuditService.logAction(
                 AdminSecurityUtils.currentAdminUserId(),
                 "GET_COUNTRY_CONFIG_READINESS",
@@ -515,7 +516,8 @@ public class AdminCountryConfigurationEngineController {
         ordered.put(CountryConfigType.ACCOUNTING, payloads.accounting());
         ordered.put(CountryConfigType.MEMBERSHIP, payloads.membership());
         ordered.put(CountryConfigType.MLM_LIMITS, payloads.mlmLimits());
-        ordered.put(CountryConfigType.FINANCING, payloads.financing());
+        ordered.put(CountryConfigType.FINANCING,
+                payloads.financing() == null ? JsonNodeFactory.instance.objectNode() : payloads.financing());
         ordered.put(CountryConfigType.GUARANTEE, payloads.guarantee());
         return ordered;
     }

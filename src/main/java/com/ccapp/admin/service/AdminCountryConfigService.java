@@ -6,6 +6,7 @@ import com.ccapp.admin.dto.*;
 import com.ccapp.admin.repository.AdminPolicyRepository;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.country.config.service.CountryConfigReadinessService;
+import com.ccapp.country.config.service.CountryConfigurationEngineService;
 import com.ccapp.country.domain.entity.Country;
 import com.ccapp.country.repository.CountryRepository;
 import com.ccapp.payments.subscription.domain.entity.SubscriptionPlan;
@@ -29,6 +30,7 @@ public class AdminCountryConfigService {
     private final AdminPolicyRepository adminPolicyRepository;
     private final CountryRepository countryRepository;
     private final CountryConfigReadinessService countryConfigReadinessService;
+    private final CountryConfigurationEngineService countryConfigurationEngineService;
     private final SubscriptionPlanCatalogService subscriptionPlanCatalogService;
     private final SubscriptionService subscriptionService;
 
@@ -95,7 +97,7 @@ public class AdminCountryConfigService {
         subscriptionService.assertCountryPlanCatalogValid(code);
         Country country = loadCountryByCode(code);
         country.setActive(true);
-        boolean configured = countryConfigReadinessService.evaluateReadiness(country.getCode()).configured();
+        boolean configured = countryConfigurationEngineService.refreshCountryConfiguredState(country.getCode());
         country.setConfigured(configured);
         Country saved = countryRepository.save(country);
         return toCountryResponse(saved);

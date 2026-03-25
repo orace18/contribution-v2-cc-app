@@ -2,7 +2,6 @@ package com.ccapp.country.config.service;
 
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.country.config.dto.CountryConfigReadinessResponse;
-import com.ccapp.country.config.dto.CountryConfigReadinessStatus;
 import com.ccapp.country.config.dto.CountryConfigurationStatusCountryResponse;
 import com.ccapp.country.config.dto.CountryConfigurationStatusResponse;
 import com.ccapp.country.config.repository.CountryConfigVersionRepository;
@@ -27,6 +26,7 @@ public class CountryConfigurationStatusService {
     private final CountryRepository countryRepository;
     private final CountryConfigVersionRepository countryConfigVersionRepository;
     private final CountryConfigReadinessService countryConfigReadinessService;
+    private final CountryConfigurationEngineService countryConfigurationEngineService;
     private final CountrySetupBootstrapService countrySetupBootstrapService;
 
     @Transactional
@@ -63,21 +63,19 @@ public class CountryConfigurationStatusService {
 
             configAttemptsCount++;
             CountryConfigReadinessResponse readiness = countryConfigReadinessService.evaluateReadiness(countryCode);
-            boolean isConfigured = readiness.configured() || country.isConfigured()
-                    || readiness.status() == CountryConfigReadinessStatus.CONFIGURED
-                    || readiness.status() == CountryConfigReadinessStatus.READY;
+            boolean isConfigured = countryConfigurationEngineService.refreshCountryConfiguredState(countryCode);
             if (isConfigured) {
                 configured.add(new CountryConfigurationStatusCountryResponse(
                         countryCode,
                         country.getName(),
-                        readiness.status().name(),
-                        readiness.score()
+                        "CONFIGURED",
+                        100
                 ));
             } else {
                 draftOrPartial.add(new CountryConfigurationStatusCountryResponse(
                         countryCode,
                         country.getName(),
-                        readiness.status().name(),
+                        "NOT_CONFIGURED",
                         readiness.score()
                 ));
             }

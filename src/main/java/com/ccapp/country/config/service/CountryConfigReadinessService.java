@@ -11,8 +11,8 @@ import com.ccapp.country.config.domain.enums.CountryConfigType;
 import com.ccapp.country.config.dto.CountryConfigReadinessResponse;
 import com.ccapp.country.config.dto.CountryConfigReadinessSectionResponse;
 import com.ccapp.country.config.dto.CountryConfigReadinessStatus;
-import com.ccapp.country.config.repository.CountryChartAccountRepository;
 import com.ccapp.country.config.repository.CountryAccountSystemMappingRepository;
+import com.ccapp.country.config.repository.CountryChartAccountRepository;
 import com.ccapp.country.config.repository.CountryConfigVersionRepository;
 import com.ccapp.country.domain.entity.Country;
 import com.ccapp.country.repository.CountryRepository;
@@ -59,20 +59,37 @@ public class CountryConfigReadinessService {
         String normalizedCountryCode = normalizeCountryCode(countryCode);
         Country country = countryRepository.findByCode(normalizedCountryCode).orElse(null);
         Map<CountryConfigType, ObjectNode> payloadByType = resolveActivePayloads(normalizedCountryCode);
+        return evaluateReadiness(country, normalizedCountryCode, payloadByType);
+    }
 
-        // Configuration sections — these determine whether the country is "configured".
-        // All 6 must pass for configured = true.
+    @Transactional(readOnly = true)
+    public CountryConfigReadinessResponse evaluateReadiness(String countryCode,
+                                                            Map<CountryConfigType, ObjectNode> payloadByType) {
+        String normalizedCountryCode = normalizeCountryCode(countryCode);
+        Country country = countryRepository.findByCode(normalizedCountryCode).orElse(null);
+        return evaluateReadiness(country, normalizedCountryCode, payloadByType);
+    }
+
+    private CountryConfigReadinessResponse evaluateReadiness(Country country,
+                                                             String normalizedCountryCode,
+                                                             Map<CountryConfigType, ObjectNode> payloadByType) {
+        ObjectNode accountingPayload = resolvedPayload(payloadByType, CountryConfigType.ACCOUNTING);
+        ObjectNode membershipPayload = resolvedPayload(payloadByType, CountryConfigType.MEMBERSHIP);
+        ObjectNode mlmLimitsPayload = resolvedPayload(payloadByType, CountryConfigType.MLM_LIMITS);
+        ObjectNode guaranteePayload = resolvedPayload(payloadByType, CountryConfigType.GUARANTEE);
+        ObjectNode financingPayload = resolvedPayload(payloadByType, CountryConfigType.FINANCING);
+
+        // Core country configuration does not depend on financing.
         List<SectionAccumulator> configSections = new ArrayList<>();
         configSections.add(evaluateGeneralSection(country));
-        configSections.add(evaluateAccountingSection(normalizedCountryCode, payloadByType.get(CountryConfigType.ACCOUNTING)));
-        configSections.add(evaluateMembershipSection(payloadByType.get(CountryConfigType.MEMBERSHIP), payloadByType.get(CountryConfigType.MLM_LIMITS)));
-        configSections.add(evaluateMlmSection(normalizedCountryCode, payloadByType.get(CountryConfigType.MLM_LIMITS)));
-        configSections.add(evaluateFinancingSection(normalizedCountryCode, payloadByType.get(CountryConfigType.FINANCING)));
-        configSections.add(evaluateRiskSection(payloadByType.get(CountryConfigType.GUARANTEE)));
+        configSections.add(evaluateAccountingSection(normalizedCountryCode, accountingPayload));
+        configSections.add(evaluateMembershipSection(membershipPayload, mlmLimitsPayload));
+        configSections.add(evaluateMlmSection(normalizedCountryCode, mlmLimitsPayload));
+        configSections.add(evaluateRiskSection(guaranteePayload));
 
-        // Operational sections — affect score and readiness status but do NOT block
-        // country.configured = true. RBAC assignment is a separate operational concern.
+        // Optional and operational diagnostics never block configured=true.
         List<SectionAccumulator> operationalSections = new ArrayList<>();
+        operationalSections.add(evaluateFinancingSection(normalizedCountryCode, financingPayload));
         operationalSections.add(evaluateRbacSection(country));
 
         List<SectionAccumulator> allSections = new ArrayList<>(configSections);
@@ -87,23 +104,13 @@ public class CountryConfigReadinessService {
                 .flatMap(section -> section.missing().stream())
                 .toList();
 
-        // configured = all configuration sections pass (RBAC does not block this).
         List<String> configMissingItems = configSections.stream()
                 .flatMap(section -> section.missing().stream())
                 .toList();
         boolean configured = configMissingItems.isEmpty() && country != null;
-
-        CountryConfigReadinessStatus status;
-        if (configured && missingItems.isEmpty()) {
-            status = CountryConfigReadinessStatus.READY;
-        } else if (configured) {
-            // All 6 config sections passed (wizard complete) but operational checks (e.g. RBAC) pending.
-            status = CountryConfigReadinessStatus.CONFIGURED;
-        } else if (score == 0) {
-            status = CountryConfigReadinessStatus.DRAFT;
-        } else {
-            status = CountryConfigReadinessStatus.IN_PROGRESS;
-        }
+        CountryConfigReadinessStatus status = configured
+                ? CountryConfigReadinessStatus.CONFIGURED
+                : CountryConfigReadinessStatus.NOT_CONFIGURED;
 
         List<CountryConfigReadinessSectionResponse> sectionResponses = allSections.stream()
                 .map(section -> new CountryConfigReadinessSectionResponse(
@@ -348,7 +355,8 @@ public class CountryConfigReadinessService {
         }
 
         boolean hasLimits = (readDecimal(mlmLimitsCountryPayload, "weeklyCap") != null)
-                || (mlmLimitsCountryPayload.has("weeklyCapsByTier")
+                || (mlmLimitsCountryPayload != null
+                && mlmLimitsCountryPayload.has("weeklyCapsByTier")
                 && mlmLimitsCountryPayload.get("weeklyCapsByTier").isArray()
                 && !mlmLimitsCountryPayload.get("weeklyCapsByTier").isEmpty());
         if (!hasLimits) {
@@ -359,20 +367,19 @@ public class CountryConfigReadinessService {
 
     private SectionAccumulator evaluateFinancingSection(String countryCode, ObjectNode financing) {
         SectionAccumulator section = new SectionAccumulator("financing", 2);
-        boolean offersInPayload = financing.has("offers")
-                && financing.get("offers").isArray()
-                && !financing.get("offers").isEmpty();
         boolean hasEnabledOfferConfig = !offerCountryConfigRepository
                 .findByCountryCodeAndEnabledTrueOrderByCreatedAtDesc(countryCode)
                 .isEmpty();
-        boolean financingEnabled = optionalBoolean(financing, "enabled", "financingEnabled")
-                .orElse(offersInPayload || hasEnabledOfferConfig);
+        boolean offersInPayload = financing != null
+                && financing.has("offers")
+                && financing.get("offers").isArray()
+                && !financing.get("offers").isEmpty();
+        boolean seedRequired = optionalBoolean(financing, "seedCapitalRequired").orElse(false);
 
-        if (financingEnabled && !offersInPayload && !hasEnabledOfferConfig) {
-            section.miss("financing.active_offer");
+        if (!hasEnabledOfferConfig && !offersInPayload && !seedRequired) {
+            return section;
         }
 
-        boolean seedRequired = optionalBoolean(financing, "seedCapitalRequired").orElse(false);
         if (seedRequired) {
             String seedOfferId = firstNonBlank(
                     optionalText(financing, "seedCapitalOfferId"),
@@ -448,6 +455,13 @@ public class CountryConfigReadinessService {
                     .orElseGet(objectMapper::createObjectNode));
         }
         return payloadByType;
+    }
+
+    private ObjectNode resolvedPayload(Map<CountryConfigType, ObjectNode> payloadByType, CountryConfigType type) {
+        if (payloadByType == null) {
+            return objectMapper.createObjectNode();
+        }
+        return payloadByType.getOrDefault(type, objectMapper.createObjectNode());
     }
 
     private ObjectNode resolveAccountsNode(ObjectNode accounting) {
