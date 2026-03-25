@@ -11,6 +11,7 @@ import com.ccapp.country.config.domain.entity.CountryConfigVersion;
 import com.ccapp.country.config.domain.enums.CountryConfigType;
 import com.ccapp.country.config.dto.CountryConfigSnapshotItemResponse;
 import com.ccapp.country.config.dto.CountryConfigSnapshotResponse;
+import com.ccapp.country.config.dto.CountryConfigReadinessResponse;
 import com.ccapp.country.config.dto.CountryConfigReadinessStatus;
 import com.ccapp.country.config.dto.CountryConfigValidationErrorResponse;
 import com.ccapp.country.config.dto.CountryConfigValidationResponse;
