@@ -24,7 +24,6 @@ import com.ccapp.ledger.repository.AccountBalanceSnapshotRepository;
 import com.ccapp.ledger.repository.LedgerEntryRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -50,10 +49,9 @@ public class CountryChartOfAccountsService {
     private final AccountBalanceSnapshotRepository accountBalanceSnapshotRepository;
     private final LedgerEntryRepository ledgerEntryRepository;
 
-    @Transactional
+    @Transactional(readOnly = true)
     public List<CountryChartAccountSummaryResponse> listCountryAccounts(String countryCode) {
         String normalizedCountryCode = normalizeCountryCode(countryCode);
-        ensureCountryChartGenerated(normalizedCountryCode);
         Country country = resolveCountry(normalizedCountryCode);
         String currency = country.getCurrency();
 
@@ -284,20 +282,10 @@ public class CountryChartOfAccountsService {
                 .openingBalance(BigDecimal.ZERO)
                 .status(CountryChartAccountStatus.ACTIVE)
                 .build();
-        try {
-            CountryChartAccount saved = countryChartAccountRepository.save(candidate);
-            log.info("country_master_account_created countryCode={} groupId={} accountCode={} systemTag={}",
-                    country.getCode(), master.getGroupId(), saved.getAccountCode(), template.systemTag());
-            return saved;
-        } catch (DataIntegrityViolationException ex) {
-            return countryChartAccountRepository
-                    .findFirstByCountryCodeAndMasterGroupIdAndAccountHolderIdIsNullAndStatusOrderByCreatedAtAsc(
-                            country.getCode(),
-                            master.getGroupId(),
-                            CountryChartAccountStatus.ACTIVE
-                    )
-                    .orElseThrow(() -> ex);
-        }
+        CountryChartAccount saved = countryChartAccountRepository.save(candidate);
+        log.info("country_master_account_created countryCode={} groupId={} accountCode={} systemTag={}",
+                country.getCode(), master.getGroupId(), saved.getAccountCode(), template.systemTag());
+        return saved;
     }
 
     private CountryChartAccount ensureSystemMapping(Country country, CountryMasterAccountTemplate template) {
@@ -351,20 +339,10 @@ public class CountryChartOfAccountsService {
                 .status(CountryChartAccountStatus.ACTIVE)
                 .accountHolderId(accountHolder.getId())
                 .build();
-        try {
-            CountryChartAccount saved = countryChartAccountRepository.save(candidate);
-            log.info("wallet_account_created accountHolderId={} countryCode={} accountCode={}",
-                    accountHolder.getId(), country.getCode(), saved.getAccountCode());
-            return saved;
-        } catch (DataIntegrityViolationException ex) {
-            return countryChartAccountRepository
-                    .findByAccountHolderIdAndCountryCodeAndStatus(
-                            accountHolder.getId(),
-                            country.getCode(),
-                            CountryChartAccountStatus.ACTIVE
-                    )
-                    .orElseThrow(() -> ex);
-        }
+        CountryChartAccount saved = countryChartAccountRepository.save(candidate);
+        log.info("wallet_account_created accountHolderId={} countryCode={} accountCode={}",
+                accountHolder.getId(), country.getCode(), saved.getAccountCode());
+        return saved;
     }
 
     private CountryChartAccount resolveOrCreateSharedGroupAccount(String countryCode,
@@ -403,17 +381,7 @@ public class CountryChartOfAccountsService {
                 .status(CountryChartAccountStatus.ACTIVE)
                 .accountHolderId(null)
                 .build();
-        try {
-            return countryChartAccountRepository.save(candidate);
-        } catch (DataIntegrityViolationException ex) {
-            return countryChartAccountRepository
-                    .findFirstByCountryCodeAndAccountGroupAndStatusOrderByCreatedAtAsc(
-                            country.getCode(),
-                            group,
-                            CountryChartAccountStatus.ACTIVE
-                    )
-                    .orElseThrow(() -> ex);
-        }
+        return countryChartAccountRepository.save(candidate);
     }
 
     private CountryMasterAccountTemplate resolveTemplate(CountryAccountGroup group) {
