@@ -15,6 +15,7 @@ import com.ccapp.country.config.dto.CountryConfigValidationErrorResponse;
 import com.ccapp.country.config.dto.CountryConfigValidationResponse;
 import com.ccapp.country.config.dto.CountryConfigVersionResponse;
 import com.ccapp.country.config.dto.CountryConfigVersionHistoryItemResponse;
+import com.ccapp.country.config.dto.CountrySetupStatusResponse;
 import com.ccapp.country.config.dto.UpsertCountryConfigRequest;
 import com.ccapp.country.config.repository.CountryChartAccountRepository;
 import com.ccapp.country.domain.entity.Country;
@@ -100,6 +101,74 @@ public class CountryConfigurationEngineService {
                 payloadOf(snapshot, CountryConfigType.ACCOUNTING),
                 buildManagedPaymentPayload()
         );
+    }
+
+    @Transactional(readOnly = true)
+    public CountrySetupStatusResponse getSetupStatus(String countryCode) {
+        String normalized = normalizeCountryCode(countryCode);
+        assertCountryExists(normalized);
+
+        OffsetDateTime now = OffsetDateTime.now();
+        Map<String, CountrySetupStatusResponse.StepStatus> steps = new HashMap<>();
+
+        // general
+        boolean generalDone = countryConfigVersionRepository
+                .findFirstByCountryCodeAndConfigTypeAndEffectiveDateLessThanEqualOrderByEffectiveDateDescVersionDesc(
+                        normalized, CountryConfigType.GENERAL, now)
+                .map(v -> v.getPayload() != null && !v.getPayload().isEmpty())
+                .orElse(false);
+        steps.put("general", generalDone
+                ? CountrySetupStatusResponse.StepStatus.ok()
+                : CountrySetupStatusResponse.StepStatus.blocked("General configuration not saved"));
+
+        // accounting: complete only when system accounts exist in DB
+        boolean accountingDone = countryChartOfAccountsService.hasRequiredSystemMappings(normalized);
+        steps.put("accounting", accountingDone
+                ? CountrySetupStatusResponse.StepStatus.ok()
+                : CountrySetupStatusResponse.StepStatus.blocked("System accounts not generated. Use 'Generate accounts' in Step 2."));
+
+        // membership
+        boolean membershipDone = countryConfigVersionRepository
+                .findFirstByCountryCodeAndConfigTypeAndEffectiveDateLessThanEqualOrderByEffectiveDateDescVersionDesc(
+                        normalized, CountryConfigType.MEMBERSHIP, now)
+                .map(v -> v.getPayload() != null && !v.getPayload().isEmpty())
+                .orElse(false);
+        steps.put("membership", membershipDone
+                ? CountrySetupStatusResponse.StepStatus.ok()
+                : CountrySetupStatusResponse.StepStatus.blocked("Membership configuration not saved"));
+
+        // mlm
+        boolean mlmDone = countryConfigVersionRepository
+                .findFirstByCountryCodeAndConfigTypeAndEffectiveDateLessThanEqualOrderByEffectiveDateDescVersionDesc(
+                        normalized, CountryConfigType.MLM_LIMITS, now)
+                .map(v -> v.getPayload() != null && !v.getPayload().isEmpty())
+                .orElse(false);
+        steps.put("mlm", mlmDone
+                ? CountrySetupStatusResponse.StepStatus.ok()
+                : CountrySetupStatusResponse.StepStatus.blocked("MLM configuration not saved"));
+
+        // financing
+        boolean financingDone = countryConfigVersionRepository
+                .findFirstByCountryCodeAndConfigTypeAndEffectiveDateLessThanEqualOrderByEffectiveDateDescVersionDesc(
+                        normalized, CountryConfigType.FINANCING, now)
+                .map(v -> v.getPayload() != null && !v.getPayload().isEmpty())
+                .orElse(false);
+        steps.put("financing", financingDone
+                ? CountrySetupStatusResponse.StepStatus.ok()
+                : CountrySetupStatusResponse.StepStatus.blocked("Financing configuration not saved"));
+
+        // guarantee
+        boolean guaranteeDone = countryConfigVersionRepository
+                .findFirstByCountryCodeAndConfigTypeAndEffectiveDateLessThanEqualOrderByEffectiveDateDescVersionDesc(
+                        normalized, CountryConfigType.GUARANTEE, now)
+                .map(v -> v.getPayload() != null && !v.getPayload().isEmpty())
+                .orElse(false);
+        steps.put("guarantee", guaranteeDone
+                ? CountrySetupStatusResponse.StepStatus.ok()
+                : CountrySetupStatusResponse.StepStatus.blocked("Risk & guarantee configuration not saved"));
+
+        boolean canActivate = steps.values().stream().allMatch(CountrySetupStatusResponse.StepStatus::complete);
+        return new CountrySetupStatusResponse(steps, canActivate);
     }
 
     @Transactional

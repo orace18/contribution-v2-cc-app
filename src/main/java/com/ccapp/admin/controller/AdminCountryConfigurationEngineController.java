@@ -18,6 +18,7 @@ import com.ccapp.country.config.dto.CountryConfigReadinessResponse;
 import com.ccapp.country.config.dto.CountryConfigSnapshotResponse;
 import com.ccapp.country.config.dto.CountryConfigValidationResponse;
 import com.ccapp.country.config.dto.CountryConfigurationStatusResponse;
+import com.ccapp.country.config.dto.CountrySetupStatusResponse;
 import com.ccapp.country.config.dto.CountrySetupCountryResponse;
 import com.ccapp.country.config.dto.CountryConfigVersionResponse;
 import com.ccapp.country.config.dto.CountryConfigVersionHistoryItemResponse;
@@ -364,6 +365,20 @@ public class AdminCountryConfigurationEngineController {
                 )
         );
         return ResponseEntity.ok(CommonResponse.success("Country setup validation", response));
+    }
+
+    @GetMapping("/{countryCode}/setup-status")
+    public ResponseEntity<CommonResponse<CountrySetupStatusResponse>> getSetupStatus(@PathVariable String countryCode) {
+        AdminSecurityUtils.assertCountryAccess(countryCode);
+        CountrySetupStatusResponse response = countryConfigurationEngineService.getSetupStatus(countryCode);
+        adminAuditService.logAction(
+                AdminSecurityUtils.currentAdminUserId(),
+                "GET_COUNTRY_SETUP_STATUS",
+                "COUNTRY_CONFIG",
+                countryCode,
+                "canActivate=" + response.canActivate()
+        );
+        return ResponseEntity.ok(CommonResponse.success("Country setup status", response));
     }
 
     @GetMapping("/{countryCode}/readiness")
