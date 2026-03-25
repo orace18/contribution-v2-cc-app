@@ -60,29 +60,44 @@ public class CountryConfigReadinessService {
         Country country = countryRepository.findByCode(normalizedCountryCode).orElse(null);
         Map<CountryConfigType, ObjectNode> payloadByType = resolveActivePayloads(normalizedCountryCode);
 
-        List<SectionAccumulator> sections = new ArrayList<>();
-        sections.add(evaluateGeneralSection(country));
-        sections.add(evaluateAccountingSection(normalizedCountryCode, payloadByType.get(CountryConfigType.ACCOUNTING)));
-        sections.add(evaluateMembershipSection(payloadByType.get(CountryConfigType.MEMBERSHIP), payloadByType.get(CountryConfigType.MLM_LIMITS)));
-        sections.add(evaluateMlmSection(normalizedCountryCode, payloadByType.get(CountryConfigType.MLM_LIMITS)));
-        sections.add(evaluateFinancingSection(normalizedCountryCode, payloadByType.get(CountryConfigType.FINANCING)));
-        sections.add(evaluateRiskSection(payloadByType.get(CountryConfigType.GUARANTEE)));
-        sections.add(evaluateRbacSection(country));
+        // Configuration sections — these determine whether the country is "configured".
+        // All 6 must pass for configured = true.
+        List<SectionAccumulator> configSections = new ArrayList<>();
+        configSections.add(evaluateGeneralSection(country));
+        configSections.add(evaluateAccountingSection(normalizedCountryCode, payloadByType.get(CountryConfigType.ACCOUNTING)));
+        configSections.add(evaluateMembershipSection(payloadByType.get(CountryConfigType.MEMBERSHIP), payloadByType.get(CountryConfigType.MLM_LIMITS)));
+        configSections.add(evaluateMlmSection(normalizedCountryCode, payloadByType.get(CountryConfigType.MLM_LIMITS)));
+        configSections.add(evaluateFinancingSection(normalizedCountryCode, payloadByType.get(CountryConfigType.FINANCING)));
+        configSections.add(evaluateRiskSection(payloadByType.get(CountryConfigType.GUARANTEE)));
 
-        int totalChecks = sections.stream().mapToInt(SectionAccumulator::totalChecks).sum();
-        int missingChecks = sections.stream().mapToInt(section -> section.missing().size()).sum();
+        // Operational sections — affect score and readiness status but do NOT block
+        // country.configured = true. RBAC assignment is a separate operational concern.
+        List<SectionAccumulator> operationalSections = new ArrayList<>();
+        operationalSections.add(evaluateRbacSection(country));
+
+        List<SectionAccumulator> allSections = new ArrayList<>(configSections);
+        allSections.addAll(operationalSections);
+
+        int totalChecks = allSections.stream().mapToInt(SectionAccumulator::totalChecks).sum();
+        int missingChecks = allSections.stream().mapToInt(section -> section.missing().size()).sum();
         int passedChecks = Math.max(totalChecks - missingChecks, 0);
         int score = totalChecks == 0 ? 0 : (int) Math.round((passedChecks * 100.0d) / totalChecks);
 
-        List<String> missingItems = sections.stream()
+        List<String> missingItems = allSections.stream()
                 .flatMap(section -> section.missing().stream())
                 .toList();
-        boolean configured = missingItems.isEmpty() && country != null;
-        CountryConfigReadinessStatus status = configured
+
+        // configured = all configuration sections pass (RBAC does not block this).
+        List<String> configMissingItems = configSections.stream()
+                .flatMap(section -> section.missing().stream())
+                .toList();
+        boolean configured = configMissingItems.isEmpty() && country != null;
+
+        CountryConfigReadinessStatus status = configured && missingItems.isEmpty()
                 ? CountryConfigReadinessStatus.READY
                 : (score == 0 ? CountryConfigReadinessStatus.DRAFT : CountryConfigReadinessStatus.PARTIAL);
 
-        List<CountryConfigReadinessSectionResponse> sectionResponses = sections.stream()
+        List<CountryConfigReadinessSectionResponse> sectionResponses = allSections.stream()
                 .map(section -> new CountryConfigReadinessSectionResponse(
                         section.section(),
                         Math.max(section.totalChecks() - section.missing().size(), 0),
