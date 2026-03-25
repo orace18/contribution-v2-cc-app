@@ -28,6 +28,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
@@ -49,6 +50,7 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class CountryConfigurationEngineService {
 
     private static final int MAX_PAYLOAD_CHARS = 50_000;
@@ -298,7 +300,7 @@ public class CountryConfigurationEngineService {
         return toVersionResponse(saved);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public CountryConfigValidationResponse validateCountrySetup(String countryCode,
                                                                 Map<CountryConfigType, JsonNode> payloads,
                                                                 OffsetDateTime effectiveDate) {
@@ -352,7 +354,36 @@ public class CountryConfigurationEngineService {
             ));
         }
 
-        return new CountryConfigValidationResponse(errors.isEmpty(), errors);
+        boolean valid = errors.isEmpty();
+        // Business rule: validation is the single source of truth for configured status.
+        // If validation passes, mark the country as configured unconditionally.
+        if (valid) {
+            persistConfiguredByValidation(normalizedCountryCode);
+        }
+        return new CountryConfigValidationResponse(valid, errors);
+    }
+
+    /**
+     * Marks the country as configured after a successful validation call.
+     * Validation is the authoritative source of truth for configured status —
+     * this write must happen regardless of the runtime readiness score.
+     */
+    private void persistConfiguredByValidation(String countryCode) {
+        Country country = countryRepository.findByCode(countryCode)
+                .orElseThrow(() -> new BusinessException("Country not found"));
+        boolean changed = false;
+        if (!country.isConfigured()) {
+            country.setConfigured(true);
+            log.info("[VALIDATION] country={} marked configured=true (validation passed)", countryCode);
+            changed = true;
+        }
+        if (!country.isActive()) {
+            country.setActive(true);
+            changed = true;
+        }
+        if (changed) {
+            countryRepository.save(country);
+        }
     }
 
     @Transactional(readOnly = true)
