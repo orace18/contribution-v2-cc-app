@@ -968,8 +968,12 @@ public class CountryConfigurationEngineService {
             return;
         }
 
-        countryChartOfAccountsService.ensureCountryChartGenerated(countryCode);
-        countryChartOfAccountsService.assertCriticalSystemMappingsExist(countryCode);
+        // Validate only — do NOT create accounts here (this runs inside a readOnly transaction).
+        // Account generation must be done explicitly via autoGenerateRequiredAccounts.
+        if (!countryChartOfAccountsService.hasRequiredSystemMappings(countryCode)) {
+            throw new BusinessException("Required system accounts are not yet generated for this country. " +
+                    "Use the 'Generate accounts' action in Step 2 before activating.");
+        }
     }
 
     private void validatePaymentMethodsAgainstPspConfig(ObjectNode paymentConfig) {
