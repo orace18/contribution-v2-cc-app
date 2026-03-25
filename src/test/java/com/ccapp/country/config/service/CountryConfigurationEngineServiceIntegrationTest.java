@@ -360,6 +360,38 @@ class CountryConfigurationEngineServiceIntegrationTest {
         assertEquals("Guarantee must align with financing rules", response.errors().get(0).message());
     }
 
+    @Test
+    void validateCountrySetup_shouldMarkBjAndIntConfiguredWithoutFinancing() {
+        for (String countryCode : List.of("BJ", "INT")) {
+            saveCountry(countryCode, countryCode.equals("BJ") ? "Benin" : "Integration Test");
+            countryConfigurationEngineService.initializeCountryConfiguration(countryCode, UUID.randomUUID());
+
+            var beforeValidation = countryRepository.findByCode(countryCode).orElseThrow();
+            assertFalse(beforeValidation.isConfigured());
+
+            var response = countryConfigurationEngineService.validateCountrySetup(
+                    countryCode,
+                    Map.of(
+                            CountryConfigType.GENERAL, objectMapper.createObjectNode(),
+                            CountryConfigType.ACCOUNTING, buildAccountingPayload(),
+                            CountryConfigType.MEMBERSHIP, buildCompleteMembershipPayload(),
+                            CountryConfigType.MLM_LIMITS, buildMlmPayload(),
+                            CountryConfigType.GUARANTEE, buildGuaranteePayload()
+                    ),
+                    OffsetDateTime.now()
+            );
+
+            assertTrue(response.valid());
+            assertTrue(response.errors().isEmpty());
+            assertTrue(countryConfigurationEngineService.getCountryReadiness(countryCode).configured());
+            assertEquals(
+                    com.ccapp.country.config.dto.CountryConfigReadinessStatus.CONFIGURED,
+                    countryConfigurationEngineService.getCountryReadiness(countryCode).status()
+            );
+            assertTrue(countryRepository.findByCode(countryCode).orElseThrow().isConfigured());
+        }
+    }
+
     private void saveCountry(String code, String name) {
         countryRepository.save(Country.builder()
                 .id(UUID.randomUUID())
@@ -401,6 +433,59 @@ class CountryConfigurationEngineServiceIntegrationTest {
         plan.put("isActive", true);
         plan.set("benefits", objectMapper.createArrayNode().add(formulaType + " benefit"));
         return plan;
+    }
+
+    private ObjectNode buildCompleteMembershipPayload() {
+        ObjectNode membershipPayload = objectMapper.createObjectNode();
+        ArrayNode membershipPlans = objectMapper.createArrayNode();
+        membershipPlans.add(buildMembershipPlan("CLASSIC", 1, 1000));
+        membershipPlans.add(buildMembershipPlan("CLASSIC", 3, 3000));
+        membershipPlans.add(buildMembershipPlan("CLASSIC", 12, 12000));
+        membershipPlans.add(buildMembershipPlan("GOLD", 1, 5000));
+        membershipPlans.add(buildMembershipPlan("GOLD", 3, 15000));
+        membershipPlans.add(buildMembershipPlan("GOLD", 12, 60000));
+        membershipPlans.add(buildMembershipPlan("DIAMOND", 1, 10000));
+        membershipPlans.add(buildMembershipPlan("DIAMOND", 3, 30000));
+        membershipPlans.add(buildMembershipPlan("DIAMOND", 12, 120000));
+        membershipPlans.add(buildMembershipPlan("FREE", 1, 0));
+        membershipPayload.set("plans", membershipPlans);
+        return membershipPayload;
+    }
+
+    private ObjectNode buildAccountingPayload() {
+        ObjectNode accountingPayload = objectMapper.createObjectNode();
+        accountingPayload.put("mode", "AUTO_GENERATED");
+        accountingPayload.put("masterTemplate", "UNIVERSAL_MASTER");
+        accountingPayload.set("requiredSystemTags", objectMapper.createArrayNode()
+                .add("USER_WALLET")
+                .add("PLATFORM_REVENUE")
+                .add("MLM_POOL")
+                .add("CIRCLE_POOL")
+                .add("LOAN_PORTFOLIO")
+                .add("INTEREST_REVENUE")
+                .add("PSP_CLEARING"));
+        return accountingPayload;
+    }
+
+    private ObjectNode buildMlmPayload() {
+        ObjectNode mlmPayload = objectMapper.createObjectNode();
+        mlmPayload.put("maxDirectChildren", 3);
+        mlmPayload.put("weeklyCap", 50000);
+        mlmPayload.set("weeklyCapsByTier", objectMapper.createArrayNode()
+                .add(buildTierCap("CLASSIC", 10000))
+                .add(buildTierCap("GOLD", 20000))
+                .add(buildTierCap("DIAMOND", 30000)));
+        return mlmPayload;
+    }
+
+    private ObjectNode buildGuaranteePayload() {
+        ObjectNode guaranteePayload = objectMapper.createObjectNode();
+        guaranteePayload.put("globalMaxExposure", 15000);
+        guaranteePayload.set("limitsByTier", objectMapper.createArrayNode()
+                .add(buildGuaranteeTier("CLASSIC", 2000, 1500))
+                .add(buildGuaranteeTier("GOLD", 3000, 2500))
+                .add(buildGuaranteeTier("DIAMOND", 4000, 3500)));
+        return guaranteePayload;
     }
 
     private ObjectNode buildTierCap(String tier, int amount) {

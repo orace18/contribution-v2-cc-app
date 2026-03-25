@@ -124,15 +124,15 @@ class AdminCountryConfigurationEngineControllerIntegrationTest {
     void getCountriesWorkspace_shouldReturnCountryFirstOverviewAndWriteAuditLog() {
         AdminCountryWorkspaceListResponse workspace = new AdminCountryWorkspaceListResponse(
                 List.of(new AdminCountryWorkspaceListItemResponse(
-                        "BJ",
-                        "Benin",
-                        AdminCountryWorkspaceStatus.DRAFT,
-                        18,
-                        "/countries/BJ",
+                        "GH",
+                        "Ghana",
+                        AdminCountryWorkspaceStatus.CONFIGURED,
+                        100,
+                        "/countries/GH",
                         new AdminCountryWorkspaceActionResponse(
-                                AdminCountryWorkspaceAction.CONTINUE,
-                                "Continue",
-                                "/countries/BJ/setup"
+                                AdminCountryWorkspaceAction.VIEW,
+                                "View",
+                                "/countries/GH"
                         )
                 )),
                 List.of(new AdminCountryWorkspaceListItemResponse(
@@ -170,7 +170,7 @@ class AdminCountryConfigurationEngineControllerIntegrationTest {
         AdminCountryWorkspaceDetailResponse workspace = new AdminCountryWorkspaceDetailResponse(
                 "BJ",
                 "Benin",
-                AdminCountryWorkspaceStatus.DRAFT,
+                AdminCountryWorkspaceStatus.NOT_CONFIGURED,
                 18,
                 true,
                 "/countries/BJ",
@@ -180,7 +180,7 @@ class AdminCountryConfigurationEngineControllerIntegrationTest {
                         new AdminCountryWorkspaceActionResponse(AdminCountryWorkspaceAction.CONTINUE_SETUP, "Continue Setup", "/countries/BJ/setup")
                 ),
                 List.of(
-                        new AdminCountryWorkspaceTabResponse("general", "General", AdminCountryWorkspaceStatus.DRAFT, 50, List.of("general.currency"), 1, null, generalPayload)
+                        new AdminCountryWorkspaceTabResponse("general", "General", AdminCountryWorkspaceStatus.NOT_CONFIGURED, 50, List.of("general.currency"), 1, null, generalPayload)
                 )
         );
         when(adminCountryWorkspaceService.getCountryWorkspace("BJ")).thenReturn(workspace);
@@ -200,8 +200,8 @@ class AdminCountryConfigurationEngineControllerIntegrationTest {
     void getConfigurationStatus_shouldReturnGroupedCountriesAndWriteAuditLog() {
         var status = new com.ccapp.country.config.dto.CountryConfigurationStatusResponse(
                 List.of(new com.ccapp.country.config.dto.CountryConfigurationStatusCountryResponse("NE", "Niger", "NOT_CONFIGURED", 0)),
-                List.of(new com.ccapp.country.config.dto.CountryConfigurationStatusCountryResponse("BJ", "Benin", "DRAFT", 18)),
-                List.of(new com.ccapp.country.config.dto.CountryConfigurationStatusCountryResponse("GH", "Ghana", "READY", 100))
+                List.of(new com.ccapp.country.config.dto.CountryConfigurationStatusCountryResponse("BJ", "Benin", "NOT_CONFIGURED", 18)),
+                List.of(new com.ccapp.country.config.dto.CountryConfigurationStatusCountryResponse("GH", "Ghana", "CONFIGURED", 100))
         );
         when(countryConfigurationStatusService.getConfigurationStatus()).thenReturn(status);
 

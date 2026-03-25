@@ -47,20 +47,24 @@ class AdminCountryWorkspaceServiceIntegrationTest {
     private SubscriptionService subscriptionService;
 
     @Test
-    void countriesOverview_shouldSeparateConfiguredAndUnconfiguredCountriesWithCountryBoundActions() {
+    void countriesOverview_shouldKeepInitializedButInvalidCountriesInUnconfiguredList() {
         saveCountry("BJ", "Benin");
         saveCountry("SN", "Senegal");
         countryConfigurationEngineService.initializeCountryConfiguration("BJ", UUID.randomUUID());
 
         var response = adminCountryWorkspaceService.getCountriesOverview();
 
-        assertEquals(1, response.configuredCountries().size());
-        assertEquals("BJ", response.configuredCountries().get(0).code());
-        assertEquals("Continue", response.configuredCountries().get(0).primaryAction().label());
-        assertEquals("/countries/BJ/setup", response.configuredCountries().get(0).primaryAction().targetPath());
-        assertTrue(response.configuredCountries().get(0).readinessPercentage() > 0);
+        assertEquals(0, response.configuredCountries().size());
 
-        assertTrue(response.unconfiguredCountries().size() >= 1);
+        assertTrue(response.unconfiguredCountries().size() >= 2);
+        var benin = response.unconfiguredCountries().stream()
+                .filter(item -> "BJ".equals(item.code()))
+                .findFirst()
+                .orElseThrow();
+        assertEquals("Continue", benin.primaryAction().label());
+        assertEquals("/countries/BJ/setup", benin.primaryAction().targetPath());
+        assertTrue(benin.readinessPercentage() > 0);
+
         var senegal = response.unconfiguredCountries().stream()
                 .filter(item -> "SN".equals(item.code()))
                 .findFirst()
@@ -82,6 +86,7 @@ class AdminCountryWorkspaceServiceIntegrationTest {
         assertTrue(response.readOnly());
         assertEquals("/countries/GH", response.detailPath());
         assertEquals("/countries/GH/setup", response.setupPath());
+        assertEquals(com.ccapp.admin.dto.AdminCountryWorkspaceStatus.NOT_CONFIGURED, response.status());
         assertEquals(2, response.headerActions().size());
         assertEquals("Edit", response.headerActions().get(0).label());
         assertEquals("/countries/GH?mode=edit", response.headerActions().get(0).targetPath());
@@ -93,6 +98,7 @@ class AdminCountryWorkspaceServiceIntegrationTest {
         assertEquals("membership", response.tabs().get(2).key());
         assertEquals("mlm", response.tabs().get(3).key());
         assertEquals("financing", response.tabs().get(4).key());
+        assertEquals("Financing not configured (optional)", response.tabs().get(4).missingItems().get(0));
         assertEquals("risk", response.tabs().get(5).key());
     }
 
