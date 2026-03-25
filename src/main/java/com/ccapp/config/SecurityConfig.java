@@ -55,6 +55,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/public/countries").permitAll()
                         .requestMatchers(HttpMethod.GET, "/public/activity-sectors").permitAll()
                         .requestMatchers(HttpMethod.GET, "/public/income-brackets").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/mobile/auth/social-login").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/mobile/onboarding/plans").permitAll()
                         .requestMatchers("/api/admin/**").hasAnyAuthority(
                                 "ROLE_SUPER_ADMIN",

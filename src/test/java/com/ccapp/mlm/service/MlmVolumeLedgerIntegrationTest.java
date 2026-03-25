@@ -108,8 +108,8 @@ class MlmVolumeLedgerIntegrationTest {
 
         MlmVolumeLedger bEntry = entries.stream().filter(e -> e.getAccountHolderId().equals(b)).findFirst().orElseThrow();
         MlmVolumeLedger aEntry = entries.stream().filter(e -> e.getAccountHolderId().equals(a)).findFirst().orElseThrow();
-        assertEquals(1, bEntry.getLegPosition());
-        assertEquals(1, aEntry.getLegPosition());
+        assertEquals(1, bEntry.getGeneration());
+        assertEquals(2, aEntry.getGeneration());
     }
 
     @Test

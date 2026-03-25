@@ -1,0 +1,13 @@
+package com.ccapp.mobile.onboarding.event;
+
+public enum MobileOnboardingEventType {
+    USER_AUTHENTICATED,
+    COUNTRY_SELECTED,
+    SPONSOR_SELECTED,
+    PLAN_SELECTED,
+    PAYMENT_INITIATED,
+    PAYMENT_CONFIRMED,
+    MEMBERSHIP_ACTIVATED,
+    NETWORK_LINKED,
+    ONBOARDING_COMPLETED
+}

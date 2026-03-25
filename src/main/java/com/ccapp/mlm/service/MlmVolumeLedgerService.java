@@ -2,12 +2,12 @@ package com.ccapp.mlm.service;
 
 import com.ccapp.common.events.DomainEventPublisher;
 import com.ccapp.common.exception.BusinessException;
-import com.ccapp.mlm.domain.entity.MlmPlacementAuditLog;
+import com.ccapp.mlm.domain.entity.MlmMemberLink;
 import com.ccapp.mlm.domain.entity.MlmRelationship;
 import com.ccapp.mlm.domain.entity.MlmVolumeLedger;
 import com.ccapp.mlm.domain.enums.MlmVolumeTreeType;
 import com.ccapp.mlm.event.MlmVolumeUpdatedEvent;
-import com.ccapp.mlm.repository.MlmPlacementAuditLogRepository;
+import com.ccapp.mlm.repository.MlmMemberLinkRepository;
 import com.ccapp.mlm.repository.MlmRelationshipRepository;
 import com.ccapp.mlm.repository.MlmVolumeLedgerRepository;
 import com.ccapp.observability.PlatformMonitoringHooks;
@@ -37,7 +37,7 @@ public class MlmVolumeLedgerService {
     private static final int MAX_SPONSOR_GENERATIONS = 10;
 
     private final MlmRelationshipRepository mlmRelationshipRepository;
-    private final MlmPlacementAuditLogRepository mlmPlacementAuditLogRepository;
+    private final MlmMemberLinkRepository mlmMemberLinkRepository;
     private final MlmVolumeLedgerRepository mlmVolumeLedgerRepository;
     private final DomainEventPublisher domainEventPublisher;
 
@@ -158,7 +158,6 @@ public class MlmVolumeLedgerService {
                     .sourceOrderId(sourceOrderId)
                     .treeType(MlmVolumeTreeType.PLACEMENT)
                     .generation(ancestor.getLevel())
-                    .legPosition(resolveLegPosition(uplineId, sourceMemberId))
                     .volumeCv(scale(businessVolume))
                     .currency(currency)
                     .weekId(weekId)
@@ -177,13 +176,11 @@ public class MlmVolumeLedgerService {
         UUID cursor = sourceMemberId;
         int generation = 1;
         while (cursor != null && generation <= MAX_SPONSOR_GENERATIONS) {
-            MlmPlacementAuditLog sponsorLink = mlmPlacementAuditLogRepository
-                    .findFirstByAccountHolderIdOrderByCreatedAtDesc(cursor)
-                    .orElse(null);
-            if (sponsorLink == null) {
+            MlmMemberLink memberLink = mlmMemberLinkRepository.findById(cursor).orElse(null);
+            if (memberLink == null) {
                 break;
             }
-            UUID sponsorId = sponsorLink.getSponsorAccountHolderId();
+            UUID sponsorId = memberLink.getSponsorAccountHolderId();
             if (sponsorId == null || sponsorId.equals(sourceMemberId) || !visitedSponsors.add(sponsorId)) {
                 break;
             }
@@ -198,7 +195,6 @@ public class MlmVolumeLedgerService {
                         .sourceOrderId(sourceOrderId)
                         .treeType(MlmVolumeTreeType.SPONSOR)
                         .generation(generation)
-                        .legPosition(null)
                         .volumeCv(scale(businessVolume))
                         .currency(currency)
                         .weekId(weekId)
@@ -208,18 +204,6 @@ public class MlmVolumeLedgerService {
             generation++;
         }
         return entries;
-    }
-
-    private int resolveLegPosition(UUID ancestorId, UUID sourceMemberId) {
-        List<UUID> directChildren = mlmRelationshipRepository.findDirectChildrenOrdered(ancestorId);
-        for (int i = 0; i < directChildren.size(); i++) {
-            UUID childId = directChildren.get(i);
-            if (childId.equals(sourceMemberId)
-                    || mlmRelationshipRepository.existsByAncestorIdAndDescendantId(childId, sourceMemberId)) {
-                return i + 1;
-            }
-        }
-        throw new BusinessException("Unable to resolve MLM leg position for source member");
     }
 
     private int toWeekId(OffsetDateTime timestamp) {

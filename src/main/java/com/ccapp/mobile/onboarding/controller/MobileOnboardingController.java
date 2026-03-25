@@ -4,8 +4,15 @@ import com.ccapp.common.api.ApiEnvelope;
 import com.ccapp.common.security.AuthenticatedPrincipal;
 import com.ccapp.common.security.SecurityUtils;
 import com.ccapp.mobile.onboarding.dto.MobileOnboardingPlanResponse;
+import com.ccapp.mobile.onboarding.dto.MobileOnboardingStatusResponse;
 import com.ccapp.mobile.onboarding.dto.MobilePlanSelectionResponse;
+import com.ccapp.mobile.onboarding.dto.MobileSponsorSelectionResponse;
 import com.ccapp.mobile.onboarding.dto.SelectMobilePlanRequest;
+import com.ccapp.mobile.onboarding.dto.SetMobileSponsorRequest;
+import com.ccapp.mobile.onboarding.dto.SelectMobileCountryRequest;
+import com.ccapp.mobile.onboarding.dto.MobileCountrySelectionResponse;
+import com.ccapp.mobile.onboarding.dto.ActivateFreePlanResponse;
+import com.ccapp.mobile.onboarding.service.MobileOnboardingJourneyService;
 import com.ccapp.mobile.onboarding.service.MobileOnboardingService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -34,6 +41,7 @@ import java.util.UUID;
 public class MobileOnboardingController {
 
     private final MobileOnboardingService mobileOnboardingService;
+    private final MobileOnboardingJourneyService mobileOnboardingJourneyService;
 
     @GetMapping("/plans")
     @Operation(summary = "List onboarding plans for the requested country catalog")
@@ -61,6 +69,61 @@ public class MobileOnboardingController {
         return ResponseEntity.ok(ApiEnvelope.success(
                 "Plan selected",
                 mobileOnboardingService.selectPlan(resolveActorUserId(), accountHolderId, request)
+        ));
+    }
+
+    @PostMapping("/select-country")
+    @Operation(summary = "Select onboarding country")
+    @SecurityRequirement(name = "bearerAuth")
+    public ResponseEntity<ApiEnvelope<MobileCountrySelectionResponse>> selectCountry(
+            @Valid @RequestBody SelectMobileCountryRequest request) {
+        UUID accountHolderId = SecurityUtils.currentAccountHolderId();
+        return ResponseEntity.ok(ApiEnvelope.success(
+                "Country selected",
+                mobileOnboardingJourneyService.selectCountry(
+                        resolveActorUserId(),
+                        accountHolderId,
+                        request.country()
+                )
+        ));
+    }
+
+    @PostMapping("/set-sponsor")
+    @Operation(summary = "Set sponsor for onboarding (nullable for no-sponsor edge case)")
+    @SecurityRequirement(name = "bearerAuth")
+    public ResponseEntity<ApiEnvelope<MobileSponsorSelectionResponse>> setSponsor(
+            @RequestBody(required = false) SetMobileSponsorRequest request) {
+        UUID accountHolderId = SecurityUtils.currentAccountHolderId();
+        UUID sponsorAccountHolderId = request == null ? null : request.sponsorAccountHolderId();
+        return ResponseEntity.ok(ApiEnvelope.success(
+                "Sponsor set",
+                mobileOnboardingJourneyService.setSponsor(
+                        resolveActorUserId(),
+                        accountHolderId,
+                        sponsorAccountHolderId
+                )
+        ));
+    }
+
+    @PostMapping("/activate-free")
+    @Operation(summary = "Activate selected FREE plan without payment")
+    @SecurityRequirement(name = "bearerAuth")
+    public ResponseEntity<ApiEnvelope<ActivateFreePlanResponse>> activateFree() {
+        UUID accountHolderId = SecurityUtils.currentAccountHolderId();
+        return ResponseEntity.ok(ApiEnvelope.success(
+                "Free plan activated",
+                mobileOnboardingJourneyService.activateFreePlan(resolveActorUserId(), accountHolderId)
+        ));
+    }
+
+    @GetMapping("/status")
+    @Operation(summary = "Get onboarding journey status for mobile orchestration")
+    @SecurityRequirement(name = "bearerAuth")
+    public ResponseEntity<ApiEnvelope<MobileOnboardingStatusResponse>> status() {
+        UUID accountHolderId = SecurityUtils.currentAccountHolderId();
+        return ResponseEntity.ok(ApiEnvelope.success(
+                "Onboarding status",
+                mobileOnboardingJourneyService.getStatus(accountHolderId)
         ));
     }
 

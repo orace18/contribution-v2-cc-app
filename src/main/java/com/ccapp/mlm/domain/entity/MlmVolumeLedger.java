@@ -33,8 +33,7 @@ import java.util.UUID;
                 columnNames = {"account_holder_id", "source_order_id", "tree_type"}),
         indexes = {
                 @Index(name = "idx_mlm_volume_ledger_account_holder", columnList = "account_holder_id"),
-                @Index(name = "idx_mlm_volume_ledger_week_id", columnList = "week_id"),
-                @Index(name = "idx_mlm_volume_ledger_leg_position", columnList = "leg_position")
+                @Index(name = "idx_mlm_volume_ledger_week_id", columnList = "week_id")
         })
 public class MlmVolumeLedger {
 
@@ -59,9 +58,6 @@ public class MlmVolumeLedger {
     @Column(name = "generation", nullable = false)
     @Builder.Default
     private Integer generation = 0;
-
-    @Column(name = "leg_position")
-    private Integer legPosition;
 
     @Column(name = "volume_cv", nullable = false, precision = 19, scale = 4)
     private BigDecimal volumeCv;

@@ -84,12 +84,12 @@ public class WeeklyGroupBonusService {
         int previousWeekId = previousWeekId(weekId);
         log.info("weekly_group_bonus_started weekId={} previousWeekId={}", weekId, previousWeekId);
 
-        Map<UUID, Map<Integer, BigDecimal>> memberLegVolumes = new HashMap<>();
+        Map<UUID, Map<UUID, BigDecimal>> memberLegVolumes = new HashMap<>();
         for (MlmWeeklyLegVolumeProjection projection : mlmVolumeLedgerRepository.aggregateWeeklyVolumeByMemberAndLeg(weekId)) {
-            mergeVolume(memberLegVolumes, projection.getAccountHolderId(), projection.getLegPosition(), projection.getTotalVolumeCv());
+            mergeVolume(memberLegVolumes, projection.getAccountHolderId(), projection.getPlacementChildId(), projection.getTotalVolumeCv());
         }
         for (MlmLegCarryover carryover : mlmLegCarryoverRepository.findByWeekId(previousWeekId)) {
-            mergeVolume(memberLegVolumes, carryover.getMemberId(), carryover.getLegPosition(), carryover.getVolume());
+            mergeVolume(memberLegVolumes, carryover.getMemberId(), carryover.getPlacementChildId(), carryover.getVolume());
         }
 
         mlmLegCarryoverRepository.deleteByWeekId(weekId);
@@ -107,7 +107,7 @@ public class WeeklyGroupBonusService {
 
         List<UUID> memberIds = memberLegVolumes.keySet().stream().sorted().toList();
         for (UUID memberId : memberIds) {
-            Map<Integer, BigDecimal> legVolumes = memberLegVolumes.get(memberId);
+            Map<UUID, BigDecimal> legVolumes = memberLegVolumes.get(memberId);
             if (legVolumes == null || legVolumes.isEmpty()) {
                 continue;
             }
@@ -122,13 +122,13 @@ public class WeeklyGroupBonusService {
                 membersWithCommissionAlreadyCreated.add(memberId);
             }
 
-            for (Map.Entry<Integer, BigDecimal> remainingByLeg : computation.remainingVolumesByLeg().entrySet()) {
+            for (Map.Entry<UUID, BigDecimal> remainingByLeg : computation.remainingVolumesByLeg().entrySet()) {
                 if (remainingByLeg.getValue().signum() <= 0) {
                     continue;
                 }
                 carryoversToSave.add(MlmLegCarryover.builder()
                         .memberId(memberId)
-                        .legPosition(remainingByLeg.getKey())
+                        .placementChildId(remainingByLeg.getKey())
                         .weekId(weekId)
                         .volume(scale(remainingByLeg.getValue()))
                         .build());
@@ -202,12 +202,12 @@ public class WeeklyGroupBonusService {
         }
     }
 
-    private BonusComputation computeBinaryBonus(Map<Integer, BigDecimal> rawLegVolumes,
+    private BonusComputation computeBinaryBonus(Map<UUID, BigDecimal> rawLegVolumes,
                                                 MlmMemberGrade memberGrade,
                                                 GlobalMlmConfigService.GlobalBinaryConfig binaryConfig) {
-        Map<Integer, BigDecimal> legVolumes = new HashMap<>();
-        for (Map.Entry<Integer, BigDecimal> entry : rawLegVolumes.entrySet()) {
-            if (entry.getKey() == null || entry.getKey() <= 0) {
+        Map<UUID, BigDecimal> legVolumes = new HashMap<>();
+        for (Map.Entry<UUID, BigDecimal> entry : rawLegVolumes.entrySet()) {
+            if (entry.getKey() == null) {
                 continue;
             }
             BigDecimal volume = scale(entry.getValue());
@@ -228,8 +228,8 @@ public class WeeklyGroupBonusService {
             return new BonusComputation(ZERO, legVolumes);
         }
 
-        Map.Entry<Integer, BigDecimal> weakestLeg = legVolumes.entrySet().stream()
-                .min(Comparator.comparing((Map.Entry<Integer, BigDecimal> e) -> e.getValue())
+        Map.Entry<UUID, BigDecimal> weakestLeg = legVolumes.entrySet().stream()
+                .min(Comparator.comparing((Map.Entry<UUID, BigDecimal> e) -> e.getValue())
                         .thenComparing(Map.Entry::getKey))
                 .orElseThrow();
 
@@ -257,36 +257,36 @@ public class WeeklyGroupBonusService {
             bonusAmount = memberGrade.weeklyCap();
         }
 
-        Map<Integer, BigDecimal> remainingByLeg = new HashMap<>(legVolumes);
+        Map<UUID, BigDecimal> remainingByLeg = new HashMap<>(legVolumes);
         remainingByLeg.put(weakestLeg.getKey(), scale(weakestLegVolume.subtract(payableMatchedVolume)));
 
         BigDecimal strongToConsume = payableMatchedVolume;
-        List<Integer> strongLegPositions = remainingByLeg.keySet().stream()
-                .filter(legPosition -> !legPosition.equals(weakestLeg.getKey()))
+        List<UUID> strongLegPositions = remainingByLeg.keySet().stream()
+                .filter(placementChildId -> !placementChildId.equals(weakestLeg.getKey()))
                 .sorted()
                 .toList();
-        for (Integer legPosition : strongLegPositions) {
+        for (UUID placementChildId : strongLegPositions) {
             if (strongToConsume.signum() <= 0) {
                 break;
             }
-            BigDecimal legVolume = remainingByLeg.get(legPosition);
+            BigDecimal legVolume = remainingByLeg.get(placementChildId);
             BigDecimal consumed = legVolume.min(strongToConsume);
-            remainingByLeg.put(legPosition, scale(legVolume.subtract(consumed)));
+            remainingByLeg.put(placementChildId, scale(legVolume.subtract(consumed)));
             strongToConsume = scale(strongToConsume.subtract(consumed));
         }
 
         return new BonusComputation(bonusAmount, remainingByLeg);
     }
 
-    private void mergeVolume(Map<UUID, Map<Integer, BigDecimal>> memberLegVolumes,
+    private void mergeVolume(Map<UUID, Map<UUID, BigDecimal>> memberLegVolumes,
                              UUID memberId,
-                             Integer legPosition,
+                             UUID placementChildId,
                              BigDecimal volume) {
-        if (memberId == null || legPosition == null || legPosition <= 0 || volume == null || volume.signum() <= 0) {
+        if (memberId == null || placementChildId == null || volume == null || volume.signum() <= 0) {
             return;
         }
-        Map<Integer, BigDecimal> legMap = memberLegVolumes.computeIfAbsent(memberId, ignored -> new HashMap<>());
-        legMap.merge(legPosition, scale(volume), BigDecimal::add);
+        Map<UUID, BigDecimal> legMap = memberLegVolumes.computeIfAbsent(memberId, ignored -> new HashMap<>());
+        legMap.merge(placementChildId, scale(volume), BigDecimal::add);
     }
 
     private int previousWeekId(int weekId) {
@@ -337,7 +337,7 @@ public class WeeklyGroupBonusService {
 
     private record BonusComputation(
             BigDecimal bonusAmount,
-            Map<Integer, BigDecimal> remainingVolumesByLeg
+            Map<UUID, BigDecimal> remainingVolumesByLeg
     ) {
     }
 }

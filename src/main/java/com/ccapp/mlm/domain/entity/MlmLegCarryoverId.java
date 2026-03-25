@@ -12,6 +12,6 @@ import java.util.UUID;
 @AllArgsConstructor
 public class MlmLegCarryoverId implements Serializable {
     private UUID memberId;
-    private Integer legPosition;
+    private UUID placementChildId;
     private Integer weekId;
 }

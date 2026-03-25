@@ -122,7 +122,6 @@ class AdminMlmMonitoringServiceIntegrationTest {
                 .accountHolderId(memberId)
                 .sourceMemberId(sourceMemberId)
                 .sourceOrderId(UUID.randomUUID())
-                .legPosition(1)
                 .volumeCv(new BigDecimal("5.0000"))
                 .weekId(weekId)
                 .build());

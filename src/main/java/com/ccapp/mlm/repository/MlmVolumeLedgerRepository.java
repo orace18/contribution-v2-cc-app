@@ -42,13 +42,18 @@ public interface MlmVolumeLedgerRepository extends JpaRepository<MlmVolumeLedger
 
     @Query("""
             select l.accountHolderId as accountHolderId,
-                   l.legPosition as legPosition,
+                   directChild.descendantId as placementChildId,
                    sum(l.volumeCv) as totalVolumeCv
             from MlmVolumeLedger l
+            join MlmRelationship directChild
+              on directChild.ancestorId = l.accountHolderId
+             and directChild.level = 1
+            join MlmRelationship sourcePath
+              on sourcePath.ancestorId = directChild.descendantId
+             and sourcePath.descendantId = l.sourceMemberId
             where l.weekId = :weekId
               and (l.treeType is null or l.treeType = com.ccapp.mlm.domain.enums.MlmVolumeTreeType.PLACEMENT)
-              and l.legPosition is not null
-            group by l.accountHolderId, l.legPosition
+            group by l.accountHolderId, directChild.descendantId
             """)
     List<MlmWeeklyLegVolumeProjection> aggregateWeeklyVolumeByMemberAndLeg(int weekId);
 
@@ -85,6 +90,15 @@ public interface MlmVolumeLedgerRepository extends JpaRepository<MlmVolumeLedger
               and (l.treeType is null or l.treeType = com.ccapp.mlm.domain.enums.MlmVolumeTreeType.PLACEMENT)
             """)
     BigDecimal sumVolumeByAccountHolderIdAndWeekId(UUID accountHolderId, int weekId);
+
+    @Query("""
+            select coalesce(sum(l.volumeCv), 0)
+            from MlmVolumeLedger l
+            where l.accountHolderId = :accountHolderId
+              and l.sourceMemberId in :sourceMemberIds
+              and (l.treeType is null or l.treeType = com.ccapp.mlm.domain.enums.MlmVolumeTreeType.PLACEMENT)
+            """)
+    BigDecimal sumVolumeByAccountHolderIdAndSourceMemberIdIn(UUID accountHolderId, Set<UUID> sourceMemberIds);
 
     @Query("""
             select count(distinct l.sourceMemberId)

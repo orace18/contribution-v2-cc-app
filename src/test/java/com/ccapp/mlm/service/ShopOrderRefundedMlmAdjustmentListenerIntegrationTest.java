@@ -81,7 +81,6 @@ class ShopOrderRefundedMlmAdjustmentListenerIntegrationTest {
                 .accountHolderId(uplineId)
                 .sourceMemberId(buyerId)
                 .sourceOrderId(order.getId())
-                .legPosition(1)
                 .volumeCv(new BigDecimal("5.2000"))
                 .weekId(202611)
                 .build());

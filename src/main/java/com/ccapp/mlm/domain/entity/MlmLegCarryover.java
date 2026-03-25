@@ -25,7 +25,7 @@ import java.util.UUID;
 @Table(name = "mlm_leg_carryover", indexes = {
         @Index(name = "idx_mlm_leg_carryover_member_id", columnList = "member_id"),
         @Index(name = "idx_mlm_leg_carryover_week_id", columnList = "week_id"),
-        @Index(name = "idx_mlm_leg_carryover_leg_position", columnList = "leg_position")
+        @Index(name = "idx_mlm_leg_carryover_placement_child", columnList = "placement_child_id")
 })
 public class MlmLegCarryover {
 
@@ -34,8 +34,8 @@ public class MlmLegCarryover {
     private UUID memberId;
 
     @Id
-    @Column(name = "leg_position", nullable = false)
-    private Integer legPosition;
+    @Column(name = "placement_child_id", nullable = false)
+    private UUID placementChildId;
 
     @Id
     @Column(name = "week_id", nullable = false)

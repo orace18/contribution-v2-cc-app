@@ -13,6 +13,7 @@ import com.ccapp.payments.psp.domain.entity.PspCallbackEvent;
 import com.ccapp.payments.psp.dto.JawupayCallbackRequest;
 import com.ccapp.payments.psp.repository.PspCallbackEventRepository;
 import com.ccapp.payments.subscription.service.MembershipService;
+import com.ccapp.mobile.onboarding.service.MobileOnboardingJourneyService;
 import com.ccapp.wallet.service.WalletDepositService;
 import com.ccapp.wallet.service.WalletWithdrawalService;
 import lombok.RequiredArgsConstructor;
@@ -47,6 +48,7 @@ public class JawupayService {
     private final WalletWithdrawalService walletWithdrawalService;
     private final PspCallbackEventRepository callbackEventRepository;
     private final SimpleRateLimiter simpleRateLimiter;
+    private final MobileOnboardingJourneyService mobileOnboardingJourneyService;
 
     @Value("${psp.jawupay.hmac-secret}")
     private String jawupayHmacSecret;
@@ -131,6 +133,7 @@ public class JawupayService {
                 membershipService.activateForConfirmedOperation(operation);
                 accountingPostingService.postConfirmedOperation(operation.getId());
                 mlmCommissionService.calculateForOperation(operation);
+                mobileOnboardingJourneyService.onPaidPaymentConfirmed(operation);
             }
             default -> accountingPostingService.postConfirmedOperation(operation.getId());
         }
@@ -139,12 +142,14 @@ public class JawupayService {
     private void handleFailedOperation(Operation operation) {
         if (operation.getType() == OperationType.SUBSCRIPTION) {
             membershipService.cancelPendingMembership(operation.getId());
+            mobileOnboardingJourneyService.onPaidPaymentFailed(operation);
         }
     }
 
     private void handleExpiredOperation(Operation operation) {
         if (operation.getType() == OperationType.SUBSCRIPTION) {
             membershipService.cancelPendingMembership(operation.getId());
+            mobileOnboardingJourneyService.onPaidPaymentFailed(operation);
         }
     }
 

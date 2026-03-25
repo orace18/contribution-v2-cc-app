@@ -36,6 +36,7 @@ public class MobileOnboardingService {
     private final CountryContextService countryContextService;
     private final AccessControlService accessControlService;
     private final MobilePlanSelectionRepository mobilePlanSelectionRepository;
+    private final MobileOnboardingJourneyService mobileOnboardingJourneyService;
 
     @Transactional(readOnly = true)
     public List<MobileOnboardingPlanResponse> getPlans(String countryCode) {
@@ -75,6 +76,7 @@ public class MobileOnboardingService {
         selection.setStatus(isFree(plan) ? MobilePlanSelectionStatus.READY_FOR_ACTIVATION : MobilePlanSelectionStatus.PENDING_PAYMENT);
 
         MobilePlanSelection saved = mobilePlanSelectionRepository.save(selection);
+        mobileOnboardingJourneyService.onPlanSelected(accountHolderId, plan);
         return toSelectionResponse(saved);
     }
 

@@ -81,7 +81,6 @@ class MlmLedgerRebuildServiceIntegrationTest {
                 .accountHolderId(createAccountHolder("Legacy", "Node"))
                 .sourceMemberId(buyer)
                 .sourceOrderId(order.getId())
-                .legPosition(1)
                 .volumeCv(new BigDecimal("99.0000"))
                 .weekId(202610)
                 .build());

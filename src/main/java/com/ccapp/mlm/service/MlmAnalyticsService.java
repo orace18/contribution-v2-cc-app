@@ -2,8 +2,8 @@ package com.ccapp.mlm.service;
 
 import com.ccapp.mlm.domain.entity.MlmMemberMetrics;
 import com.ccapp.mlm.domain.entity.MlmWeeklySnapshot;
+import com.ccapp.mlm.graph.MlmGraphService;
 import com.ccapp.mlm.repository.MlmMemberMetricsRepository;
-import com.ccapp.mlm.repository.MlmRelationshipRepository;
 import com.ccapp.mlm.repository.MlmVolumeLedgerRepository;
 import com.ccapp.mlm.repository.MlmWeeklySnapshotRepository;
 import com.ccapp.mlm.repository.projection.MlmLevelBreakdownProjection;
@@ -21,8 +21,11 @@ import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.temporal.IsoFields;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -32,7 +35,7 @@ public class MlmAnalyticsService {
 
     private final MlmMemberMetricsRepository mlmMemberMetricsRepository;
     private final MlmWeeklySnapshotRepository mlmWeeklySnapshotRepository;
-    private final MlmRelationshipRepository mlmRelationshipRepository;
+    private final MlmGraphService mlmGraphService;
     private final MlmVolumeLedgerRepository mlmVolumeLedgerRepository;
     private final MlmCommissionRepository mlmCommissionRepository;
 
@@ -44,7 +47,7 @@ public class MlmAnalyticsService {
 
     @Transactional
     public MlmMemberMetrics refreshMemberMetrics(UUID accountHolderId) {
-        long teamSize = mlmRelationshipRepository.countTeamSize(accountHolderId);
+        long teamSize = mlmGraphService.countDownline(accountHolderId);
         OffsetDateTime activeFrom = OffsetDateTime.now(ZoneId.of(analyticsZone)).minusDays(activeWindowDays);
         long activeTeamMembers = mlmVolumeLedgerRepository.countDistinctSourceMembersByAccountHolderIdSince(accountHolderId, activeFrom);
         BigDecimal totalVolume = safeAmount(mlmVolumeLedgerRepository.sumVolumeByAccountHolderId(accountHolderId));
@@ -106,7 +109,18 @@ public class MlmAnalyticsService {
 
     @Transactional(readOnly = true)
     public List<MlmLevelBreakdownProjection> levelBreakdown(UUID accountHolderId) {
-        return new ArrayList<>(mlmRelationshipRepository.countLevelBreakdown(accountHolderId));
+        Map<Integer, Long> membersByLevel = new HashMap<>();
+        for (MlmGraphService.GraphMember member : mlmGraphService.getDownline(accountHolderId, Integer.MAX_VALUE, Long.MAX_VALUE)) {
+            if (member.level() <= 0) {
+                continue;
+            }
+            membersByLevel.merge(member.level(), 1L, Long::sum);
+        }
+        return membersByLevel.entrySet().stream()
+                .sorted(Comparator.comparingInt(Map.Entry::getKey))
+                .map(entry -> new LevelBreakdown(entry.getKey(), entry.getValue()))
+                .map(MlmLevelBreakdownProjection.class::cast)
+                .toList();
     }
 
     @Transactional(readOnly = true)
@@ -119,5 +133,17 @@ public class MlmAnalyticsService {
 
     private BigDecimal safeAmount(BigDecimal amount) {
         return amount == null ? BigDecimal.ZERO : amount;
+    }
+
+    private record LevelBreakdown(Integer level, Long members) implements MlmLevelBreakdownProjection {
+        @Override
+        public Integer getLevel() {
+            return level;
+        }
+
+        @Override
+        public Long getMembers() {
+            return members;
+        }
     }
 }

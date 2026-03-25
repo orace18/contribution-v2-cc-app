@@ -9,6 +9,8 @@ import com.ccapp.identity.account_holder.repository.AccountHolderRepository;
 import com.ccapp.identity.account_holder.service.AccountHolderService;
 import com.ccapp.identity.account_holder.domain.enums.AccountType;
 import com.ccapp.identity.delegation.service.AccessControlService;
+import com.ccapp.mlm.graph.MlmGraphNeo4jGateway;
+import com.ccapp.mlm.graph.MlmGraphService;
 import com.ccapp.mlm.dto.MlmPlacementResponse;
 import com.ccapp.mlm.repository.MlmRelationshipRepository;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
@@ -36,7 +38,7 @@ import static org.mockito.Mockito.when;
         "spring.flyway.enabled=false",
         "spring.jpa.hibernate.ddl-auto=create-drop"
 })
-@Import({MLMPlacementService.class, MLMQueryService.class, AutoPlacementService.class, MlmPlacementAuditService.class})
+@Import({MLMPlacementService.class, MLMQueryService.class, AutoPlacementService.class, MlmPlacementAuditService.class, MlmGraphService.class})
 class MLMServicesIntegrationTest {
 
     @Autowired
@@ -58,6 +60,8 @@ class MLMServicesIntegrationTest {
     private CountryContextService countryContextService;
     @MockBean
     private CountryConfigResolver countryConfigResolver;
+    @MockBean
+    private MlmGraphNeo4jGateway mlmGraphNeo4jGateway;
 
     @BeforeEach
     void setUp() {
@@ -76,6 +80,7 @@ class MLMServicesIntegrationTest {
         ));
         when(countryConfigResolver.payloadAsObjectNode(any(CountryConfigResolver.ResolvedConfig.class)))
                 .thenReturn(JsonNodeFactory.instance.objectNode());
+        when(mlmGraphNeo4jGateway.isAvailable()).thenReturn(false);
     }
 
     @Test

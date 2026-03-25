@@ -3,6 +3,8 @@ package com.ccapp.mlm.service;
 import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
 import com.ccapp.identity.account_holder.domain.enums.AccountType;
 import com.ccapp.identity.account_holder.repository.AccountHolderRepository;
+import com.ccapp.mlm.graph.MlmGraphNeo4jGateway;
+import com.ccapp.mlm.graph.MlmGraphService;
 import com.ccapp.mlm.domain.entity.MlmRelationship;
 import com.ccapp.mlm.domain.entity.MlmVolumeLedger;
 import com.ccapp.mlm.domain.entity.MlmWeeklySnapshot;
@@ -16,6 +18,7 @@ import com.ccapp.payments.commission.repository.MlmCommissionRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -24,13 +27,14 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.Mockito.when;
 
 @DataJpaTest(properties = {
         "spring.profiles.active=test",
         "spring.flyway.enabled=false",
         "spring.jpa.hibernate.ddl-auto=create-drop"
 })
-@Import({MlmAnalyticsService.class})
+@Import({MlmAnalyticsService.class, MlmGraphService.class})
 class MlmAnalyticsServiceIntegrationTest {
 
     @Autowired
@@ -45,9 +49,13 @@ class MlmAnalyticsServiceIntegrationTest {
     private MlmWeeklySnapshotRepository mlmWeeklySnapshotRepository;
     @Autowired
     private AccountHolderRepository accountHolderRepository;
+    @MockBean
+    private MlmGraphNeo4jGateway mlmGraphNeo4jGateway;
 
     @Test
     void refreshAndSnapshot_shouldUseLedgerAndCommissions() {
+        when(mlmGraphNeo4jGateway.isAvailable()).thenReturn(false);
+
         UUID a = createAccountHolder("A", "Leader");
         UUID b = createAccountHolder("B", "Node");
         UUID d = createAccountHolder("D", "Buyer");
@@ -62,7 +70,6 @@ class MlmAnalyticsServiceIntegrationTest {
                 .accountHolderId(a)
                 .sourceMemberId(sourceMember)
                 .sourceOrderId(UUID.randomUUID())
-                .legPosition(1)
                 .volumeCv(new BigDecimal("5.2000"))
                 .weekId(weekId)
                 .createdAt(OffsetDateTime.now().minusDays(2))

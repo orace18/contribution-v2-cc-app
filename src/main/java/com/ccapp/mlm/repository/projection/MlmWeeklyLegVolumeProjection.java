@@ -6,7 +6,7 @@ import java.util.UUID;
 public interface MlmWeeklyLegVolumeProjection {
     UUID getAccountHolderId();
 
-    Integer getLegPosition();
+    UUID getPlacementChildId();
 
     BigDecimal getTotalVolumeCv();
 }

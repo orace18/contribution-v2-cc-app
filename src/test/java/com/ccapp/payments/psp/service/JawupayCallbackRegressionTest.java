@@ -12,6 +12,7 @@ import com.ccapp.payments.psp.domain.entity.PspCallbackEvent;
 import com.ccapp.payments.psp.dto.JawupayCallbackRequest;
 import com.ccapp.payments.psp.repository.PspCallbackEventRepository;
 import com.ccapp.payments.subscription.service.MembershipService;
+import com.ccapp.mobile.onboarding.service.MobileOnboardingJourneyService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -54,6 +55,8 @@ class JawupayCallbackRegressionTest {
     private MlmCommissionService mlmCommissionService;
     @Mock
     private MembershipService membershipService;
+    @Mock
+    private MobileOnboardingJourneyService mobileOnboardingJourneyService;
     @Mock
     private PspCallbackEventRepository callbackEventRepository;
     @Mock
@@ -117,7 +120,10 @@ class JawupayCallbackRegressionTest {
         JawupayCallbackRequest request = callbackRequest("FAILED", Instant.now().getEpochSecond());
         String signature = sign(request);
         UUID operationId = UUID.randomUUID();
-        Operation failedOperation = Operation.builder().id(operationId).build();
+        Operation failedOperation = Operation.builder()
+                .id(operationId)
+                .type(OperationType.SUBSCRIPTION)
+                .build();
 
         when(simpleRateLimiter.allow("10.0.0.2", 60)).thenReturn(true);
         when(callbackEventRepository.existsByNonce("nonce-1")).thenReturn(false);

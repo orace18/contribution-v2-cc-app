@@ -3,17 +3,15 @@ package com.ccapp.mlm.service;
 import com.ccapp.common.events.DomainEventPublisher;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.common.exception.ConflictException;
-import com.ccapp.country.config.domain.enums.CountryConfigType;
-import com.ccapp.country.config.service.CountryConfigResolver;
-import com.ccapp.country.dto.CountryContext;
-import com.ccapp.country.service.CountryContextService;
 import com.ccapp.identity.account_holder.service.AccountHolderService;
 import com.ccapp.identity.delegation.domain.enums.PermissionLevel;
 import com.ccapp.identity.delegation.service.AccessControlService;
+import com.ccapp.mlm.domain.entity.MlmMemberLink;
 import com.ccapp.mlm.domain.entity.MlmRelationship;
 import com.ccapp.mlm.dto.MlmPlacementResponse;
 import com.ccapp.mlm.event.MlmPlacementCreatedEvent;
 import com.ccapp.observability.PlatformMonitoringHooks;
+import com.ccapp.mlm.repository.MlmMemberLinkRepository;
 import com.ccapp.mlm.repository.MlmRelationshipRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -30,16 +28,15 @@ import java.util.UUID;
 @Slf4j
 public class MLMPlacementService {
 
-    private static final int DEFAULT_MAX_DIRECT_CHILDREN = 5;
+    private static final int MAX_DIRECT_CHILDREN = 5;
 
     private final MlmRelationshipRepository mlmRelationshipRepository;
+    private final MlmMemberLinkRepository mlmMemberLinkRepository;
     private final AccountHolderService accountHolderService;
     private final AccessControlService accessControlService;
     private final AutoPlacementService autoPlacementService;
     private final MlmPlacementAuditService mlmPlacementAuditService;
     private final DomainEventPublisher domainEventPublisher;
-    private final CountryContextService countryContextService;
-    private final CountryConfigResolver countryConfigResolver;
 
     @Transactional
     public MlmPlacementResponse placeAccountHolder(UUID actorUserId,
@@ -55,12 +52,11 @@ public class MLMPlacementService {
         ensureSelfRelationship(sponsorAccountHolderId);
         ensureSelfRelationship(accountHolderId);
 
-        if (mlmRelationshipRepository.countByDescendantIdAndLevelGreaterThan(accountHolderId, 0) > 0) {
+        if (hasExistingSponsor(accountHolderId)) {
             throw new ConflictException("Account holder already has a sponsor");
         }
 
-        int maxDirectChildren = resolveMaxDirectChildren(accountHolderId);
-        UUID placementParentId = autoPlacementService.resolvePlacementParent(sponsorAccountHolderId, maxDirectChildren);
+        UUID placementParentId = autoPlacementService.resolvePlacementParent(sponsorAccountHolderId, MAX_DIRECT_CHILDREN);
 
         List<MlmRelationship> ancestors = mlmRelationshipRepository.findAncestors(placementParentId);
         if (ancestors.isEmpty()) {
@@ -84,6 +80,7 @@ public class MLMPlacementService {
         }
 
         mlmRelationshipRepository.saveAll(toInsert);
+        upsertMemberLink(accountHolderId, sponsorAccountHolderId, placementParentId);
         domainEventPublisher.publish(MlmPlacementCreatedEvent.create(
                 accountHolderId,
                 sponsorAccountHolderId,
@@ -118,6 +115,7 @@ public class MLMPlacementService {
 
     private void ensureSelfRelationship(UUID accountHolderId) {
         if (mlmRelationshipRepository.existsByAncestorIdAndDescendantId(accountHolderId, accountHolderId)) {
+            ensureRootMemberLink(accountHolderId);
             return;
         }
         mlmRelationshipRepository.save(MlmRelationship.builder()
@@ -126,22 +124,35 @@ public class MLMPlacementService {
                 .level(0)
                 .createdAt(OffsetDateTime.now())
                 .build());
+        ensureRootMemberLink(accountHolderId);
     }
 
-    private int resolveMaxDirectChildren(UUID accountHolderId) {
-        CountryContext countryContext = countryContextService.resolve(accountHolderId);
-        CountryConfigResolver.ResolvedConfig mlmConfig = countryConfigResolver.resolveActiveConfig(
-                countryContext.serviceCountryCode(),
-                CountryConfigType.MLM_LIMITS
-        );
-        var payload = countryConfigResolver.payloadAsObjectNode(mlmConfig);
-        if (!payload.has("maxDirectChildren") || payload.get("maxDirectChildren").isNull()) {
-            return DEFAULT_MAX_DIRECT_CHILDREN;
+    private void ensureRootMemberLink(UUID accountHolderId) {
+        if (mlmMemberLinkRepository.existsById(accountHolderId)) {
+            return;
         }
-        if (!payload.get("maxDirectChildren").canConvertToInt()) {
-            throw new BusinessException("mlm_limits.maxDirectChildren must be an integer");
+        mlmMemberLinkRepository.save(MlmMemberLink.builder()
+                .accountHolderId(accountHolderId)
+                .sponsorAccountHolderId(null)
+                .placementAccountHolderId(accountHolderId)
+                .build());
+    }
+
+    private boolean hasExistingSponsor(UUID accountHolderId) {
+        MlmMemberLink link = mlmMemberLinkRepository.findById(accountHolderId).orElse(null);
+        if (link != null && link.getSponsorAccountHolderId() != null) {
+            return true;
         }
-        int value = payload.get("maxDirectChildren").asInt();
-        return value > 0 ? value : DEFAULT_MAX_DIRECT_CHILDREN;
+        return mlmRelationshipRepository.countByDescendantIdAndLevelGreaterThan(accountHolderId, 0) > 0;
+    }
+
+    private void upsertMemberLink(UUID accountHolderId, UUID sponsorAccountHolderId, UUID placementParentId) {
+        MlmMemberLink memberLink = mlmMemberLinkRepository.findById(accountHolderId)
+                .orElseGet(() -> MlmMemberLink.builder()
+                        .accountHolderId(accountHolderId)
+                        .build());
+        memberLink.setSponsorAccountHolderId(sponsorAccountHolderId);
+        memberLink.setPlacementAccountHolderId(placementParentId);
+        mlmMemberLinkRepository.save(memberLink);
     }
 }
