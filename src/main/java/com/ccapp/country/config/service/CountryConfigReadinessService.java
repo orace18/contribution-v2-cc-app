@@ -1,8 +1,5 @@
 package com.ccapp.country.config.service;
 
-import com.ccapp.admin.domain.enums.AdminRole;
-import com.ccapp.admin.domain.enums.AdminUserStatus;
-import com.ccapp.admin.repository.AdminUserRepository;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.country.config.domain.entity.CountryConfigVersion;
 import com.ccapp.country.config.domain.enums.CountryAccountSystemTag;
@@ -17,8 +14,6 @@ import com.ccapp.country.config.repository.CountryConfigVersionRepository;
 import com.ccapp.country.domain.entity.Country;
 import com.ccapp.country.repository.CountryRepository;
 import com.ccapp.financing.repository.OfferCountryConfigRepository;
-import com.ccapp.platform.config.domain.enums.PlatformConfigType;
-import com.ccapp.platform.config.service.GlobalMlmConfigService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -49,9 +44,6 @@ public class CountryConfigReadinessService {
     private final CountryChartAccountRepository countryChartAccountRepository;
     private final CountryAccountSystemMappingRepository countryAccountSystemMappingRepository;
     private final OfferCountryConfigRepository offerCountryConfigRepository;
-    private final AdminUserRepository adminUserRepository;
-    private final CountryConfigResolver countryConfigResolver;
-    private final GlobalMlmConfigService globalMlmConfigService;
     private final ObjectMapper objectMapper;
 
     @Transactional(readOnly = true)
@@ -84,29 +76,25 @@ public class CountryConfigReadinessService {
         configSections.add(evaluateGeneralSection(country));
         configSections.add(evaluateAccountingSection(normalizedCountryCode, accountingPayload));
         configSections.add(evaluateMembershipSection(membershipPayload, mlmLimitsPayload));
-        configSections.add(evaluateMlmSection(normalizedCountryCode, mlmLimitsPayload));
+        configSections.add(evaluateMlmSection(mlmLimitsPayload));
         configSections.add(evaluateRiskSection(guaranteePayload));
 
         // Optional and operational diagnostics never block configured=true.
         List<SectionAccumulator> operationalSections = new ArrayList<>();
         operationalSections.add(evaluateFinancingSection(normalizedCountryCode, financingPayload));
-        operationalSections.add(evaluateRbacSection(country));
 
         List<SectionAccumulator> allSections = new ArrayList<>(configSections);
         allSections.addAll(operationalSections);
 
-        int totalChecks = allSections.stream().mapToInt(SectionAccumulator::totalChecks).sum();
-        int missingChecks = allSections.stream().mapToInt(section -> section.missing().size()).sum();
+        int totalChecks = configSections.stream().mapToInt(SectionAccumulator::totalChecks).sum();
+        int missingChecks = configSections.stream().mapToInt(section -> section.missing().size()).sum();
         int passedChecks = Math.max(totalChecks - missingChecks, 0);
         int score = totalChecks == 0 ? 0 : (int) Math.round((passedChecks * 100.0d) / totalChecks);
-
-        List<String> missingItems = allSections.stream()
-                .flatMap(section -> section.missing().stream())
-                .toList();
 
         List<String> configMissingItems = configSections.stream()
                 .flatMap(section -> section.missing().stream())
                 .toList();
+        List<String> missingItems = configMissingItems;
         boolean configured = configMissingItems.isEmpty() && country != null;
         CountryConfigReadinessStatus status = configured
                 ? CountryConfigReadinessStatus.CONFIGURED
@@ -344,16 +332,10 @@ public class CountryConfigReadinessService {
         return null;
     }
 
-    private SectionAccumulator evaluateMlmSection(String countryCode, ObjectNode mlmLimitsCountryPayload) {
-        SectionAccumulator section = new SectionAccumulator("mlm", 2);
-        ObjectNode globalMlm = countryConfigResolver.payloadAsObjectNode(
-                countryConfigResolver.resolveActivePlatformConfig(PlatformConfigType.GLOBAL_MLM_BASE_RATES)
-        );
-
-        if (!globalMlmConfigService.isResolvable(globalMlm)) {
-            section.miss("mlm.commission_rates");
-        }
-
+    private SectionAccumulator evaluateMlmSection(ObjectNode mlmLimitsCountryPayload) {
+        SectionAccumulator section = new SectionAccumulator("mlm", 1);
+        // Country activation depends only on country-level MLM caps. Global MLM rates
+        // remain runtime defaults and must not block country validation.
         boolean hasLimits = (readDecimal(mlmLimitsCountryPayload, "weeklyCap") != null)
                 || (mlmLimitsCountryPayload != null
                 && mlmLimitsCountryPayload.has("weeklyCapsByTier")
@@ -420,23 +402,6 @@ public class CountryConfigReadinessService {
         }
         if (!hasRiskLimits) {
             section.miss("risk.risk_limits");
-        }
-        return section;
-    }
-
-    private SectionAccumulator evaluateRbacSection(Country country) {
-        SectionAccumulator section = new SectionAccumulator("rbac", 1);
-        if (country == null) {
-            section.miss("rbac.country_ops");
-            return section;
-        }
-        boolean hasCountryOps = adminUserRepository.existsByCountryIdAndStatusAndRoleIn(
-                country.getId(),
-                AdminUserStatus.ACTIVE,
-                List.of(AdminRole.ROLE_COUNTRY_ADMIN, AdminRole.ROLE_OPERATIONS)
-        );
-        if (!hasCountryOps) {
-            section.miss("rbac.country_ops");
         }
         return section;
     }

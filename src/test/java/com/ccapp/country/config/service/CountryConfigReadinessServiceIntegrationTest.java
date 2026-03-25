@@ -75,7 +75,8 @@ class CountryConfigReadinessServiceIntegrationTest {
         assertTrue(readiness.score() < 100);
         assertTrue(readiness.missing().contains("membership.gold_variants"));
         assertTrue(readiness.missing().contains("accounting.chart_of_accounts"));
-        assertTrue(readiness.missing().contains("rbac.country_ops"));
+        assertFalse(readiness.missing().contains("rbac.country_ops"));
+        assertFalse(readiness.missing().contains("mlm.commission_rates"));
     }
 
     @Test
@@ -112,7 +113,9 @@ class CountryConfigReadinessServiceIntegrationTest {
         CountryConfigReadinessResponse readiness = countryConfigReadinessService.evaluateReadiness("CI");
         assertTrue(readiness.configured());
         assertEquals(com.ccapp.country.config.dto.CountryConfigReadinessStatus.CONFIGURED, readiness.status());
+        assertEquals(100, readiness.score());
         assertFalse(readiness.missing().contains("financing.seed_capital_offer"));
+        assertFalse(readiness.missing().contains("mlm.commission_rates"));
     }
 
     private Country saveCountry(String code, String name) {

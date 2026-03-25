@@ -3,6 +3,7 @@
 -- BUSINESS RULE:
 --   If core setup is valid, countries.configured must be TRUE even when no financing
 --   offer configuration exists.
+--   Global platform defaults must never block country configuration backfills.
 --
 -- WHY THIS MIGRATION EXISTS:
 --   V69 still treated FINANCING as mandatory during the data backfill. That leaves
@@ -17,13 +18,6 @@ WHERE c.active = TRUE
   AND c.configured = FALSE
   AND c.currency IS NOT NULL
   AND LENGTH(BTRIM(c.currency)) = 3
-  AND EXISTS (
-      SELECT 1
-      FROM platform_config_versions pcv
-      WHERE pcv.config_type = 'GLOBAL_MLM_BASE_RATES'
-        AND pcv.payload IS NOT NULL
-        AND BTRIM(pcv.payload) NOT IN ('', '{}', 'null')
-  )
   AND (
       SELECT COUNT(DISTINCT v.config_type)
       FROM country_config_versions v
