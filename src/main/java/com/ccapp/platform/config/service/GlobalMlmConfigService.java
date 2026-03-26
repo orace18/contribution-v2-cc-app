@@ -142,22 +142,16 @@ public class GlobalMlmConfigService {
         }
 
         String matchingRule;
-        BigDecimal percentage;
         if (binaryConfigPayload != null) {
             JsonNode matchingRuleNode = binaryConfigPayload.get("matchingRule");
             if (matchingRuleNode == null || !matchingRuleNode.isTextual() || matchingRuleNode.asText().isBlank()) {
                 throw new BusinessException("global_mlm_base_rates.binaryConfig.matchingRule is required");
             }
             matchingRule = matchingRuleNode.asText().trim().toUpperCase(Locale.ROOT);
-
-            JsonNode percentageNode = binaryConfigPayload.get("percentage");
-            if (percentageNode == null || !percentageNode.isNumber()) {
-                throw new BusinessException("global_mlm_base_rates.binaryConfig.percentage is required and must be numeric");
-            }
-            percentage = percentageNode.decimalValue();
-        } else if (allowLegacyFallback && payload.has("binary") && payload.get("binary").isNumber()) {
+            // Note: binaryConfig.percentage is kept for backward-compat with stored configs
+            // but is NOT used in commission calculations — rates are plan-based (MlmMemberGrade).
+        } else if (allowLegacyFallback) {
             matchingRule = DEFAULT_BINARY_MATCHING_RULE;
-            percentage = payload.get("binary").decimalValue();
         } else {
             throw new BusinessException("global_mlm_base_rates.binaryConfig is required");
         }
@@ -165,8 +159,7 @@ public class GlobalMlmConfigService {
         if (!DEFAULT_BINARY_MATCHING_RULE.equals(matchingRule)) {
             throw new BusinessException("global_mlm_base_rates.binaryConfig.matchingRule must be WEAKER_LEG");
         }
-        validatePercentage(percentage, "global_mlm_base_rates.binaryConfig.percentage");
-        return new GlobalBinaryConfig(matchingRule, percentage);
+        return new GlobalBinaryConfig(matchingRule);
     }
 
     private void validatePercentage(BigDecimal value, String errorPrefix) {
@@ -176,8 +169,7 @@ public class GlobalMlmConfigService {
     }
 
     public record GlobalBinaryConfig(
-            String matchingRule,
-            BigDecimal percentage
+            String matchingRule
     ) {
     }
 
