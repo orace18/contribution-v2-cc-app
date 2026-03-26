@@ -32,7 +32,6 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.temporal.ChronoField;
 import java.time.temporal.IsoFields;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -75,8 +74,7 @@ class WeeklyGroupBonusServiceIntegrationTest {
                 new GlobalMlmConfigService.GlobalMlmConfig(
                         Map.of(),
                         new GlobalMlmConfigService.GlobalBinaryConfig(
-                                GlobalMlmConfigService.DEFAULT_BINARY_MATCHING_RULE,
-                                new BigDecimal("10")
+                                GlobalMlmConfigService.DEFAULT_BINARY_MATCHING_RULE
                         )
                 )
         );
