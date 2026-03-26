@@ -1,15 +1,12 @@
--- V70: Financing is optional for country configuration.
+-- V71: Re-run of V70 backfill — V70 was applied to DB with an earlier version of this
+-- script (checksum mismatch). This migration replaces it as a safe re-run.
+--
+-- Financing is optional for country configuration.
 --
 -- BUSINESS RULE:
 --   If core setup is valid, countries.configured must be TRUE even when no financing
 --   offer configuration exists.
 --   Global platform defaults must never block country configuration backfills.
---
--- WHY THIS MIGRATION EXISTS:
---   V69 still treated FINANCING as mandatory during the data backfill. That leaves
---   already-valid countries stuck with configured = false, which is now inconsistent
---   with the runtime validation model and with services that still read the persisted
---   countries.configured flag directly.
 
 UPDATE countries c
 SET configured = TRUE,
