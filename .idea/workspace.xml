@@ -4,33 +4,10 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="notif">
+    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Refactoring conplete du model MLM">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pom.xml" beforeDir="false" afterPath="$PROJECT_DIR$/pom.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/config/SecurityConfig.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/config/SecurityConfig.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/account_holder/repository/AccountHolderRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/identity/account_holder/repository/AccountHolderRepository.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/mlm/domain/entity/MlmLegCarryover.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/mlm/domain/entity/MlmLegCarryover.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/mlm/domain/entity/MlmLegCarryoverId.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/mlm/domain/entity/MlmLegCarryoverId.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/mlm/domain/entity/MlmVolumeLedger.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/mlm/domain/entity/MlmVolumeLedger.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/mlm/repository/MlmVolumeLedgerRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/mlm/repository/MlmVolumeLedgerRepository.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/mlm/repository/projection/MlmWeeklyLegVolumeProjection.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/mlm/repository/projection/MlmWeeklyLegVolumeProjection.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/mlm/service/MLMPlacementService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/mlm/service/MLMPlacementService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/mlm/service/MLMQueryService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/mlm/service/MLMQueryService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/mlm/service/MlmAnalyticsService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/mlm/service/MlmAnalyticsService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/mlm/service/MlmVolumeLedgerService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/mlm/service/MlmVolumeLedgerService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/mlm/service/WeeklyGroupBonusService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/mlm/service/WeeklyGroupBonusService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/mobile/onboarding/controller/MobileOnboardingController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/mobile/onboarding/controller/MobileOnboardingController.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/mobile/onboarding/service/MobileOnboardingService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/mobile/onboarding/service/MobileOnboardingService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/payments/psp/service/JawupayService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/payments/psp/service/JawupayService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/resources/application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/application.properties" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/test/java/com/ccapp/admin/service/AdminMlmMonitoringServiceIntegrationTest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/test/java/com/ccapp/admin/service/AdminMlmMonitoringServiceIntegrationTest.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/test/java/com/ccapp/mlm/service/MLMServicesIntegrationTest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/test/java/com/ccapp/mlm/service/MLMServicesIntegrationTest.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/test/java/com/ccapp/mlm/service/MlmAnalyticsServiceIntegrationTest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/test/java/com/ccapp/mlm/service/MlmAnalyticsServiceIntegrationTest.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/test/java/com/ccapp/mlm/service/MlmLedgerRebuildServiceIntegrationTest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/test/java/com/ccapp/mlm/service/MlmLedgerRebuildServiceIntegrationTest.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/test/java/com/ccapp/mlm/service/MlmVolumeLedgerIntegrationTest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/test/java/com/ccapp/mlm/service/MlmVolumeLedgerIntegrationTest.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/test/java/com/ccapp/mlm/service/ShopOrderRefundedMlmAdjustmentListenerIntegrationTest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/test/java/com/ccapp/mlm/service/ShopOrderRefundedMlmAdjustmentListenerIntegrationTest.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/test/java/com/ccapp/mlm/service/WeeklyGroupBonusServiceIntegrationTest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/test/java/com/ccapp/mlm/service/WeeklyGroupBonusServiceIntegrationTest.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/test/java/com/ccapp/payments/psp/service/JawupayCallbackRegressionTest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/test/java/com/ccapp/payments/psp/service/JawupayCallbackRegressionTest.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/chat/config/ChatWebSocketConfig.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/chat/config/ChatWebSocketConfig.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/common/exception/GlobalExceptionHandler.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/common/exception/GlobalExceptionHandler.java" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -38,7 +15,7 @@
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
   <component name="EmbeddingIndexingInfo">
-    <option name="cachedIndexableFilesCount" value="1051" />
+    <option name="cachedIndexableFilesCount" value="1086" />
   </component>
   <component name="FileTemplateManagerImpl">
     <option name="RECENT_TEMPLATES">
@@ -168,14 +145,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1772553173766</updated>
-    </task>
-    <task id="LOCAL-00030" summary="Refact de onboarding">
-      <option name="closed" value="true" />
-      <created>1773128986428</created>
-      <option name="number" value="00030" />
-      <option name="presentableId" value="LOCAL-00030" />
-      <option name="project" value="LOCAL" />
-      <updated>1773128986428</updated>
     </task>
     <task id="LOCAL-00031" summary="Configuration pays">
       <option name="closed" value="true" />
@@ -561,7 +530,15 @@
       <option name="project" value="LOCAL" />
       <updated>1774385850103</updated>
     </task>
-    <option name="localTasksCounter" value="79" />
+    <task id="LOCAL-00079" summary="Refactoring conplete du model MLM">
+      <option name="closed" value="true" />
+      <created>1774436112457</created>
+      <option name="number" value="00079" />
+      <option name="presentableId" value="LOCAL-00079" />
+      <option name="project" value="LOCAL" />
+      <updated>1774436112458</updated>
+    </task>
+    <option name="localTasksCounter" value="80" />
     <servers />
   </component>
   <component name="UnknownFeatures">
@@ -592,7 +569,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="Config smtp et secret key" />
     <MESSAGE value="Config des secrets key" />
     <MESSAGE value="Ajout de url su back-office" />
     <MESSAGE value="Revue du profil" />
@@ -617,7 +593,8 @@
     <MESSAGE value="Fix migrantion and beans error" />
     <MESSAGE value="Le onbording ready for test" />
     <MESSAGE value="notif" />
-    <option name="LAST_COMMIT_MESSAGE" value="notif" />
+    <MESSAGE value="Refactoring conplete du model MLM" />
+    <option name="LAST_COMMIT_MESSAGE" value="Refactoring conplete du model MLM" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />
