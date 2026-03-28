@@ -6,7 +6,7 @@ import com.ccapp.payments.psp.dto.JawuPayCreatePayoutRequest;
 import com.ccapp.payments.psp.dto.JawuPayPaymentMethod;
 import com.ccapp.payments.psp.dto.JawuPayPaymentResponse;
 import com.ccapp.payments.psp.dto.JawuPayPayoutDetailsResponse;
-import com.ccapp.payments.psp.dto.JawuPayPayoutResponse;
+import com.ccapp.payments.psp.dto.JawuPayCreatePayoutResponse;
 import com.ccapp.payments.psp.dto.JawuPayQuoteRequest;
 import com.ccapp.payments.psp.dto.JawuPayQuoteResponse;
 import org.junit.jupiter.api.BeforeEach;
@@ -79,7 +79,7 @@ class JawuPayPspClientImplMockTest {
         JawuPayCreatePayoutRequest request = new JawuPayCreatePayoutRequest(
                 50000L, "XOF", "CI", "MOBILE_MONEY_MTN", "client-1", "+22501234567", "MTN");
 
-        JawuPayPayoutResponse response = client.createPayout(request);
+        JawuPayCreatePayoutResponse response = client.createPayout(request);
 
         assertThat(response.payoutId()).isNotNull();
         assertThat(response.status()).isEqualTo("PENDING");

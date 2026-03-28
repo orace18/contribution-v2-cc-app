@@ -6,7 +6,7 @@ import com.ccapp.payments.psp.dto.JawuPayCreatePayoutRequest;
 import com.ccapp.payments.psp.dto.JawuPayPaymentMethod;
 import com.ccapp.payments.psp.dto.JawuPayPaymentResponse;
 import com.ccapp.payments.psp.dto.JawuPayPayoutDetailsResponse;
-import com.ccapp.payments.psp.dto.JawuPayPayoutResponse;
+import com.ccapp.payments.psp.dto.JawuPayCreatePayoutResponse;
 import com.ccapp.payments.psp.dto.JawuPayQuoteRequest;
 import com.ccapp.payments.psp.dto.JawuPayQuoteResponse;
 
@@ -24,7 +24,7 @@ public interface JawuPayPspClient {
     JawuPayPaymentResponse getPayment(String paymentId);
 
     /** POST /api/v1/payout — initiate an outbound payout */
-    JawuPayPayoutResponse createPayout(JawuPayCreatePayoutRequest request);
+    JawuPayCreatePayoutResponse createPayout(JawuPayCreatePayoutRequest request);
 
     /** GET /api/v1/payout/{id} — fetch current payout status */
     JawuPayPayoutDetailsResponse getPayout(String payoutId);

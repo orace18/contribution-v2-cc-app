@@ -7,7 +7,7 @@ import com.ccapp.payments.psp.dto.JawuPayCreatePayoutRequest;
 import com.ccapp.payments.psp.dto.JawuPayPaymentMethod;
 import com.ccapp.payments.psp.dto.JawuPayPaymentResponse;
 import com.ccapp.payments.psp.dto.JawuPayPayoutDetailsResponse;
-import com.ccapp.payments.psp.dto.JawuPayPayoutResponse;
+import com.ccapp.payments.psp.dto.JawuPayCreatePayoutResponse;
 import com.ccapp.payments.psp.dto.JawuPayQuoteRequest;
 import com.ccapp.payments.psp.dto.JawuPayQuoteResponse;
 import jakarta.annotation.PostConstruct;
@@ -151,20 +151,20 @@ public class JawuPayPspClientImpl implements JawuPayPspClient {
     // -----------------------------------------------------------------------
 
     @Override
-    public JawuPayPayoutResponse createPayout(JawuPayCreatePayoutRequest request) {
+    public JawuPayCreatePayoutResponse createPayout(JawuPayCreatePayoutRequest request) {
         log.info("PSP request provider=jawupay endpoint=POST /api/v1/payout body={}", request);
         if (mockEnabled) {
-            JawuPayPayoutResponse response = new JawuPayPayoutResponse(
+            JawuPayCreatePayoutResponse response = new JawuPayCreatePayoutResponse(
                     UUID.randomUUID(), "PENDING", "MOCK_PSP", "MOCK-PAYOUT-REF-" + UUID.randomUUID());
             log.info("PSP response (mock) endpoint=POST /api/v1/payout body={}", response);
             return response;
         }
-        JawuPayPayoutResponse response = restClient.post()
+        JawuPayCreatePayoutResponse response = restClient.post()
                 .uri("/api/v1/payout")
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(request)
                 .retrieve()
-                .body(JawuPayPayoutResponse.class);
+                .body(JawuPayCreatePayoutResponse.class);
         log.info("PSP response endpoint=POST /api/v1/payout body={}", response);
         return response;
     }

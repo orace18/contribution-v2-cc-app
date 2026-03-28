@@ -7,7 +7,7 @@ import com.ccapp.payments.operation.service.OperationService;
 import com.ccapp.payments.operation.service.OperationService.OperationRouting;
 import com.ccapp.payments.psp.client.JawuPayPspClient;
 import com.ccapp.payments.psp.dto.JawuPayCreatePayoutRequest;
-import com.ccapp.payments.psp.dto.JawuPayPayoutResponse;
+import com.ccapp.payments.psp.dto.JawuPayCreatePayoutResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -81,7 +81,7 @@ public class JawuPayPayoutOrchestrationService {
         long amountMinorUnits = JawuPayPaymentOrchestrationService.toMinorUnits(amount);
 
         // Step 2 — submit the payout to the PSP
-        JawuPayPayoutResponse payout = pspClient.createPayout(
+        JawuPayCreatePayoutResponse payout = pspClient.createPayout(
                 new JawuPayCreatePayoutRequest(
                         amountMinorUnits,
                         currency,
