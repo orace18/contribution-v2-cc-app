@@ -2,7 +2,9 @@ package com.ccapp.payments.psp.controller;
 
 import com.ccapp.common.api.CommonResponse;
 import com.ccapp.payments.psp.dto.JawupayCallbackRequest;
+import com.ccapp.payments.psp.dto.JawuPayWebhookRequest;
 import com.ccapp.payments.psp.service.JawupayService;
+import com.ccapp.payments.psp.service.JawuPayWebhookService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -23,6 +25,7 @@ import org.springframework.web.bind.annotation.*;
 public class PspController {
 
     private final JawupayService jawupayService;
+    private final JawuPayWebhookService jawuPayWebhookService;
 
     @PostMapping("/jawupay/callback")
     @Operation(summary = "Recevoir un callback Jawupay (public)")
@@ -39,6 +42,21 @@ public class PspController {
 
         jawupayService.processCallback(request, signature, extractRemoteIp(httpRequest));
         return ResponseEntity.ok(CommonResponse.success("Callback processed"));
+    }
+
+    @PostMapping("/jawupay/webhook")
+    @Operation(summary = "Recevoir un webhook JawuPay (public)")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Webhook traite", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Payload invalide ou operation introuvable", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "403", description = "IP non autorisee", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
+    })
+    public ResponseEntity<CommonResponse<Void>> jawuPayWebhook(
+            @Valid @RequestBody JawuPayWebhookRequest request,
+            HttpServletRequest httpRequest) {
+
+        jawuPayWebhookService.processWebhook(request, extractRemoteIp(httpRequest));
+        return ResponseEntity.ok(CommonResponse.success("Webhook processed"));
     }
 
     private String extractRemoteIp(HttpServletRequest request) {

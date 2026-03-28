@@ -109,6 +109,52 @@ public class OperationService {
         return createInitiatedOperation(accountHolderId, accountHolderId, type, amount, currency, idempotencyKey, description, null, OperationRouting.none());
     }
 
+    /**
+     * Creates an operation in PAYOUT_INITIATED state. Used exclusively for outbound payout flows
+     * (e.g. JawuPay payout) where the lifecycle starts with a distinct payout-initiation status
+     * rather than the generic INITIATED state.
+     */
+    @Transactional
+    public Operation createPayoutInitiatedOperation(UUID accountHolderId,
+                                                    UUID actorUserId,
+                                                    OperationType type,
+                                                    BigDecimal amount,
+                                                    String currency,
+                                                    String idempotencyKey,
+                                                    String description,
+                                                    OperationRouting routing) {
+        String normalizedIdempotencyKey = normalizeIdempotencyKey(idempotencyKey);
+        String normalizedCurrency = normalizeCurrency(currency);
+        OperationRouting normalizedRouting = normalizeRouting(routing);
+        validateAmount(amount);
+
+        return operationRepository.findByIdempotencyKey(normalizedIdempotencyKey)
+                .map(existing -> ensureCompatibleExistingOperation(
+                        existing,
+                        accountHolderId,
+                        actorUserId,
+                        type,
+                        amount,
+                        normalizedCurrency,
+                        null,
+                        normalizedRouting
+                ))
+                .orElseGet(() -> operationRepository.save(Operation.builder()
+                        .accountHolderId(accountHolderId)
+                        .actorUserId(actorUserId)
+                        .type(type)
+                        .status(OperationStatus.PAYOUT_INITIATED)
+                        .amount(amount)
+                        .currency(normalizedCurrency)
+                        .idempotencyKey(normalizedIdempotencyKey)
+                        .destinationAccountHolderId(normalizedRouting.destinationAccountHolderId())
+                        .destinationWalletId(normalizedRouting.destinationWalletId())
+                        .destinationPhone(normalizedRouting.destinationPhone())
+                        .destinationAccountCode(normalizedRouting.destinationAccountCode())
+                        .description(normalizeDescription(description))
+                        .build()));
+    }
+
     @Transactional(readOnly = true)
     public Optional<Operation> findByIdempotencyKey(String idempotencyKey) {
         return operationRepository.findByIdempotencyKey(normalizeIdempotencyKey(idempotencyKey));
@@ -151,7 +197,8 @@ public class OperationService {
         if (operation.getStatus() == OperationStatus.PENDING_PSP) {
             return operation;
         }
-        if (operation.getStatus() != OperationStatus.INITIATED) {
+        if (operation.getStatus() != OperationStatus.INITIATED
+                && operation.getStatus() != OperationStatus.PAYOUT_INITIATED) {
             throw new BusinessException("Operation cannot move to PENDING_PSP");
         }
         operation.setStatus(OperationStatus.PENDING_PSP);
