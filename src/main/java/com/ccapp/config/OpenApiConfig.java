@@ -23,7 +23,7 @@ public class OpenApiConfig {
     @Bean
     public OpenAPI ccAppOpenApi() {
         return new OpenAPI().info(new Info()
-                .title("cc-app-backend API")
+                .title("cc-backend-monolitic API")
                 .version("v1")
                 .description("Modular monolithic fintech backend"))
                 .components(new Components()

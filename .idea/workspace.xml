@@ -4,10 +4,10 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Refactoring conplete du model MLM">
+    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="fix bug">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/chat/config/ChatWebSocketConfig.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/chat/config/ChatWebSocketConfig.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/common/exception/GlobalExceptionHandler.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/common/exception/GlobalExceptionHandler.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/config/OpenApiConfig.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/config/OpenApiConfig.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/resources/application-prod.properties" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/application-prod.properties" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -145,14 +145,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1772553173766</updated>
-    </task>
-    <task id="LOCAL-00031" summary="Configuration pays">
-      <option name="closed" value="true" />
-      <created>1773131598588</created>
-      <option name="number" value="00031" />
-      <option name="presentableId" value="LOCAL-00031" />
-      <option name="project" value="LOCAL" />
-      <updated>1773131598588</updated>
     </task>
     <task id="LOCAL-00032" summary="Configuration pays">
       <option name="closed" value="true" />
@@ -538,7 +530,15 @@
       <option name="project" value="LOCAL" />
       <updated>1774436112458</updated>
     </task>
-    <option name="localTasksCounter" value="80" />
+    <task id="LOCAL-00080" summary="fix bug">
+      <option name="closed" value="true" />
+      <created>1774556881119</created>
+      <option name="number" value="00080" />
+      <option name="presentableId" value="LOCAL-00080" />
+      <option name="project" value="LOCAL" />
+      <updated>1774556881120</updated>
+    </task>
+    <option name="localTasksCounter" value="81" />
     <servers />
   </component>
   <component name="UnknownFeatures">
@@ -569,7 +569,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="Config des secrets key" />
     <MESSAGE value="Ajout de url su back-office" />
     <MESSAGE value="Revue du profil" />
     <MESSAGE value="Mise en place des base mlm" />
@@ -594,7 +593,8 @@
     <MESSAGE value="Le onbording ready for test" />
     <MESSAGE value="notif" />
     <MESSAGE value="Refactoring conplete du model MLM" />
-    <option name="LAST_COMMIT_MESSAGE" value="Refactoring conplete du model MLM" />
+    <MESSAGE value="fix bug" />
+    <option name="LAST_COMMIT_MESSAGE" value="fix bug" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />
