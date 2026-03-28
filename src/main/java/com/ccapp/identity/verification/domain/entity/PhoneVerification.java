@@ -67,6 +67,10 @@ public class PhoneVerification extends AuditableEntity {
     @Column(name = "verified_at")
     private OffsetDateTime verifiedAt;
 
+    /** Set when OTP is delegated to CPass. Null for locally-managed OTPs. */
+    @Column(name = "cpass_reference_id", length = 128)
+    private String cpassReferenceId;
+
     @PrePersist
     protected void onPersistDefaults() {
         if (status == null) {
