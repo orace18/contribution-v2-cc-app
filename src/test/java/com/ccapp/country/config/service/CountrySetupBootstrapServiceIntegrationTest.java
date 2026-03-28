@@ -60,7 +60,7 @@ class CountrySetupBootstrapServiceIntegrationTest {
     }
 
     @Test
-    void shouldSplitConfiguredAndUnconfiguredCountriesWhenSomeAreInitialized() {
+    void shouldKeepInitializedCountryInUnconfiguredUntilCoreValidationPasses() {
         saveCountry("ML", "Mali");
         saveCountry("NE", "Niger");
         countryConfigurationEngineService.initializeCountryConfiguration("ML", UUID.randomUUID());
@@ -68,11 +68,10 @@ class CountrySetupBootstrapServiceIntegrationTest {
         List<CountrySetupCountryResponse> configured = countrySetupBootstrapService.listConfiguredCountries();
         List<CountrySetupCountryResponse> unconfigured = countrySetupBootstrapService.listUnconfiguredCountries();
 
-        assertEquals(1, configured.size());
-        assertEquals("ML", configured.get(0).code());
-        assertTrue(configured.get(0).configured());
+        assertTrue(configured.isEmpty());
         assertTrue(unconfigured.stream().anyMatch(country -> country.code().equals("NE")));
-        assertFalse(unconfigured.stream().anyMatch(country -> country.code().equals("ML")));
+        assertTrue(unconfigured.stream().anyMatch(country -> country.code().equals("ML")));
+        assertTrue(unconfigured.stream().allMatch(country -> !country.configured()));
     }
 
     @Test
@@ -110,7 +109,7 @@ class CountrySetupBootstrapServiceIntegrationTest {
     }
 
     @Test
-    void initializeShouldMoveCountryFromUnconfiguredToConfigured() {
+    void initializeShouldKeepCountryInUnconfiguredListUntilValidationPasses() {
         saveCountry("CM", "Cameroon");
 
         List<CountrySetupCountryResponse> beforeConfigured = countrySetupBootstrapService.listConfiguredCountries();
@@ -122,8 +121,8 @@ class CountrySetupBootstrapServiceIntegrationTest {
 
         List<CountrySetupCountryResponse> afterConfigured = countrySetupBootstrapService.listConfiguredCountries();
         List<CountrySetupCountryResponse> afterUnconfigured = countrySetupBootstrapService.listUnconfiguredCountries();
-        assertTrue(afterConfigured.stream().anyMatch(country -> country.code().equals("CM")));
-        assertFalse(afterUnconfigured.stream().anyMatch(country -> country.code().equals("CM")));
+        assertTrue(afterConfigured.isEmpty());
+        assertTrue(afterUnconfigured.stream().anyMatch(country -> country.code().equals("CM")));
     }
 
     private void saveCountry(String code, String name) {

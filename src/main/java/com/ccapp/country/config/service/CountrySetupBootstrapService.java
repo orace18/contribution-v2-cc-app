@@ -41,6 +41,7 @@ public class CountrySetupBootstrapService {
 
     private final CountryRepository countryRepository;
     private final CountryConfigVersionRepository countryConfigVersionRepository;
+    private final CountryConfigurationEngineService countryConfigurationEngineService;
 
     @Transactional
     public void ensureMasterCountriesSeededIfEmpty() {
@@ -88,15 +89,24 @@ public class CountrySetupBootstrapService {
             throw new BusinessException("No active countries available");
         }
 
-        List<CountrySetupCountryResponse> configuredCountries = activeCountries.stream()
-                .filter(country -> initializedCountryCodes.contains(normalizeCountryCode(country.getCode())))
-                .map(country -> new CountrySetupCountryResponse(normalizeCountryCode(country.getCode()), country.getName(), true))
-                .toList();
-
-        List<CountrySetupCountryResponse> unconfiguredCountries = activeCountries.stream()
-                .filter(country -> !initializedCountryCodes.contains(normalizeCountryCode(country.getCode())))
-                .map(country -> new CountrySetupCountryResponse(normalizeCountryCode(country.getCode()), country.getName(), false))
-                .toList();
+        List<CountrySetupCountryResponse> configuredCountries = new java.util.ArrayList<>();
+        List<CountrySetupCountryResponse> unconfiguredCountries = new java.util.ArrayList<>();
+        for (Country country : activeCountries) {
+            String normalizedCountryCode = normalizeCountryCode(country.getCode());
+            boolean initialized = initializedCountryCodes.contains(normalizedCountryCode);
+            boolean configured = initialized
+                    && countryConfigurationEngineService.refreshCountryConfiguredState(normalizedCountryCode);
+            CountrySetupCountryResponse item = new CountrySetupCountryResponse(
+                    normalizedCountryCode,
+                    country.getName(),
+                    configured
+            );
+            if (configured) {
+                configuredCountries.add(item);
+            } else {
+                unconfiguredCountries.add(item);
+            }
+        }
 
         log.info(
                 "Country setup bootstrap counts: totalCountriesInDb={}, activeCountriesCount={}, configuredCountriesCount={}, unconfiguredCountriesCount={}",

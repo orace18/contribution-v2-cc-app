@@ -11,10 +11,13 @@ import com.ccapp.country.config.domain.entity.CountryConfigVersion;
 import com.ccapp.country.config.domain.enums.CountryConfigType;
 import com.ccapp.country.config.dto.CountryConfigSnapshotItemResponse;
 import com.ccapp.country.config.dto.CountryConfigSnapshotResponse;
+import com.ccapp.country.config.dto.CountryConfigReadinessResponse;
+import com.ccapp.country.config.dto.CountryConfigReadinessStatus;
 import com.ccapp.country.config.dto.CountryConfigValidationErrorResponse;
 import com.ccapp.country.config.dto.CountryConfigValidationResponse;
 import com.ccapp.country.config.dto.CountryConfigVersionResponse;
 import com.ccapp.country.config.dto.CountryConfigVersionHistoryItemResponse;
+import com.ccapp.country.config.dto.CountrySetupStatusResponse;
 import com.ccapp.country.config.dto.UpsertCountryConfigRequest;
 import com.ccapp.country.config.repository.CountryChartAccountRepository;
 import com.ccapp.country.domain.entity.Country;
@@ -27,6 +30,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
@@ -37,6 +41,7 @@ import java.math.RoundingMode;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -48,6 +53,7 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class CountryConfigurationEngineService {
 
     private static final int MAX_PAYLOAD_CHARS = 50_000;
@@ -55,6 +61,14 @@ public class CountryConfigurationEngineService {
     private static final String COUNTRY_CONFIG_ENTITY_TYPE = "COUNTRY_CONFIG";
     private static final String JAWUPAY_PROVIDER = "JAWUPAY";
     private static final String JAWUPAY_METHOD_SOURCE = "JAWUPAY_DYNAMIC";
+    private static final List<CountryConfigType> SETUP_VALIDATION_TYPES = List.of(
+            CountryConfigType.GENERAL,
+            CountryConfigType.ACCOUNTING,
+            CountryConfigType.MEMBERSHIP,
+            CountryConfigType.MLM_LIMITS,
+            CountryConfigType.FINANCING,
+            CountryConfigType.GUARANTEE
+    );
 
     private final CountryConfigVersionRepository countryConfigVersionRepository;
     private final CountryChartAccountRepository countryChartAccountRepository;
@@ -100,6 +114,74 @@ public class CountryConfigurationEngineService {
                 payloadOf(snapshot, CountryConfigType.ACCOUNTING),
                 buildManagedPaymentPayload()
         );
+    }
+
+    @Transactional(readOnly = true)
+    public CountrySetupStatusResponse getSetupStatus(String countryCode) {
+        String normalized = normalizeCountryCode(countryCode);
+        assertCountryExists(normalized);
+
+        OffsetDateTime now = OffsetDateTime.now();
+        Map<String, CountrySetupStatusResponse.StepStatus> steps = new HashMap<>();
+
+        // general
+        boolean generalDone = countryConfigVersionRepository
+                .findFirstByCountryCodeAndConfigTypeAndEffectiveDateLessThanEqualOrderByEffectiveDateDescVersionDesc(
+                        normalized, CountryConfigType.GENERAL, now)
+                .map(v -> v.getPayload() != null && !v.getPayload().isEmpty())
+                .orElse(false);
+        steps.put("general", generalDone
+                ? CountrySetupStatusResponse.StepStatus.ok()
+                : CountrySetupStatusResponse.StepStatus.blocked("General configuration not saved"));
+
+        // accounting: complete only when system accounts exist in DB
+        boolean accountingDone = countryChartOfAccountsService.hasRequiredSystemMappings(normalized);
+        steps.put("accounting", accountingDone
+                ? CountrySetupStatusResponse.StepStatus.ok()
+                : CountrySetupStatusResponse.StepStatus.blocked("System accounts not generated. Use 'Generate accounts' in Step 2."));
+
+        // membership
+        boolean membershipDone = countryConfigVersionRepository
+                .findFirstByCountryCodeAndConfigTypeAndEffectiveDateLessThanEqualOrderByEffectiveDateDescVersionDesc(
+                        normalized, CountryConfigType.MEMBERSHIP, now)
+                .map(v -> v.getPayload() != null && !v.getPayload().isEmpty())
+                .orElse(false);
+        steps.put("membership", membershipDone
+                ? CountrySetupStatusResponse.StepStatus.ok()
+                : CountrySetupStatusResponse.StepStatus.blocked("Membership configuration not saved"));
+
+        // mlm
+        boolean mlmDone = countryConfigVersionRepository
+                .findFirstByCountryCodeAndConfigTypeAndEffectiveDateLessThanEqualOrderByEffectiveDateDescVersionDesc(
+                        normalized, CountryConfigType.MLM_LIMITS, now)
+                .map(v -> v.getPayload() != null && !v.getPayload().isEmpty())
+                .orElse(false);
+        steps.put("mlm", mlmDone
+                ? CountrySetupStatusResponse.StepStatus.ok()
+                : CountrySetupStatusResponse.StepStatus.blocked("MLM configuration not saved"));
+
+        // financing is optional and never blocks activation.
+        boolean financingDone = countryConfigVersionRepository
+                .findFirstByCountryCodeAndConfigTypeAndEffectiveDateLessThanEqualOrderByEffectiveDateDescVersionDesc(
+                        normalized, CountryConfigType.FINANCING, now)
+                .map(v -> v.getPayload() != null && !v.getPayload().isEmpty())
+                .orElse(false);
+        steps.put("financing", financingDone
+                ? CountrySetupStatusResponse.StepStatus.ok()
+                : new CountrySetupStatusResponse.StepStatus(true, "Financing not configured (optional)"));
+
+        // guarantee
+        boolean guaranteeDone = countryConfigVersionRepository
+                .findFirstByCountryCodeAndConfigTypeAndEffectiveDateLessThanEqualOrderByEffectiveDateDescVersionDesc(
+                        normalized, CountryConfigType.GUARANTEE, now)
+                .map(v -> v.getPayload() != null && !v.getPayload().isEmpty())
+                .orElse(false);
+        steps.put("guarantee", guaranteeDone
+                ? CountrySetupStatusResponse.StepStatus.ok()
+                : CountrySetupStatusResponse.StepStatus.blocked("Risk & guarantee configuration not saved"));
+
+        boolean canActivate = steps.values().stream().allMatch(CountrySetupStatusResponse.StepStatus::complete);
+        return new CountrySetupStatusResponse(steps, canActivate);
     }
 
     @Transactional
@@ -229,7 +311,7 @@ public class CountryConfigurationEngineService {
         return toVersionResponse(saved);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public CountryConfigValidationResponse validateCountrySetup(String countryCode,
                                                                 Map<CountryConfigType, JsonNode> payloads,
                                                                 OffsetDateTime effectiveDate) {
@@ -255,26 +337,92 @@ public class CountryConfigurationEngineService {
             return new CountryConfigValidationResponse(false, errors);
         }
 
+        SetupValidationResult validationResult = evaluateSetupValidation(normalizedCountryCode, sanitizedPayloads);
+        errors.addAll(validationResult.errors());
+
+        boolean valid = errors.isEmpty();
+        // Business rule: validation is the single source of truth for configured status.
+        // If validation passes, mark the country as configured unconditionally.
+        if (valid) {
+            persistConfiguredByValidation(normalizedCountryCode);
+            ensureConfiguredInvariant(normalizedCountryCode);
+        }
+        return new CountryConfigValidationResponse(valid, errors);
+    }
+
+    /**
+     * Marks the country as configured after a successful validation call.
+     * Validation is the authoritative source of truth for configured status —
+     * this write must happen regardless of the runtime readiness score.
+     */
+    private void persistConfiguredByValidation(String countryCode) {
+        Country country = countryRepository.findByCode(countryCode)
+                .orElseThrow(() -> new BusinessException("Country not found"));
+        boolean changed = false;
+        if (!country.isConfigured()) {
+            country.setConfigured(true);
+            log.info("[VALIDATION] country={} marked configured=true (validation passed)", countryCode);
+            changed = true;
+        }
+        if (!country.isActive()) {
+            country.setActive(true);
+            changed = true;
+        }
+        if (changed) {
+            countryRepository.save(country);
+        }
+    }
+
+    @Transactional
+    public boolean refreshCountryConfiguredState(String countryCode) {
+        String normalizedCountryCode = normalizeCountryCode(countryCode);
+        return synchronizeCountryConfiguredState(normalizedCountryCode, false);
+    }
+
+    @Transactional
+    public CountryConfigReadinessResponse getCountryReadiness(String countryCode) {
+        String normalizedCountryCode = normalizeCountryCode(countryCode);
+        CountryConfigReadinessResponse readiness = countryConfigReadinessService.evaluateReadiness(normalizedCountryCode);
+        boolean configured = synchronizeCountryConfiguredState(normalizedCountryCode, false);
+        return new CountryConfigReadinessResponse(
+                configured,
+                readiness.score(),
+                configured ? CountryConfigReadinessStatus.CONFIGURED
+                        : CountryConfigReadinessStatus.NOT_CONFIGURED,
+                readiness.missing(),
+                readiness.sections()
+        );
+    }
+
+    private SetupValidationResult evaluateSetupValidation(String countryCode,
+                                                          Map<CountryConfigType, ObjectNode> payloads) {
+        Map<CountryConfigType, ObjectNode> normalizedPayloads = setupPayloadsWithDefaults(payloads);
+        CountryConfigReadinessResponse readiness = countryConfigReadinessService.evaluateReadiness(countryCode, normalizedPayloads);
+        if (!readiness.configured()) {
+            return new SetupValidationResult(false, buildReadinessValidationErrors(readiness));
+        }
+
+        List<CountryConfigValidationErrorResponse> errors = new ArrayList<>();
         try {
             validateMlmMembershipAlignment(
-                    sanitizedPayloads.getOrDefault(CountryConfigType.MLM_LIMITS, objectMapper.createObjectNode()),
-                    sanitizedPayloads.getOrDefault(CountryConfigType.MEMBERSHIP, objectMapper.createObjectNode())
+                    normalizedPayloads.get(CountryConfigType.MLM_LIMITS),
+                    normalizedPayloads.get(CountryConfigType.MEMBERSHIP)
             );
             validateGuaranteeMembershipAlignment(
-                    sanitizedPayloads.getOrDefault(CountryConfigType.GUARANTEE, objectMapper.createObjectNode()),
-                    sanitizedPayloads.getOrDefault(CountryConfigType.MEMBERSHIP, objectMapper.createObjectNode())
+                    normalizedPayloads.get(CountryConfigType.GUARANTEE),
+                    normalizedPayloads.get(CountryConfigType.MEMBERSHIP)
             );
             validateGuaranteeFinancingAlignment(
-                    sanitizedPayloads.getOrDefault(CountryConfigType.GUARANTEE, objectMapper.createObjectNode()),
-                    sanitizedPayloads.getOrDefault(CountryConfigType.FINANCING, objectMapper.createObjectNode())
+                    normalizedPayloads.get(CountryConfigType.GUARANTEE),
+                    normalizedPayloads.get(CountryConfigType.FINANCING)
             );
             subscriptionPlanCatalogService.assertMembershipPayloadCompatibleWithCountry(
-                    normalizedCountryCode,
-                    sanitizedPayloads.getOrDefault(CountryConfigType.MEMBERSHIP, objectMapper.createObjectNode())
+                    countryCode,
+                    normalizedPayloads.get(CountryConfigType.MEMBERSHIP)
             );
             validateAccountingAccountsExist(
-                    normalizedCountryCode,
-                    sanitizedPayloads.getOrDefault(CountryConfigType.ACCOUNTING, objectMapper.createObjectNode())
+                    countryCode,
+                    normalizedPayloads.get(CountryConfigType.ACCOUNTING)
             );
         } catch (BusinessException ex) {
             errors.add(new CountryConfigValidationErrorResponse(
@@ -282,8 +430,75 @@ public class CountryConfigurationEngineService {
                     ex.getMessage()
             ));
         }
+        return new SetupValidationResult(errors.isEmpty(), errors);
+    }
 
-        return new CountryConfigValidationResponse(errors.isEmpty(), errors);
+    private List<CountryConfigValidationErrorResponse> buildReadinessValidationErrors(CountryConfigReadinessResponse readiness) {
+        return readiness.missing().stream()
+                .distinct()
+                .map(message -> new CountryConfigValidationErrorResponse(resolveValidationField(message), message))
+                .toList();
+    }
+
+    private Map<CountryConfigType, ObjectNode> setupPayloadsWithDefaults(Map<CountryConfigType, ObjectNode> payloads) {
+        Map<CountryConfigType, ObjectNode> normalized = new EnumMap<>(CountryConfigType.class);
+        for (CountryConfigType type : SETUP_VALIDATION_TYPES) {
+            ObjectNode payload = payloads == null ? null : payloads.get(type);
+            normalized.put(type, payload == null ? objectMapper.createObjectNode() : payload);
+        }
+        return normalized;
+    }
+
+    private Map<CountryConfigType, ObjectNode> resolveActiveSetupPayloads(String countryCode) {
+        Map<CountryConfigType, ObjectNode> payloads = new EnumMap<>(CountryConfigType.class);
+        OffsetDateTime now = OffsetDateTime.now();
+        for (CountryConfigType type : SETUP_VALIDATION_TYPES) {
+            ObjectNode payload = countryConfigVersionRepository
+                    .findFirstByCountryCodeAndConfigTypeAndEffectiveDateLessThanEqualOrderByEffectiveDateDescVersionDesc(
+                            countryCode,
+                            type,
+                            now
+                    )
+                    .map(CountryConfigVersion::getPayload)
+                    .map(this::readPayload)
+                    .map(this::toObjectNode)
+                    .orElseGet(objectMapper::createObjectNode);
+            payloads.put(type, payload);
+        }
+        return payloads;
+    }
+
+    private boolean synchronizeCountryConfiguredState(String countryCode, boolean activateCountry) {
+        Country country = countryRepository.findByCode(countryCode)
+                .orElseThrow(() -> new BusinessException("Country not found"));
+        SetupValidationResult validationResult = evaluateSetupValidation(countryCode, resolveActiveSetupPayloads(countryCode));
+        boolean configured = validationResult.valid();
+        if (configured) {
+            subscriptionService.assertCountryPlanCatalogValid(countryCode);
+        }
+
+        boolean changed = false;
+        if (country.isConfigured() != configured) {
+            country.setConfigured(configured);
+            changed = true;
+        }
+        if (activateCountry && !country.isActive()) {
+            country.setActive(true);
+            changed = true;
+        }
+        if (changed) {
+            countryRepository.save(country);
+        }
+        return configured;
+    }
+
+    private void ensureConfiguredInvariant(String countryCode) {
+        Country country = countryRepository.findByCode(countryCode)
+                .orElseThrow(() -> new BusinessException("Country not found"));
+        if (!country.isConfigured()) {
+            country.setConfigured(true);
+            countryRepository.save(country);
+        }
     }
 
     @Transactional(readOnly = true)
@@ -660,8 +875,11 @@ public class CountryConfigurationEngineService {
         if (offersNode == null || offersNode.isNull()) {
             return;
         }
-        if (!offersNode.isArray() || offersNode.isEmpty()) {
-            throw new BusinessException("financing.offers must be a non-empty array");
+        if (!offersNode.isArray()) {
+            throw new BusinessException("financing.offers must be an array");
+        }
+        if (offersNode.isEmpty()) {
+            return;
         }
         offersNode.forEach(offerNode -> {
             if (!offerNode.isObject()) {
@@ -968,8 +1186,12 @@ public class CountryConfigurationEngineService {
             return;
         }
 
-        countryChartOfAccountsService.ensureCountryChartGenerated(countryCode);
-        countryChartOfAccountsService.assertCriticalSystemMappingsExist(countryCode);
+        // Validate only — do NOT create accounts here (this runs inside a readOnly transaction).
+        // Account generation must be done explicitly via autoGenerateRequiredAccounts.
+        if (!countryChartOfAccountsService.hasRequiredSystemMappings(countryCode)) {
+            throw new BusinessException("Required system accounts are not yet generated for this country. " +
+                    "Use the 'Generate accounts' action in Step 2 before activating.");
+        }
     }
 
     private void validatePaymentMethodsAgainstPspConfig(ObjectNode paymentConfig) {
@@ -1088,24 +1310,7 @@ public class CountryConfigurationEngineService {
     }
 
     private void markCountryConfigured(String countryCode) {
-        Country country = countryRepository.findByCode(countryCode)
-                .orElseThrow(() -> new BusinessException("Country not found"));
-        boolean configured = countryConfigReadinessService.evaluateReadiness(countryCode).configured();
-        if (configured) {
-            subscriptionService.assertCountryPlanCatalogValid(countryCode);
-        }
-        boolean changed = false;
-        if (country.isConfigured() != configured) {
-            country.setConfigured(configured);
-            changed = true;
-        }
-        if (!country.isActive()) {
-            country.setActive(true);
-            changed = true;
-        }
-        if (changed) {
-            countryRepository.save(country);
-        }
+        synchronizeCountryConfiguredState(countryCode, true);
     }
 
     private String writePayload(JsonNode payload) {
@@ -1124,5 +1329,11 @@ public class CountryConfigurationEngineService {
             fallback.put("legacyRaw", rawPayload);
             return fallback;
         }
+    }
+
+    private record SetupValidationResult(
+            boolean valid,
+            List<CountryConfigValidationErrorResponse> errors
+    ) {
     }
 }

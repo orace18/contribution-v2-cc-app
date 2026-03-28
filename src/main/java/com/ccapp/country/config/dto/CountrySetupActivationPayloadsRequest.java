@@ -14,7 +14,6 @@ public record CountrySetupActivationPayloadsRequest(
         @JsonProperty("mlm_limits")
         @NotNull(message = "mlm_limits payload is required")
         JsonNode mlmLimits,
-        @NotNull(message = "financing payload is required")
         JsonNode financing,
         @NotNull(message = "guarantee payload is required")
         JsonNode guarantee

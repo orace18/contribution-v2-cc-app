@@ -113,7 +113,7 @@ public class WeeklyGroupBonusService {
             }
 
             MlmMemberGrade memberGrade = resolveMemberGrade(memberId);
-            BonusComputation computation = computeBinaryBonus(legVolumes, memberGrade, binaryConfig);
+            BonusComputation computation = computeBinaryBonus(legVolumes, memberGrade, memberGrade.binaryRate(), binaryConfig);
 
             if (computation.bonusAmount().signum() > 0
                     && !membersWithCommissionAlreadyCreated.contains(memberId)
@@ -204,6 +204,7 @@ public class WeeklyGroupBonusService {
 
     private BonusComputation computeBinaryBonus(Map<UUID, BigDecimal> rawLegVolumes,
                                                 MlmMemberGrade memberGrade,
+                                                BigDecimal planBinaryRate,
                                                 GlobalMlmConfigService.GlobalBinaryConfig binaryConfig) {
         Map<UUID, BigDecimal> legVolumes = new HashMap<>();
         for (Map.Entry<UUID, BigDecimal> entry : rawLegVolumes.entrySet()) {
@@ -224,7 +225,7 @@ public class WeeklyGroupBonusService {
         if (!GlobalMlmConfigService.DEFAULT_BINARY_MATCHING_RULE.equals(binaryConfig.matchingRule())) {
             throw new IllegalStateException("Unsupported global binary matching rule: " + binaryConfig.matchingRule());
         }
-        if (binaryConfig.percentage() == null || binaryConfig.percentage().signum() <= 0) {
+        if (planBinaryRate == null || planBinaryRate.signum() <= 0) {
             return new BonusComputation(ZERO, legVolumes);
         }
 
@@ -244,14 +245,14 @@ public class WeeklyGroupBonusService {
 
         BigDecimal maxMatchedByCap = memberGrade.weeklyCap()
                 .multiply(ONE_HUNDRED)
-                .divide(binaryConfig.percentage(), 4, RoundingMode.DOWN);
+                .divide(planBinaryRate, 4, RoundingMode.DOWN);
         BigDecimal payableMatchedVolume = matchedVolume.min(maxMatchedByCap);
         if (payableMatchedVolume.signum() <= 0) {
             return new BonusComputation(ZERO, legVolumes);
         }
 
         BigDecimal bonusAmount = scale(
-                payableMatchedVolume.multiply(binaryConfig.percentage()).divide(ONE_HUNDRED, 4, RoundingMode.HALF_UP)
+                payableMatchedVolume.multiply(planBinaryRate).divide(ONE_HUNDRED, 4, RoundingMode.HALF_UP)
         );
         if (bonusAmount.compareTo(memberGrade.weeklyCap()) > 0) {
             bonusAmount = memberGrade.weeklyCap();

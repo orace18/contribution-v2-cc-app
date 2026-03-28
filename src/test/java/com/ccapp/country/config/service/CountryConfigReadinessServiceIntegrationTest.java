@@ -66,20 +66,21 @@ class CountryConfigReadinessServiceIntegrationTest {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Test
-    void evaluateReadiness_shouldExposeMissingItemsWhenCountryIsPartial() {
+    void evaluateReadiness_shouldExposeMissingItemsWhenCountryIsNotConfigured() {
         saveCountry("BJ", "Benin");
 
         CountryConfigReadinessResponse readiness = countryConfigReadinessService.evaluateReadiness("BJ");
 
         assertFalse(readiness.configured());
         assertTrue(readiness.score() < 100);
-        assertTrue(readiness.missing().contains("membership.gold_plan"));
+        assertTrue(readiness.missing().contains("membership.gold_variants"));
         assertTrue(readiness.missing().contains("accounting.chart_of_accounts"));
-        assertTrue(readiness.missing().contains("rbac.country_ops"));
+        assertFalse(readiness.missing().contains("rbac.country_ops"));
+        assertFalse(readiness.missing().contains("mlm.commission_rates"));
     }
 
     @Test
-    void evaluateReadiness_shouldReturnReadyWhenMandatorySectionsPass() {
+    void evaluateReadiness_shouldReturnConfiguredWithoutFinancingWhenCoreSectionsPass() {
         Country country = saveCountry("CI", "Cote d'Ivoire");
         countryConfigurationEngineService.initializeCountryConfiguration("CI", UUID.randomUUID());
         saveCountryAdmin(country);
@@ -108,17 +109,13 @@ class CountryConfigReadinessServiceIntegrationTest {
                 new UpsertCountryConfigRequest(buildAccountingPayload(), OffsetDateTime.now()),
                 UUID.randomUUID()
         );
-        countryConfigurationEngineService.upsertCountryConfiguration(
-                "CI",
-                CountryConfigType.FINANCING,
-                new UpsertCountryConfigRequest(objectMapper.createObjectNode().put("enabled", false), OffsetDateTime.now()),
-                UUID.randomUUID()
-        );
 
         CountryConfigReadinessResponse readiness = countryConfigReadinessService.evaluateReadiness("CI");
         assertTrue(readiness.configured());
+        assertEquals(com.ccapp.country.config.dto.CountryConfigReadinessStatus.CONFIGURED, readiness.status());
         assertEquals(100, readiness.score());
-        assertTrue(readiness.missing().isEmpty());
+        assertFalse(readiness.missing().contains("financing.seed_capital_offer"));
+        assertFalse(readiness.missing().contains("mlm.commission_rates"));
     }
 
     private Country saveCountry(String code, String name) {
@@ -161,23 +158,55 @@ class CountryConfigReadinessServiceIntegrationTest {
     private ObjectNode buildMembershipPayload() {
         ObjectNode payload = objectMapper.createObjectNode();
         ArrayNode plans = objectMapper.createArrayNode();
-        plans.add(buildPlan("CLASSIC", 2000));
-        plans.add(buildPlan("GOLD", 4000));
-        plans.add(buildPlan("DIAMOND", 6000));
+        plans.add(buildPlan("CLASSIC", 1, 2000));
+        plans.add(buildPlan("CLASSIC", 3, 6000));
+        plans.add(buildPlan("CLASSIC", 12, 24000));
+        plans.add(buildPlan("GOLD", 1, 4000));
+        plans.add(buildPlan("GOLD", 3, 12000));
+        plans.add(buildPlan("GOLD", 12, 48000));
+        plans.add(buildPlan("DIAMOND", 1, 6000));
+        plans.add(buildPlan("DIAMOND", 3, 18000));
+        plans.add(buildPlan("DIAMOND", 12, 72000));
+        plans.add(buildFreePlan());
         payload.set("plans", plans);
         return payload;
     }
 
-    private ObjectNode buildPlan(String tier, int amount) {
+    private ObjectNode buildPlan(String tier, int durationMonths, int amount) {
         ObjectNode plan = objectMapper.createObjectNode();
         plan.put("code", tier);
-        plan.put("name", tier);
+        plan.put("name", durationMonths == 1 ? tier : tier + " " + durationMonths + "M");
         plan.put("tier", tier);
+        plan.put("formulaType", tier);
+        plan.put("durationMonths", durationMonths);
+        plan.put("currency", "XOF");
+        plan.put("totalPrice", amount);
+        plan.put("monthlyPrice", amount / durationMonths);
+        plan.put("isActive", true);
         ObjectNode pricing = objectMapper.createObjectNode();
         pricing.put("amount", amount);
         pricing.put("currency", "XOF");
         plan.set("pricing", pricing);
         plan.set("benefits", objectMapper.createArrayNode().add("Benefit " + tier));
+        return plan;
+    }
+
+    private ObjectNode buildFreePlan() {
+        ObjectNode plan = objectMapper.createObjectNode();
+        plan.put("code", "FREE");
+        plan.put("name", "FREE");
+        plan.put("tier", "FREE");
+        plan.put("formulaType", "FREE");
+        plan.put("durationMonths", 1);
+        plan.put("currency", "XOF");
+        plan.put("totalPrice", 0);
+        plan.put("monthlyPrice", 0);
+        plan.put("isActive", true);
+        ObjectNode pricing = objectMapper.createObjectNode();
+        pricing.put("amount", 0);
+        pricing.put("currency", "XOF");
+        plan.set("pricing", pricing);
+        plan.set("benefits", objectMapper.createArrayNode().add("Benefit FREE"));
         return plan;
     }
 

@@ -13,6 +13,7 @@ import org.springframework.context.annotation.Import;
 
 import java.util.UUID;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -54,7 +55,7 @@ class CountryConfigurationStatusServiceIntegrationTest {
     }
 
     @Test
-    void initializeShouldMoveCountryFromNotConfiguredToDraftOrPartial() {
+    void initializeShouldMoveCountryFromNotConfiguredToDraftOrPartialWithBinaryStatus() {
         saveCountry("CM", "Cameroon");
 
         var before = countryConfigurationStatusService.getConfigurationStatus();
@@ -65,6 +66,14 @@ class CountryConfigurationStatusServiceIntegrationTest {
         var after = countryConfigurationStatusService.getConfigurationStatus();
         assertFalse(after.notConfigured().stream().anyMatch(country -> country.code().equals("CM")));
         assertTrue(after.draftOrPartial().stream().anyMatch(country -> country.code().equals("CM")));
+        assertEquals(
+                "NOT_CONFIGURED",
+                after.draftOrPartial().stream()
+                        .filter(country -> country.code().equals("CM"))
+                        .findFirst()
+                        .orElseThrow()
+                        .status()
+        );
     }
 
     @Test
@@ -79,6 +88,14 @@ class CountryConfigurationStatusServiceIntegrationTest {
         assertFalse(response.notConfigured().stream().anyMatch(item -> item.code().equals("GH")));
         assertFalse(response.draftOrPartial().stream().anyMatch(item -> item.code().equals("GH")));
         assertTrue(response.configured().stream().anyMatch(item -> item.code().equals("GH")));
+        assertEquals(
+                "CONFIGURED",
+                response.configured().stream()
+                        .filter(item -> item.code().equals("GH"))
+                        .findFirst()
+                        .orElseThrow()
+                        .status()
+        );
     }
 
     private Country saveCountry(String code, String name) {

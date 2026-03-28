@@ -122,7 +122,10 @@ public class CountryConfigResolver {
     private List<PlatformConfigType> mapFallbackTypes(CountryConfigType configType) {
         return switch (configType) {
             case GENERAL -> List.of(PlatformConfigType.GLOBAL_GENERAL, PlatformConfigType.GLOBAL_ALLOCATION);
-            case MLM_LIMITS -> List.of(PlatformConfigType.GLOBAL_MLM_BASE_RATES);
+            // MLM_LIMITS contains only per-country earning caps (weeklyCap, weeklyCapsByTier, maxDirectChildren).
+            // MLM rates (unilevelRates, binaryConfig) are GLOBAL and must be read exclusively via
+            // GlobalMlmConfigService. No platform fallback here prevents any country-level rate override.
+            case MLM_LIMITS -> List.of();
             case MEMBERSHIP, GUARANTEE, FINANCING, ACCOUNTING, PAYMENT -> List.of();
         };
     }
