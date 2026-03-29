@@ -1,0 +1,4 @@
+#NOTE: This is a Maven Resolver internal implementation file, its format can be changed without prior notice.
+#Sun Mar 29 19:35:44 CEST 2026
+@default-central-https\://repo.maven.apache.org/maven2/.lastUpdated=1774805744333
+https\://repo.maven.apache.org/maven2/.error=Could not transfer artifact org.apache.maven.surefire\:surefire-shared-utils\:jar\:3.5.4 from/to central (https\://repo.maven.apache.org/maven2)\: Connection reset
