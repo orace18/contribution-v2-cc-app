@@ -14,7 +14,7 @@ import java.util.UUID;
 
 @Component
 @Slf4j
-public class JawupayClientImpl implements JawupayClient {
+public class LegacyJawupayClientAdapter implements JawupayClient {
 
     @Value("${psp.jawupay.mock-enabled:false}")
     private boolean mockEnabled;

@@ -6,6 +6,7 @@ import com.ccapp.wallet.dto.WalletAgentDepositRequest;
 import com.ccapp.wallet.dto.WalletBalanceResponse;
 import com.ccapp.wallet.dto.WalletStatusResponse;
 import com.ccapp.wallet.dto.WalletDepositResponse;
+import com.ccapp.wallet.dto.WalletPspDepositRequest;
 import com.ccapp.wallet.dto.WalletPayRequest;
 import com.ccapp.wallet.dto.WalletPayResponse;
 import com.ccapp.wallet.dto.WalletPinSetupRequest;
@@ -125,7 +126,7 @@ public class WalletController {
             @ApiResponse(responseCode = "401", description = "Unauthenticated")
     })
     public ResponseEntity<CommonResponse<WalletDepositResponse>> initiatePspDeposit(
-            @Valid @RequestBody WalletWithdrawRequest request) {
+            @Valid @RequestBody WalletPspDepositRequest request) {
         var principal = SecurityUtils.currentPrincipal();
         UUID actorUserId = principal.userId() != null ? principal.userId() : SecurityUtils.currentAccountHolderId();
         return ResponseEntity.ok(CommonResponse.success(
@@ -133,9 +134,7 @@ public class WalletController {
                 walletDepositService.initiatePspDeposit(
                         SecurityUtils.currentAccountHolderId(),
                         actorUserId,
-                        request.amount(),
-                        request.currency().toUpperCase(),
-                        request.idempotencyKey())));
+                        request)));
     }
 
     @PostMapping("/deposit/agent")

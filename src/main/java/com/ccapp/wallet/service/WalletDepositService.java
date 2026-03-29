@@ -11,12 +11,12 @@ import com.ccapp.ledger.service.AccountingPostingService;
 import com.ccapp.payments.operation.domain.entity.Operation;
 import com.ccapp.payments.operation.domain.enums.OperationStatus;
 import com.ccapp.payments.operation.domain.enums.OperationType;
-import com.ccapp.payments.psp.dto.JawupayInitiateResponse;
 import com.ccapp.payments.operation.service.OperationService;
-import com.ccapp.payments.service.PaymentService;
+import com.ccapp.payments.psp.service.JawuPayPaymentOrchestrationService;
 import com.ccapp.wallet.domain.enums.WalletType;
 import com.ccapp.wallet.dto.WalletAgentDepositRequest;
 import com.ccapp.wallet.dto.WalletDepositResponse;
+import com.ccapp.wallet.dto.WalletPspDepositRequest;
 import com.ccapp.wallet.event.WalletCreditedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,6 +24,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.Locale;
 import java.util.UUID;
 
 /**
@@ -42,28 +43,29 @@ public class WalletDepositService {
     private final WalletLimitService walletLimitService;
     private final OperationService operationService;
     private final AccountingPostingService accountingPostingService;
-    private final PaymentService paymentService;
+    private final JawuPayPaymentOrchestrationService jawuPayPaymentOrchestrationService;
     private final WalletDebitFacade walletDebitFacade;
     private final CountryChartOfAccountsService countryChartOfAccountsService;
     private final AccountHolderRepository accountHolderRepository;
     private final DomainEventPublisher eventPublisher;
 
-    public WalletDepositResponse initiatePspDeposit(UUID accountHolderId, UUID actorUserId,
-                                                    BigDecimal amount, String currency,
-                                                    String idempotencyKey) {
+    public WalletDepositResponse initiatePspDeposit(UUID accountHolderId,
+                                                    UUID actorUserId,
+                                                    WalletPspDepositRequest request) {
         Wallet wallet = walletGuardService.requireActiveWallet(accountHolderId);
-        walletLimitService.checkDepositAllowed(wallet, amount, currency);
+        String currency = normalizeCurrency(request.currency());
+        walletLimitService.checkDepositAllowed(wallet, request.amount(), currency);
 
         Operation operation = operationService.createInitiatedOperation(
                 accountHolderId, actorUserId,
                 OperationType.WALLET_DEPOSIT_PSP,
-                amount, currency, idempotencyKey,
+                request.amount(), currency, request.idempotencyKey(),
                 "PSP wallet deposit");
-        if ("PENDING_PSP".equals(operation.getStatus().name())) {
+        if (operation.getStatus() == OperationStatus.PENDING_PSP) {
             return new WalletDepositResponse(
                     operation.getId(),
                     operation.getStatus().name(),
-                    amount,
+                    request.amount(),
                     currency,
                     false,
                     null,
@@ -72,11 +74,11 @@ public class WalletDepositService {
                     null
             );
         }
-        if ("CONFIRMED".equals(operation.getStatus().name())) {
+        if (operation.getStatus() == OperationStatus.CONFIRMED) {
             return new WalletDepositResponse(
                     operation.getId(),
                     operation.getStatus().name(),
-                    amount,
+                    request.amount(),
                     currency,
                     false,
                     null,
@@ -85,30 +87,43 @@ public class WalletDepositService {
                     null
             );
         }
-        JawupayInitiateResponse pspResponse = paymentService.initiatePayment(
-                operation.getId(),
-                idempotencyKey,
-                amount,
-                currency,
-                accountHolderId,
-                actorUserId,
-                operation.getDescription()
-        );
-        operationService.markPendingPsp(operation.getId(), pspResponse.pspReference());
 
-        log.info("wallet_psp_deposit_initiated operationId={} accountHolderId={} amount={} currency={}",
-                operation.getId(), accountHolderId, amount, currency);
+        AccountHolder holder = resolveHolder(accountHolderId);
+        String countryCode = readCountryCode(holder);
+
+        JawuPayPaymentOrchestrationService.InitiatePaymentResult orchestrationResult =
+                jawuPayPaymentOrchestrationService.initiatePayment(
+                        accountHolderId,
+                        actorUserId,
+                        request.amount(),
+                        currency,
+                        countryCode,
+                        request.paymentMethodId().trim(),
+                        resolveDepositMsisdn(request, wallet, holder),
+                        resolveDepositOperatorHint(request, wallet),
+                        request.idempotencyKey(),
+                        operation.getDescription()
+                );
+
+        if (!operation.getId().equals(orchestrationResult.operationId())) {
+            throw new IllegalStateException("Wallet deposit orchestration returned an unexpected operation id");
+        }
+
+        Operation pending = operationService.getById(operation.getId());
+
+        log.info("wallet_psp_deposit_initiated operationId={} accountHolderId={} amount={} currency={} pspReference={}",
+                pending.getId(), accountHolderId, request.amount(), currency, pending.getPspReference());
 
         return new WalletDepositResponse(
-                operation.getId(),
-                "PENDING_PSP",
-                amount,
+                pending.getId(),
+                pending.getStatus().name(),
+                request.amount(),
                 currency,
                 false,
                 null,
                 null,
-                pspResponse.pspReference(),
-                pspResponse.checkoutUrl()
+                pending.getPspReference(),
+                orchestrationResult.redirectUrl()
         );
     }
 
@@ -203,6 +218,46 @@ public class WalletDepositService {
     private AccountHolder resolveHolder(UUID id) {
         return accountHolderRepository.findById(id)
                 .orElseThrow(() -> new BusinessException("Account holder not found: " + id));
+    }
+
+    private String readCountryCode(AccountHolder holder) {
+        if (holder.getServiceCountryCode() != null && !holder.getServiceCountryCode().isBlank()) {
+            return holder.getServiceCountryCode().trim().toUpperCase(Locale.ROOT);
+        }
+        if (holder.getCountryCode() != null && !holder.getCountryCode().isBlank()) {
+            return holder.getCountryCode().trim().toUpperCase(Locale.ROOT);
+        }
+        throw new BusinessException("WALLET_DEPOSIT_COUNTRY_REQUIRED");
+    }
+
+    private String resolveDepositMsisdn(WalletPspDepositRequest request, Wallet wallet, AccountHolder holder) {
+        if (request.msisdn() != null && !request.msisdn().isBlank()) {
+            return request.msisdn().trim();
+        }
+        if (wallet.getMobileMoneyNumber() != null && !wallet.getMobileMoneyNumber().isBlank()) {
+            return wallet.getMobileMoneyNumber().trim();
+        }
+        if (holder.getPhoneNumber() != null && !holder.getPhoneNumber().isBlank()) {
+            return holder.getPhoneNumber().trim();
+        }
+        throw new BusinessException("WALLET_DEPOSIT_PHONE_REQUIRED");
+    }
+
+    private String resolveDepositOperatorHint(WalletPspDepositRequest request, Wallet wallet) {
+        if (request.operatorHint() != null && !request.operatorHint().isBlank()) {
+            return request.operatorHint().trim();
+        }
+        if (wallet.getProvider() != null && !wallet.getProvider().isBlank()) {
+            return wallet.getProvider().trim();
+        }
+        return null;
+    }
+
+    private String normalizeCurrency(String currency) {
+        if (currency == null || currency.isBlank()) {
+            throw new BusinessException("Currency is required");
+        }
+        return currency.trim().toUpperCase(Locale.ROOT);
     }
 
     private String buildOtpFingerprint(WalletAgentDepositRequest request) {
