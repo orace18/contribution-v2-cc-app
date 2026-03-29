@@ -28,12 +28,47 @@ class RequiredSecretsValidatorTest {
         assertDoesNotThrow(validator::validateRequiredSecrets);
     }
 
+    @Test
+    void validateRequiredSecrets_shouldPass_whenFirebaseAuthIsDisabledAndCredentialsAreMissing() {
+        MockEnvironment environment = baseEnvironment();
+        environment.setProperty("firebase.auth.enabled", "false");
+        environment.setProperty("firebase.credentials.path", "");
+        environment.setProperty("firebase.credentials.base64", "");
+        RequiredSecretsValidator validator = new RequiredSecretsValidator(environment);
+
+        assertDoesNotThrow(validator::validateRequiredSecrets);
+    }
+
+    @Test
+    void validateRequiredSecrets_shouldPass_whenFirebaseAuthUsesBase64Credentials() {
+        MockEnvironment environment = baseEnvironment();
+        environment.setProperty("firebase.credentials.path", "");
+        environment.setProperty("firebase.credentials.base64", "eyJ0eXBlIjoic2VydmljZV9hY2NvdW50In0=");
+        RequiredSecretsValidator validator = new RequiredSecretsValidator(environment);
+
+        assertDoesNotThrow(validator::validateRequiredSecrets);
+    }
+
+    @Test
+    void validateRequiredSecrets_shouldThrow_whenFirebaseAuthIsEnabledWithoutAnyCredentialSource() {
+        MockEnvironment environment = baseEnvironment();
+        environment.setProperty("firebase.credentials.path", "");
+        environment.setProperty("firebase.credentials.base64", "");
+        RequiredSecretsValidator validator = new RequiredSecretsValidator(environment);
+
+        IllegalStateException ex = assertThrows(IllegalStateException.class, validator::validateRequiredSecrets);
+
+        assertTrue(ex.getMessage().contains("firebase.credentials.path|firebase.credentials.base64"));
+    }
+
     private MockEnvironment baseEnvironment() {
         return new MockEnvironment()
+                .withProperty("firebase.auth.enabled", "true")
                 .withProperty("jwt.secret", "jwt-secret")
                 .withProperty("admin.jwt.secret", "admin-jwt-secret")
                 .withProperty("admin.bootstrap.password", "bootstrap-password")
                 .withProperty("firebase.credentials.path", "/opt/secrets/firebase.json")
+                .withProperty("firebase.credentials.base64", "")
                 .withProperty("psp.jawupay.hmac-secret", "jawupay-secret")
                 .withProperty("security.internal-api-key", "internal-api-key")
                 .withProperty("spring.datasource.password", "db-password")

@@ -24,8 +24,10 @@ services:
       - ADMIN_BOOTSTRAP_PASSWORD=${ADMIN_BOOTSTRAP_PASSWORD:-admin-bootstrap-prod-change-me}
       - INTERNAL_API_KEY=${INTERNAL_API_KEY:-internal-api-key-prod-change-me}
       - JAWUPAY_HMAC_SECRET=${JAWUPAY_HMAC_SECRET:-jawupay-hmac-prod-change-me}
+      - FIREBASE_AUTH_ENABLED=${FIREBASE_AUTH_ENABLED:-true}
       - FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID:-}
-      - FIREBASE_CREDENTIALS_PATH=${FIREBASE_CREDENTIALS_PATH:-classpath:firebase/firebase-service-account-prod.json}
+      - FIREBASE_CREDENTIALS_PATH=${FIREBASE_CREDENTIALS_PATH:-}
+      - FIREBASE_CREDENTIALS_BASE64=${FIREBASE_CREDENTIALS_BASE64:-}
       - PARTNER_API_KEY=${PARTNER_API_KEY:-partner-api-key-prod-change-me}
       - MAIL_PASSWORD=${MAIL_PASSWORD:-bB9-6KZZ7UG9NxW}
       - SENTRY_DSN=${SENTRY_DSN}

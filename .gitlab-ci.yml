@@ -111,7 +111,7 @@ build:
   script:
     - export IMAGE_FULL="${CI_REGISTRY_IMAGE}:${CI_PIPELINE_IID}"
     - echo "Building package using Docker Maven image..."
-    - mvn clean install -DskipTests -Dmaven.repo.local=$CI_MAVEN_DIR -P$CI_COMMIT_REF_NAME
+    - bash scripts/rebuild-from-scratch.sh -DskipTests -Dmaven.repo.local=$CI_MAVEN_DIR -P$CI_COMMIT_REF_NAME
     - |
       case "$CI_COMMIT_REF_NAME" in
         dev) LOCAL_IMAGE="cc-backend-monolitic_dev:mvp" ;;

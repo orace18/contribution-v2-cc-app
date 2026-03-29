@@ -16,7 +16,6 @@ public class RequiredSecretsValidator {
             "jwt.secret",
             "admin.jwt.secret",
             "admin.bootstrap.password",
-            "firebase.credentials.path",
             "psp.jawupay.hmac-secret",
             "security.internal-api-key",
             "spring.datasource.password",
@@ -39,12 +38,22 @@ public class RequiredSecretsValidator {
             }
         }
 
+        if (isFirebaseAuthEnabled()
+                && isMissing(environment.getProperty("firebase.credentials.path"))
+                && isMissing(environment.getProperty("firebase.credentials.base64"))) {
+            missing.add("firebase.credentials.path|firebase.credentials.base64");
+        }
+
         if (!missing.isEmpty()) {
             throw new IllegalStateException(
                     "Missing required secret configuration: " + String.join(", ", missing)
                             + ". Provide values through environment variables."
             );
         }
+    }
+
+    private boolean isFirebaseAuthEnabled() {
+        return Boolean.parseBoolean(environment.getProperty("firebase.auth.enabled", "false"));
     }
 
     private boolean isMissing(String value) {

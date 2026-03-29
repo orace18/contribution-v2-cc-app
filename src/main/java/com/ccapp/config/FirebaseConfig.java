@@ -4,53 +4,54 @@ import com.google.auth.oauth2.GoogleCredentials;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.FirebaseOptions;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.ClassPathResource;
-import org.springframework.core.env.Environment;
 
-import java.io.FileInputStream;
 import java.io.FileNotFoundException;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.ByteArrayInputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Locale;
+import java.util.Base64;
 
 @Slf4j
 @Configuration
+@ConditionalOnProperty(name = "firebase.auth.enabled", havingValue = "true")
 public class FirebaseConfig {
 
-    private static final List<String> CLASSPATH_FALLBACK_LOCATIONS = List.of(
-            "firebase/firebase-service-account-prod.json",
-            "firebase/firebase-service-account-dev.json",
-            "firebase/jawupay-bbc9f-firebase-adminsdk-q6oiw-73173de43d.json"
-    );
-
-    public FirebaseConfig(@Value("${firebase.credentials.path}") String credentialsPath,
-                          @Value("${firebase.project-id:}") String projectId,
-                          Environment environment) {
+    @Bean
+    public FirebaseApp firebaseApp(@Value("${firebase.credentials.path:}") String credentialsPath,
+                                   @Value("${firebase.credentials.base64:}") String credentialsBase64,
+                                   @Value("${firebase.project-id:}") String projectId) throws IOException {
         if (!FirebaseApp.getApps().isEmpty()) {
-            return;
+            return FirebaseApp.getInstance();
         }
 
-        try {
-            FirebaseOptions.Builder builder = FirebaseOptions.builder()
-                    .setCredentials(loadCredentials(credentialsPath, environment.getActiveProfiles()));
-            if (projectId != null && !projectId.isBlank()) {
-                builder.setProjectId(projectId);
-            }
-            FirebaseOptions options = builder.build();
-            FirebaseApp.initializeApp(options);
-            log.info("Firebase Admin SDK initialized");
-        } catch (Exception ex) {
-            throw new IllegalStateException("Unable to initialize Firebase Admin SDK", ex);
+        FirebaseOptions.Builder builder = FirebaseOptions.builder()
+                .setCredentials(loadCredentials(credentialsPath, credentialsBase64));
+        if (projectId != null && !projectId.isBlank()) {
+            builder.setProjectId(projectId.trim());
         }
+
+        FirebaseApp firebaseApp = FirebaseApp.initializeApp(builder.build());
+        log.info("Firebase Admin SDK initialized projectId={}", projectId);
+        return firebaseApp;
     }
 
-    private GoogleCredentials loadCredentials(String credentialsPath, String[] activeProfiles) throws IOException {
+    private GoogleCredentials loadCredentials(String credentialsPath, String credentialsBase64) throws IOException {
+        if (credentialsBase64 != null && !credentialsBase64.isBlank()) {
+            try (InputStream stream = new ByteArrayInputStream(Base64.getMimeDecoder().decode(credentialsBase64.trim()))) {
+                return GoogleCredentials.fromStream(stream);
+            } catch (IllegalArgumentException ex) {
+                throw new IllegalStateException("Invalid Base64 value configured for firebase.credentials.base64", ex);
+            }
+        }
+
         if (credentialsPath != null && !credentialsPath.isBlank()) {
             if (credentialsPath.startsWith("classpath:")) {
                 return loadFromClasspath(credentialsPath.substring("classpath:".length()));
@@ -58,19 +59,20 @@ public class FirebaseConfig {
 
             Path filePath = Path.of(credentialsPath);
             if (Files.isDirectory(filePath)) {
-                log.warn("Firebase credentials path points to a directory ({}), falling back to classpath resource", filePath);
-                return loadFromClasspath(resolveFallbackClasspathLocation(activeProfiles));
+                throw new IllegalStateException("Firebase credentials path points to a directory: " + filePath);
             }
             if (Files.exists(filePath)) {
                 try (InputStream stream = new FileInputStream(credentialsPath)) {
                     return GoogleCredentials.fromStream(stream);
                 }
             }
-            log.warn("Firebase credentials file not found at {}, falling back to classpath resource", filePath);
-            return loadFromClasspath(resolveFallbackClasspathLocation(activeProfiles));
+            throw new FileNotFoundException("Firebase credentials file not found: " + filePath);
         }
 
-        return loadFromClasspath(resolveFallbackClasspathLocation(activeProfiles));
+        throw new IllegalStateException(
+                "Firebase authentication is enabled but no credentials were provided. "
+                        + "Set firebase.credentials.path or firebase.credentials.base64."
+        );
     }
 
     private GoogleCredentials loadFromClasspath(String classpathLocation) throws IOException {
@@ -81,31 +83,5 @@ public class FirebaseConfig {
         try (InputStream stream = resource.getInputStream()) {
             return GoogleCredentials.fromStream(stream);
         }
-    }
-
-    private String resolveFallbackClasspathLocation(String[] activeProfiles) {
-        if (activeProfiles != null) {
-            for (String profile : activeProfiles) {
-                String normalized = profile == null ? "" : profile.toLowerCase(Locale.ROOT);
-                if ("prod".equals(normalized)) {
-                    return "firebase/firebase-service-account-prod.json";
-                }
-                if ("dev".equals(normalized)) {
-                    return "firebase/firebase-service-account-dev.json";
-                }
-            }
-        }
-
-        return CLASSPATH_FALLBACK_LOCATIONS.stream()
-                .filter(this::classpathResourceExists)
-                .findFirst()
-                .orElseThrow(() -> new IllegalStateException(
-                        "No Firebase credentials found in classpath fallback locations for profiles "
-                                + Arrays.toString(activeProfiles)
-                ));
-    }
-
-    private boolean classpathResourceExists(String classpathLocation) {
-        return new ClassPathResource(classpathLocation).exists();
     }
 }
