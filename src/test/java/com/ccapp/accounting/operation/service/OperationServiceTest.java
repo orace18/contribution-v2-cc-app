@@ -153,4 +153,136 @@ class OperationServiceTest {
         assertThrows(ConflictException.class, () -> operationService.assignPspReference(operationId, "PSP-NEW"));
         verify(operationRepository, never()).save(any(Operation.class));
     }
+
+    @Test
+    void markPendingPsp_shouldPersistStructuredMetadataAndSetPendingStatus() {
+        UUID operationId = UUID.randomUUID();
+        Operation operation = Operation.builder()
+                .id(operationId)
+                .accountHolderId(UUID.randomUUID())
+                .actorUserId(UUID.randomUUID())
+                .type(OperationType.WALLET_DEPOSIT_PSP)
+                .status(OperationStatus.INITIATED)
+                .amount(new BigDecimal("15.00"))
+                .currency("XOF")
+                .idempotencyKey("idem-4")
+                .build();
+
+        when(operationRepository.findById(operationId)).thenReturn(Optional.of(operation));
+        when(operationRepository.save(any(Operation.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Operation result = operationService.markPendingPsp(
+                operationId,
+                OperationService.PspMetadata.payment(
+                        "PAY-123",
+                        "PROVIDER-456",
+                        "https://checkout.example/pay/PAY-123",
+                        "MOBILE_MONEY_MTN",
+                        "pending"
+                )
+        );
+
+        assertEquals(OperationStatus.PENDING_PSP, result.getStatus());
+        assertEquals("PAY-123", result.getPspReference());
+        assertEquals("PAY-123", result.getPaymentId());
+        assertEquals("PROVIDER-456", result.getProviderReference());
+        assertEquals("https://checkout.example/pay/PAY-123", result.getRedirectUrl());
+        assertEquals("MOBILE_MONEY_MTN", result.getPaymentMethod());
+        assertEquals("PENDING", result.getPspStatus());
+        verify(operationRepository).save(operation);
+    }
+
+    @Test
+    void recordPspMetadata_shouldBackfillPaymentIdWithoutOverwritingLegacyReference() {
+        UUID operationId = UUID.randomUUID();
+        Operation operation = Operation.builder()
+                .id(operationId)
+                .accountHolderId(UUID.randomUUID())
+                .actorUserId(UUID.randomUUID())
+                .type(OperationType.SUBSCRIPTION)
+                .status(OperationStatus.PENDING_PSP)
+                .amount(new BigDecimal("25.00"))
+                .currency("XOF")
+                .idempotencyKey("idem-5")
+                .pspReference("PROVIDER-LEGACY")
+                .build();
+
+        when(operationRepository.findById(operationId)).thenReturn(Optional.of(operation));
+        when(operationRepository.save(any(Operation.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Operation result = operationService.recordPspMetadata(
+                operationId,
+                new OperationService.PspMetadata(
+                        "PAY-789",
+                        "PAY-789",
+                        null,
+                        "PROVIDER-LEGACY",
+                        null,
+                        "CARD",
+                        "completed",
+                        "{\"status\":\"completed\"}"
+                )
+        );
+
+        assertEquals("PROVIDER-LEGACY", result.getPspReference());
+        assertEquals("PAY-789", result.getPaymentId());
+        assertEquals("PROVIDER-LEGACY", result.getProviderReference());
+        assertEquals("CARD", result.getPaymentMethod());
+        assertEquals("COMPLETED", result.getPspStatus());
+        assertEquals("{\"status\":\"completed\"}", result.getPspPayload());
+        verify(operationRepository).save(operation);
+    }
+
+    @Test
+    void findByPaymentIdOrPspReference_shouldFallbackToLegacyReference() {
+        Operation operation = Operation.builder()
+                .id(UUID.randomUUID())
+                .accountHolderId(UUID.randomUUID())
+                .actorUserId(UUID.randomUUID())
+                .type(OperationType.SUBSCRIPTION)
+                .status(OperationStatus.PENDING_PSP)
+                .amount(new BigDecimal("5.00"))
+                .currency("XOF")
+                .idempotencyKey("idem-6")
+                .pspReference("PAY-LEGACY")
+                .build();
+
+        when(operationRepository.findByPaymentId("PAY-LEGACY")).thenReturn(Optional.empty());
+        when(operationRepository.findByPspReference("PAY-LEGACY")).thenReturn(Optional.of(operation));
+
+        Optional<Operation> result = operationService.findByPaymentIdOrPspReference(" PAY-LEGACY ");
+
+        assertTrue(result.isPresent());
+        assertSame(operation, result.get());
+        verify(operationRepository).findByPaymentId("PAY-LEGACY");
+        verify(operationRepository).findByPspReference("PAY-LEGACY");
+    }
+
+    @Test
+    void recordPspMetadata_shouldAllowPspStatusProgression() {
+        UUID operationId = UUID.randomUUID();
+        Operation operation = Operation.builder()
+                .id(operationId)
+                .accountHolderId(UUID.randomUUID())
+                .actorUserId(UUID.randomUUID())
+                .type(OperationType.WALLET_DEPOSIT_PSP)
+                .status(OperationStatus.PENDING_PSP)
+                .amount(new BigDecimal("10.00"))
+                .currency("XOF")
+                .idempotencyKey("idem-7")
+                .paymentId("PAY-123")
+                .pspStatus("PENDING")
+                .build();
+
+        when(operationRepository.findById(operationId)).thenReturn(Optional.of(operation));
+        when(operationRepository.save(any(Operation.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Operation result = operationService.recordPspMetadata(
+                operationId,
+                OperationService.PspMetadata.statusOnly("success")
+        );
+
+        assertEquals("SUCCESS", result.getPspStatus());
+        verify(operationRepository).save(operation);
+    }
 }

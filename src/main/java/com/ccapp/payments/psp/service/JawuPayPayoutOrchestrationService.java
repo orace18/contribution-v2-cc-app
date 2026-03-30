@@ -4,6 +4,7 @@ import com.ccapp.payments.operation.domain.entity.Operation;
 import com.ccapp.payments.operation.domain.enums.OperationStatus;
 import com.ccapp.payments.operation.domain.enums.OperationType;
 import com.ccapp.payments.operation.service.OperationService;
+import com.ccapp.payments.operation.service.OperationService.PspMetadata;
 import com.ccapp.payments.operation.service.OperationService.OperationRouting;
 import com.ccapp.payments.psp.client.JawuPayPspClient;
 import com.ccapp.payments.psp.dto.JawuPayCreatePayoutRequest;
@@ -72,9 +73,7 @@ public class JawuPayPayoutOrchestrationService {
         if (operation.getStatus() != OperationStatus.PAYOUT_INITIATED) {
             log.info("Idempotent payout: operation={} already in status={}, skipping PSP call",
                     operation.getId(), operation.getStatus());
-            UUID existingPayoutId = operation.getPspReference() != null
-                    ? UUID.fromString(operation.getPspReference())
-                    : null;
+            UUID existingPayoutId = resolveExistingPayoutId(operation);
             return new InitiatePayoutResult(operation.getId(), existingPayoutId);
         }
 
@@ -96,9 +95,30 @@ public class JawuPayPayoutOrchestrationService {
                 operation.getId(), payout.payoutId(), payout.status());
 
         // Step 3 — store payoutId on the operation, transition to PENDING_PSP
-        operationService.markPendingPsp(operation.getId(), payout.payoutId().toString());
+        operationService.markPendingPsp(operation.getId(), PspMetadata.payout(
+                payout.payoutId() == null ? null : payout.payoutId().toString(),
+                payout.providerReference(),
+                paymentMethodId,
+                payout.status()
+        ));
         log.info("Payout pending PSP: operationId={} payoutId={}", operation.getId(), payout.payoutId());
 
         return new InitiatePayoutResult(operation.getId(), payout.payoutId());
+    }
+
+    private UUID resolveExistingPayoutId(Operation operation) {
+        if (operation.getPayoutId() != null) {
+            return UUID.fromString(operation.getPayoutId());
+        }
+        if (operation.getPspReference() == null) {
+            return null;
+        }
+        try {
+            return UUID.fromString(operation.getPspReference());
+        } catch (IllegalArgumentException ex) {
+            log.warn("Existing payout operation {} has non-UUID legacy pspReference={}",
+                    operation.getId(), operation.getPspReference());
+            return null;
+        }
     }
 }

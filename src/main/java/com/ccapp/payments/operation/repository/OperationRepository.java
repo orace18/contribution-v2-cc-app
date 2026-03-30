@@ -16,6 +16,12 @@ public interface OperationRepository extends JpaRepository<Operation, UUID> {
 
     Optional<Operation> findByPspReference(String pspReference);
 
+    Optional<Operation> findByPaymentId(String paymentId);
+
+    Optional<Operation> findByPayoutId(String payoutId);
+
+    Optional<Operation> findByProviderReference(String providerReference);
+
     List<Operation> findByTypeAndStatusOrderByCreatedAtAsc(OperationType type, OperationStatus status);
 
     List<Operation> findByStatusOrderByCreatedAtAsc(OperationStatus status);

@@ -64,10 +64,6 @@ class JawuPayPaymentOrchestrationServiceTest {
                 "https://checkout.example/pay/" + PAYMENT_ID, null, "REF-1");
         when(pspClient.confirmPayment(any(), eq("idem-1"))).thenReturn(confirm);
 
-        Operation pending = operationWithStatus(OperationStatus.PENDING_PSP);
-        when(operationService.markPendingPsp(OPERATION_ID, PAYMENT_ID.toString()))
-                .thenReturn(pending);
-
         JawuPayPaymentOrchestrationService.InitiatePaymentResult result =
                 service.initiatePayment(ACCOUNT_HOLDER_ID, ACTOR_USER_ID,
                         amount, "XOF", "CI",
@@ -91,12 +87,22 @@ class JawuPayPaymentOrchestrationServiceTest {
         assertThat(confirmCaptor.getValue().payerInfo().msisdn()).isEqualTo("22501234567");
         assertThat(confirmCaptor.getValue().payerInfo().operatorHint()).isEqualTo("MTN");
 
-        verify(operationService).markPendingPsp(OPERATION_ID, PAYMENT_ID.toString());
+        ArgumentCaptor<OperationService.PspMetadata> metadataCaptor =
+                ArgumentCaptor.forClass(OperationService.PspMetadata.class);
+        verify(operationService).markPendingPsp(eq(OPERATION_ID), metadataCaptor.capture());
+        assertThat(metadataCaptor.getValue().pspReference()).isEqualTo(PAYMENT_ID.toString());
+        assertThat(metadataCaptor.getValue().paymentId()).isEqualTo(PAYMENT_ID.toString());
+        assertThat(metadataCaptor.getValue().providerReference()).isEqualTo("REF-1");
+        assertThat(metadataCaptor.getValue().redirectUrl())
+                .isEqualTo("https://checkout.example/pay/" + PAYMENT_ID);
+        assertThat(metadataCaptor.getValue().paymentMethod()).isEqualTo("MOBILE_MONEY_MTN");
+        assertThat(metadataCaptor.getValue().pspStatus()).isEqualTo("PENDING");
     }
 
     @Test
     void initiatePayment_idempotentOperation_skipsPspCalls() {
         Operation alreadyPending = operationWithStatus(OperationStatus.PENDING_PSP);
+        alreadyPending.setRedirectUrl("https://checkout.example/pay/existing");
         when(operationService.createInitiatedOperation(any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(alreadyPending);
 
@@ -107,7 +113,7 @@ class JawuPayPaymentOrchestrationServiceTest {
                         "idem-dup", "desc");
 
         assertThat(result.operationId()).isEqualTo(OPERATION_ID);
-        assertThat(result.redirectUrl()).isNull();
+        assertThat(result.redirectUrl()).isEqualTo("https://checkout.example/pay/existing");
         verifyNoMoreInteractions(pspClient);
     }
 

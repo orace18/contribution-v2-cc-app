@@ -4,6 +4,7 @@ import com.ccapp.payments.operation.domain.entity.Operation;
 import com.ccapp.payments.operation.domain.enums.OperationStatus;
 import com.ccapp.payments.operation.domain.enums.OperationType;
 import com.ccapp.payments.operation.service.OperationService;
+import com.ccapp.payments.operation.service.OperationService.PspMetadata;
 import com.ccapp.payments.psp.client.JawuPayPspClient;
 import com.ccapp.payments.psp.dto.JawuPayConfirmRequest;
 import com.ccapp.payments.psp.dto.JawuPayConfirmResponse;
@@ -74,7 +75,7 @@ public class JawuPayPaymentOrchestrationService {
         if (operation.getStatus() != OperationStatus.INITIATED) {
             log.info("Idempotent payment: operation={} already in status={}, skipping PSP calls",
                     operation.getId(), operation.getStatus());
-            return new InitiatePaymentResult(operation.getId(), null);
+            return new InitiatePaymentResult(operation.getId(), operation.getRedirectUrl());
         }
 
         long amountMinorUnits = toMinorUnits(amount);
@@ -103,7 +104,13 @@ public class JawuPayPaymentOrchestrationService {
         );
 
         // Step 4 — store paymentId on the operation, transition to PENDING_PSP
-        operationService.markPendingPsp(operation.getId(), confirm.paymentId().toString());
+        operationService.markPendingPsp(operation.getId(), PspMetadata.payment(
+                confirm.paymentId() == null ? null : confirm.paymentId().toString(),
+                confirm.providerReference(),
+                confirm.redirectUrl(),
+                paymentMethodId,
+                confirm.status()
+        ));
         log.info("Payment pending PSP: operationId={} paymentId={}", operation.getId(), confirm.paymentId());
 
         // Step 5 — return redirectUrl to the caller

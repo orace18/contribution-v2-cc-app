@@ -4,8 +4,8 @@ import com.ccapp.common.exception.BusinessException;
 import com.ccapp.ledger.service.AccountingPostingService;
 import com.ccapp.payments.operation.domain.entity.Operation;
 import com.ccapp.payments.operation.domain.enums.OperationStatus;
-import com.ccapp.payments.operation.repository.OperationRepository;
 import com.ccapp.payments.operation.service.OperationService;
+import com.ccapp.payments.operation.service.OperationService.PspMetadata;
 import com.ccapp.payments.psp.client.JawuPayPspClient;
 import com.ccapp.payments.psp.dto.JawuPayPaymentResponse;
 import com.ccapp.payments.psp.dto.JawuPayPayoutDetailsResponse;
@@ -37,8 +37,7 @@ import java.util.stream.Collectors;
  *
  * <p>Shared logic: {@link #applyPspStatusToOperation(Operation, String)} is the single
  * method that drives the Operation lifecycle from a raw PSP status string. It is called
- * by both the webhook handler (step 3) and the fallback check (step 4) to avoid any
- * duplication.
+ * by both the webhook handler and the fallback checks to avoid any duplication.
  */
 @Service
 @RequiredArgsConstructor
@@ -46,7 +45,6 @@ import java.util.stream.Collectors;
 public class JawuPayWebhookService {
 
     private final OperationService operationService;
-    private final OperationRepository operationRepository;
     private final JawuPayPspClient pspClient;
     private final AccountingPostingService accountingPostingService;
     private final WalletDepositService walletDepositService;
@@ -65,61 +63,45 @@ public class JawuPayWebhookService {
                 .collect(Collectors.toUnmodifiableSet());
     }
 
-    // -------------------------------------------------------------------------
-    // Step 3 — Webhook handler
-    // -------------------------------------------------------------------------
-
-    /**
-     * Entry point for {@code POST /psp/jawupay/webhook}.
-     *
-     * <p>Processing order (as specified):
-     * <ol>
-     *   <li>Validate the caller IP against the allowlist.</li>
-     *   <li>Extract {@code paymentId} or {@code reference} from the payload.</li>
-     *   <li>Look up the matching Operation — if not found, log and return.</li>
-     *   <li>Delegate to {@link #applyPspStatusToOperation} (shared step 4 logic).</li>
-     * </ol>
-     */
     @Transactional
     public void processWebhook(JawuPayWebhookRequest request, String remoteIp) {
-
-        // Step 1 — IP allowlist check
         validateIp(remoteIp);
 
-        // Step 2 — resolve the PSP reference (paymentId takes precedence over reference)
-        String pspReference = resolvePspReference(request);
-        if (pspReference == null) {
+        String paymentId = normalizeIdentifier(request.paymentId());
+        String providerReference = normalizeIdentifier(request.reference());
+        if (paymentId == null && providerReference == null) {
             log.warn("Webhook ignored: neither paymentId nor reference present in payload provider={}",
                     request.provider());
             return;
         }
 
-        // Step 3 — look up the Operation
-        Optional<Operation> maybeOperation = operationRepository.findByPspReference(pspReference);
+        Optional<Operation> maybeOperation = findOperationForWebhook(paymentId, providerReference);
         if (maybeOperation.isEmpty()) {
-            log.warn("Webhook ignored: no operation found for pspReference={} provider={}",
-                    pspReference, request.provider());
+            log.warn("Webhook ignored: no operation found for paymentId={} providerReference={} provider={}",
+                    paymentId, providerReference, request.provider());
             return;
         }
 
-        // Steps 4-7 delegated to the shared method
-        applyPspStatusToOperation(maybeOperation.get(), request.status());
+        Operation operation = operationService.recordPspMetadata(
+                maybeOperation.get().getId(),
+                new PspMetadata(
+                        paymentId != null ? paymentId : providerReference,
+                        paymentId,
+                        null,
+                        providerReference,
+                        null,
+                        null,
+                        request.status(),
+                        null
+                )
+        );
+
+        applyPspStatusToOperation(operation, request.status());
     }
 
-    // -------------------------------------------------------------------------
-    // Step 4 — Fallback / reconciliation check for payments
-    // -------------------------------------------------------------------------
-
-    /**
-     * Fetches the current payment status from the PSP and applies it to the Operation.
-     * Used when a webhook never arrived, for retries, or during reconciliation.
-     *
-     * <p>Verifies that the PSP-reported amount and currency match the Operation before
-     * applying any state transition.
-     */
     @Transactional
     public void checkAndApplyPaymentStatus(String paymentId) {
-        Optional<Operation> maybeOperation = operationRepository.findByPspReference(paymentId);
+        Optional<Operation> maybeOperation = operationService.findByPaymentIdOrPspReference(paymentId);
         if (maybeOperation.isEmpty()) {
             log.warn("Fallback check: no operation found for paymentId={}", paymentId);
             return;
@@ -127,20 +109,25 @@ public class JawuPayWebhookService {
         Operation operation = maybeOperation.get();
 
         JawuPayPaymentResponse payment = pspClient.getPayment(paymentId);
-
-        // Security: verify the PSP-reported amount/currency match our records
         verifyAmountCurrencyMatch(operation, payment.amount(), payment.currency());
 
-        applyPspStatusToOperation(operation, payment.status());
+        Operation updatedOperation = operationService.recordPspMetadata(
+                operation.getId(),
+                PspMetadata.payment(
+                        payment.paymentId() == null ? paymentId : payment.paymentId().toString(),
+                        payment.providerReference(),
+                        null,
+                        payment.paymentMethodId(),
+                        payment.status()
+                )
+        );
+
+        applyPspStatusToOperation(updatedOperation, payment.status());
     }
 
-    /**
-     * Fetches the current payout status from the PSP and applies it to the Operation.
-     * Reuses the same lifecycle logic as the webhook handler.
-     */
     @Transactional
     public void checkAndApplyPayoutStatus(String payoutId) {
-        Optional<Operation> maybeOperation = operationRepository.findByPspReference(payoutId);
+        Optional<Operation> maybeOperation = operationService.findByPayoutIdOrPspReference(payoutId);
         if (maybeOperation.isEmpty()) {
             log.warn("Payout fallback check: no operation found for payoutId={}", payoutId);
             return;
@@ -148,35 +135,27 @@ public class JawuPayWebhookService {
         Operation operation = maybeOperation.get();
 
         JawuPayPayoutDetailsResponse payout = pspClient.getPayout(payoutId);
-
         verifyAmountCurrencyMatch(operation, payout.amount(), payout.currency());
 
-        applyPspStatusToOperation(operation, payout.status());
+        Operation updatedOperation = operationService.recordPspMetadata(
+                operation.getId(),
+                PspMetadata.payout(
+                        payout.payoutId() == null ? payoutId : payout.payoutId().toString(),
+                        payout.providerReference(),
+                        payout.paymentMethodId(),
+                        payout.status()
+                )
+        );
+
+        applyPspStatusToOperation(updatedOperation, payout.status());
     }
 
-    // -------------------------------------------------------------------------
-    // Shared core logic (steps 4-7 of the webhook spec)
-    // -------------------------------------------------------------------------
-
-    /**
-     * Applies a raw PSP status string to an Operation following the exact sequence:
-     * <ol>
-     *   <li>Map the raw PSP value to an internal status.</li>
-     *   <li>Enforce idempotence — skip if the operation is already terminal.</li>
-     *   <li>If SUCCESS: confirm the Operation, then trigger ledger posting.</li>
-     *   <li>If FAILED: mark the Operation as FAILED.</li>
-     *   <li>If PENDING: log and take no action.</li>
-     * </ol>
-     * This method is intentionally package-visible so it can be called from both
-     * {@link #processWebhook} and {@link #checkAndApplyPaymentStatus}.
-     */
     @Transactional
     public void applyPspStatusToOperation(Operation operation, String rawPspStatus) {
         InternalStatus mapped = mapStatus(rawPspStatus);
         log.info("Applying PSP status: operationId={} rawStatus={} mappedStatus={}",
                 operation.getId(), rawPspStatus, mapped);
 
-        // Idempotence: already in a terminal state — nothing to do
         if (isTerminal(operation.getStatus())) {
             log.info("Idempotent: operationId={} already in status={}, ignoring rawStatus={}",
                     operation.getId(), operation.getStatus(), rawPspStatus);
@@ -193,10 +172,6 @@ public class JawuPayWebhookService {
         }
     }
 
-    // -------------------------------------------------------------------------
-    // Post-confirmation dispatch (drives ledger posting per operation type)
-    // -------------------------------------------------------------------------
-
     private void finalizeConfirmedOperation(Operation operation) {
         switch (operation.getType()) {
             case WALLET_DEPOSIT_PSP -> walletDepositService.confirmPspDeposit(operation.getId());
@@ -205,9 +180,18 @@ public class JawuPayWebhookService {
         }
     }
 
-    // -------------------------------------------------------------------------
-    // Helpers
-    // -------------------------------------------------------------------------
+    private Optional<Operation> findOperationForWebhook(String paymentId, String providerReference) {
+        if (paymentId != null) {
+            Optional<Operation> operation = operationService.findByPaymentIdOrPspReference(paymentId);
+            if (operation.isPresent()) {
+                return operation;
+            }
+        }
+        if (providerReference != null) {
+            return operationService.findByProviderReferenceOrPspReference(providerReference);
+        }
+        return Optional.empty();
+    }
 
     private enum InternalStatus { SUCCESS, FAILED, PENDING }
 
@@ -230,7 +214,6 @@ public class JawuPayWebhookService {
 
     private void validateIp(String remoteIp) {
         if (allowedIps.isEmpty()) {
-            // No allowlist configured — permissive (dev/test mode)
             log.debug("IP allowlist empty, allowing request from ip={}", remoteIp);
             return;
         }
@@ -240,20 +223,13 @@ public class JawuPayWebhookService {
         }
     }
 
-    private String resolvePspReference(JawuPayWebhookRequest request) {
-        if (request.paymentId() != null && !request.paymentId().isBlank()) {
-            return request.paymentId().trim();
+    private String normalizeIdentifier(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
         }
-        if (request.reference() != null && !request.reference().isBlank()) {
-            return request.reference().trim();
-        }
-        return null;
+        return value.trim();
     }
 
-    /**
-     * Verifies that the PSP-reported amount (in minor units, ×100) and currency match
-     * the Operation's major-unit amount and currency.
-     */
     private void verifyAmountCurrencyMatch(Operation operation, long pspAmountMinorUnits, String pspCurrency) {
         BigDecimal pspAmount = BigDecimal.valueOf(pspAmountMinorUnits).movePointLeft(2);
         if (operation.getAmount().compareTo(pspAmount) != 0) {

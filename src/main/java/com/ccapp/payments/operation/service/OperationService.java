@@ -16,6 +16,7 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 @Service
 @RequiredArgsConstructor
@@ -161,6 +162,36 @@ public class OperationService {
     }
 
     @Transactional(readOnly = true)
+    public Optional<Operation> findByPaymentIdOrPspReference(String paymentId) {
+        String normalizedPaymentId = normalizeNullableText(paymentId, 128);
+        if (normalizedPaymentId == null) {
+            return Optional.empty();
+        }
+        return operationRepository.findByPaymentId(normalizedPaymentId)
+                .or(() -> operationRepository.findByPspReference(normalizedPaymentId));
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<Operation> findByPayoutIdOrPspReference(String payoutId) {
+        String normalizedPayoutId = normalizeNullableText(payoutId, 128);
+        if (normalizedPayoutId == null) {
+            return Optional.empty();
+        }
+        return operationRepository.findByPayoutId(normalizedPayoutId)
+                .or(() -> operationRepository.findByPspReference(normalizedPayoutId));
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<Operation> findByProviderReferenceOrPspReference(String providerReference) {
+        String normalizedProviderReference = normalizeNullableText(providerReference, 128);
+        if (normalizedProviderReference == null) {
+            return Optional.empty();
+        }
+        return operationRepository.findByProviderReference(normalizedProviderReference)
+                .or(() -> operationRepository.findByPspReference(normalizedProviderReference));
+    }
+
+    @Transactional(readOnly = true)
     public Operation assertCompatibleExistingOperation(Operation existing,
                                                        UUID accountHolderId,
                                                        UUID actorUserId,
@@ -183,19 +214,27 @@ public class OperationService {
 
     @Transactional
     public Operation assignPspReference(UUID operationId, String pspReference) {
+        return recordPspMetadata(operationId, PspMetadata.legacyReference(pspReference));
+    }
+
+    @Transactional
+    public Operation recordPspMetadata(UUID operationId, PspMetadata metadata) {
         Operation operation = getById(operationId);
-        if (operation.getPspReference() != null && !operation.getPspReference().equals(pspReference)) {
-            throw new ConflictException("Operation already linked to another PSP reference");
-        }
-        operation.setPspReference(pspReference);
+        mergePspMetadata(operation, metadata);
         return operationRepository.save(operation);
     }
 
     @Transactional
     public Operation markPendingPsp(UUID operationId, String pspReference) {
-        Operation operation = assignPspReference(operationId, pspReference);
+        return markPendingPsp(operationId, PspMetadata.legacyReference(pspReference));
+    }
+
+    @Transactional
+    public Operation markPendingPsp(UUID operationId, PspMetadata metadata) {
+        Operation operation = getById(operationId);
+        mergePspMetadata(operation, metadata);
         if (operation.getStatus() == OperationStatus.PENDING_PSP) {
-            return operation;
+            return operationRepository.save(operation);
         }
         if (operation.getStatus() != OperationStatus.INITIATED
                 && operation.getStatus() != OperationStatus.PAYOUT_INITIATED) {
@@ -309,8 +348,8 @@ public class OperationService {
                 && Objects.equals(existing.getPlanId(), planId)
                 && Objects.equals(existing.getDestinationAccountHolderId(), routing.destinationAccountHolderId())
                 && Objects.equals(existing.getDestinationWalletId(), routing.destinationWalletId())
-                && Objects.equals(normalizeNullableText(existing.getDestinationPhone()), routing.destinationPhone())
-                && Objects.equals(normalizeNullableText(existing.getDestinationAccountCode()), routing.destinationAccountCode());
+                && Objects.equals(normalizeNullableText(existing.getDestinationPhone(), 64), routing.destinationPhone())
+                && Objects.equals(normalizeNullableText(existing.getDestinationAccountCode(), 64), routing.destinationAccountCode());
         if (!compatible) {
             throw new ConflictException("Idempotency key already used by another operation signature");
         }
@@ -349,6 +388,32 @@ public class OperationService {
         return normalized.length() <= 255 ? normalized : normalized.substring(0, 255);
     }
 
+    private void mergePspMetadata(Operation operation, PspMetadata metadata) {
+        if (operation == null || metadata == null) {
+            return;
+        }
+
+        String explicitPspReference = normalizeNullableText(metadata.pspReference(), 128);
+        String paymentId = normalizeNullableText(metadata.paymentId(), 128);
+        String payoutId = normalizeNullableText(metadata.payoutId(), 128);
+        String providerReference = normalizeNullableText(metadata.providerReference(), 128);
+        String derivedPspReference = normalizePspReference(explicitPspReference, paymentId, payoutId, providerReference);
+        boolean hasStructuredIdentifiers = paymentId != null || payoutId != null || providerReference != null;
+
+        if (!hasStructuredIdentifiers) {
+            assignIfCompatible("PSP reference", operation.getPspReference(), derivedPspReference, operation::setPspReference);
+        } else if (operation.getPspReference() == null && derivedPspReference != null) {
+            operation.setPspReference(derivedPspReference);
+        }
+        assignIfCompatible("payment id", operation.getPaymentId(), paymentId, operation::setPaymentId);
+        assignIfCompatible("payout id", operation.getPayoutId(), payoutId, operation::setPayoutId);
+        assignIfCompatible("provider reference", operation.getProviderReference(), providerReference, operation::setProviderReference);
+        assignIfCompatible("redirect URL", operation.getRedirectUrl(), normalizeNullableText(metadata.redirectUrl(), 1024), operation::setRedirectUrl);
+        assignIfCompatible("payment method", operation.getPaymentMethod(), normalizeNullableText(metadata.paymentMethod(), 64), operation::setPaymentMethod);
+        replaceIfPresent(operation::setPspStatus, normalizePspStatus(metadata.pspStatus()));
+        replaceIfPresent(operation::setPspPayload, normalizePspPayload(metadata.pspPayload()));
+    }
+
     private OperationRouting normalizeRouting(OperationRouting routing) {
         if (routing == null) {
             return OperationRouting.none();
@@ -356,17 +421,100 @@ public class OperationService {
         return new OperationRouting(
                 routing.destinationAccountHolderId(),
                 routing.destinationWalletId(),
-                normalizeNullableText(routing.destinationPhone()),
-                normalizeNullableText(routing.destinationAccountCode())
+                normalizeNullableText(routing.destinationPhone(), 64),
+                normalizeNullableText(routing.destinationAccountCode(), 64)
         );
     }
 
-    private String normalizeNullableText(String value) {
+    private String normalizeNullableText(String value, int maxLength) {
         if (value == null || value.isBlank()) {
             return null;
         }
         String normalized = value.trim();
-        return normalized.length() <= 64 ? normalized : normalized.substring(0, 64);
+        return normalized.length() <= maxLength ? normalized : normalized.substring(0, maxLength);
+    }
+
+    private String normalizePspReference(String pspReference,
+                                         String paymentId,
+                                         String payoutId,
+                                         String providerReference) {
+        String normalized = normalizeNullableText(pspReference, 128);
+        if (normalized != null) {
+            return normalized;
+        }
+        if (paymentId != null) {
+            return paymentId;
+        }
+        if (payoutId != null) {
+            return payoutId;
+        }
+        return providerReference;
+    }
+
+    private String normalizePspStatus(String pspStatus) {
+        String normalized = normalizeNullableText(pspStatus, 64);
+        return normalized == null ? null : normalized.toUpperCase(Locale.ROOT);
+    }
+
+    private String normalizePspPayload(String pspPayload) {
+        if (pspPayload == null || pspPayload.isBlank()) {
+            return null;
+        }
+        String normalized = pspPayload.trim();
+        return normalized.length() <= 16000 ? normalized : normalized.substring(0, 16000);
+    }
+
+    private void assignIfCompatible(String fieldLabel,
+                                    String currentValue,
+                                    String candidateValue,
+                                    Consumer<String> setter) {
+        if (candidateValue == null) {
+            return;
+        }
+        if (currentValue != null && !currentValue.equals(candidateValue)) {
+            throw new ConflictException("Operation already linked to another " + fieldLabel);
+        }
+        setter.accept(candidateValue);
+    }
+
+    private void replaceIfPresent(Consumer<String> setter, String candidateValue) {
+        if (candidateValue != null) {
+            setter.accept(candidateValue);
+        }
+    }
+
+    public record PspMetadata(
+            String pspReference,
+            String paymentId,
+            String payoutId,
+            String providerReference,
+            String redirectUrl,
+            String paymentMethod,
+            String pspStatus,
+            String pspPayload
+    ) {
+        public static PspMetadata legacyReference(String pspReference) {
+            return new PspMetadata(pspReference, null, null, null, null, null, null, null);
+        }
+
+        public static PspMetadata payment(String paymentId,
+                                          String providerReference,
+                                          String redirectUrl,
+                                          String paymentMethod,
+                                          String pspStatus) {
+            return new PspMetadata(paymentId, paymentId, null, providerReference, redirectUrl, paymentMethod, pspStatus, null);
+        }
+
+        public static PspMetadata payout(String payoutId,
+                                         String providerReference,
+                                         String paymentMethod,
+                                         String pspStatus) {
+            return new PspMetadata(payoutId, null, payoutId, providerReference, null, paymentMethod, pspStatus, null);
+        }
+
+        public static PspMetadata statusOnly(String pspStatus) {
+            return new PspMetadata(null, null, null, null, null, null, pspStatus, null);
+        }
     }
 
     public record OperationRouting(

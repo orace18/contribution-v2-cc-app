@@ -71,8 +71,8 @@ public class WalletDepositService {
                     null,
                     null,
                     operation.getPspReference(),
-                    null
-            );
+                    operation.getRedirectUrl()
+                );
         }
         if (operation.getStatus() == OperationStatus.CONFIRMED) {
             return new WalletDepositResponse(
@@ -123,7 +123,7 @@ public class WalletDepositService {
                 null,
                 null,
                 pending.getPspReference(),
-                orchestrationResult.redirectUrl()
+                pending.getRedirectUrl() != null ? pending.getRedirectUrl() : orchestrationResult.redirectUrl()
         );
     }
 

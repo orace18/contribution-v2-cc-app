@@ -105,6 +105,7 @@ class WalletDepositServiceTest {
                 .currency("XOF")
                 .idempotencyKey("idem-1")
                 .pspReference("payment-123")
+                .redirectUrl("https://checkout.example/deposit/persisted-payment-123")
                 .description("PSP wallet deposit")
                 .build();
 
@@ -141,7 +142,7 @@ class WalletDepositServiceTest {
                 "PSP wallet deposit"
         )).thenReturn(new JawuPayPaymentOrchestrationService.InitiatePaymentResult(
                 operationId,
-                "https://checkout.example/deposit/payment-123"
+                "https://checkout.example/deposit/psp-response-payment-123"
         ));
         when(operationService.getById(operationId)).thenReturn(pending);
 
@@ -149,7 +150,7 @@ class WalletDepositServiceTest {
 
         assertEquals("PENDING_PSP", response.status());
         assertEquals("payment-123", response.pspReference());
-        assertEquals("https://checkout.example/deposit/payment-123", response.checkoutUrl());
+        assertEquals("https://checkout.example/deposit/persisted-payment-123", response.checkoutUrl());
         assertEquals(new BigDecimal("1500.00"), response.amount());
         assertEquals("XOF", response.currency());
 
@@ -199,6 +200,7 @@ class WalletDepositServiceTest {
                 .currency("XOF")
                 .idempotencyKey("idem-1")
                 .pspReference("payment-123")
+                .redirectUrl("https://checkout.example/deposit/existing-payment-123")
                 .description("PSP wallet deposit")
                 .build();
 
@@ -226,7 +228,7 @@ class WalletDepositServiceTest {
 
         assertEquals("PENDING_PSP", response.status());
         assertEquals("payment-123", response.pspReference());
-        assertNull(response.checkoutUrl());
+        assertEquals("https://checkout.example/deposit/existing-payment-123", response.checkoutUrl());
         verify(jawuPayPaymentOrchestrationService, never()).initiatePayment(
                 eq(accountHolderId),
                 eq(actorUserId),

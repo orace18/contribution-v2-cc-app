@@ -5,3 +5,9 @@ src/main/resources/firebase/*.json
 logs/
 secrets/
 target/
+build/
+node_modules/
+.m2repo-run*/
+*.log
+*.jar
+*.class
