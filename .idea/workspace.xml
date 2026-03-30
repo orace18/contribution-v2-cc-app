@@ -4,10 +4,9 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="fix bug">
+    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="fix de cpass variable">
+      <change beforePath="$PROJECT_DIR$/.idea/compiler.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/compiler.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/config/OpenApiConfig.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/config/OpenApiConfig.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/resources/application-prod.properties" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/application-prod.properties" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -15,7 +14,7 @@
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
   <component name="EmbeddingIndexingInfo">
-    <option name="cachedIndexableFilesCount" value="1086" />
+    <option name="cachedIndexableFilesCount" value="1107" />
   </component>
   <component name="FileTemplateManagerImpl">
     <option name="RECENT_TEMPLATES">
@@ -145,22 +144,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1772553173766</updated>
-    </task>
-    <task id="LOCAL-00032" summary="Configuration pays">
-      <option name="closed" value="true" />
-      <created>1773133762062</created>
-      <option name="number" value="00032" />
-      <option name="presentableId" value="LOCAL-00032" />
-      <option name="project" value="LOCAL" />
-      <updated>1773133762062</updated>
-    </task>
-    <task id="LOCAL-00033" summary="Refact de pays">
-      <option name="closed" value="true" />
-      <created>1773136059107</created>
-      <option name="number" value="00033" />
-      <option name="presentableId" value="LOCAL-00033" />
-      <option name="project" value="LOCAL" />
-      <updated>1773136059107</updated>
     </task>
     <task id="LOCAL-00034" summary="Refact de retour api">
       <option name="closed" value="true" />
@@ -538,7 +521,23 @@
       <option name="project" value="LOCAL" />
       <updated>1774556881120</updated>
     </task>
-    <option name="localTasksCounter" value="81" />
+    <task id="LOCAL-00081" summary="integration de cpass">
+      <option name="closed" value="true" />
+      <created>1774726533568</created>
+      <option name="number" value="00081" />
+      <option name="presentableId" value="LOCAL-00081" />
+      <option name="project" value="LOCAL" />
+      <updated>1774726533572</updated>
+    </task>
+    <task id="LOCAL-00082" summary="fix de cpass variable">
+      <option name="closed" value="true" />
+      <created>1774727459936</created>
+      <option name="number" value="00082" />
+      <option name="presentableId" value="LOCAL-00082" />
+      <option name="project" value="LOCAL" />
+      <updated>1774727459936</updated>
+    </task>
+    <option name="localTasksCounter" value="83" />
     <servers />
   </component>
   <component name="UnknownFeatures">
@@ -569,8 +568,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="Ajout de url su back-office" />
-    <MESSAGE value="Revue du profil" />
     <MESSAGE value="Mise en place des base mlm" />
     <MESSAGE value="Mise en place des base mlm commissions" />
     <MESSAGE value="Revue des migrations flyway" />
@@ -594,7 +591,9 @@
     <MESSAGE value="notif" />
     <MESSAGE value="Refactoring conplete du model MLM" />
     <MESSAGE value="fix bug" />
-    <option name="LAST_COMMIT_MESSAGE" value="fix bug" />
+    <MESSAGE value="integration de cpass" />
+    <MESSAGE value="fix de cpass variable" />
+    <option name="LAST_COMMIT_MESSAGE" value="fix de cpass variable" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />
