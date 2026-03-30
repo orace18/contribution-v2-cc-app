@@ -17,9 +17,13 @@ import java.util.UUID;
 @Entity
 @Table(
         name = "wallet_reservations",
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uk_wallet_reservations_operation_id", columnNames = "operation_id")
+        },
         indexes = {
                 @Index(name = "idx_wallet_reservations_wallet_id",     columnList = "wallet_id"),
-                @Index(name = "idx_wallet_reservations_wallet_status", columnList = "wallet_id, status")
+                @Index(name = "idx_wallet_reservations_wallet_status", columnList = "wallet_id, status"),
+                @Index(name = "idx_wallet_reservations_operation_id", columnList = "operation_id")
         }
 )
 public class WalletReservation extends AuditableEntity {
@@ -30,6 +34,9 @@ public class WalletReservation extends AuditableEntity {
 
     @Column(name = "wallet_id", nullable = false)
     private UUID walletId;
+
+    @Column(name = "operation_id")
+    private UUID operationId;
 
     @Column(name = "amount", nullable = false, precision = 19, scale = 4)
     private BigDecimal amount;

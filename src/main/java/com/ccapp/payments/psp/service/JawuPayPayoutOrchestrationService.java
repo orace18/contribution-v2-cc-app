@@ -1,5 +1,6 @@
 package com.ccapp.payments.psp.service;
 
+import com.ccapp.common.exception.BusinessException;
 import com.ccapp.payments.operation.domain.entity.Operation;
 import com.ccapp.payments.operation.domain.enums.OperationStatus;
 import com.ccapp.payments.operation.domain.enums.OperationType;
@@ -32,6 +33,8 @@ import java.util.UUID;
 @Slf4j
 public class JawuPayPayoutOrchestrationService {
 
+    private static final String PENDING_PSP_STATUS = "PENDING_PSP";
+
     private final OperationService operationService;
     private final JawuPayPspClient pspClient;
 
@@ -60,6 +63,31 @@ public class JawuPayPayoutOrchestrationService {
                                                String operatorHint,
                                                String idempotencyKey,
                                                String description) {
+        return createPayout(
+                accountHolderId,
+                actorUserId,
+                amount,
+                currency,
+                country,
+                paymentMethodId,
+                beneficiaryRef,
+                operatorHint,
+                idempotencyKey,
+                description
+        );
+    }
+
+    @Transactional
+    public InitiatePayoutResult createPayout(UUID accountHolderId,
+                                             UUID actorUserId,
+                                             BigDecimal amount,
+                                             String currency,
+                                             String country,
+                                             String paymentMethodId,
+                                             String beneficiaryRef,
+                                             String operatorHint,
+                                             String idempotencyKey,
+                                             String description) {
 
         // Step 1 — create or retrieve idempotent operation in PAYOUT_INITIATED state
         Operation operation = operationService.createPayoutInitiatedOperation(
@@ -69,12 +97,17 @@ public class JawuPayPayoutOrchestrationService {
                 OperationRouting.none()
         );
 
-        // Idempotency guard: PSP call already done for this operation
-        if (operation.getStatus() != OperationStatus.PAYOUT_INITIATED) {
+        // Idempotency guard: PSP call already done for this operation.
+        if (operation.getStatus() == OperationStatus.PENDING_PSP
+                || operation.getStatus() == OperationStatus.CONFIRMED) {
             log.info("Idempotent payout: operation={} already in status={}, skipping PSP call",
                     operation.getId(), operation.getStatus());
             UUID existingPayoutId = resolveExistingPayoutId(operation);
             return new InitiatePayoutResult(operation.getId(), existingPayoutId);
+        }
+        if (operation.getStatus() != OperationStatus.PAYOUT_INITIATED
+                && operation.getStatus() != OperationStatus.INITIATED) {
+            throw new BusinessException("Payout cannot be created for operation status: " + operation.getStatus());
         }
 
         long amountMinorUnits = JawuPayPaymentOrchestrationService.toMinorUnits(amount);
@@ -99,7 +132,7 @@ public class JawuPayPayoutOrchestrationService {
                 payout.payoutId() == null ? null : payout.payoutId().toString(),
                 payout.providerReference(),
                 paymentMethodId,
-                payout.status()
+                PENDING_PSP_STATUS
         ));
         log.info("Payout pending PSP: operationId={} payoutId={}", operation.getId(), payout.payoutId());
 

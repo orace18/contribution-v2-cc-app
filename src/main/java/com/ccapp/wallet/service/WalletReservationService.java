@@ -40,22 +40,41 @@ public class WalletReservationService {
 
     /** Creates a fund reservation after verifying available balance. */
     public WalletReserveResponse reserve(UUID accountHolderId, WalletReserveRequest request) {
-        return reserveInternal(accountHolderId, request, false);
+        return reserveInternal(accountHolderId, request, false, null);
     }
 
     public WalletReserveResponse reserveSystem(UUID accountHolderId, WalletReserveRequest request) {
-        return reserveInternal(accountHolderId, request, true);
+        return reserveInternal(accountHolderId, request, true, null);
+    }
+
+    public WalletReserveResponse reserveSystem(UUID accountHolderId,
+                                               WalletReserveRequest request,
+                                               UUID operationId) {
+        return reserveInternal(accountHolderId, request, true, operationId);
     }
 
     private WalletReserveResponse reserveInternal(UUID accountHolderId,
                                                   WalletReserveRequest request,
-                                                  boolean systemReservation) {
+                                                  boolean systemReservation,
+                                                  UUID operationId) {
+        if (operationId != null) {
+            WalletReservation existing = reservationRepository.findByOperationId(operationId).orElse(null);
+            if (existing != null) {
+                if (existing.getStatus() == WalletReservationStatus.ACTIVE) {
+                    return toResponse(existing);
+                }
+                throw new BusinessException("Reservation already exists for operation " + operationId
+                        + " with status " + existing.getStatus());
+            }
+        }
+
         Wallet wallet = walletGuardService.requireActiveWallet(accountHolderId);
         walletGuardService.checkDebitAllowed(wallet, request.amount(), request.currency());
         walletSecurityService.authorizeReservation(wallet, accountHolderId, request.pin(), systemReservation);
 
         WalletReservation reservation = reservationRepository.save(WalletReservation.builder()
                 .walletId(wallet.getId())
+                .operationId(operationId)
                 .amount(request.amount())
                 .reason(request.reason())
                 .expiryDate(request.expiryDate())
@@ -68,10 +87,7 @@ public class WalletReservationService {
         log.info("wallet_reserved walletId={} reservationId={} amount={} reason={}",
                 wallet.getId(), reservation.getId(), request.amount(), request.reason());
 
-        return new WalletReserveResponse(
-                reservation.getId(), wallet.getId(),
-                reservation.getAmount(), reservation.getStatus().name(),
-                reservation.getExpiryDate());
+        return toResponse(reservation);
     }
 
     /** Releases an ACTIVE reservation, making the funds spendable again. */
@@ -87,14 +103,25 @@ public class WalletReservationService {
             throw new BusinessException("Reservation is not active: " + reservation.getStatus());
         }
 
-        reservation.setStatus(WalletReservationStatus.RELEASED);
-        reservationRepository.save(reservation);
+        releaseActiveReservation(reservation);
+    }
 
-        eventPublisher.publish(WalletReleasedEvent.create(
-                wallet.getId(), reservationId, reservation.getAmount()));
-
-        log.info("wallet_reservation_released reservationId={} walletId={} amount={}",
-                reservationId, wallet.getId(), reservation.getAmount());
+    public void releaseReservation(UUID operationId) {
+        if (operationId == null) {
+            log.info("wallet_reservation_skip_release operationId=null");
+            return;
+        }
+        WalletReservation reservation = reservationRepository.findByOperationId(operationId).orElse(null);
+        if (reservation == null) {
+            log.info("wallet_reservation_not_found_for_operation operationId={}", operationId);
+            return;
+        }
+        if (reservation.getStatus() != WalletReservationStatus.ACTIVE) {
+            log.info("wallet_reservation_skip_release operationId={} reservationId={} status={}",
+                    operationId, reservation.getId(), reservation.getStatus());
+            return;
+        }
+        releaseActiveReservation(reservation);
     }
 
     /** Marks all ACTIVE reservations past their expiry date as EXPIRED. */
@@ -114,5 +141,24 @@ public class WalletReservationService {
     public BigDecimal getTotalReserved(UUID walletId) {
         return reservationRepository.sumSpendBlockingReservationsByWalletId(walletId, OffsetDateTime.now())
                 .orElse(BigDecimal.ZERO);
+    }
+
+    private WalletReserveResponse toResponse(WalletReservation reservation) {
+        return new WalletReserveResponse(
+                reservation.getId(),
+                reservation.getWalletId(),
+                reservation.getAmount(),
+                reservation.getStatus().name(),
+                reservation.getExpiryDate()
+        );
+    }
+
+    private void releaseActiveReservation(WalletReservation reservation) {
+        reservation.setStatus(WalletReservationStatus.RELEASED);
+        reservationRepository.save(reservation);
+        eventPublisher.publish(WalletReleasedEvent.create(
+                reservation.getWalletId(), reservation.getId(), reservation.getAmount()));
+        log.info("wallet_reservation_released reservationId={} walletId={} amount={}",
+                reservation.getId(), reservation.getWalletId(), reservation.getAmount());
     }
 }
