@@ -4,7 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="rebuild" />
+    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="fix @Lob sur PostgreSQL mappe vers oid mais la colonne en DB est TEXT" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -141,14 +141,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1772553173766</updated>
-    </task>
-    <task id="LOCAL-00037" summary="Ajout des apis de community">
-      <option name="closed" value="true" />
-      <created>1773151430123</created>
-      <option name="number" value="00037" />
-      <option name="presentableId" value="LOCAL-00037" />
-      <option name="project" value="LOCAL" />
-      <updated>1773151430123</updated>
     </task>
     <task id="LOCAL-00038" summary="Revue des configs firebase">
       <option name="closed" value="true" />
@@ -534,7 +526,15 @@
       <option name="project" value="LOCAL" />
       <updated>1774868581771</updated>
     </task>
-    <option name="localTasksCounter" value="86" />
+    <task id="LOCAL-00086" summary="fix @Lob sur PostgreSQL mappe vers oid mais la colonne en DB est TEXT">
+      <option name="closed" value="true" />
+      <created>1774881316390</created>
+      <option name="number" value="00086" />
+      <option name="presentableId" value="LOCAL-00086" />
+      <option name="project" value="LOCAL" />
+      <updated>1774881316390</updated>
+    </task>
+    <option name="localTasksCounter" value="87" />
     <servers />
   </component>
   <component name="UnknownFeatures">
@@ -565,7 +565,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="Revue des migrations flyway" />
     <MESSAGE value="Ajout de fonctionnalités" />
     <MESSAGE value="Revue des configs" />
     <MESSAGE value="Refactoring configs" />
@@ -590,7 +589,8 @@
     <MESSAGE value="fix de cpass variable" />
     <MESSAGE value="Config deep link" />
     <MESSAGE value="rebuild" />
-    <option name="LAST_COMMIT_MESSAGE" value="rebuild" />
+    <MESSAGE value="fix @Lob sur PostgreSQL mappe vers oid mais la colonne en DB est TEXT" />
+    <option name="LAST_COMMIT_MESSAGE" value="fix @Lob sur PostgreSQL mappe vers oid mais la colonne en DB est TEXT" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />
