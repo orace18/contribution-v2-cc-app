@@ -3,8 +3,6 @@ package com.ccapp.payments.psp.service;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.payments.operation.domain.entity.Operation;
 import com.ccapp.payments.operation.domain.enums.OperationType;
-import com.ccapp.payments.operation.repository.OperationRepository;
-import com.ccapp.payments.service.PaymentService;
 import com.ccapp.payments.operation.service.OperationService;
 import com.ccapp.payments.psp.domain.entity.PspCallbackEvent;
 import com.ccapp.payments.psp.dto.JawupayCallbackRequest;
@@ -42,15 +40,13 @@ class JawupayCallbackRegressionTest {
     @Mock
     private OperationService operationService;
     @Mock
-    private OperationRepository operationRepository;
-    @Mock
-    private PaymentService paymentService;
-    @Mock
     private PspCallbackEventRepository callbackEventRepository;
     @Mock
     private SimpleRateLimiter simpleRateLimiter;
     @Mock
     private JawuPayWebhookService jawuPayWebhookService;
+    @Mock
+    private PspReconciliationJob pspReconciliationJob;
 
     @InjectMocks
     private JawupayService jawupayService;

@@ -4,14 +4,10 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="ticket 3">
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/mobile/onboarding/service/MobileOnboardingJourneyService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/mobile/onboarding/service/MobileOnboardingJourneyService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/mobile/payments/controller/MobilePaymentController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/mobile/payments/controller/MobilePaymentController.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/mobile/payments/dto/MobilePaymentInitiateRequest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/mobile/payments/dto/MobilePaymentInitiateRequest.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/mobile/payments/service/MobilePaymentService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/mobile/payments/service/MobilePaymentService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/payments/psp/service/JawuPayPaymentOrchestrationService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/payments/psp/service/JawuPayPaymentOrchestrationService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/test/java/com/ccapp/mobile/onboarding/service/MobileOnboardingJourneyServiceTest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/test/java/com/ccapp/mobile/onboarding/service/MobileOnboardingJourneyServiceTest.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/test/java/com/ccapp/payments/psp/service/JawuPayPaymentOrchestrationServiceTest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/test/java/com/ccapp/payments/psp/service/JawuPayPaymentOrchestrationServiceTest.java" afterDir="false" />
+    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="ticket 4">
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/payments/operation/repository/OperationRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/payments/operation/repository/OperationRepository.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/payments/psp/service/JawupayService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/payments/psp/service/JawupayService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/test/java/com/ccapp/payments/psp/service/JawupayCallbackRegressionTest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/test/java/com/ccapp/payments/psp/service/JawupayCallbackRegressionTest.java" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -149,14 +145,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1772553173766</updated>
-    </task>
-    <task id="LOCAL-00040" summary="Revue des cors">
-      <option name="closed" value="true" />
-      <created>1773159592488</created>
-      <option name="number" value="00040" />
-      <option name="presentableId" value="LOCAL-00040" />
-      <option name="project" value="LOCAL" />
-      <updated>1773159592488</updated>
     </task>
     <task id="LOCAL-00041" summary="Ajout de logs">
       <option name="closed" value="true" />
@@ -542,7 +530,15 @@
       <option name="project" value="LOCAL" />
       <updated>1774882828399</updated>
     </task>
-    <option name="localTasksCounter" value="89" />
+    <task id="LOCAL-00089" summary="ticket 4">
+      <option name="closed" value="true" />
+      <created>1774883474877</created>
+      <option name="number" value="00089" />
+      <option name="presentableId" value="LOCAL-00089" />
+      <option name="project" value="LOCAL" />
+      <updated>1774883474877</updated>
+    </task>
+    <option name="localTasksCounter" value="90" />
     <servers />
   </component>
   <component name="UnknownFeatures">
@@ -573,7 +569,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="Refactoring configs" />
     <MESSAGE value="Refactoring configs pays" />
     <MESSAGE value="Refactoring" />
     <MESSAGE value="Resolve error" />
@@ -598,7 +593,8 @@
     <MESSAGE value="fix @Lob sur PostgreSQL mappe vers oid mais la colonne en DB est TEXT" />
     <MESSAGE value="fix context path" />
     <MESSAGE value="ticket 3" />
-    <option name="LAST_COMMIT_MESSAGE" value="ticket 3" />
+    <MESSAGE value="ticket 4" />
+    <option name="LAST_COMMIT_MESSAGE" value="ticket 4" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />

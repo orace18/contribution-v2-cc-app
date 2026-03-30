@@ -1,9 +1,6 @@
 package com.ccapp.payments.psp.service;
 
 import com.ccapp.payments.operation.domain.entity.Operation;
-import com.ccapp.payments.operation.domain.enums.OperationStatus;
-import com.ccapp.payments.operation.repository.OperationRepository;
-import com.ccapp.payments.service.PaymentService;
 import com.ccapp.payments.operation.service.OperationService;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.payments.psp.domain.entity.PspCallbackEvent;
@@ -11,7 +8,6 @@ import com.ccapp.payments.psp.dto.JawupayCallbackRequest;
 import com.ccapp.payments.psp.repository.PspCallbackEventRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,8 +18,6 @@ import java.security.MessageDigest;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.HexFormat;
-import java.util.List;
-import java.util.Locale;
 
 @Service
 @RequiredArgsConstructor
@@ -32,11 +26,10 @@ public class JawupayService {
     private static final HexFormat HEX = HexFormat.of();
 
     private final OperationService operationService;
-    private final OperationRepository operationRepository;
-    private final PaymentService paymentService;
     private final JawuPayWebhookService jawuPayWebhookService;
     private final PspCallbackEventRepository callbackEventRepository;
     private final SimpleRateLimiter simpleRateLimiter;
+    private final PspReconciliationJob pspReconciliationJob;
 
     @Value("${psp.jawupay.hmac-secret}")
     private String jawupayHmacSecret;
@@ -46,9 +39,6 @@ public class JawupayService {
 
     @Value("${psp.jawupay.callback-rate-limit-per-minute:60}")
     private int callbackRateLimitPerMinute;
-
-    @Value("${psp.jawupay.pending-expiration-minutes:15}")
-    private long pendingExpirationMinutes;
 
     @Transactional
     public void processCallback(JawupayCallbackRequest request, String signature, String remoteIp) {
@@ -83,34 +73,9 @@ public class JawupayService {
         }
     }
 
-    @Scheduled(cron = "${psp.jawupay.pending-poll.cron:0 */2 * * * *}", zone = "${mlm.group-bonus.zone:Africa/Porto-Novo}")
-    @Transactional
+    @Deprecated(forRemoval = false)
     public void pollPendingPspOperations() {
-        List<Operation> pendingOperations = operationRepository
-                .findByStatusOrderByCreatedAtAsc(OperationStatus.PENDING_PSP);
-        OffsetDateTime now = OffsetDateTime.now();
-        for (Operation operation : pendingOperations) {
-            if (operation.getPspReference() == null || operation.getPspReference().isBlank()) {
-                expireIfTimedOut(operation, now);
-                continue;
-            }
-
-            String status = paymentService.fetchPaymentStatus(operation.getPspReference()).status();
-            String normalizedStatus = status == null ? "PENDING" : status.trim().toUpperCase(Locale.ROOT);
-            switch (normalizedStatus) {
-                case "SUCCESS", "CONFIRMED" -> finalizeConfirmedOperation(operationService.confirmOperation(operation.getId()));
-                case "FAILED" -> handleFailedOperation(operationService.markFailed(operation.getId()));
-                case "EXPIRED", "TIMEOUT" -> handleExpiredOperation(operationService.markExpired(operation.getId()));
-                default -> expireIfTimedOut(operation, now);
-            }
-        }
-    }
-
-    private void expireIfTimedOut(Operation operation, OffsetDateTime now) {
-        if (operation.getCreatedAt() != null
-                && operation.getCreatedAt().plusMinutes(pendingExpirationMinutes).isBefore(now)) {
-            handleExpiredOperation(operationService.markExpired(operation.getId()));
-        }
+        pspReconciliationJob.reconcileStuckOperations();
     }
 
     private void finalizeConfirmedOperation(Operation operation) {
