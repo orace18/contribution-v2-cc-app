@@ -6,10 +6,11 @@
   <component name="ChangeListManager">
     <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Config deep link">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/controller/CircleInviteController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/controller/CircleInviteController.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/dto/CircleInviteResponse.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/dto/CircleInviteResponse.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/service/CircleInviteService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/service/CircleInviteService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/resources/application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/application.properties" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/BACKEND_DOCUMENTATION.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/POINT_COUNTRY_DATA_API_2026-03-19.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/POINT_DEBUG_WORLD_COUNTRIES_2026-03-19.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/POINT_SCOPE_COUNTRY_FLOW_2026-03-19.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/POINT_WALLET_SYSTEM_2026-03-23.txt" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -147,14 +148,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1772553173766</updated>
-    </task>
-    <task id="LOCAL-00035" summary="Ajout de inscription sans phone">
-      <option name="closed" value="true" />
-      <created>1773141624570</created>
-      <option name="number" value="00035" />
-      <option name="presentableId" value="LOCAL-00035" />
-      <option name="project" value="LOCAL" />
-      <updated>1773141624570</updated>
     </task>
     <task id="LOCAL-00036" summary="Ajout des apis de community">
       <option name="closed" value="true" />
@@ -540,7 +533,15 @@
       <option name="project" value="LOCAL" />
       <updated>1774856357746</updated>
     </task>
-    <option name="localTasksCounter" value="84" />
+    <task id="LOCAL-00084" summary="Config deep link">
+      <option name="closed" value="true" />
+      <created>1774860548425</created>
+      <option name="number" value="00084" />
+      <option name="presentableId" value="LOCAL-00084" />
+      <option name="project" value="LOCAL" />
+      <updated>1774860548425</updated>
+    </task>
+    <option name="localTasksCounter" value="85" />
     <servers />
   </component>
   <component name="UnknownFeatures">
