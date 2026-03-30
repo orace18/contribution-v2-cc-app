@@ -15,12 +15,16 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/psp")
 @RequiredArgsConstructor
+@Slf4j
 @Tag(name = "PSP", description = "Callbacks et integration PSP")
 public class PspController {
 
@@ -48,22 +52,30 @@ public class PspController {
     @Operation(summary = "Recevoir un webhook JawuPay (public)")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Webhook traite", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
-            @ApiResponse(responseCode = "400", description = "Payload invalide ou operation introuvable", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Payload invalide", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
             @ApiResponse(responseCode = "403", description = "IP non autorisee", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
     })
     public ResponseEntity<CommonResponse<Void>> jawuPayWebhook(
             @Valid @RequestBody JawuPayWebhookRequest request,
             HttpServletRequest httpRequest) {
-
-        jawuPayWebhookService.processWebhook(request, extractRemoteIp(httpRequest));
-        return ResponseEntity.ok(CommonResponse.success("Webhook processed"));
+        if (!request.hasPrimaryReference()) {
+            return ResponseEntity.badRequest()
+                    .body(CommonResponse.error("paymentId or payoutId is required"));
+        }
+        try {
+            jawuPayWebhookService.processWebhook(request, extractRemoteIp(httpRequest));
+            return ResponseEntity.ok(CommonResponse.success("Webhook processed"));
+        } catch (AccessDeniedException ex) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(CommonResponse.error("Webhook request from unauthorized IP"));
+        } catch (Exception ex) {
+            log.error("JawuPay webhook accepted with processing error provider={} paymentId={} payoutId={}",
+                    request.provider(), request.paymentId(), request.payoutId(), ex);
+            return ResponseEntity.ok(CommonResponse.success("Webhook accepted for reconciliation"));
+        }
     }
 
     private String extractRemoteIp(HttpServletRequest request) {
-        String forwarded = request.getHeader("X-Forwarded-For");
-        if (forwarded != null && !forwarded.isBlank()) {
-            return forwarded.split(",")[0].trim();
-        }
         return request.getRemoteAddr() == null ? "unknown" : request.getRemoteAddr();
     }
 }

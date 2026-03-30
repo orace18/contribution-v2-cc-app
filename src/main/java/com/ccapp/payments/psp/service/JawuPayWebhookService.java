@@ -12,45 +12,42 @@ import com.ccapp.payments.psp.dto.JawuPayPayoutDetailsResponse;
 import com.ccapp.payments.psp.dto.JawuPayWebhookRequest;
 import com.ccapp.wallet.service.WalletDepositService;
 import com.ccapp.wallet.service.WalletWithdrawalService;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.OffsetDateTime;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
-/**
- * Processes JawuPay webhook notifications and provides fallback status checks.
- *
- * <p>Security: all webhook calls are validated against a configurable IP allowlist before
- * any business logic runs.
- *
- * <p>Idempotence: operations already in a terminal state (CONFIRMED / FAILED / EXPIRED)
- * are silently ignored so duplicate webhook deliveries are safe.
- *
- * <p>Shared logic: {@link #applyPspStatusToOperation(Operation, String)} is the single
- * method that drives the Operation lifecycle from a raw PSP status string. It is called
- * by both the webhook handler and the fallback checks to avoid any duplication.
- */
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class JawuPayWebhookService {
+
+    private static final String RECONCILIATION_REQUIRED = "RECONCILIATION_REQUIRED";
 
     private final OperationService operationService;
     private final JawuPayPspClient pspClient;
     private final AccountingPostingService accountingPostingService;
     private final WalletDepositService walletDepositService;
     private final WalletWithdrawalService walletWithdrawalService;
+    private final ObjectMapper objectMapper;
 
-    @Value("${psp.jawupay.webhook.allowed-ips:}")
+    @Value("${psp.jawupay.webhook.allowedIps:${psp.jawupay.webhook.allowed-ips:}}")
     private String allowedIpsConfig;
 
     private Set<String> allowedIps;
@@ -63,40 +60,57 @@ public class JawuPayWebhookService {
                 .collect(Collectors.toUnmodifiableSet());
     }
 
-    @Transactional
     public void processWebhook(JawuPayWebhookRequest request, String remoteIp) {
         validateIp(remoteIp);
 
         String paymentId = normalizeIdentifier(request.paymentId());
+        String payoutId = normalizeIdentifier(request.payoutId());
         String providerReference = normalizeIdentifier(request.reference());
-        if (paymentId == null && providerReference == null) {
-            log.warn("Webhook ignored: neither paymentId nor reference present in payload provider={}",
-                    request.provider());
+        if (paymentId == null && payoutId == null) {
+            log.warn("Webhook ignored: neither paymentId nor payoutId present provider={} remoteIp={}",
+                    request.provider(), remoteIp);
             return;
         }
 
-        Optional<Operation> maybeOperation = findOperationForWebhook(paymentId, providerReference);
+        String auditPayload = buildAuditPayload(request, remoteIp, "RECEIVED", null);
+
+        Optional<Operation> maybeOperation;
+        try {
+            maybeOperation = findOperationForWebhook(paymentId, payoutId, providerReference);
+        } catch (Exception ex) {
+            log.error("Webhook lookup failed provider={} paymentId={} payoutId={} providerReference={} remoteIp={} payload={}",
+                    request.provider(), paymentId, payoutId, providerReference, remoteIp, auditPayload, ex);
+            return;
+        }
+
         if (maybeOperation.isEmpty()) {
-            log.warn("Webhook ignored: no operation found for paymentId={} providerReference={} provider={}",
-                    paymentId, providerReference, request.provider());
+            log.warn("Webhook ignored: no operation found for paymentId={} payoutId={} providerReference={} provider={} remoteIp={} payload={}",
+                    paymentId, payoutId, providerReference, request.provider(), remoteIp, auditPayload);
             return;
         }
 
-        Operation operation = operationService.recordPspMetadata(
-                maybeOperation.get().getId(),
-                new PspMetadata(
-                        paymentId != null ? paymentId : providerReference,
-                        paymentId,
-                        null,
-                        providerReference,
-                        null,
-                        null,
-                        request.status(),
-                        null
-                )
-        );
+        UUID operationId = maybeOperation.get().getId();
+        try {
+            Operation operation = operationService.recordPspMetadata(
+                    operationId,
+                    new PspMetadata(
+                            resolvePrimaryReference(paymentId, payoutId, providerReference),
+                            paymentId,
+                            payoutId,
+                            providerReference,
+                            null,
+                            null,
+                            request.status(),
+                            auditPayload
+                    )
+            );
 
-        applyPspStatusToOperation(operation, request.status());
+            applyPspStatusToOperation(operation, request.status());
+        } catch (Exception ex) {
+            log.error("Webhook processing failed operationId={} provider={} paymentId={} payoutId={} providerReference={} remoteIp={}",
+                    operationId, request.provider(), paymentId, payoutId, providerReference, remoteIp, ex);
+            markReconciliationNeeded(operationId, request, remoteIp, paymentId, payoutId, providerReference, ex);
+        }
     }
 
     @Transactional
@@ -180,9 +194,49 @@ public class JawuPayWebhookService {
         }
     }
 
-    private Optional<Operation> findOperationForWebhook(String paymentId, String providerReference) {
+    private void markReconciliationNeeded(UUID operationId,
+                                          JawuPayWebhookRequest request,
+                                          String remoteIp,
+                                          String paymentId,
+                                          String payoutId,
+                                          String providerReference,
+                                          Exception ex) {
+        String auditPayload = buildAuditPayload(
+                request,
+                remoteIp,
+                RECONCILIATION_REQUIRED,
+                ex.getClass().getSimpleName() + ": " + normalizeErrorMessage(ex.getMessage())
+        );
+        try {
+            operationService.recordPspMetadata(
+                    operationId,
+                    new PspMetadata(
+                            resolvePrimaryReference(paymentId, payoutId, providerReference),
+                            paymentId,
+                            payoutId,
+                            providerReference,
+                            null,
+                            null,
+                            RECONCILIATION_REQUIRED,
+                            auditPayload
+                    )
+            );
+        } catch (Exception reconciliationEx) {
+            log.error("Failed to persist reconciliation marker for operationId={}", operationId, reconciliationEx);
+        }
+    }
+
+    private Optional<Operation> findOperationForWebhook(String paymentId,
+                                                        String payoutId,
+                                                        String providerReference) {
         if (paymentId != null) {
             Optional<Operation> operation = operationService.findByPaymentIdOrPspReference(paymentId);
+            if (operation.isPresent()) {
+                return operation;
+            }
+        }
+        if (payoutId != null) {
+            Optional<Operation> operation = operationService.findByPayoutIdOrPspReference(payoutId);
             if (operation.isPresent()) {
                 return operation;
             }
@@ -191,6 +245,49 @@ public class JawuPayWebhookService {
             return operationService.findByProviderReferenceOrPspReference(providerReference);
         }
         return Optional.empty();
+    }
+
+    private String resolvePrimaryReference(String paymentId, String payoutId, String providerReference) {
+        if (paymentId != null) {
+            return paymentId;
+        }
+        if (payoutId != null) {
+            return payoutId;
+        }
+        return providerReference;
+    }
+
+    private String buildAuditPayload(JawuPayWebhookRequest request,
+                                     String remoteIp,
+                                     String lifecycleState,
+                                     String error) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("receivedAt", OffsetDateTime.now().toString());
+        payload.put("provider", normalizeIdentifier(request.provider()));
+        payload.put("status", normalizeIdentifier(request.status()));
+        payload.put("paymentId", normalizeIdentifier(request.paymentId()));
+        payload.put("payoutId", normalizeIdentifier(request.payoutId()));
+        payload.put("reference", normalizeIdentifier(request.reference()));
+        payload.put("remoteIp", normalizeIdentifier(remoteIp));
+        payload.put("lifecycleState", lifecycleState);
+        if (error != null) {
+            payload.put("error", error);
+        }
+        try {
+            return objectMapper.writeValueAsString(payload);
+        } catch (JsonProcessingException ex) {
+            log.warn("Failed to serialize webhook audit payload provider={} paymentId={} payoutId={}",
+                    request.provider(), request.paymentId(), request.payoutId(), ex);
+            return "{\"lifecycleState\":\"" + lifecycleState + "\"}";
+        }
+    }
+
+    private String normalizeErrorMessage(String value) {
+        if (value == null || value.isBlank()) {
+            return "n/a";
+        }
+        String normalized = value.trim();
+        return normalized.length() <= 200 ? normalized : normalized.substring(0, 200);
     }
 
     private enum InternalStatus { SUCCESS, FAILED, PENDING }
@@ -219,7 +316,7 @@ public class JawuPayWebhookService {
         }
         if (!allowedIps.contains(remoteIp)) {
             log.warn("Webhook blocked: ip={} not in allowlist", remoteIp);
-            throw new BusinessException("Webhook request from unauthorized IP: " + remoteIp);
+            throw new AccessDeniedException("Webhook request from unauthorized IP: " + remoteIp);
         }
     }
 

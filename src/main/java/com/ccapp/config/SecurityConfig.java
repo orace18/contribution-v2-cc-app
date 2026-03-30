@@ -71,7 +71,7 @@ public class SecurityConfig {
                                 "ROLE_OPERATIONS",
                                 "ROLE_SUPPORT"
                         )
-                        .requestMatchers(HttpMethod.POST, "/psp/jawupay/callback").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/psp/jawupay/callback", "/psp/jawupay/webhook").permitAll()
                         .requestMatchers("/internal/**").hasAuthority("INTERNAL")
                         .anyRequest().authenticated())
                 .addFilterBefore(apiKeyAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)

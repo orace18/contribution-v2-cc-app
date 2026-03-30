@@ -12,6 +12,7 @@ import com.ccapp.payments.psp.dto.JawuPayPayoutDetailsResponse;
 import com.ccapp.payments.psp.dto.JawuPayWebhookRequest;
 import com.ccapp.wallet.service.WalletDepositService;
 import com.ccapp.wallet.service.WalletWithdrawalService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -20,7 +21,9 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
@@ -29,10 +32,12 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -45,6 +50,7 @@ class JawuPayWebhookServiceTest {
     @Mock AccountingPostingService accountingPostingService;
     @Mock WalletDepositService walletDepositService;
     @Mock WalletWithdrawalService walletWithdrawalService;
+    @Spy ObjectMapper objectMapper = new ObjectMapper();
 
     @InjectMocks
     JawuPayWebhookService service;
@@ -61,14 +67,14 @@ class JawuPayWebhookServiceTest {
     }
 
     @Test
-    void processWebhook_ipNotInAllowlist_throwsBusinessException() {
+    void processWebhook_ipNotInAllowlist_throwsAccessDeniedException() {
         ReflectionTestUtils.setField(service, "allowedIpsConfig", "10.0.0.1,10.0.0.2");
         service.init();
 
-        JawuPayWebhookRequest request = new JawuPayWebhookRequest("JAWUPAY", "SUCCESS", PAYMENT_ID, null);
+        JawuPayWebhookRequest request = new JawuPayWebhookRequest("JAWUPAY", "SUCCESS", PAYMENT_ID, null, null);
 
         assertThatThrownBy(() -> service.processWebhook(request, "1.2.3.4"))
-                .isInstanceOf(BusinessException.class)
+                .isInstanceOf(AccessDeniedException.class)
                 .hasMessageContaining("unauthorized IP");
     }
 
@@ -77,7 +83,7 @@ class JawuPayWebhookServiceTest {
         when(operationService.findByPaymentIdOrPspReference(PAYMENT_ID))
                 .thenReturn(Optional.empty());
 
-        service.processWebhook(new JawuPayWebhookRequest("JAWUPAY", "SUCCESS", PAYMENT_ID, null), "9.9.9.9");
+        service.processWebhook(new JawuPayWebhookRequest("JAWUPAY", "SUCCESS", PAYMENT_ID, null, null), "9.9.9.9");
 
         verify(operationService).findByPaymentIdOrPspReference(PAYMENT_ID);
         verify(operationService, never()).recordPspMetadata(any(), any());
@@ -93,7 +99,7 @@ class JawuPayWebhookServiceTest {
         Operation confirmed = confirmedOperation(OperationType.WALLET_DEPOSIT_PSP);
         when(operationService.confirmOperation(OPERATION_ID)).thenReturn(confirmed);
 
-        service.processWebhook(new JawuPayWebhookRequest("JAWUPAY", rawStatus, PAYMENT_ID, null), "127.0.0.1");
+        service.processWebhook(new JawuPayWebhookRequest("JAWUPAY", rawStatus, PAYMENT_ID, null, null), "127.0.0.1");
 
         verify(operationService).confirmOperation(OPERATION_ID);
         verify(walletDepositService).confirmPspDeposit(OPERATION_ID);
@@ -107,7 +113,7 @@ class JawuPayWebhookServiceTest {
         when(operationService.findByPaymentIdOrPspReference(PAYMENT_ID)).thenReturn(Optional.of(op));
         when(operationService.recordPspMetadata(eq(OPERATION_ID), any())).thenReturn(op);
 
-        service.processWebhook(new JawuPayWebhookRequest("JAWUPAY", rawStatus, PAYMENT_ID, null), "127.0.0.1");
+        service.processWebhook(new JawuPayWebhookRequest("JAWUPAY", rawStatus, PAYMENT_ID, null, null), "127.0.0.1");
 
         verify(operationService).markFailed(OPERATION_ID);
         verifyNoInteractions(walletDepositService, accountingPostingService);
@@ -119,7 +125,7 @@ class JawuPayWebhookServiceTest {
         when(operationService.findByPaymentIdOrPspReference(PAYMENT_ID)).thenReturn(Optional.of(op));
         when(operationService.recordPspMetadata(eq(OPERATION_ID), any())).thenReturn(op);
 
-        service.processWebhook(new JawuPayWebhookRequest("JAWUPAY", "PENDING", PAYMENT_ID, null), "127.0.0.1");
+        service.processWebhook(new JawuPayWebhookRequest("JAWUPAY", "PENDING", PAYMENT_ID, null, null), "127.0.0.1");
 
         verify(operationService, never()).confirmOperation(any());
         verify(operationService, never()).markFailed(any());
@@ -131,7 +137,7 @@ class JawuPayWebhookServiceTest {
         when(operationService.findByPaymentIdOrPspReference(PAYMENT_ID)).thenReturn(Optional.of(op));
         when(operationService.recordPspMetadata(eq(OPERATION_ID), any())).thenReturn(op);
 
-        service.processWebhook(new JawuPayWebhookRequest("JAWUPAY", "SUCCESS", PAYMENT_ID, null), "127.0.0.1");
+        service.processWebhook(new JawuPayWebhookRequest("JAWUPAY", "SUCCESS", PAYMENT_ID, null, null), "127.0.0.1");
 
         verify(operationService, never()).confirmOperation(any());
     }
@@ -140,7 +146,7 @@ class JawuPayWebhookServiceTest {
     void processWebhook_unknownIdentifiers_logsAndReturns() {
         when(operationService.findByPaymentIdOrPspReference(PAYMENT_ID)).thenReturn(Optional.empty());
 
-        service.processWebhook(new JawuPayWebhookRequest("JAWUPAY", "SUCCESS", PAYMENT_ID, null), "127.0.0.1");
+        service.processWebhook(new JawuPayWebhookRequest("JAWUPAY", "SUCCESS", PAYMENT_ID, null, null), "127.0.0.1");
 
         verify(operationService).findByPaymentIdOrPspReference(PAYMENT_ID);
         verify(operationService, never()).recordPspMetadata(any(), any());
@@ -150,24 +156,68 @@ class JawuPayWebhookServiceTest {
     @Test
     void processWebhook_providerReferenceFallback_recordsStructuredMetadata() {
         Operation op = pendingPspOperation(OperationType.WALLET_DEPOSIT_PSP);
-        op.setPspReference(PROVIDER_REFERENCE);
+        when(operationService.findByPaymentIdOrPspReference(PAYMENT_ID)).thenReturn(Optional.empty());
         when(operationService.findByProviderReferenceOrPspReference(PROVIDER_REFERENCE)).thenReturn(Optional.of(op));
         when(operationService.recordPspMetadata(eq(OPERATION_ID), any())).thenReturn(op);
 
         Operation confirmed = confirmedOperation(OperationType.WALLET_DEPOSIT_PSP);
         when(operationService.confirmOperation(OPERATION_ID)).thenReturn(confirmed);
 
-        service.processWebhook(new JawuPayWebhookRequest("JAWUPAY", "SUCCESS", null, PROVIDER_REFERENCE), "127.0.0.1");
+        service.processWebhook(
+                new JawuPayWebhookRequest("JAWUPAY", "SUCCESS", PAYMENT_ID, null, PROVIDER_REFERENCE),
+                "127.0.0.1"
+        );
 
         ArgumentCaptor<OperationService.PspMetadata> metadataCaptor =
                 ArgumentCaptor.forClass(OperationService.PspMetadata.class);
         verify(operationService).recordPspMetadata(eq(OPERATION_ID), metadataCaptor.capture());
-        assertThat(metadataCaptor.getValue().pspReference()).isEqualTo(PROVIDER_REFERENCE);
-        assertThat(metadataCaptor.getValue().paymentId()).isNull();
+        assertThat(metadataCaptor.getValue().paymentId()).isEqualTo(PAYMENT_ID);
         assertThat(metadataCaptor.getValue().providerReference()).isEqualTo(PROVIDER_REFERENCE);
         assertThat(metadataCaptor.getValue().pspStatus()).isEqualTo("SUCCESS");
+        assertThat(metadataCaptor.getValue().pspPayload()).contains(PROVIDER_REFERENCE);
         verify(operationService).findByProviderReferenceOrPspReference(PROVIDER_REFERENCE);
         verify(walletDepositService).confirmPspDeposit(OPERATION_ID);
+    }
+
+    @Test
+    void processWebhook_payoutId_usesPayoutLookupAndDispatchesWithdrawal() {
+        Operation op = pendingPspOperation(OperationType.WALLET_WITHDRAWAL);
+        when(operationService.findByPayoutIdOrPspReference(PAYOUT_ID)).thenReturn(Optional.of(op));
+        when(operationService.recordPspMetadata(eq(OPERATION_ID), any())).thenReturn(op);
+
+        Operation confirmed = confirmedOperation(OperationType.WALLET_WITHDRAWAL);
+        when(operationService.confirmOperation(OPERATION_ID)).thenReturn(confirmed);
+
+        service.processWebhook(
+                new JawuPayWebhookRequest("JAWUPAY", "SUCCESS", null, PAYOUT_ID, "PAYOUT-REF-9"),
+                "127.0.0.1"
+        );
+
+        ArgumentCaptor<OperationService.PspMetadata> metadataCaptor =
+                ArgumentCaptor.forClass(OperationService.PspMetadata.class);
+        verify(operationService).recordPspMetadata(eq(OPERATION_ID), metadataCaptor.capture());
+        assertThat(metadataCaptor.getValue().payoutId()).isEqualTo(PAYOUT_ID);
+        assertThat(metadataCaptor.getValue().providerReference()).isEqualTo("PAYOUT-REF-9");
+        verify(walletWithdrawalService).confirmPspWithdrawal(OPERATION_ID);
+    }
+
+    @Test
+    void processWebhook_processingFailure_marksReconciliationNeededAndDoesNotThrow() {
+        Operation op = pendingPspOperation(OperationType.WALLET_DEPOSIT_PSP);
+        when(operationService.findByPaymentIdOrPspReference(PAYMENT_ID)).thenReturn(Optional.of(op));
+        when(operationService.recordPspMetadata(eq(OPERATION_ID), any())).thenReturn(op);
+        when(operationService.confirmOperation(OPERATION_ID)).thenThrow(new RuntimeException("ledger unavailable"));
+
+        assertThatCode(() -> service.processWebhook(
+                new JawuPayWebhookRequest("JAWUPAY", "SUCCESS", PAYMENT_ID, null, null),
+                "127.0.0.1"
+        )).doesNotThrowAnyException();
+
+        ArgumentCaptor<OperationService.PspMetadata> metadataCaptor =
+                ArgumentCaptor.forClass(OperationService.PspMetadata.class);
+        verify(operationService, times(2)).recordPspMetadata(eq(OPERATION_ID), metadataCaptor.capture());
+        assertThat(metadataCaptor.getAllValues().get(1).pspStatus()).isEqualTo("RECONCILIATION_REQUIRED");
+        assertThat(metadataCaptor.getAllValues().get(1).pspPayload()).contains("ledger unavailable");
     }
 
     @Test

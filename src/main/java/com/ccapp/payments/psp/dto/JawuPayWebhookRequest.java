@@ -10,7 +10,15 @@ public record JawuPayWebhookRequest(
         String status,
 
         String paymentId,
+        String payoutId,
 
         String reference
 ) {
+    public boolean hasPrimaryReference() {
+        return hasText(paymentId) || hasText(payoutId);
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.isBlank();
+    }
 }
