@@ -28,8 +28,7 @@ import com.ccapp.payments.operation.domain.enums.OperationStatus;
 import com.ccapp.payments.operation.domain.enums.OperationType;
 import com.ccapp.payments.operation.repository.OperationRepository;
 import com.ccapp.payments.operation.service.OperationService;
-import com.ccapp.payments.psp.dto.JawupayInitiateResponse;
-import com.ccapp.payments.service.PaymentService;
+import com.ccapp.payments.psp.service.JawuPayPaymentOrchestrationService;
 import com.ccapp.payments.subscription.domain.entity.Membership;
 import com.ccapp.payments.subscription.domain.entity.SubscriptionPlan;
 import com.ccapp.payments.subscription.domain.enums.MembershipStatus;
@@ -95,7 +94,7 @@ class MobileOnboardingJourneyServiceTest {
     @Mock
     private MembershipService membershipService;
     @Mock
-    private PaymentService paymentService;
+    private JawuPayPaymentOrchestrationService jawuPayPaymentOrchestrationService;
     @Mock
     private MLMPlacementService mlmPlacementService;
     @Mock
@@ -187,8 +186,6 @@ class MobileOnboardingJourneyServiceTest {
                 any(),
                 eq(PLAN_ID)
         )).thenReturn(initiated);
-        when(paymentService.initiatePayment(eq(OPERATION_ID), any(), eq(new BigDecimal("15000.0000")), eq("XOF"), eq(ACCOUNT_ID), eq(ACTOR_ID), any()))
-                .thenReturn(new JawupayInitiateResponse("PSP-REF-001", "https://checkout"));
         Operation pending = Operation.builder()
                 .id(OPERATION_ID)
                 .accountHolderId(ACCOUNT_ID)
@@ -198,18 +195,29 @@ class MobileOnboardingJourneyServiceTest {
                 .amount(new BigDecimal("15000.0000"))
                 .currency("XOF")
                 .pspReference("PSP-REF-001")
+                .redirectUrl("https://checkout")
                 .planId(PLAN_ID)
                 .build();
-        when(operationService.markPendingPsp(OPERATION_ID, "PSP-REF-001")).thenReturn(pending);
+        when(jawuPayPaymentOrchestrationService.initiatePayment(
+                eq(ACCOUNT_ID), eq(ACTOR_ID),
+                eq(new BigDecimal("15000.0000")), eq("XOF"), eq("BJ"),
+                eq("MOBILE_MONEY_MTN"), eq("22961000000"), eq("MTN"),
+                any(), any(), eq(OperationType.SUBSCRIPTION)
+        )).thenReturn(new JawuPayPaymentOrchestrationService.InitiatePaymentResult(OPERATION_ID, "https://checkout"));
+        when(operationService.getById(OPERATION_ID)).thenReturn(pending);
         when(membershipService.createPendingMembership(OPERATION_ID, ACCOUNT_ID, paidPlan))
                 .thenReturn(Membership.builder().status(MembershipStatus.PENDING).build());
         when(mlmRelationshipRepository.existsByDescendantId(ACCOUNT_ID)).thenReturn(false, true);
 
         MobilePaymentInitiateResponse paymentResponse = mobileOnboardingJourneyService
-                .initiatePaidPlanPayment(ACTOR_ID, ACCOUNT_ID, "idem-001");
+                .initiatePaidPlanPayment(
+                        ACTOR_ID, ACCOUNT_ID, "idem-001",
+                        "BJ", "MOBILE_MONEY_MTN", "22961000000", "MTN"
+                );
 
         assertEquals("PENDING_PSP", paymentResponse.status());
         assertEquals("PSP-REF-001", paymentResponse.pspReference());
+        assertEquals("https://checkout", paymentResponse.checkoutUrl());
 
         Operation confirmed = Operation.builder()
                 .id(OPERATION_ID)
@@ -228,6 +236,49 @@ class MobileOnboardingJourneyServiceTest {
         assertPublishedEvent(MobileOnboardingEventType.PAYMENT_INITIATED);
         assertPublishedEvent(MobileOnboardingEventType.PAYMENT_CONFIRMED);
         assertPublishedEvent(MobileOnboardingEventType.ONBOARDING_COMPLETED);
+    }
+
+    @Test
+    void paidPlanFlow_reentryPending_shouldReturnExistingCheckoutUrlWithoutNewPspCall() {
+        MobileOnboardingJourney journey = journey(MobileOnboardingJourneyStatus.PLAN_SELECTED, true, SPONSOR_ID, PLAN_ID);
+        when(journeyRepository.findByAccountHolderId(ACCOUNT_ID)).thenReturn(Optional.of(journey));
+        SubscriptionPlan paidPlan = plan(SubscriptionGrade.CLASSIC, new BigDecimal("15000.0000"));
+        when(subscriptionPlanRepository.findByIdAndActiveTrue(PLAN_ID)).thenReturn(Optional.of(paidPlan));
+
+        Operation pending = Operation.builder()
+                .id(OPERATION_ID)
+                .accountHolderId(ACCOUNT_ID)
+                .actorUserId(ACTOR_ID)
+                .type(OperationType.SUBSCRIPTION)
+                .status(OperationStatus.PENDING_PSP)
+                .amount(new BigDecimal("15000.0000"))
+                .currency("XOF")
+                .pspReference("PSP-REF-REENTRY")
+                .redirectUrl("https://checkout/reentry")
+                .planId(PLAN_ID)
+                .build();
+        when(operationService.createInitiatedOperation(
+                eq(ACCOUNT_ID),
+                eq(ACTOR_ID),
+                eq(OperationType.SUBSCRIPTION),
+                eq(new BigDecimal("15000.0000")),
+                eq("XOF"),
+                any(),
+                any(),
+                eq(PLAN_ID)
+        )).thenReturn(pending);
+        when(membershipService.createPendingMembership(OPERATION_ID, ACCOUNT_ID, paidPlan))
+                .thenReturn(Membership.builder().status(MembershipStatus.PENDING).build());
+
+        MobilePaymentInitiateResponse response = mobileOnboardingJourneyService.initiatePaidPlanPayment(
+                ACTOR_ID, ACCOUNT_ID, "idem-reentry", "BJ", "MOBILE_MONEY_MTN", "22961000000", "MTN"
+        );
+
+        assertEquals("PENDING_PSP", response.status());
+        assertEquals("PSP-REF-REENTRY", response.pspReference());
+        assertEquals("https://checkout/reentry", response.checkoutUrl());
+        verify(jawuPayPaymentOrchestrationService, never())
+                .initiatePayment(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test

@@ -4,16 +4,14 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="fix context path">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/payments/psp/service/JawuPayPayoutOrchestrationService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/payments/psp/service/JawuPayPayoutOrchestrationService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/payments/psp/service/JawuPayWebhookService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/payments/psp/service/JawuPayWebhookService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/wallet/domain/entity/WalletReservation.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/wallet/domain/entity/WalletReservation.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/wallet/repository/WalletReservationRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/wallet/repository/WalletReservationRepository.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/wallet/service/WalletReservationService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/wallet/service/WalletReservationService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/wallet/service/WalletWithdrawalService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/wallet/service/WalletWithdrawalService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/test/java/com/ccapp/payments/psp/service/JawuPayPayoutOrchestrationServiceTest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/test/java/com/ccapp/payments/psp/service/JawuPayPayoutOrchestrationServiceTest.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/test/java/com/ccapp/payments/psp/service/JawuPayWebhookServiceTest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/test/java/com/ccapp/payments/psp/service/JawuPayWebhookServiceTest.java" afterDir="false" />
+    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="ticket 3">
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/mobile/onboarding/service/MobileOnboardingJourneyService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/mobile/onboarding/service/MobileOnboardingJourneyService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/mobile/payments/controller/MobilePaymentController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/mobile/payments/controller/MobilePaymentController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/mobile/payments/dto/MobilePaymentInitiateRequest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/mobile/payments/dto/MobilePaymentInitiateRequest.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/mobile/payments/service/MobilePaymentService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/mobile/payments/service/MobilePaymentService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/payments/psp/service/JawuPayPaymentOrchestrationService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/payments/psp/service/JawuPayPaymentOrchestrationService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/test/java/com/ccapp/mobile/onboarding/service/MobileOnboardingJourneyServiceTest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/test/java/com/ccapp/mobile/onboarding/service/MobileOnboardingJourneyServiceTest.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/test/java/com/ccapp/payments/psp/service/JawuPayPaymentOrchestrationServiceTest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/test/java/com/ccapp/payments/psp/service/JawuPayPaymentOrchestrationServiceTest.java" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -151,14 +149,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1772553173766</updated>
-    </task>
-    <task id="LOCAL-00039" summary="Revue des configs firebase">
-      <option name="closed" value="true" />
-      <created>1773156976862</created>
-      <option name="number" value="00039" />
-      <option name="presentableId" value="LOCAL-00039" />
-      <option name="project" value="LOCAL" />
-      <updated>1773156976862</updated>
     </task>
     <task id="LOCAL-00040" summary="Revue des cors">
       <option name="closed" value="true" />
@@ -544,7 +534,15 @@
       <option name="project" value="LOCAL" />
       <updated>1774881893985</updated>
     </task>
-    <option name="localTasksCounter" value="88" />
+    <task id="LOCAL-00088" summary="ticket 3">
+      <option name="closed" value="true" />
+      <created>1774882828399</created>
+      <option name="number" value="00088" />
+      <option name="presentableId" value="LOCAL-00088" />
+      <option name="project" value="LOCAL" />
+      <updated>1774882828399</updated>
+    </task>
+    <option name="localTasksCounter" value="89" />
     <servers />
   </component>
   <component name="UnknownFeatures">
@@ -575,7 +573,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="Revue des configs" />
     <MESSAGE value="Refactoring configs" />
     <MESSAGE value="Refactoring configs pays" />
     <MESSAGE value="Refactoring" />
@@ -600,7 +597,8 @@
     <MESSAGE value="rebuild" />
     <MESSAGE value="fix @Lob sur PostgreSQL mappe vers oid mais la colonne en DB est TEXT" />
     <MESSAGE value="fix context path" />
-    <option name="LAST_COMMIT_MESSAGE" value="fix context path" />
+    <MESSAGE value="ticket 3" />
+    <option name="LAST_COMMIT_MESSAGE" value="ticket 3" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />

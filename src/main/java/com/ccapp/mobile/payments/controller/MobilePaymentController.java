@@ -13,6 +13,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -39,7 +40,7 @@ public class MobilePaymentController {
             @ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content(schema = @Schema(implementation = ApiEnvelope.class)))
     })
     public ResponseEntity<ApiEnvelope<MobilePaymentInitiateResponse>> initiate(
-            @RequestBody(required = false) MobilePaymentInitiateRequest request) {
+            @Valid @RequestBody MobilePaymentInitiateRequest request) {
         UUID accountHolderId = SecurityUtils.currentAccountHolderId();
         return ResponseEntity.ok(ApiEnvelope.success(
                 "Payment initiated",
