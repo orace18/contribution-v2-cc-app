@@ -4,14 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Config deep link">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/BACKEND_DOCUMENTATION.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/POINT_COUNTRY_DATA_API_2026-03-19.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/POINT_DEBUG_WORLD_COUNTRIES_2026-03-19.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/POINT_SCOPE_COUNTRY_FLOW_2026-03-19.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/POINT_WALLET_SYSTEM_2026-03-23.txt" beforeDir="false" />
-    </list>
+    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="rebuild" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -148,14 +141,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1772553173766</updated>
-    </task>
-    <task id="LOCAL-00036" summary="Ajout des apis de community">
-      <option name="closed" value="true" />
-      <created>1773150348520</created>
-      <option name="number" value="00036" />
-      <option name="presentableId" value="LOCAL-00036" />
-      <option name="project" value="LOCAL" />
-      <updated>1773150348520</updated>
     </task>
     <task id="LOCAL-00037" summary="Ajout des apis de community">
       <option name="closed" value="true" />
@@ -541,7 +526,15 @@
       <option name="project" value="LOCAL" />
       <updated>1774860548425</updated>
     </task>
-    <option name="localTasksCounter" value="85" />
+    <task id="LOCAL-00085" summary="rebuild">
+      <option name="closed" value="true" />
+      <created>1774868581771</created>
+      <option name="number" value="00085" />
+      <option name="presentableId" value="LOCAL-00085" />
+      <option name="project" value="LOCAL" />
+      <updated>1774868581771</updated>
+    </task>
+    <option name="localTasksCounter" value="86" />
     <servers />
   </component>
   <component name="UnknownFeatures">
@@ -572,7 +565,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="Mise en place des base mlm commissions" />
     <MESSAGE value="Revue des migrations flyway" />
     <MESSAGE value="Ajout de fonctionnalités" />
     <MESSAGE value="Revue des configs" />
@@ -597,7 +589,8 @@
     <MESSAGE value="integration de cpass" />
     <MESSAGE value="fix de cpass variable" />
     <MESSAGE value="Config deep link" />
-    <option name="LAST_COMMIT_MESSAGE" value="Config deep link" />
+    <MESSAGE value="rebuild" />
+    <option name="LAST_COMMIT_MESSAGE" value="rebuild" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />

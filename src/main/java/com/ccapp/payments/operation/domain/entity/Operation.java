@@ -77,8 +77,7 @@ public class Operation extends AuditableEntity {
     @Column(name = "psp_status", length = 64)
     private String pspStatus;
 
-    @Lob
-    @Column(name = "psp_payload")
+    @Column(name = "psp_payload", columnDefinition = "TEXT")
     private String pspPayload;
 
     @Column(name = "plan_id")
