@@ -2,12 +2,14 @@ package com.ccapp.circles.service;
 
 import com.ccapp.circles.domain.entity.Circle;
 import com.ccapp.circles.domain.entity.CircleInvite;
+import com.ccapp.circles.domain.entity.InviteCode;
 import com.ccapp.circles.domain.enums.CircleInviteStatus;
 import com.ccapp.circles.domain.enums.CircleStatus;
 import com.ccapp.circles.dto.*;
 import com.ccapp.circles.repository.CircleInviteRepository;
 import com.ccapp.circles.repository.CircleMemberRepository;
 import com.ccapp.circles.repository.CircleRepository;
+import com.ccapp.circles.repository.InviteCodeRepository;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.common.exception.NotFoundException;
 import com.ccapp.country.config.domain.enums.CountryConfigType;
@@ -37,6 +39,8 @@ public class CircleInviteService {
     private final CircleRepository circleRepository;
     private final CircleMemberRepository circleMemberRepository;
     private final CircleInviteRepository circleInviteRepository;
+    private final InviteCodeRepository inviteCodeRepository;
+    private final InviteCodeRateLimiter inviteCodeRateLimiter;
     private final CircleService circleService;
     private final PhoneMessageGateway phoneMessageGateway;
     private final CountryConfigResolver countryConfigResolver;
@@ -47,11 +51,20 @@ public class CircleInviteService {
     @Value("${circles.invite.default-max-uses:3}")
     private int defaultMaxUses;
 
-    @Value("${circles.invite.base-url:https://app.ccapp.com/circles/join}")
+    @Value("${circles.invite.base-url:ccapp://circles/join}")
     private String inviteBaseUrl;
 
     @Value("${circles.invite.deep-link-base:ccapp://circles/join}")
     private String inviteDeepLinkBase;
+
+    @Value("${circles.invite.qr-base-url:https://app.clubchretien.org/join}")
+    private String inviteQrBaseUrl;
+
+    @Value("${circles.invite.code-expiration-hours:24}")
+    private int codeExpirationHours;
+
+    @Value("${circles.invite.code-rate-limit-per-minute:5}")
+    private int codeRateLimitPerMinute;
 
     @Transactional
     public CircleInviteResponse createInvite(UUID actorAccountHolderId, UUID circleId, CreateCircleInviteRequest request) {
@@ -82,7 +95,41 @@ public class CircleInviteService {
                 .expiresAt(OffsetDateTime.now().plusHours(expiresInHours))
                 .build());
 
-        return toResponse(invite);
+        InviteCode inviteCode = inviteCodeRepository.save(InviteCode.builder()
+                .code(generateShortCode())
+                .invite(invite)
+                .circle(circle)
+                .expiresAt(OffsetDateTime.now().plusHours(codeExpirationHours))
+                .build());
+
+        return toResponse(invite, inviteCode.getCode());
+    }
+
+    @Transactional(readOnly = true)
+    public ResolveInviteCodeResponse resolveInviteCode(String code, String clientIp) {
+        if (!inviteCodeRateLimiter.allow(clientIp, codeRateLimitPerMinute)) {
+            throw new BusinessException("RATE_LIMIT_EXCEEDED");
+        }
+
+        InviteCode inviteCode = inviteCodeRepository.findByCode(code)
+                .orElseThrow(() -> new NotFoundException("Invite code not found"));
+
+        if (inviteCode.getExpiresAt().isBefore(OffsetDateTime.now())) {
+            throw new BusinessException(CIRCLE_INVITE_EXPIRED);
+        }
+
+        CircleInvite invite = inviteCode.getInvite();
+        ensureInviteIsUsable(invite);
+
+        Circle circle = inviteCode.getCircle();
+        long membersCount = circleMemberRepository.countByCircle_IdAndFinancialMemberTrue(circle.getId());
+
+        return new ResolveInviteCodeResponse(
+                circle.getId(),
+                circle.getName(),
+                (int) membersCount,
+                invite.getInvitationToken()
+        );
     }
 
     @Transactional
@@ -90,9 +137,13 @@ public class CircleInviteService {
         assertCircleParticipant(actorAccountHolderId, circleId);
         CircleInvite invite = getInvite(circleId, inviteId);
         ensureInviteIsUsable(invite);
+
+        InviteCode inviteCode = inviteCodeRepository.findByInvite_Id(invite.getId())
+                .orElseThrow(() -> new NotFoundException("Invite code not found"));
+
         return new CircleInviteQrResponse(
                 invite.getId(),
-                buildQrPayload(invite.getInvitationToken()),
+                buildQrPayload(inviteCode.getCode()),
                 buildInviteLink(invite.getInvitationToken()),
                 invite.getExpiresAt()
         );
@@ -177,13 +228,14 @@ public class CircleInviteService {
         }
     }
 
-    private CircleInviteResponse toResponse(CircleInvite invite) {
+    private CircleInviteResponse toResponse(CircleInvite invite, String shortCode) {
         return new CircleInviteResponse(
                 invite.getId(),
                 invite.getCircle().getId(),
                 invite.getStatus(),
                 invite.getInvitationToken(),
                 buildInviteLink(invite.getInvitationToken()),
+                shortCode,
                 invite.getMaxUses(),
                 invite.getUsedCount(),
                 invite.getExpiresAt(),
@@ -200,14 +252,24 @@ public class CircleInviteService {
         return inviteBaseUrl + "?token=" + token;
     }
 
-    private String buildQrPayload(String token) {
-        return inviteDeepLinkBase + "?token=" + token;
+    private String buildQrPayload(String code) {
+        return inviteQrBaseUrl + "?code=" + code;
     }
 
     private String generateToken() {
         byte[] buffer = new byte[32];
         TOKEN_RANDOM.nextBytes(buffer);
         return Base64.getUrlEncoder().withoutPadding().encodeToString(buffer);
+    }
+
+    private String generateShortCode() {
+        for (int attempt = 0; attempt < 10; attempt++) {
+            String code = String.format("%06d", TOKEN_RANDOM.nextInt(1_000_000));
+            if (!inviteCodeRepository.existsByCode(code)) {
+                return code;
+            }
+        }
+        throw new BusinessException("INVITE_CODE_GENERATION_FAILED");
     }
 
     private String normalizePhone(String phoneNumber) {

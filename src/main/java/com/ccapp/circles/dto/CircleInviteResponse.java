@@ -11,6 +11,7 @@ public record CircleInviteResponse(
         CircleInviteStatus status,
         String invitationToken,
         String inviteLink,
+        String shortCode,
         int maxUses,
         int usedCount,
         OffsetDateTime expiresAt,

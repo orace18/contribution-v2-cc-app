@@ -11,6 +11,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -73,6 +74,21 @@ public class CircleInviteController {
         UUID accountHolderId = SecurityUtils.currentAccountHolderId();
         SendCircleInviteWhatsAppResponse response = circleInviteService.sendInviteViaWhatsApp(accountHolderId, circleId, inviteId, request);
         return ResponseEntity.ok(CommonResponse.success("Circle invite sent via WhatsApp", response));
+    }
+
+    @GetMapping("/invites/code/{code}")
+    @Operation(summary = "Resolve a 6-digit invite code — returns circle preview and token")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Success", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Code expired or invite revoked", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Code not found", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "429", description = "Rate limit exceeded", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
+    })
+    public ResponseEntity<CommonResponse<ResolveInviteCodeResponse>> resolveCode(@PathVariable String code,
+                                                                                  HttpServletRequest httpRequest) {
+        String clientIp = httpRequest.getRemoteAddr();
+        ResolveInviteCodeResponse response = circleInviteService.resolveInviteCode(code, clientIp);
+        return ResponseEntity.ok(CommonResponse.success("Invite code resolved", response));
     }
 
     @PostMapping("/invites/{token}/join")

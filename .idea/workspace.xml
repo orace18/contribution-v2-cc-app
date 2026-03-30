@@ -4,9 +4,12 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="fix de cpass variable">
-      <change beforePath="$PROJECT_DIR$/.idea/compiler.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/compiler.xml" afterDir="false" />
+    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Config deep link">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/controller/CircleInviteController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/controller/CircleInviteController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/dto/CircleInviteResponse.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/dto/CircleInviteResponse.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/service/CircleInviteService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/service/CircleInviteService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/resources/application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/application.properties" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -144,14 +147,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1772553173766</updated>
-    </task>
-    <task id="LOCAL-00034" summary="Refact de retour api">
-      <option name="closed" value="true" />
-      <created>1773137346445</created>
-      <option name="number" value="00034" />
-      <option name="presentableId" value="LOCAL-00034" />
-      <option name="project" value="LOCAL" />
-      <updated>1773137346445</updated>
     </task>
     <task id="LOCAL-00035" summary="Ajout de inscription sans phone">
       <option name="closed" value="true" />
@@ -537,7 +532,15 @@
       <option name="project" value="LOCAL" />
       <updated>1774727459936</updated>
     </task>
-    <option name="localTasksCounter" value="83" />
+    <task id="LOCAL-00083" summary="Config deep link">
+      <option name="closed" value="true" />
+      <created>1774856357745</created>
+      <option name="number" value="00083" />
+      <option name="presentableId" value="LOCAL-00083" />
+      <option name="project" value="LOCAL" />
+      <updated>1774856357746</updated>
+    </task>
+    <option name="localTasksCounter" value="84" />
     <servers />
   </component>
   <component name="UnknownFeatures">
@@ -568,7 +571,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="Mise en place des base mlm" />
     <MESSAGE value="Mise en place des base mlm commissions" />
     <MESSAGE value="Revue des migrations flyway" />
     <MESSAGE value="Ajout de fonctionnalités" />
@@ -593,7 +595,8 @@
     <MESSAGE value="fix bug" />
     <MESSAGE value="integration de cpass" />
     <MESSAGE value="fix de cpass variable" />
-    <option name="LAST_COMMIT_MESSAGE" value="fix de cpass variable" />
+    <MESSAGE value="Config deep link" />
+    <option name="LAST_COMMIT_MESSAGE" value="Config deep link" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />
