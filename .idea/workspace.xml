@@ -4,11 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="ticket 4">
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/payments/operation/repository/OperationRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/payments/operation/repository/OperationRepository.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/payments/psp/service/JawupayService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/payments/psp/service/JawupayService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/test/java/com/ccapp/payments/psp/service/JawupayCallbackRegressionTest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/test/java/com/ccapp/payments/psp/service/JawupayCallbackRegressionTest.java" afterDir="false" />
-    </list>
+    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="ticket 5" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -145,14 +141,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1772553173766</updated>
-    </task>
-    <task id="LOCAL-00041" summary="Ajout de logs">
-      <option name="closed" value="true" />
-      <created>1773161541860</created>
-      <option name="number" value="00041" />
-      <option name="presentableId" value="LOCAL-00041" />
-      <option name="project" value="LOCAL" />
-      <updated>1773161541860</updated>
     </task>
     <task id="LOCAL-00042" summary="Firebase">
       <option name="closed" value="true" />
@@ -538,7 +526,15 @@
       <option name="project" value="LOCAL" />
       <updated>1774883474877</updated>
     </task>
-    <option name="localTasksCounter" value="90" />
+    <task id="LOCAL-00090" summary="ticket 5">
+      <option name="closed" value="true" />
+      <created>1774884025061</created>
+      <option name="number" value="00090" />
+      <option name="presentableId" value="LOCAL-00090" />
+      <option name="project" value="LOCAL" />
+      <updated>1774884025061</updated>
+    </task>
+    <option name="localTasksCounter" value="91" />
     <servers />
   </component>
   <component name="UnknownFeatures">
@@ -569,7 +565,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="Refactoring configs pays" />
     <MESSAGE value="Refactoring" />
     <MESSAGE value="Resolve error" />
     <MESSAGE value="chat et revue" />
@@ -594,7 +589,8 @@
     <MESSAGE value="fix context path" />
     <MESSAGE value="ticket 3" />
     <MESSAGE value="ticket 4" />
-    <option name="LAST_COMMIT_MESSAGE" value="ticket 4" />
+    <MESSAGE value="ticket 5" />
+    <option name="LAST_COMMIT_MESSAGE" value="ticket 5" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />

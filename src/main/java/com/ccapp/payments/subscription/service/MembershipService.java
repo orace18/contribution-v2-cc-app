@@ -3,7 +3,6 @@ package com.ccapp.payments.subscription.service;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.country.config.domain.enums.CountryConfigType;
 import com.ccapp.country.config.service.CountryConfigResolver;
-import com.ccapp.payments.service.PaymentService;
 import com.ccapp.payments.operation.domain.entity.Operation;
 import com.ccapp.payments.operation.domain.enums.OperationStatus;
 import com.ccapp.payments.subscription.domain.entity.Membership;
@@ -26,6 +25,8 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class MembershipService {
+
+    private static final String JAWUPAY_PROVIDER = "JAWUPAY";
 
     private final MembershipRepository membershipRepository;
     private final SubscriptionPlanRepository subscriptionPlanRepository;
@@ -137,7 +138,7 @@ public class MembershipService {
 
     private String writeSnapshot(CountryConfigResolver.ResolvedConfig membershipConfig, Operation operation) {
         boolean walletBacked = operation.getPspReference() == null || operation.getPspReference().isBlank();
-        String paymentProvider = walletBacked ? "WALLET" : PaymentService.PSP_PROVIDER;
+        String paymentProvider = walletBacked ? "WALLET" : JAWUPAY_PROVIDER;
         ObjectNode root = objectMapper.createObjectNode();
         root.put("countryCode", membershipConfig.countryCode());
         root.put("membershipConfigVersion", membershipConfig.version());
