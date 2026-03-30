@@ -2,14 +2,18 @@ package com.ccapp.payments.psp.service;
 
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.ledger.service.AccountingPostingService;
+import com.ccapp.mobile.onboarding.service.MobileOnboardingJourneyService;
+import com.ccapp.payments.commission.service.MlmCommissionService;
 import com.ccapp.payments.operation.domain.entity.Operation;
 import com.ccapp.payments.operation.domain.enums.OperationStatus;
+import com.ccapp.payments.operation.domain.enums.OperationType;
 import com.ccapp.payments.operation.service.OperationService;
 import com.ccapp.payments.operation.service.OperationService.PspMetadata;
 import com.ccapp.payments.psp.client.JawuPayPspClient;
 import com.ccapp.payments.psp.dto.JawuPayPaymentResponse;
 import com.ccapp.payments.psp.dto.JawuPayPayoutDetailsResponse;
 import com.ccapp.payments.psp.dto.JawuPayWebhookRequest;
+import com.ccapp.payments.subscription.service.MembershipService;
 import com.ccapp.wallet.service.WalletDepositService;
 import com.ccapp.wallet.service.WalletWithdrawalService;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -43,6 +47,9 @@ public class JawuPayWebhookService {
     private final OperationService operationService;
     private final JawuPayPspClient pspClient;
     private final AccountingPostingService accountingPostingService;
+    private final MlmCommissionService mlmCommissionService;
+    private final MembershipService membershipService;
+    private final MobileOnboardingJourneyService mobileOnboardingJourneyService;
     private final WalletDepositService walletDepositService;
     private final WalletWithdrawalService walletWithdrawalService;
     private final ObjectMapper objectMapper;
@@ -179,18 +186,46 @@ public class JawuPayWebhookService {
         switch (mapped) {
             case SUCCESS -> {
                 Operation confirmed = operationService.confirmOperation(operation.getId());
-                finalizeConfirmedOperation(confirmed);
+                dispatchConfirmedSideEffects(confirmed);
             }
-            case FAILED -> operationService.markFailed(operation.getId());
+            case FAILED -> {
+                Operation failed = operationService.markFailed(operation.getId());
+                dispatchFailedSideEffects(failed);
+            }
             case PENDING -> log.info("Operation still pending per PSP: operationId={}", operation.getId());
         }
     }
 
-    private void finalizeConfirmedOperation(Operation operation) {
+    @Transactional
+    void dispatchConfirmedSideEffects(Operation operation) {
+        if (operation == null) {
+            return;
+        }
         switch (operation.getType()) {
             case WALLET_DEPOSIT_PSP -> walletDepositService.confirmPspDeposit(operation.getId());
             case WALLET_WITHDRAWAL -> walletWithdrawalService.confirmPspWithdrawal(operation.getId());
+            case SUBSCRIPTION -> {
+                membershipService.activateForConfirmedOperation(operation);
+                accountingPostingService.postConfirmedOperation(operation.getId());
+                mlmCommissionService.calculateForOperation(operation);
+                mobileOnboardingJourneyService.onPaidPaymentConfirmed(operation);
+            }
             default -> accountingPostingService.postConfirmedOperation(operation.getId());
+        }
+    }
+
+    @Transactional
+    void dispatchFailedSideEffects(Operation operation) {
+        if (operation == null) {
+            return;
+        }
+        if (operation.getType() == OperationType.SUBSCRIPTION) {
+            membershipService.cancelPendingMembership(operation.getId());
+            mobileOnboardingJourneyService.onPaidPaymentFailed(operation);
+            return;
+        }
+        if (operation.getType() == OperationType.WALLET_WITHDRAWAL) {
+            walletWithdrawalService.handlePspWithdrawalFailure(operation.getId());
         }
     }
 
@@ -298,7 +333,7 @@ public class JawuPayWebhookService {
         }
         return switch (raw.trim().toUpperCase(Locale.ROOT)) {
             case "SUCCESS", "CONFIRMED", "PAID", "COMPLETED" -> InternalStatus.SUCCESS;
-            case "FAILED", "DECLINED", "REJECTED", "CANCELLED", "CANCELED" -> InternalStatus.FAILED;
+            case "FAILED", "DECLINED", "REJECTED", "CANCELLED", "CANCELED", "EXPIRED", "TIMEOUT" -> InternalStatus.FAILED;
             default -> InternalStatus.PENDING;
         };
     }

@@ -168,6 +168,19 @@ public class WalletWithdrawalService {
         }
     }
 
+    public void handlePspWithdrawalFailure(UUID operationId) {
+        Operation operation = operationService.getById(operationId);
+
+        // The current withdrawal flow does not persist a reservation link yet.
+        // This hook keeps webhook-side payout failure handling centralized so
+        // reservation release can be wired here as soon as reservation support lands.
+        log.warn("wallet_withdrawal_psp_failed operationId={} accountHolderId={} amount={} currency={} reservationRelease=not_linked",
+                operation.getId(),
+                operation.getAccountHolderId(),
+                operation.getAmount(),
+                operation.getCurrency());
+    }
+
     private AccountHolder resolveHolder(UUID id) {
         return accountHolderRepository.findById(id)
                 .orElseThrow(() -> new BusinessException("Account holder not found: " + id));

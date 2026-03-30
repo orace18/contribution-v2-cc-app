@@ -2,6 +2,8 @@ package com.ccapp.payments.psp.service;
 
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.ledger.service.AccountingPostingService;
+import com.ccapp.mobile.onboarding.service.MobileOnboardingJourneyService;
+import com.ccapp.payments.commission.service.MlmCommissionService;
 import com.ccapp.payments.operation.domain.entity.Operation;
 import com.ccapp.payments.operation.domain.enums.OperationStatus;
 import com.ccapp.payments.operation.domain.enums.OperationType;
@@ -10,6 +12,7 @@ import com.ccapp.payments.psp.client.JawuPayPspClient;
 import com.ccapp.payments.psp.dto.JawuPayPaymentResponse;
 import com.ccapp.payments.psp.dto.JawuPayPayoutDetailsResponse;
 import com.ccapp.payments.psp.dto.JawuPayWebhookRequest;
+import com.ccapp.payments.subscription.service.MembershipService;
 import com.ccapp.wallet.service.WalletDepositService;
 import com.ccapp.wallet.service.WalletWithdrawalService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -48,6 +51,9 @@ class JawuPayWebhookServiceTest {
     @Mock OperationService operationService;
     @Mock JawuPayPspClient pspClient;
     @Mock AccountingPostingService accountingPostingService;
+    @Mock MlmCommissionService mlmCommissionService;
+    @Mock MembershipService membershipService;
+    @Mock MobileOnboardingJourneyService mobileOnboardingJourneyService;
     @Mock WalletDepositService walletDepositService;
     @Mock WalletWithdrawalService walletWithdrawalService;
     @Spy ObjectMapper objectMapper = new ObjectMapper();
@@ -202,6 +208,67 @@ class JawuPayWebhookServiceTest {
     }
 
     @Test
+    void processWebhook_subscriptionSuccess_dispatchesMembershipLedgerMlmAndOnboarding() {
+        Operation op = pendingPspOperation(OperationType.SUBSCRIPTION);
+        when(operationService.findByPaymentIdOrPspReference(PAYMENT_ID)).thenReturn(Optional.of(op));
+        when(operationService.recordPspMetadata(eq(OPERATION_ID), any())).thenReturn(op);
+
+        Operation confirmed = confirmedOperation(OperationType.SUBSCRIPTION);
+        when(operationService.confirmOperation(OPERATION_ID)).thenReturn(confirmed);
+
+        service.processWebhook(
+                new JawuPayWebhookRequest("JAWUPAY", "SUCCESS", PAYMENT_ID, null, PROVIDER_REFERENCE),
+                "127.0.0.1"
+        );
+
+        verify(operationService).confirmOperation(OPERATION_ID);
+        verify(membershipService).activateForConfirmedOperation(confirmed);
+        verify(accountingPostingService).postConfirmedOperation(OPERATION_ID);
+        verify(mlmCommissionService).calculateForOperation(confirmed);
+        verify(mobileOnboardingJourneyService).onPaidPaymentConfirmed(confirmed);
+        verifyNoInteractions(walletDepositService, walletWithdrawalService);
+    }
+
+    @Test
+    void processWebhook_subscriptionFailure_dispatchesFailureSideEffects() {
+        Operation op = pendingPspOperation(OperationType.SUBSCRIPTION);
+        when(operationService.findByPaymentIdOrPspReference(PAYMENT_ID)).thenReturn(Optional.of(op));
+        when(operationService.recordPspMetadata(eq(OPERATION_ID), any())).thenReturn(op);
+
+        Operation failed = failedOperation(OperationType.SUBSCRIPTION);
+        when(operationService.markFailed(OPERATION_ID)).thenReturn(failed);
+
+        service.processWebhook(
+                new JawuPayWebhookRequest("JAWUPAY", "FAILED", PAYMENT_ID, null, PROVIDER_REFERENCE),
+                "127.0.0.1"
+        );
+
+        verify(operationService).markFailed(OPERATION_ID);
+        verify(membershipService).cancelPendingMembership(OPERATION_ID);
+        verify(mobileOnboardingJourneyService).onPaidPaymentFailed(failed);
+        verifyNoInteractions(walletDepositService, walletWithdrawalService, accountingPostingService, mlmCommissionService);
+    }
+
+    @Test
+    void processWebhook_withdrawalFailure_dispatchesFailureHook() {
+        Operation op = pendingPspOperation(OperationType.WALLET_WITHDRAWAL);
+        when(operationService.findByPayoutIdOrPspReference(PAYOUT_ID)).thenReturn(Optional.of(op));
+        when(operationService.recordPspMetadata(eq(OPERATION_ID), any())).thenReturn(op);
+
+        Operation failed = failedOperation(OperationType.WALLET_WITHDRAWAL);
+        when(operationService.markFailed(OPERATION_ID)).thenReturn(failed);
+
+        service.processWebhook(
+                new JawuPayWebhookRequest("JAWUPAY", "FAILED", null, PAYOUT_ID, "PAYOUT-REF-9"),
+                "127.0.0.1"
+        );
+
+        verify(operationService).markFailed(OPERATION_ID);
+        verify(walletWithdrawalService).handlePspWithdrawalFailure(OPERATION_ID);
+        verifyNoInteractions(walletDepositService, accountingPostingService, membershipService, mlmCommissionService, mobileOnboardingJourneyService);
+    }
+
+    @Test
     void processWebhook_processingFailure_marksReconciliationNeededAndDoesNotThrow() {
         Operation op = pendingPspOperation(OperationType.WALLET_DEPOSIT_PSP);
         when(operationService.findByPaymentIdOrPspReference(PAYMENT_ID)).thenReturn(Optional.of(op));
@@ -305,6 +372,16 @@ class JawuPayWebhookServiceTest {
         Operation op = new Operation();
         op.setId(OPERATION_ID);
         op.setStatus(OperationStatus.CONFIRMED);
+        op.setType(type);
+        op.setAmount(new BigDecimal("1500.00"));
+        op.setCurrency("XOF");
+        return op;
+    }
+
+    private Operation failedOperation(OperationType type) {
+        Operation op = new Operation();
+        op.setId(OPERATION_ID);
+        op.setStatus(OperationStatus.FAILED);
         op.setType(type);
         op.setAmount(new BigDecimal("1500.00"));
         op.setCurrency("XOF");

@@ -1,8 +1,6 @@
 package com.ccapp.payments.psp.service;
 
 import com.ccapp.common.exception.BusinessException;
-import com.ccapp.ledger.service.AccountingPostingService;
-import com.ccapp.payments.commission.service.MlmCommissionService;
 import com.ccapp.payments.operation.domain.entity.Operation;
 import com.ccapp.payments.operation.domain.enums.OperationType;
 import com.ccapp.payments.operation.repository.OperationRepository;
@@ -11,8 +9,6 @@ import com.ccapp.payments.operation.service.OperationService;
 import com.ccapp.payments.psp.domain.entity.PspCallbackEvent;
 import com.ccapp.payments.psp.dto.JawupayCallbackRequest;
 import com.ccapp.payments.psp.repository.PspCallbackEventRepository;
-import com.ccapp.payments.subscription.service.MembershipService;
-import com.ccapp.mobile.onboarding.service.MobileOnboardingJourneyService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -50,17 +46,11 @@ class JawupayCallbackRegressionTest {
     @Mock
     private PaymentService paymentService;
     @Mock
-    private AccountingPostingService accountingPostingService;
-    @Mock
-    private MlmCommissionService mlmCommissionService;
-    @Mock
-    private MembershipService membershipService;
-    @Mock
-    private MobileOnboardingJourneyService mobileOnboardingJourneyService;
-    @Mock
     private PspCallbackEventRepository callbackEventRepository;
     @Mock
     private SimpleRateLimiter simpleRateLimiter;
+    @Mock
+    private JawuPayWebhookService jawuPayWebhookService;
 
     @InjectMocks
     private JawupayService jawupayService;
@@ -85,12 +75,12 @@ class JawupayCallbackRegressionTest {
 
         verify(callbackEventRepository, never()).save(any(PspCallbackEvent.class));
         verify(operationService, never()).confirmByPspReference(any(), any(), any());
-        verify(accountingPostingService, never()).postConfirmedOperation(any());
-        verify(mlmCommissionService, never()).calculateForOperation(any());
+        verify(jawuPayWebhookService, never()).dispatchConfirmedSideEffects(any());
+        verify(jawuPayWebhookService, never()).dispatchFailedSideEffects(any());
     }
 
     @Test
-    void processCallback_shouldConfirmPaymentAndPostLedger_forSuccessfulStatus() throws Exception {
+    void processCallback_shouldConfirmPaymentAndDelegateSideEffects_forSuccessfulStatus() throws Exception {
         JawupayCallbackRequest request = callbackRequest("SUCCESS", Instant.now().getEpochSecond());
         String signature = sign(request);
         UUID operationId = UUID.randomUUID();
@@ -110,13 +100,11 @@ class JawupayCallbackRegressionTest {
         assertEquals(signature, eventCaptor.getValue().getSignature());
 
         verify(operationService).confirmByPspReference("PSP-REF-001", new BigDecimal("1500.00"), "XOF");
-        verify(membershipService).activateForConfirmedOperation(confirmedOperation);
-        verify(accountingPostingService).postConfirmedOperation(operationId);
-        verify(mlmCommissionService).calculateForOperation(confirmedOperation);
+        verify(jawuPayWebhookService).dispatchConfirmedSideEffects(confirmedOperation);
     }
 
     @Test
-    void processCallback_shouldNotPostLedger_forNonSuccessfulStatus() throws Exception {
+    void processCallback_shouldDelegateFailure_forNonSuccessfulStatus() throws Exception {
         JawupayCallbackRequest request = callbackRequest("FAILED", Instant.now().getEpochSecond());
         String signature = sign(request);
         UUID operationId = UUID.randomUUID();
@@ -134,10 +122,9 @@ class JawupayCallbackRegressionTest {
 
         verify(callbackEventRepository).save(any(PspCallbackEvent.class));
         verify(operationService).failByPspReference("PSP-REF-001");
-        verify(membershipService).cancelPendingMembership(operationId);
+        verify(jawuPayWebhookService).dispatchFailedSideEffects(failedOperation);
         verify(operationService, never()).confirmByPspReference(any(), any(), any());
-        verify(accountingPostingService, never()).postConfirmedOperation(any());
-        verify(mlmCommissionService, never()).calculateForOperation(any());
+        verify(jawuPayWebhookService, never()).dispatchConfirmedSideEffects(any());
     }
 
     private JawupayCallbackRequest callbackRequest(String status, long timestamp) {
