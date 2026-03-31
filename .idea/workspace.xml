@@ -4,9 +4,9 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Retrait des logs de hibernate">
+    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Rebuild firebase">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pom.xml" beforeDir="false" afterPath="$PROJECT_DIR$/pom.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/resources/application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/application.properties" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -144,54 +144,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1772553173766</updated>
-    </task>
-    <task id="LOCAL-00047" summary="Firebase location">
-      <option name="closed" value="true" />
-      <created>1773266805186</created>
-      <option name="number" value="00047" />
-      <option name="presentableId" value="LOCAL-00047" />
-      <option name="project" value="LOCAL" />
-      <updated>1773266805186</updated>
-    </task>
-    <task id="LOCAL-00048" summary="Reajustement firebase">
-      <option name="closed" value="true" />
-      <created>1773267952307</created>
-      <option name="number" value="00048" />
-      <option name="presentableId" value="LOCAL-00048" />
-      <option name="project" value="LOCAL" />
-      <updated>1773267952307</updated>
-    </task>
-    <task id="LOCAL-00049" summary="Config smtp et secret key">
-      <option name="closed" value="true" />
-      <created>1773302320648</created>
-      <option name="number" value="00049" />
-      <option name="presentableId" value="LOCAL-00049" />
-      <option name="project" value="LOCAL" />
-      <updated>1773302320648</updated>
-    </task>
-    <task id="LOCAL-00050" summary="Config des secrets key">
-      <option name="closed" value="true" />
-      <created>1773303826976</created>
-      <option name="number" value="00050" />
-      <option name="presentableId" value="LOCAL-00050" />
-      <option name="project" value="LOCAL" />
-      <updated>1773303826977</updated>
-    </task>
-    <task id="LOCAL-00051" summary="Ajout de url su back-office">
-      <option name="closed" value="true" />
-      <created>1773304382788</created>
-      <option name="number" value="00051" />
-      <option name="presentableId" value="LOCAL-00051" />
-      <option name="project" value="LOCAL" />
-      <updated>1773304382788</updated>
-    </task>
-    <task id="LOCAL-00052" summary="Revue du profil">
-      <option name="closed" value="true" />
-      <created>1773305396216</created>
-      <option name="number" value="00052" />
-      <option name="presentableId" value="LOCAL-00052" />
-      <option name="project" value="LOCAL" />
-      <updated>1773305396216</updated>
     </task>
     <task id="LOCAL-00053" summary="Mise en place des base mlm">
       <option name="closed" value="true" />
@@ -537,7 +489,55 @@
       <option name="project" value="LOCAL" />
       <updated>1774966065961</updated>
     </task>
-    <option name="localTasksCounter" value="96" />
+    <task id="LOCAL-00096" summary="Configuration firebase">
+      <option name="closed" value="true" />
+      <created>1774967118302</created>
+      <option name="number" value="00096" />
+      <option name="presentableId" value="LOCAL-00096" />
+      <option name="project" value="LOCAL" />
+      <updated>1774967118302</updated>
+    </task>
+    <task id="LOCAL-00097" summary="Rebuild">
+      <option name="closed" value="true" />
+      <created>1774968201598</created>
+      <option name="number" value="00097" />
+      <option name="presentableId" value="LOCAL-00097" />
+      <option name="project" value="LOCAL" />
+      <updated>1774968201598</updated>
+    </task>
+    <task id="LOCAL-00098" summary="Rebuild">
+      <option name="closed" value="true" />
+      <created>1774968208029</created>
+      <option name="number" value="00098" />
+      <option name="presentableId" value="LOCAL-00098" />
+      <option name="project" value="LOCAL" />
+      <updated>1774968208030</updated>
+    </task>
+    <task id="LOCAL-00099" summary="Rebuild">
+      <option name="closed" value="true" />
+      <created>1774968857940</created>
+      <option name="number" value="00099" />
+      <option name="presentableId" value="LOCAL-00099" />
+      <option name="project" value="LOCAL" />
+      <updated>1774968857940</updated>
+    </task>
+    <task id="LOCAL-00100" summary="Rebuild">
+      <option name="closed" value="true" />
+      <created>1774970559474</created>
+      <option name="number" value="00100" />
+      <option name="presentableId" value="LOCAL-00100" />
+      <option name="project" value="LOCAL" />
+      <updated>1774970559474</updated>
+    </task>
+    <task id="LOCAL-00101" summary="Rebuild firebase">
+      <option name="closed" value="true" />
+      <created>1774971852616</created>
+      <option name="number" value="00101" />
+      <option name="presentableId" value="LOCAL-00101" />
+      <option name="project" value="LOCAL" />
+      <updated>1774971852616</updated>
+    </task>
+    <option name="localTasksCounter" value="102" />
     <servers />
   </component>
   <component name="UnknownFeatures">
@@ -568,9 +568,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="Revue model comptable" />
-    <MESSAGE value="Gestion des admins" />
-    <MESSAGE value="Config mail" />
     <MESSAGE value="Config mail revue" />
     <MESSAGE value="Correction du bug" />
     <MESSAGE value="Fix 500 code status error" />
@@ -593,7 +590,10 @@
     <MESSAGE value="Revue du FirebaseAdminTokenVerifier" />
     <MESSAGE value="Revue du JawuPayWebhookService" />
     <MESSAGE value="Retrait des logs de hibernate" />
-    <option name="LAST_COMMIT_MESSAGE" value="Retrait des logs de hibernate" />
+    <MESSAGE value="Configuration firebase" />
+    <MESSAGE value="Rebuild" />
+    <MESSAGE value="Rebuild firebase" />
+    <option name="LAST_COMMIT_MESSAGE" value="Rebuild firebase" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />
