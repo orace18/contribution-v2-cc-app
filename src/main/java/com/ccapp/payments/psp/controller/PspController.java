@@ -1,6 +1,8 @@
 package com.ccapp.payments.psp.controller;
 
 import com.ccapp.common.api.CommonResponse;
+import com.ccapp.common.exception.BusinessException;
+import com.ccapp.common.exception.ConflictException;
 import com.ccapp.payments.psp.dto.JawuPayWebhookRequest;
 import com.ccapp.payments.psp.service.JawuPayWebhookService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -39,7 +41,7 @@ public class PspController {
             HttpServletRequest httpRequest) {
         if (!request.hasPrimaryReference()) {
             return ResponseEntity.badRequest()
-                    .body(CommonResponse.error("paymentId or payoutId is required"));
+                    .body(CommonResponse.error("paymentId or payoutId or providerReference is required"));
         }
         try {
             jawuPayWebhookService.processWebhook(request, extractRemoteIp(httpRequest));
@@ -47,6 +49,12 @@ public class PspController {
         } catch (AccessDeniedException ex) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(CommonResponse.error("Webhook request from unauthorized IP"));
+        } catch (ConflictException ex) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(CommonResponse.error(ex.getMessage()));
+        } catch (BusinessException ex) {
+            return ResponseEntity.badRequest()
+                    .body(CommonResponse.error(ex.getMessage()));
         } catch (Exception ex) {
             log.error("JawuPay webhook accepted with processing error provider={} paymentId={} payoutId={}",
                     request.provider(), request.paymentId(), request.payoutId(), ex);

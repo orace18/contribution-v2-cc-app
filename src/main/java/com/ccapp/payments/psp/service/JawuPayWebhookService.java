@@ -1,6 +1,7 @@
 package com.ccapp.payments.psp.service;
 
 import com.ccapp.common.exception.BusinessException;
+import com.ccapp.common.exception.ConflictException;
 import com.ccapp.ledger.service.AccountingPostingService;
 import com.ccapp.mobile.onboarding.service.MobileOnboardingJourneyService;
 import com.ccapp.payments.commission.service.MlmCommissionService;
@@ -10,9 +11,11 @@ import com.ccapp.payments.operation.domain.enums.OperationType;
 import com.ccapp.payments.operation.service.OperationService;
 import com.ccapp.payments.operation.service.OperationService.PspMetadata;
 import com.ccapp.payments.psp.client.JawuPayPspClient;
+import com.ccapp.payments.psp.domain.entity.JawuPayWebhookEvent;
 import com.ccapp.payments.psp.dto.JawuPayPaymentResponse;
 import com.ccapp.payments.psp.dto.JawuPayPayoutDetailsResponse;
 import com.ccapp.payments.psp.dto.JawuPayWebhookRequest;
+import com.ccapp.payments.psp.repository.JawuPayWebhookEventRepository;
 import com.ccapp.payments.subscription.service.MembershipService;
 import com.ccapp.wallet.service.WalletDepositService;
 import com.ccapp.wallet.service.WalletWithdrawalService;
@@ -22,11 +25,15 @@ import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.OffsetDateTime;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -42,6 +49,7 @@ import java.util.stream.Collectors;
 @Slf4j
 public class JawuPayWebhookService {
 
+    private static final String JAWUPAY_PROVIDER = "JAWUPAY";
     private static final String RECONCILIATION_REQUIRED = "RECONCILIATION_REQUIRED";
 
     private final OperationService operationService;
@@ -52,6 +60,7 @@ public class JawuPayWebhookService {
     private final MobileOnboardingJourneyService mobileOnboardingJourneyService;
     private final WalletDepositService walletDepositService;
     private final WalletWithdrawalService walletWithdrawalService;
+    private final JawuPayWebhookEventRepository webhookEventRepository;
     private final ObjectMapper objectMapper;
 
     @Value("${psp.jawupay.webhook.allowedIps:${psp.jawupay.webhook.allowed-ips:}}")
@@ -61,45 +70,35 @@ public class JawuPayWebhookService {
 
     @PostConstruct
     void init() {
-        allowedIps = Arrays.stream(allowedIpsConfig.split(","))
+        allowedIps = Arrays.stream((allowedIpsConfig == null ? "" : allowedIpsConfig).split(","))
                 .map(String::trim)
                 .filter(ip -> !ip.isEmpty())
                 .collect(Collectors.toUnmodifiableSet());
+        if (allowedIps.isEmpty()) {
+            throw new IllegalStateException("psp.jawupay.webhook.allowedIps must not be empty");
+        }
     }
 
     public void processWebhook(JawuPayWebhookRequest request, String remoteIp) {
         validateIp(remoteIp);
+        validateProvider(request.provider());
 
         String paymentId = normalizeIdentifier(request.paymentId());
         String payoutId = normalizeIdentifier(request.payoutId());
-        String providerReference = normalizeIdentifier(request.reference());
-        if (paymentId == null && payoutId == null) {
-            log.warn("Webhook ignored: neither paymentId nor payoutId present provider={} remoteIp={}",
-                    request.provider(), remoteIp);
-            return;
-        }
+        String providerReference = normalizeIdentifier(request.resolvedProviderReference());
+        validateReferencePresence(paymentId, payoutId, providerReference);
+
+        Operation operation = findOperationForWebhook(paymentId, payoutId, providerReference)
+                .orElseThrow(() -> new BusinessException("Operation not found for JawuPay webhook identifiers"));
+
+        validateRequiredOperationId(request.operationId(), operation.getId());
+        verifyAmountCurrencyMatch(operation, requireAmount(request.amount()), requireCurrency(request.currency()));
+        recordWebhookEvent(request, operation, paymentId, payoutId, providerReference);
 
         String auditPayload = buildAuditPayload(request, remoteIp, "RECEIVED", null);
-
-        Optional<Operation> maybeOperation;
         try {
-            maybeOperation = findOperationForWebhook(paymentId, payoutId, providerReference);
-        } catch (Exception ex) {
-            log.error("Webhook lookup failed provider={} paymentId={} payoutId={} providerReference={} remoteIp={} payload={}",
-                    request.provider(), paymentId, payoutId, providerReference, remoteIp, auditPayload, ex);
-            return;
-        }
-
-        if (maybeOperation.isEmpty()) {
-            log.warn("Webhook ignored: no operation found for paymentId={} payoutId={} providerReference={} provider={} remoteIp={} payload={}",
-                    paymentId, payoutId, providerReference, request.provider(), remoteIp, auditPayload);
-            return;
-        }
-
-        UUID operationId = maybeOperation.get().getId();
-        try {
-            Operation operation = operationService.recordPspMetadata(
-                    operationId,
+            Operation updatedOperation = operationService.recordPspMetadata(
+                    operation.getId(),
                     new PspMetadata(
                             resolvePrimaryReference(paymentId, payoutId, providerReference),
                             paymentId,
@@ -112,11 +111,13 @@ public class JawuPayWebhookService {
                     )
             );
 
-            applyPspStatusToOperation(operation, request.status());
+            applyPspStatusToOperation(updatedOperation, request.status());
+        } catch (BusinessException | ConflictException | AccessDeniedException ex) {
+            throw ex;
         } catch (Exception ex) {
             log.error("Webhook processing failed operationId={} provider={} paymentId={} payoutId={} providerReference={} remoteIp={}",
-                    operationId, request.provider(), paymentId, payoutId, providerReference, remoteIp, ex);
-            markReconciliationNeeded(operationId, request, remoteIp, paymentId, payoutId, providerReference, ex);
+                    operation.getId(), request.provider(), paymentId, payoutId, providerReference, remoteIp, ex);
+            markReconciliationNeeded(operation.getId(), request, remoteIp, paymentId, payoutId, providerReference, ex);
         }
     }
 
@@ -286,6 +287,80 @@ public class JawuPayWebhookService {
         return Optional.empty();
     }
 
+    private void validateProvider(String provider) {
+        String normalizedProvider = normalizeIdentifier(provider);
+        if (normalizedProvider == null || !JAWUPAY_PROVIDER.equalsIgnoreCase(normalizedProvider)) {
+            throw new BusinessException("Only JawuPay provider is accepted");
+        }
+    }
+
+    private void validateReferencePresence(String paymentId,
+                                           String payoutId,
+                                           String providerReference) {
+        if (paymentId == null && payoutId == null && providerReference == null) {
+            throw new BusinessException("paymentId or payoutId or providerReference is required");
+        }
+    }
+
+    private void validateRequiredOperationId(UUID requestOperationId, UUID operationId) {
+        if (requestOperationId == null) {
+            throw new BusinessException("operationId is required");
+        }
+        if (!requestOperationId.equals(operationId)) {
+            throw new BusinessException("Webhook operationId does not match stored operation");
+        }
+    }
+
+    private long requireAmount(Long amount) {
+        if (amount == null || amount <= 0) {
+            throw new BusinessException("Webhook amount is required");
+        }
+        return amount;
+    }
+
+    private String requireCurrency(String currency) {
+        String normalizedCurrency = normalizeIdentifier(currency);
+        if (normalizedCurrency == null) {
+            throw new BusinessException("Webhook currency is required");
+        }
+        return normalizedCurrency;
+    }
+
+    private void recordWebhookEvent(JawuPayWebhookRequest request,
+                                    Operation operation,
+                                    String paymentId,
+                                    String payoutId,
+                                    String providerReference) {
+        String normalizedProvider = normalizeIdentifier(request.provider()).toUpperCase(Locale.ROOT);
+        String normalizedStatus = normalizeIdentifier(request.status()).toUpperCase(Locale.ROOT);
+        String normalizedEventId = normalizeIdentifier(request.eventId());
+        String eventHash = computeEventHash(
+                normalizedProvider,
+                normalizedStatus,
+                paymentId,
+                payoutId,
+                providerReference,
+                operation.getId(),
+                request.amount(),
+                requireCurrency(request.currency())
+        );
+
+        try {
+            webhookEventRepository.save(JawuPayWebhookEvent.builder()
+                    .eventId(normalizedEventId)
+                    .eventHash(eventHash)
+                    .operationId(operation.getId())
+                    .provider(normalizedProvider)
+                    .status(normalizedStatus)
+                    .paymentId(paymentId)
+                    .payoutId(payoutId)
+                    .providerReference(providerReference)
+                    .build());
+        } catch (DataIntegrityViolationException ex) {
+            throw new ConflictException("Duplicate JawuPay webhook event rejected");
+        }
+    }
+
     private String resolvePrimaryReference(String paymentId, String payoutId, String providerReference) {
         if (paymentId != null) {
             return paymentId;
@@ -306,7 +381,11 @@ public class JawuPayWebhookService {
         payload.put("status", normalizeIdentifier(request.status()));
         payload.put("paymentId", normalizeIdentifier(request.paymentId()));
         payload.put("payoutId", normalizeIdentifier(request.payoutId()));
-        payload.put("reference", normalizeIdentifier(request.reference()));
+        payload.put("providerReference", normalizeIdentifier(request.resolvedProviderReference()));
+        payload.put("operationId", request.operationId() == null ? null : request.operationId().toString());
+        payload.put("amount", request.amount());
+        payload.put("currency", normalizeIdentifier(request.currency()));
+        payload.put("eventId", normalizeIdentifier(request.eventId()));
         payload.put("remoteIp", normalizeIdentifier(remoteIp));
         payload.put("lifecycleState", lifecycleState);
         if (error != null) {
@@ -319,6 +398,40 @@ public class JawuPayWebhookService {
                     request.provider(), request.paymentId(), request.payoutId(), ex);
             return "{\"lifecycleState\":\"" + lifecycleState + "\"}";
         }
+    }
+
+    private String computeEventHash(String provider,
+                                    String status,
+                                    String paymentId,
+                                    String payoutId,
+                                    String providerReference,
+                                    UUID operationId,
+                                    Long amount,
+                                    String currency) {
+        String input = String.join("|",
+                safeHashValue(provider),
+                safeHashValue(status),
+                safeHashValue(paymentId),
+                safeHashValue(payoutId),
+                safeHashValue(providerReference),
+                operationId == null ? "" : operationId.toString(),
+                amount == null ? "" : amount.toString(),
+                safeHashValue(currency));
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] bytes = digest.digest(input.getBytes(StandardCharsets.UTF_8));
+            StringBuilder builder = new StringBuilder(bytes.length * 2);
+            for (byte value : bytes) {
+                builder.append(String.format("%02x", value));
+            }
+            return builder.toString();
+        } catch (NoSuchAlgorithmException ex) {
+            throw new IllegalStateException("SHA-256 not available", ex);
+        }
+    }
+
+    private String safeHashValue(String value) {
+        return value == null ? "" : value;
     }
 
     private String normalizeErrorMessage(String value) {
@@ -349,10 +462,6 @@ public class JawuPayWebhookService {
     }
 
     private void validateIp(String remoteIp) {
-        if (allowedIps.isEmpty()) {
-            log.debug("IP allowlist empty, allowing request from ip={}", remoteIp);
-            return;
-        }
         if (!allowedIps.contains(remoteIp)) {
             log.warn("Webhook blocked: ip={} not in allowlist", remoteIp);
             throw new AccessDeniedException("Webhook request from unauthorized IP: " + remoteIp);
