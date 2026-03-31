@@ -9,7 +9,11 @@ import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
 import com.ccapp.identity.account_holder.service.AccountHolderService;
 import com.ccapp.identity.delegation.domain.enums.PermissionLevel;
 import com.ccapp.identity.delegation.service.AccessControlService;
+import com.ccapp.identity.verification.domain.enums.PhoneVerificationStatus;
+import com.ccapp.identity.verification.repository.PhoneVerificationRepository;
+import com.ccapp.identity.wallet.domain.entity.Wallet;
 import com.ccapp.identity.wallet.repository.WalletRepository;
+import com.ccapp.identity.wallet.service.WalletService;
 import com.ccapp.mlm.domain.entity.MlmRelationship;
 import com.ccapp.mlm.domain.entity.MlmMemberLink;
 import com.ccapp.mlm.repository.MlmMemberLinkRepository;
@@ -42,6 +46,7 @@ import com.ccapp.payments.subscription.domain.enums.SubscriptionGrade;
 import com.ccapp.payments.subscription.repository.SubscriptionPlanRepository;
 import com.ccapp.payments.subscription.service.MembershipService;
 import com.ccapp.payments.subscription.service.SubscriptionService;
+import com.ccapp.wallet.domain.enums.WalletType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -49,7 +54,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
-import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -75,7 +79,9 @@ public class MobileOnboardingJourneyService {
     private final MlmGraphSyncService mlmGraphSyncService;
     private final DomainEventPublisher domainEventPublisher;
     private final CountryContextService countryContextService;
+    private final PhoneVerificationRepository phoneVerificationRepository;
     private final WalletRepository walletRepository;
+    private final WalletService walletService;
 
     @Transactional
     public MobileOnboardingJourney markAuthenticated(UUID accountHolderId) {
@@ -90,9 +96,32 @@ public class MobileOnboardingJourneyService {
     public MobileOnboardingJourney markWalletActivated(UUID accountHolderId) {
         MobileOnboardingJourney journey = getOrCreate(accountHolderId);
         promoteStatus(journey, MobileOnboardingJourneyStatus.AUTHENTICATED);
+        if (promoteStatus(journey, MobileOnboardingJourneyStatus.PHONE_VERIFIED)) {
+            publish(accountHolderId, MobileOnboardingEventType.PHONE_VERIFIED, Map.of());
+        }
         if (promoteStatus(journey, MobileOnboardingJourneyStatus.WALLET_ACTIVATED)) {
             publish(accountHolderId, MobileOnboardingEventType.WALLET_ACTIVATED, Map.of());
         }
+        if (promoteStatus(journey, MobileOnboardingJourneyStatus.ONBOARDING_COMPLETED)) {
+            journey.setOnboardingCompleted(true);
+            publish(accountHolderId, MobileOnboardingEventType.ONBOARDING_COMPLETED, Map.of());
+        }
+        return journeyRepository.save(journey);
+    }
+
+    @Transactional
+    public MobileOnboardingJourney onPhoneVerified(UUID accountHolderId, String phoneNumber) {
+        MobileOnboardingJourney journey = getOrCreate(accountHolderId);
+        promoteStatus(journey, MobileOnboardingJourneyStatus.AUTHENTICATED);
+
+        if (journey.getStatus().ordinal() < MobileOnboardingJourneyStatus.ACTIVE_MEMBER.ordinal()) {
+            return journeyRepository.save(journey);
+        }
+
+        if (promoteStatus(journey, MobileOnboardingJourneyStatus.PHONE_VERIFIED)) {
+            publish(accountHolderId, MobileOnboardingEventType.PHONE_VERIFIED, Map.of());
+        }
+        activateWalletIfEligible(journey, normalizeOptional(phoneNumber), accountHolderId);
         return journeyRepository.save(journey);
     }
 
@@ -103,7 +132,7 @@ public class MobileOnboardingJourneyService {
         accessControlService.assertCanActOnAccountHolder(actorUserId, accountHolderId, PermissionLevel.TRANSACT);
         MobileOnboardingJourney journey = getOrCreate(accountHolderId);
         promoteStatus(journey, MobileOnboardingJourneyStatus.AUTHENTICATED);
-        requireAtLeast(journey, MobileOnboardingJourneyStatus.WALLET_ACTIVATED, "Wallet must be activated after phone verification");
+        requireAtLeast(journey, MobileOnboardingJourneyStatus.AUTHENTICATED, "User must be authenticated first");
 
         AccountHolder accountHolder = accountHolderService.selectCountry(accountHolderId, normalizeCountryCode(requestedCountryCode));
         boolean changed = journey.getCountryCode() == null
@@ -151,7 +180,7 @@ public class MobileOnboardingJourneyService {
     public void onPlanSelected(UUID accountHolderId, SubscriptionPlan selectedPlan) {
         MobileOnboardingJourney journey = getOrCreate(accountHolderId);
         promoteStatus(journey, MobileOnboardingJourneyStatus.AUTHENTICATED);
-        requireAtLeast(journey, MobileOnboardingJourneyStatus.SPONSOR_SET, "Sponsor step must be completed first");
+        requireAtLeast(journey, MobileOnboardingJourneyStatus.COUNTRY_SELECTED, "Country must be selected first");
 
         boolean changed = !java.util.Objects.equals(journey.getPlanId(), selectedPlan.getId());
         journey.setPlanId(selectedPlan.getId());
@@ -376,10 +405,6 @@ public class MobileOnboardingJourneyService {
         MobileOnboardingJourney copy = copyOf(base);
         promoteStatus(copy, MobileOnboardingJourneyStatus.AUTHENTICATED);
 
-        if (walletRepository.findFirstByAccountHolderIdAndStatusOrderByCreatedAtDesc(accountHolderId, "ACTIVE").isPresent()) {
-            promoteStatus(copy, MobileOnboardingJourneyStatus.WALLET_ACTIVATED);
-        }
-
         AccountHolder accountHolder = accountHolderService.getById(accountHolderId);
         if (accountHolder.getCountryCode() != null && !accountHolder.getCountryCode().isBlank()) {
             copy.setCountryCode(accountHolder.getCountryCode());
@@ -413,14 +438,23 @@ public class MobileOnboardingJourneyService {
             promoteStatus(copy, MobileOnboardingJourneyStatus.ACTIVE_MEMBER);
         }
 
-        if (mlmRelationshipRepository.existsByDescendantId(accountHolderId) || copy.isNetworkLinked()) {
-            copy.setNetworkLinked(true);
-            promoteStatus(copy, MobileOnboardingJourneyStatus.NETWORK_LINKED);
+        String verifiedPhoneNumber = findVerifiedPhoneNumber(accountHolderId);
+        if (verifiedPhoneNumber != null && copy.getStatus().ordinal() >= MobileOnboardingJourneyStatus.ACTIVE_MEMBER.ordinal()) {
+            promoteStatus(copy, MobileOnboardingJourneyStatus.PHONE_VERIFIED);
         }
 
-        if (copy.isOnboardingCompleted()) {
-            promoteStatus(copy, MobileOnboardingJourneyStatus.ONBOARDING_COMPLETED);
-        } else if (copy.getStatus() == MobileOnboardingJourneyStatus.NETWORK_LINKED) {
+        if (verifiedPhoneNumber != null
+                && copy.getStatus().ordinal() >= MobileOnboardingJourneyStatus.ACTIVE_MEMBER.ordinal()
+                && walletRepository.findFirstByAccountHolderIdAndStatusOrderByCreatedAtDesc(accountHolderId, "ACTIVE").isPresent()) {
+            promoteStatus(copy, MobileOnboardingJourneyStatus.WALLET_ACTIVATED);
+        }
+
+        if (mlmRelationshipRepository.existsByDescendantId(accountHolderId) || copy.isNetworkLinked()) {
+            copy.setNetworkLinked(true);
+        }
+
+        if (copy.isOnboardingCompleted()
+                || copy.getStatus().ordinal() >= MobileOnboardingJourneyStatus.WALLET_ACTIVATED.ordinal()) {
             copy.setOnboardingCompleted(true);
             promoteStatus(copy, MobileOnboardingJourneyStatus.ONBOARDING_COMPLETED);
         }
@@ -446,16 +480,15 @@ public class MobileOnboardingJourneyService {
             ));
         }
 
-        ensureNetworkLinked(journey, actorUserId);
-        if (journey.isNetworkLinked() && promoteStatus(journey, MobileOnboardingJourneyStatus.NETWORK_LINKED)) {
-            publish(journey.getAccountHolderId(), MobileOnboardingEventType.NETWORK_LINKED, Map.of());
-        }
+        syncNetworkLink(journey, actorUserId);
+        activateWalletIfEligible(journey, findVerifiedPhoneNumber(journey.getAccountHolderId()), actorUserId);
+    }
 
-        if (journey.isNetworkLinked()) {
-            journey.setOnboardingCompleted(true);
-            if (promoteStatus(journey, MobileOnboardingJourneyStatus.ONBOARDING_COMPLETED)) {
-                publish(journey.getAccountHolderId(), MobileOnboardingEventType.ONBOARDING_COMPLETED, Map.of());
-            }
+    private void syncNetworkLink(MobileOnboardingJourney journey, UUID actorUserId) {
+        boolean alreadyLinked = journey.isNetworkLinked();
+        ensureNetworkLinked(journey, actorUserId == null ? journey.getAccountHolderId() : actorUserId);
+        if (journey.isNetworkLinked() && !alreadyLinked) {
+            publish(journey.getAccountHolderId(), MobileOnboardingEventType.NETWORK_LINKED, Map.of());
         }
     }
 
@@ -515,6 +548,76 @@ public class MobileOnboardingJourneyService {
                     "pspReference", pspReference == null ? "" : pspReference
             ));
         }
+    }
+
+    private void activateWalletIfEligible(MobileOnboardingJourney journey,
+                                          String verifiedPhoneNumber,
+                                          UUID actorUserId) {
+        if (journey.getStatus().ordinal() < MobileOnboardingJourneyStatus.ACTIVE_MEMBER.ordinal()) {
+            return;
+        }
+
+        String normalizedPhone = normalizeOptional(verifiedPhoneNumber);
+        if (normalizedPhone == null) {
+            return;
+        }
+
+        if (journey.getStatus().ordinal() < MobileOnboardingJourneyStatus.PHONE_VERIFIED.ordinal()) {
+            if (promoteStatus(journey, MobileOnboardingJourneyStatus.PHONE_VERIFIED)) {
+                publish(journey.getAccountHolderId(), MobileOnboardingEventType.PHONE_VERIFIED, Map.of());
+            }
+        }
+
+        Wallet walletByPhone = walletRepository.findByMobileMoneyNumber(normalizedPhone).orElse(null);
+        Wallet activeWallet = walletRepository.findFirstByAccountHolderIdAndStatusOrderByCreatedAtDesc(
+                journey.getAccountHolderId(), "ACTIVE").orElse(null);
+
+        if (walletByPhone != null && !walletByPhone.getAccountHolderId().equals(journey.getAccountHolderId())) {
+            throw new BusinessException("PHONE_ALREADY_BOUND_TO_ANOTHER_WALLET");
+        }
+
+        if (activeWallet != null) {
+            if (activeWallet.getMobileMoneyNumber() == null
+                    || activeWallet.getMobileMoneyNumber().isBlank()
+                    || !activeWallet.getMobileMoneyNumber().trim().equals(normalizedPhone)) {
+                activeWallet.setMobileMoneyNumber(normalizedPhone);
+                walletRepository.save(activeWallet);
+            }
+        } else {
+            if (walletByPhone != null) {
+                throw new BusinessException("WALLET_PHONE_BINDING_REQUIRES_MANUAL_REVIEW");
+            }
+            Wallet wallet = walletService.createWallet(journey.getAccountHolderId(), "MOBILE", normalizedPhone, "ACTIVE");
+            wallet.setWalletType(WalletType.USER);
+            walletRepository.save(wallet);
+        }
+
+        if (promoteStatus(journey, MobileOnboardingJourneyStatus.WALLET_ACTIVATED)) {
+            publish(journey.getAccountHolderId(), MobileOnboardingEventType.WALLET_ACTIVATED, Map.of());
+        }
+
+        finalizeOnboarding(journey, actorUserId);
+    }
+
+    private void finalizeOnboarding(MobileOnboardingJourney journey, UUID actorUserId) {
+        if (journey.getStatus().ordinal() < MobileOnboardingJourneyStatus.WALLET_ACTIVATED.ordinal()) {
+            return;
+        }
+        syncNetworkLink(journey, actorUserId);
+        journey.setOnboardingCompleted(true);
+        if (promoteStatus(journey, MobileOnboardingJourneyStatus.ONBOARDING_COMPLETED)) {
+            publish(journey.getAccountHolderId(), MobileOnboardingEventType.ONBOARDING_COMPLETED, Map.of());
+        }
+    }
+
+    private String findVerifiedPhoneNumber(UUID accountHolderId) {
+        return phoneVerificationRepository
+                .findTopByRequesterAccountHolderIdAndStatusOrderByVerifiedAtDescCreatedAtDesc(
+                        accountHolderId,
+                        PhoneVerificationStatus.VERIFIED
+                )
+                .map(verification -> normalizeOptional(verification.getPhoneNumber()))
+                .orElse(null);
     }
 
     private SubscriptionPlan resolveSelectedPlan(MobileOnboardingJourney journey, UUID accountHolderId) {
@@ -620,38 +723,57 @@ public class MobileOnboardingJourneyService {
 
     private List<String> completedSteps(MobileOnboardingJourney journey) {
         List<String> steps = new ArrayList<>();
-        for (MobileOnboardingJourneyStatus status : EnumSet.allOf(MobileOnboardingJourneyStatus.class)) {
-            if (status.ordinal() <= journey.getStatus().ordinal()) {
-                steps.add(status.name());
-            }
+        steps.add(MobileOnboardingJourneyStatus.REGISTERED.name());
+        if (journey.getStatus().ordinal() >= MobileOnboardingJourneyStatus.AUTHENTICATED.ordinal()) {
+            steps.add(MobileOnboardingJourneyStatus.AUTHENTICATED.name());
+        }
+        if (journey.getCountryCode() != null && !journey.getCountryCode().isBlank()) {
+            steps.add(MobileOnboardingJourneyStatus.COUNTRY_SELECTED.name());
+        }
+        if (journey.isSponsorSet()) {
+            steps.add(MobileOnboardingJourneyStatus.SPONSOR_SET.name());
+        }
+        if (journey.getPlanId() != null) {
+            steps.add(MobileOnboardingJourneyStatus.PLAN_SELECTED.name());
+        }
+        if (journey.getStatus().ordinal() >= MobileOnboardingJourneyStatus.PAYMENT_PENDING.ordinal()
+                && journey.getPaymentOperationId() != null) {
+            steps.add(MobileOnboardingJourneyStatus.PAYMENT_PENDING.name());
+        }
+        if (journey.getStatus().ordinal() >= MobileOnboardingJourneyStatus.PAYMENT_CONFIRMED.ordinal()) {
+            steps.add(MobileOnboardingJourneyStatus.PAYMENT_CONFIRMED.name());
+        }
+        if (journey.getStatus().ordinal() >= MobileOnboardingJourneyStatus.ACTIVE_MEMBER.ordinal()) {
+            steps.add(MobileOnboardingJourneyStatus.ACTIVE_MEMBER.name());
+        }
+        if (journey.getStatus().ordinal() >= MobileOnboardingJourneyStatus.PHONE_VERIFIED.ordinal()) {
+            steps.add(MobileOnboardingJourneyStatus.PHONE_VERIFIED.name());
+        }
+        if (journey.getStatus().ordinal() >= MobileOnboardingJourneyStatus.WALLET_ACTIVATED.ordinal()) {
+            steps.add(MobileOnboardingJourneyStatus.WALLET_ACTIVATED.name());
+        }
+        if (journey.isOnboardingCompleted()
+                || journey.getStatus().ordinal() >= MobileOnboardingJourneyStatus.ONBOARDING_COMPLETED.ordinal()) {
+            steps.add(MobileOnboardingJourneyStatus.ONBOARDING_COMPLETED.name());
+        }
+        if (journey.isNetworkLinked()) {
+            steps.add(MobileOnboardingJourneyStatus.NETWORK_LINKED.name());
         }
         return List.copyOf(steps);
     }
 
     private MobileOnboardingStatusResponse.NextStep nextStep(MobileOnboardingJourney journey, boolean activeMembership) {
-        if (activeMembership || journey.getStatus() == MobileOnboardingJourneyStatus.ONBOARDING_COMPLETED) {
+        if (journey.getStatus() == MobileOnboardingJourneyStatus.ONBOARDING_COMPLETED) {
             return null;
         }
         return switch (journey.getStatus()) {
             case REGISTERED, AUTHENTICATED -> new MobileOnboardingStatusResponse.NextStep(
-                    "VERIFY_PHONE",
-                    "POST",
-                    "/api/mobile/phone-verifications/start",
-                    "Verify your phone to activate your wallet"
-            );
-            case WALLET_ACTIVATED -> new MobileOnboardingStatusResponse.NextStep(
                     "SELECT_COUNTRY",
                     "POST",
                     "/api/mobile/onboarding/select-country",
                     "Select your country to continue"
             );
-            case COUNTRY_SELECTED -> new MobileOnboardingStatusResponse.NextStep(
-                    "SET_SPONSOR",
-                    "POST",
-                    "/api/mobile/onboarding/set-sponsor",
-                    "Set sponsor or continue without sponsor"
-            );
-            case SPONSOR_SET -> new MobileOnboardingStatusResponse.NextStep(
+            case COUNTRY_SELECTED, SPONSOR_SET -> new MobileOnboardingStatusResponse.NextStep(
                     "SELECT_PLAN",
                     "POST",
                     "/api/mobile/onboarding/select-plan",
@@ -683,16 +805,24 @@ public class MobileOnboardingJourneyService {
                     "Wait for PSP confirmation callback"
             );
             case PAYMENT_CONFIRMED, ACTIVE_MEMBER -> new MobileOnboardingStatusResponse.NextStep(
-                    "NETWORK_LINKING",
-                    "GET",
-                    "/api/mobile/onboarding/status",
-                    "Network linking is in progress"
+                    "VERIFY_PHONE",
+                    "POST",
+                    "/api/mobile/phone-verifications/start",
+                    "Verify your phone to activate your wallet"
             );
-            case NETWORK_LINKED -> new MobileOnboardingStatusResponse.NextStep(
-                    "COMPLETE_ONBOARDING",
+            case PHONE_VERIFIED, WALLET_ACTIVATED -> new MobileOnboardingStatusResponse.NextStep(
+                    "WAIT_WALLET_ACTIVATION",
                     "GET",
-                    "/api/mobile/onboarding/status",
-                    "Finalize onboarding"
+                    "/wallet/status",
+                    "Wallet activation is in progress"
+            );
+            case NETWORK_LINKED -> activeMembership
+                    ? null
+                    : new MobileOnboardingStatusResponse.NextStep(
+                    "VERIFY_PHONE",
+                    "POST",
+                    "/api/mobile/phone-verifications/start",
+                    "Verify your phone to complete onboarding"
             );
             case ONBOARDING_COMPLETED -> null;
         };

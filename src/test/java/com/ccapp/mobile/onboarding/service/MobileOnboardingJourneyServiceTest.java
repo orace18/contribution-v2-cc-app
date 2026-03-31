@@ -7,6 +7,13 @@ import com.ccapp.country.service.CountryContextService;
 import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
 import com.ccapp.identity.account_holder.service.AccountHolderService;
 import com.ccapp.identity.delegation.service.AccessControlService;
+import com.ccapp.identity.verification.domain.entity.PhoneVerification;
+import com.ccapp.identity.verification.domain.enums.PhoneVerificationChannel;
+import com.ccapp.identity.verification.domain.enums.PhoneVerificationStatus;
+import com.ccapp.identity.verification.repository.PhoneVerificationRepository;
+import com.ccapp.identity.wallet.domain.entity.Wallet;
+import com.ccapp.identity.wallet.repository.WalletRepository;
+import com.ccapp.identity.wallet.service.WalletService;
 import com.ccapp.mlm.graph.MlmGraphSyncService;
 import com.ccapp.mlm.domain.entity.MlmRelationship;
 import com.ccapp.mlm.repository.MlmMemberLinkRepository;
@@ -36,6 +43,7 @@ import com.ccapp.payments.subscription.domain.enums.SubscriptionGrade;
 import com.ccapp.payments.subscription.repository.SubscriptionPlanRepository;
 import com.ccapp.payments.subscription.service.MembershipService;
 import com.ccapp.payments.subscription.service.SubscriptionService;
+import com.ccapp.wallet.domain.enums.WalletType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -58,6 +66,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doNothing;
@@ -107,6 +116,12 @@ class MobileOnboardingJourneyServiceTest {
     private DomainEventPublisher domainEventPublisher;
     @Mock
     private CountryContextService countryContextService;
+    @Mock
+    private PhoneVerificationRepository phoneVerificationRepository;
+    @Mock
+    private WalletRepository walletRepository;
+    @Mock
+    private WalletService walletService;
 
     @InjectMocks
     private MobileOnboardingJourneyService mobileOnboardingJourneyService;
@@ -130,10 +145,27 @@ class MobileOnboardingJourneyServiceTest {
         when(mlmGraphSyncService.isNetworkReady(ACCOUNT_ID)).thenReturn(true);
         when(mlmMemberLinkRepository.existsById(ACCOUNT_ID)).thenReturn(false);
         when(mlmMemberLinkRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(phoneVerificationRepository.findTopByRequesterAccountHolderIdAndStatusOrderByVerifiedAtDescCreatedAtDesc(
+                ACCOUNT_ID,
+                PhoneVerificationStatus.VERIFIED
+        )).thenReturn(Optional.empty());
+        when(walletRepository.save(any(Wallet.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(walletRepository.findFirstByAccountHolderIdAndStatusOrderByCreatedAtDesc(ACCOUNT_ID, "ACTIVE"))
+                .thenReturn(Optional.empty());
+        when(walletRepository.findByMobileMoneyNumber(any())).thenReturn(Optional.empty());
+        when(walletService.createWallet(eq(ACCOUNT_ID), eq("MOBILE"), any(), eq("ACTIVE")))
+                .thenAnswer(invocation -> Wallet.builder()
+                        .id(UUID.randomUUID())
+                        .accountHolderId(ACCOUNT_ID)
+                        .provider("MOBILE")
+                        .mobileMoneyNumber(invocation.getArgument(2))
+                        .status("ACTIVE")
+                        .walletType(WalletType.USER)
+                        .build());
     }
 
     @Test
-    void freePlanFlow_shouldCompleteOnboardingAndEmitEvents() {
+    void freePlanFlow_shouldActivateMembershipWithoutCompletingOnboardingBeforePhoneVerification() {
         MobileOnboardingJourney journey = journey(MobileOnboardingJourneyStatus.PLAN_SELECTED, true, SPONSOR_ID, PLAN_ID);
         when(journeyRepository.findByAccountHolderId(ACCOUNT_ID)).thenReturn(Optional.of(journey));
         SubscriptionPlan freePlan = plan(SubscriptionGrade.FREE, BigDecimal.ZERO.setScale(4));
@@ -150,16 +182,18 @@ class MobileOnboardingJourneyServiceTest {
 
         var response = mobileOnboardingJourneyService.activateFreePlan(ACTOR_ID, ACCOUNT_ID);
 
-        assertEquals("ONBOARDING_COMPLETED", response.journeyStatus());
+        assertEquals("ACTIVE_MEMBER", response.journeyStatus());
         assertTrue(response.active());
         verify(mlmPlacementService).placeAccountHolder(ACTOR_ID, ACCOUNT_ID, SPONSOR_ID);
         assertPublishedEvent(MobileOnboardingEventType.MEMBERSHIP_ACTIVATED);
         assertPublishedEvent(MobileOnboardingEventType.NETWORK_LINKED);
-        assertPublishedEvent(MobileOnboardingEventType.ONBOARDING_COMPLETED);
+        verify(domainEventPublisher, never()).publish(argThat(event ->
+                event instanceof MobileOnboardingEvent mobileEvent
+                        && mobileEvent.eventType() == MobileOnboardingEventType.ONBOARDING_COMPLETED));
     }
 
     @Test
-    void paidPlanFlow_shouldInitiateThenCompleteAfterConfirmation() {
+    void paidPlanFlow_shouldInitiateThenRequirePhoneVerificationBeforeCompletion() {
         MobileOnboardingJourney journey = journey(MobileOnboardingJourneyStatus.PLAN_SELECTED, true, SPONSOR_ID, PLAN_ID);
         when(journeyRepository.findByAccountHolderId(ACCOUNT_ID)).thenReturn(Optional.of(journey));
         SubscriptionPlan paidPlan = plan(SubscriptionGrade.CLASSIC, new BigDecimal("15000.0000"));
@@ -232,9 +266,36 @@ class MobileOnboardingJourneyServiceTest {
                 .build();
         mobileOnboardingJourneyService.onPaidPaymentConfirmed(confirmed);
 
+        assertEquals(MobileOnboardingJourneyStatus.ACTIVE_MEMBER, journey.getStatus());
+        verify(walletService, never()).createWallet(any(), any(), any(), any());
+
+        when(phoneVerificationRepository.findTopByRequesterAccountHolderIdAndStatusOrderByVerifiedAtDescCreatedAtDesc(
+                ACCOUNT_ID,
+                PhoneVerificationStatus.VERIFIED
+        )).thenReturn(Optional.of(PhoneVerification.builder()
+                .id(UUID.randomUUID())
+                .requesterAccountHolderId(ACCOUNT_ID)
+                .phoneNumber("22961000000")
+                .channel(PhoneVerificationChannel.SMS)
+                .status(PhoneVerificationStatus.VERIFIED)
+                .codeHash("hash")
+                .attemptCount(0)
+                .maxAttempts(5)
+                .sendCount(1)
+                .maxSendCount(3)
+                .lastSentAt(OffsetDateTime.now())
+                .resendAvailableAt(OffsetDateTime.now())
+                .expiresAt(OffsetDateTime.now().plusMinutes(5))
+                .verifiedAt(OffsetDateTime.now())
+                .build()));
+
+        mobileOnboardingJourneyService.onPhoneVerified(ACCOUNT_ID, "22961000000");
+
         assertEquals(MobileOnboardingJourneyStatus.ONBOARDING_COMPLETED, journey.getStatus());
         assertPublishedEvent(MobileOnboardingEventType.PAYMENT_INITIATED);
         assertPublishedEvent(MobileOnboardingEventType.PAYMENT_CONFIRMED);
+        assertPublishedEvent(MobileOnboardingEventType.PHONE_VERIFIED);
+        assertPublishedEvent(MobileOnboardingEventType.WALLET_ACTIVATED);
         assertPublishedEvent(MobileOnboardingEventType.ONBOARDING_COMPLETED);
     }
 
@@ -309,6 +370,30 @@ class MobileOnboardingJourneyServiceTest {
     }
 
     @Test
+    void selectCountry_shouldNotRequirePhoneVerificationOrWalletActivation() {
+        MobileOnboardingJourney journey = journey(MobileOnboardingJourneyStatus.AUTHENTICATED, false, null, null);
+        when(journeyRepository.findByAccountHolderId(ACCOUNT_ID)).thenReturn(Optional.of(journey));
+        when(accountHolderService.selectCountry(ACCOUNT_ID, "BJ"))
+                .thenReturn(AccountHolder.builder().id(ACCOUNT_ID).countryCode("BJ").build());
+
+        var response = mobileOnboardingJourneyService.selectCountry(ACTOR_ID, ACCOUNT_ID, "BJ");
+
+        assertEquals("BJ", response.countryCode());
+        assertEquals(MobileOnboardingJourneyStatus.COUNTRY_SELECTED, journey.getStatus());
+    }
+
+    @Test
+    void onPlanSelected_shouldNotRequireSponsorStep() {
+        MobileOnboardingJourney journey = journey(MobileOnboardingJourneyStatus.COUNTRY_SELECTED, false, null, null);
+        when(journeyRepository.findByAccountHolderId(ACCOUNT_ID)).thenReturn(Optional.of(journey));
+
+        mobileOnboardingJourneyService.onPlanSelected(ACCOUNT_ID, plan(SubscriptionGrade.CLASSIC, new BigDecimal("15000.0000")));
+
+        assertEquals(MobileOnboardingJourneyStatus.PLAN_SELECTED, journey.getStatus());
+        assertEquals(PLAN_ID, journey.getPlanId());
+    }
+
+    @Test
     void freePlanWithoutSponsor_shouldCreateSelfNetworkNode() {
         MobileOnboardingJourney journey = journey(MobileOnboardingJourneyStatus.PLAN_SELECTED, true, null, PLAN_ID);
         when(journeyRepository.findByAccountHolderId(ACCOUNT_ID)).thenReturn(Optional.of(journey));
@@ -329,7 +414,7 @@ class MobileOnboardingJourneyServiceTest {
 
         verify(mlmPlacementService, never()).placeAccountHolder(any(), any(), any());
         verify(mlmRelationshipRepository).save(any(MlmRelationship.class));
-        assertEquals(MobileOnboardingJourneyStatus.ONBOARDING_COMPLETED, journey.getStatus());
+        assertEquals(MobileOnboardingJourneyStatus.ACTIVE_MEMBER, journey.getStatus());
     }
 
     @Test

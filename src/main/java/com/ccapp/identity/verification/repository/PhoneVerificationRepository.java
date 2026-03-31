@@ -20,6 +20,11 @@ public interface PhoneVerificationRepository extends JpaRepository<PhoneVerifica
             PhoneVerificationStatus status
     );
 
+    Optional<PhoneVerification> findTopByRequesterAccountHolderIdAndStatusOrderByVerifiedAtDescCreatedAtDesc(
+            UUID requesterAccountHolderId,
+            PhoneVerificationStatus status
+    );
+
     boolean existsByRequesterAccountHolderIdAndPhoneNumberAndStatus(UUID requesterAccountHolderId,
                                                                     String phoneNumber,
                                                                     PhoneVerificationStatus status);
