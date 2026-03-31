@@ -7,11 +7,13 @@ import com.ccapp.cpass.otp.CPassOtpGateway;
 import com.ccapp.cpass.otp.CPassOtpSendResponse;
 import com.ccapp.identity.verification.domain.entity.PhoneVerification;
 import com.ccapp.identity.verification.domain.enums.PhoneVerificationChannel;
+import com.ccapp.identity.verification.domain.enums.PhoneVerificationSource;
 import com.ccapp.identity.verification.domain.enums.PhoneVerificationStatus;
 import com.ccapp.identity.verification.dto.ConfirmPhoneVerificationRequest;
 import com.ccapp.identity.verification.dto.PhoneVerificationResponse;
 import com.ccapp.identity.verification.dto.StartPhoneVerificationRequest;
 import com.ccapp.identity.verification.repository.PhoneVerificationRepository;
+import com.ccapp.identity.service.IdentitySecurityService;
 import com.ccapp.progress.event.PhoneVerifiedEvent;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -40,6 +42,8 @@ public class PhoneVerificationService {
     private final PhoneVerificationRepository phoneVerificationRepository;
     private final UnifiedOtpService unifiedOtpService;
     private final DomainEventPublisher domainEventPublisher;
+    private final PhoneVerificationTrustService phoneVerificationTrustService;
+    private final IdentitySecurityService identitySecurityService;
 
     @Nullable
     @Autowired(required = false)
@@ -166,6 +170,12 @@ public class PhoneVerificationService {
         verification.setStatus(PhoneVerificationStatus.VERIFIED);
         verification.setVerifiedAt(OffsetDateTime.now());
         PhoneVerification saved = phoneVerificationRepository.save(verification);
+        phoneVerificationTrustService.markPhoneVerified(
+                requesterAccountHolderId,
+                saved.getPhoneNumber(),
+                PhoneVerificationSource.INTERNAL_OTP,
+                identitySecurityService.currentRequestMetadata().ipAddress()
+        );
         domainEventPublisher.publish(PhoneVerifiedEvent.create(
                 requesterAccountHolderId,
                 saved.getId(),

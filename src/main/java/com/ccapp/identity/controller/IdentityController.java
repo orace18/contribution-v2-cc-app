@@ -201,6 +201,6 @@ public class IdentityController {
         if (authentication == null || !(authentication.getPrincipal() instanceof AuthenticatedPrincipal principal)) {
             throw new IllegalStateException("Invalid authentication context");
         }
-        return new FirebaseUserClaims(principal.firebaseUid(), principal.email());
+        return new FirebaseUserClaims(principal.firebaseUid(), principal.email(), null);
     }
 }

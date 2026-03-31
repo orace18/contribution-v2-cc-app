@@ -12,7 +12,11 @@ public interface UserDeviceRepository extends JpaRepository<UserDevice, UUID> {
 
     List<UserDevice> findByUserIdAndDeletedFalse(UUID userId);
 
+    long countByUserIdAndDeletedFalse(UUID userId);
+
     List<UserDevice> findByUserIdAndDeletedFalseAndPushTokenIsNotNull(UUID userId);
 
     List<UserDevice> findByDeletedFalseAndPushTokenIsNotNull();
+
+    List<UserDevice> findByDeletedFalseAndPushToken(String pushToken);
 }

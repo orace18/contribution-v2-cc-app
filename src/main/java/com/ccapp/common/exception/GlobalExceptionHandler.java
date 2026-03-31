@@ -27,6 +27,11 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(CommonResponse.error(ex.getMessage()));
     }
 
+    @ExceptionHandler(TooManyRequestsException.class)
+    public ResponseEntity<CommonResponse<Void>> handleTooManyRequests(TooManyRequestsException ex) {
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(CommonResponse.error(ex.getMessage()));
+    }
+
     @ExceptionHandler(ConflictException.class)
     public ResponseEntity<CommonResponse<Void>> handleConflict(ConflictException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(CommonResponse.error(ex.getMessage()));

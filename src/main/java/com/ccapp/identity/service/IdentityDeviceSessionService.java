@@ -3,6 +3,7 @@ package com.ccapp.identity.service;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.common.exception.NotFoundException;
 import com.ccapp.common.exception.UnauthorizedException;
+import com.ccapp.common.security.ClientRequestMetadata;
 import com.ccapp.identity.account_holder.service.AccountHolderService;
 import com.ccapp.identity.app_user.domain.entity.AppUser;
 import com.ccapp.identity.app_user.repository.AppUserRepository;
@@ -13,6 +14,7 @@ import com.ccapp.identity.domain.entity.UserSession;
 import com.ccapp.identity.domain.enums.AccountStatus;
 import com.ccapp.identity.domain.enums.KycStatus;
 import com.ccapp.identity.domain.enums.Platform;
+import com.ccapp.identity.domain.enums.SecurityRiskLevel;
 import com.ccapp.identity.domain.enums.UserRole;
 import com.ccapp.identity.dto.RefreshTokenRequest;
 import com.ccapp.identity.dto.RefreshTokenResponse;
@@ -47,12 +49,17 @@ public class IdentityDeviceSessionService {
     private final AccountHolderService accountHolderService;
     private final AppUserRepository appUserRepository;
     private final RefreshTokenService refreshTokenService;
+    private final IdentitySecurityService identitySecurityService;
 
     @Value("${identity.refresh-token.ttl-hours:720}")
     private long refreshTtlHours;
 
+    @Value("${security.mobile-auth.max-devices-per-user:5}")
+    private int maxDevicesPerUser;
+
     @Transactional
     public SyncResponse sync(FirebaseUserClaims claims, SyncRequest request) {
+        ClientRequestMetadata metadata = identitySecurityService.currentRequestMetadata();
         log.info("Identity sync start firebaseUid={} platform={} deviceIdentifier={}",
                 claims.uid(), request.platform(), request.deviceIdentifier());
         User user = userRepository.findByFirebaseUid(claims.uid()).orElseGet(() -> userRepository.save(User.builder()
@@ -62,12 +69,27 @@ public class IdentityDeviceSessionService {
                 .accountStatus(AccountStatus.ACTIVE)
                 .kycStatus(KycStatus.NOT_STARTED)
                 .build()));
+        syncUserClaims(user, claims);
 
         ensureDelegatedIdentityModel(user);
         ensureAccountActive(user);
 
-        UserDevice device = upsertDevice(user, request.deviceIdentifier(), request.platform(), request.pushToken());
-        SessionCreation sessionCreation = createSession(user, device);
+        DeviceUpsertResult deviceResult = upsertDevice(
+                user,
+                request.deviceIdentifier(),
+                request.platform(),
+                request.pushToken(),
+                metadata.ipAddress()
+        );
+        SecurityRiskLevel riskLevel = identitySecurityService.assessLoginRisk(
+                user.getId(),
+                deviceResult.device(),
+                deviceResult.newDevice(),
+                deviceResult.ipChanged(),
+                metadata.ipAddress(),
+                metadata.countryCode()
+        );
+        SessionCreation sessionCreation = createSession(user, deviceResult.device(), metadata, riskLevel);
 
         log.info("Identity sync success userId={} sessionId={}", user.getId(), sessionCreation.session().getId());
         return new SyncResponse(
@@ -84,11 +106,18 @@ public class IdentityDeviceSessionService {
 
     @Transactional
     public UserDeviceDto registerDevice(UUID userId, RegisterDeviceRequest request) {
+        ClientRequestMetadata metadata = identitySecurityService.currentRequestMetadata();
         log.info("Identity registerDevice userId={} platform={} deviceIdentifier={}",
                 userId, request.platform(), request.deviceIdentifier());
         User user = findUser(userId);
         ensureAccountActive(user);
-        UserDevice saved = upsertDevice(user, request.deviceIdentifier(), request.platform(), request.pushToken());
+        UserDevice saved = upsertDevice(
+                user,
+                request.deviceIdentifier(),
+                request.platform(),
+                request.pushToken(),
+                metadata.ipAddress()
+        ).device();
         return new UserDeviceDto(
                 saved.getId(),
                 saved.getDeviceIdentifier(),
@@ -118,12 +147,14 @@ public class IdentityDeviceSessionService {
                 .filter(session -> session.getDevice().getId().equals(deviceId))
                 .forEach(session -> session.setRevokedAt(revokedAt));
         userSessionRepository.saveAll(activeSessions);
+        maybeClearPushTokenIfNoActiveSessions(device);
         log.info("Identity blockDevice success userId={} deviceId={} affectedSessions={}",
                 userId, deviceId, activeSessions.stream().filter(session -> session.getDevice().getId().equals(deviceId)).count());
     }
 
     @Transactional
     public RefreshTokenResponse rotateRefreshToken(RefreshTokenRequest request) {
+        ClientRequestMetadata metadata = identitySecurityService.currentRequestMetadata();
         log.info("Identity rotateRefreshToken start");
         String hash = refreshTokenService.hash(request.refreshToken());
         UserSession currentSession = userSessionRepository.findByRefreshTokenHash(hash)
@@ -131,6 +162,7 @@ public class IdentityDeviceSessionService {
 
         OffsetDateTime now = OffsetDateTime.now();
         if (currentSession.getRevokedAt() != null || currentSession.getExpiresAt().isBefore(now)) {
+            identitySecurityService.handleRefreshTokenReplay(currentSession, metadata);
             log.warn("Identity rotateRefreshToken denied sessionId={} revokedAt={} expiresAt={}",
                     currentSession.getId(), currentSession.getRevokedAt(), currentSession.getExpiresAt());
             throw new UnauthorizedException("Refresh token expired or revoked");
@@ -144,10 +176,21 @@ public class IdentityDeviceSessionService {
             throw new UnauthorizedException("Device is blocked");
         }
 
+        boolean ipChanged = hasIpChanged(currentSession.getDevice(), metadata.ipAddress());
+        touchDevice(currentSession.getDevice(), metadata.ipAddress());
+
         currentSession.setRevokedAt(now);
         userSessionRepository.save(currentSession);
 
-        SessionCreation newSession = createSession(user, currentSession.getDevice());
+        SecurityRiskLevel riskLevel = identitySecurityService.assessLoginRisk(
+                user.getId(),
+                currentSession.getDevice(),
+                false,
+                ipChanged,
+                metadata.ipAddress(),
+                metadata.countryCode()
+        );
+        SessionCreation newSession = createSession(user, currentSession.getDevice(), metadata, riskLevel);
         log.info("Identity rotateRefreshToken success oldSessionId={} newSessionId={}",
                 currentSession.getId(), newSession.session().getId());
         return new RefreshTokenResponse(newSession.session().getId(), newSession.rawRefreshToken());
@@ -165,35 +208,64 @@ public class IdentityDeviceSessionService {
         }
         session.setRevokedAt(OffsetDateTime.now());
         userSessionRepository.save(session);
+        maybeClearPushTokenIfNoActiveSessions(session.getDevice());
         log.info("Identity revokeSession success userId={} sessionId={}", userId, sessionId);
     }
 
-    private User findUser(UUID userId) {
+    public User findUser(UUID userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new NotFoundException("User not found"));
     }
 
-    private UserDevice upsertDevice(User user, String deviceIdentifier, Platform platform, String pushToken) {
-        UserDevice device = userDeviceRepository.findByUserIdAndDeviceIdentifierAndDeletedFalse(user.getId(), deviceIdentifier)
-                .orElseGet(() -> UserDevice.builder()
-                        .user(user)
-                        .deviceIdentifier(deviceIdentifier)
-                        .deleted(false)
-                        .build());
+    private DeviceUpsertResult upsertDevice(User user,
+                                            String deviceIdentifier,
+                                            Platform platform,
+                                            String pushToken,
+                                            String ipAddress) {
+        OffsetDateTime now = OffsetDateTime.now();
+        UserDevice existingDevice = userDeviceRepository.findByUserIdAndDeviceIdentifierAndDeletedFalse(user.getId(), deviceIdentifier)
+                .orElse(null);
+        boolean newDevice = existingDevice == null;
+        if (newDevice && userDeviceRepository.countByUserIdAndDeletedFalse(user.getId()) >= maxDevicesPerUser) {
+            throw new BusinessException("DEVICE_LIMIT_EXCEEDED");
+        }
+
+        UserDevice device = existingDevice != null
+                ? existingDevice
+                : UserDevice.builder()
+                .user(user)
+                .deviceIdentifier(deviceIdentifier)
+                .deleted(false)
+                .trustedDevice(userDeviceRepository.countByUserIdAndDeletedFalse(user.getId()) == 0)
+                .firstSeenAt(now)
+                .build();
+
+        boolean ipChanged = hasIpChanged(device, ipAddress);
         device.setPlatform(platform);
-        device.setLastSeenAt(OffsetDateTime.now());
+        device.setLastSeenAt(now);
+        device.setLastLoginAt(now);
+        if (device.getFirstSeenAt() == null) {
+            device.setFirstSeenAt(now);
+        }
+        device.setLastIpAddress(normalizeOptional(ipAddress));
         String normalizedPushToken = normalizeOptional(pushToken);
-        if (normalizedPushToken != null || device.getPushToken() == null) {
+        if (normalizedPushToken != null) {
+            detachPushTokenFromOtherDevices(device, normalizedPushToken);
             device.setPushToken(normalizedPushToken);
+        } else if (device.getPushToken() == null) {
+            device.setPushToken(null);
         }
         if (!device.isBlocked()) {
             device.setBlocked(false);
             device.setBlockedAt(null);
         }
-        return userDeviceRepository.save(device);
+        return new DeviceUpsertResult(userDeviceRepository.save(device), newDevice, ipChanged);
     }
 
-    private SessionCreation createSession(User user, UserDevice device) {
+    private SessionCreation createSession(User user,
+                                          UserDevice device,
+                                          ClientRequestMetadata metadata,
+                                          SecurityRiskLevel riskLevel) {
         if (device.isBlocked()) {
             throw new UnauthorizedException("Device is blocked");
         }
@@ -205,6 +277,10 @@ public class IdentityDeviceSessionService {
                 .device(device)
                 .refreshTokenHash(refreshTokenHash)
                 .expiresAt(OffsetDateTime.now().plusHours(refreshTtlHours))
+                .ipAddress(metadata == null ? null : normalizeOptional(metadata.ipAddress()))
+                .lastSeenAt(OffsetDateTime.now())
+                .riskLevel(riskLevel == null ? SecurityRiskLevel.LOW : riskLevel)
+                .countryCode(metadata == null ? null : normalizeOptional(metadata.countryCode()))
                 .build();
         userSessionRepository.save(session);
         return new SessionCreation(session, rawRefreshToken);
@@ -237,11 +313,61 @@ public class IdentityDeviceSessionService {
                 .build());
     }
 
+    private void syncUserClaims(User user, FirebaseUserClaims claims) {
+        String normalizedEmail = normalizeOptional(claims.email());
+        if (normalizedEmail != null && !normalizedEmail.equals(user.getEmail())) {
+            user.setEmail(normalizedEmail);
+            userRepository.save(user);
+        }
+    }
+
+    private void detachPushTokenFromOtherDevices(UserDevice currentDevice, String pushToken) {
+        userDeviceRepository.findByDeletedFalseAndPushToken(pushToken).stream()
+                .filter(otherDevice -> !otherDevice.getId().equals(currentDevice.getId()))
+                .forEach(otherDevice -> {
+                    otherDevice.setPushToken(null);
+                    userDeviceRepository.save(otherDevice);
+                });
+    }
+
+    private boolean hasIpChanged(UserDevice device, String ipAddress) {
+        String normalizedIp = normalizeOptional(ipAddress);
+        return normalizedIp != null
+                && device.getLastIpAddress() != null
+                && !normalizedIp.equals(device.getLastIpAddress());
+    }
+
+    private void touchDevice(UserDevice device, String ipAddress) {
+        device.setLastSeenAt(OffsetDateTime.now());
+        device.setLastLoginAt(OffsetDateTime.now());
+        if (ipAddress != null && !ipAddress.isBlank()) {
+            device.setLastIpAddress(ipAddress.trim());
+        }
+        userDeviceRepository.save(device);
+    }
+
+    private void maybeClearPushTokenIfNoActiveSessions(UserDevice device) {
+        if (device == null) {
+            return;
+        }
+        boolean hasActiveSessions = userSessionRepository.existsByDeviceIdAndRevokedAtIsNullAndExpiresAtAfter(
+                device.getId(),
+                OffsetDateTime.now()
+        );
+        if (!hasActiveSessions && device.getPushToken() != null) {
+            device.setPushToken(null);
+            userDeviceRepository.save(device);
+        }
+    }
+
     private String normalizeOptional(String value) {
         if (value == null || value.isBlank()) {
             return null;
         }
         return value.trim();
+    }
+
+    private record DeviceUpsertResult(UserDevice device, boolean newDevice, boolean ipChanged) {
     }
 
     private record SessionCreation(UserSession session, String rawRefreshToken) {

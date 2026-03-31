@@ -14,6 +14,7 @@ import com.ccapp.identity.dto.RegisterDeviceRequest;
 import com.ccapp.identity.dto.SyncRequest;
 import com.ccapp.identity.dto.SyncResponse;
 import com.ccapp.identity.dto.UserDeviceDto;
+import com.ccapp.identity.domain.entity.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -94,6 +95,11 @@ public class IdentityService {
     @Transactional
     public void revokeSession(UUID userId, UUID sessionId) {
         identityDeviceSessionService.revokeSession(userId, sessionId);
+    }
+
+    @Transactional(readOnly = true)
+    public User findUser(UUID userId) {
+        return identityDeviceSessionService.findUser(userId);
     }
 
     @Transactional

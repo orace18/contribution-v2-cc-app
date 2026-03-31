@@ -2,9 +2,11 @@ package com.ccapp.identity.verification.service;
 
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.common.events.DomainEventPublisher;
+import com.ccapp.common.security.ClientRequestMetadata;
 import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
 import com.ccapp.identity.account_holder.domain.enums.AccountType;
 import com.ccapp.identity.account_holder.repository.AccountHolderRepository;
+import com.ccapp.identity.service.IdentitySecurityService;
 import com.ccapp.identity.verification.domain.enums.PhoneVerificationChannel;
 import com.ccapp.identity.verification.domain.enums.PhoneVerificationStatus;
 import com.ccapp.identity.verification.dto.ConfirmPhoneVerificationRequest;
@@ -36,7 +38,7 @@ import static org.mockito.Mockito.when;
         "spring.flyway.enabled=false",
         "spring.jpa.hibernate.ddl-auto=create-drop"
 })
-@Import(PhoneVerificationService.class)
+@Import({PhoneVerificationService.class, UnifiedOtpService.class})
 class PhoneVerificationServiceIntegrationTest {
 
     private static final Pattern OTP_PATTERN = Pattern.compile("(\\d{4,8})");
@@ -50,6 +52,10 @@ class PhoneVerificationServiceIntegrationTest {
     private PhoneMessageGateway phoneMessageGateway;
     @MockBean
     private DomainEventPublisher domainEventPublisher;
+    @MockBean
+    private PhoneVerificationTrustService phoneVerificationTrustService;
+    @MockBean
+    private IdentitySecurityService identitySecurityService;
 
     @BeforeEach
     void setUp() {
@@ -57,6 +63,7 @@ class PhoneVerificationServiceIntegrationTest {
                 .thenReturn(new PhoneMessageDispatchResult(true, "sms:accepted"));
         when(phoneMessageGateway.sendWhatsApp(anyString(), anyString()))
                 .thenReturn(new PhoneMessageDispatchResult(true, "whatsapp:accepted"));
+        when(identitySecurityService.currentRequestMetadata()).thenReturn(new ClientRequestMetadata("203.0.113.30", "BJ"));
     }
 
     @Test

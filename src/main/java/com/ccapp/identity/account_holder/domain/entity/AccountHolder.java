@@ -3,6 +3,7 @@ package com.ccapp.identity.account_holder.domain.entity;
 import com.ccapp.identity.account_holder.domain.enums.AccountCreatedVia;
 import com.ccapp.identity.account_holder.domain.enums.AccountType;
 import com.ccapp.identity.domain.enums.KycStatus;
+import com.ccapp.identity.verification.domain.enums.PhoneVerificationSource;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -54,6 +55,19 @@ public class AccountHolder {
 
     @Column(name = "kyc_verified_at")
     private OffsetDateTime kycVerifiedAt;
+
+    @Column(name = "phone_verified_at")
+    private OffsetDateTime phoneVerifiedAt;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "phone_verification_source", length = 32)
+    private PhoneVerificationSource phoneVerificationSource;
+
+    @Column(name = "phone_verification_ip", length = 64)
+    private String phoneVerificationIp;
+
+    @Column(name = "phone_verification_device", length = 128)
+    private String phoneVerificationDevice;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;

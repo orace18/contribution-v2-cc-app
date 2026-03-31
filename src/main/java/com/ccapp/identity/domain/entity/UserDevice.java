@@ -50,4 +50,16 @@ public class UserDevice extends AuditableEntity {
 
     @Column(name = "last_seen_at")
     private OffsetDateTime lastSeenAt;
+
+    @Column(name = "first_seen_at")
+    private OffsetDateTime firstSeenAt;
+
+    @Column(name = "last_login_at")
+    private OffsetDateTime lastLoginAt;
+
+    @Column(name = "last_ip_address", length = 64)
+    private String lastIpAddress;
+
+    @Column(name = "trusted_device", nullable = false)
+    private boolean trustedDevice;
 }

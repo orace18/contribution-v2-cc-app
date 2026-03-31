@@ -1,6 +1,7 @@
 package com.ccapp.identity.domain.entity;
 
 import com.ccapp.common.model.AuditableEntity;
+import com.ccapp.identity.domain.enums.SecurityRiskLevel;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -41,4 +42,17 @@ public class UserSession extends AuditableEntity {
 
     @Column(name = "revoked_at")
     private OffsetDateTime revokedAt;
+
+    @Column(name = "ip_address", length = 64)
+    private String ipAddress;
+
+    @Column(name = "last_seen_at")
+    private OffsetDateTime lastSeenAt;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "risk_level", nullable = false, length = 16)
+    private SecurityRiskLevel riskLevel;
+
+    @Column(name = "country_code", length = 8)
+    private String countryCode;
 }

@@ -12,4 +12,10 @@ public interface UserSessionRepository extends JpaRepository<UserSession, UUID> 
     Optional<UserSession> findByRefreshTokenHash(String refreshTokenHash);
 
     List<UserSession> findByUserIdAndRevokedAtIsNullAndExpiresAtAfter(UUID userId, OffsetDateTime now);
+
+    List<UserSession> findByUserIdAndDeviceIdAndRevokedAtIsNullAndExpiresAtAfter(UUID userId, UUID deviceId, OffsetDateTime now);
+
+    boolean existsByDeviceIdAndRevokedAtIsNullAndExpiresAtAfter(UUID deviceId, OffsetDateTime now);
+
+    Optional<UserSession> findTopByUserIdAndRevokedAtIsNullOrderByCreatedAtDesc(UUID userId);
 }
