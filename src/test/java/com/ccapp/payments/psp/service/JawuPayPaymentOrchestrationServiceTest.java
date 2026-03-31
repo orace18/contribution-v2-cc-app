@@ -96,6 +96,7 @@ class JawuPayPaymentOrchestrationServiceTest {
         assertThat(metadataCaptor.getValue().redirectUrl())
                 .isEqualTo("https://checkout.example/pay/" + PAYMENT_ID);
         assertThat(metadataCaptor.getValue().paymentMethod()).isEqualTo("MOBILE_MONEY_MTN");
+        assertThat(metadataCaptor.getValue().pspCountry()).isEqualTo("CI");
         assertThat(metadataCaptor.getValue().pspStatus()).isEqualTo("PENDING_PSP");
     }
 

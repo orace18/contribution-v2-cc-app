@@ -140,7 +140,8 @@ public class JawuPayPaymentOrchestrationService {
                 confirm.providerReference(),
                 confirm.redirectUrl(),
                 paymentMethodId,
-                PENDING_PSP_STATUS
+                PENDING_PSP_STATUS,
+                country
         ));
         log.info("Payment pending PSP: operationId={} paymentId={}", operation.getId(), confirm.paymentId());
 

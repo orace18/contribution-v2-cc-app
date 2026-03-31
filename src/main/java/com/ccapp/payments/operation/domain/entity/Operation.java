@@ -74,6 +74,9 @@ public class Operation extends AuditableEntity {
     @Column(name = "payment_method", length = 64)
     private String paymentMethod;
 
+    @Column(name = "psp_country", length = 5)
+    private String pspCountry;
+
     @Column(name = "psp_status", length = 64)
     private String pspStatus;
 

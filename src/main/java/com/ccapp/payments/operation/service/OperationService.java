@@ -410,6 +410,7 @@ public class OperationService {
         assignIfCompatible("provider reference", operation.getProviderReference(), providerReference, operation::setProviderReference);
         assignIfCompatible("redirect URL", operation.getRedirectUrl(), normalizeNullableText(metadata.redirectUrl(), 1024), operation::setRedirectUrl);
         assignIfCompatible("payment method", operation.getPaymentMethod(), normalizeNullableText(metadata.paymentMethod(), 64), operation::setPaymentMethod);
+        assignIfCompatible("PSP country", operation.getPspCountry(), normalizePspCountry(metadata.pspCountry()), operation::setPspCountry);
         replaceIfPresent(operation::setPspStatus, normalizePspStatus(metadata.pspStatus()));
         replaceIfPresent(operation::setPspPayload, normalizePspPayload(metadata.pspPayload()));
     }
@@ -456,6 +457,11 @@ public class OperationService {
         return normalized == null ? null : normalized.toUpperCase(Locale.ROOT);
     }
 
+    private String normalizePspCountry(String pspCountry) {
+        String normalized = normalizeNullableText(pspCountry, 5);
+        return normalized == null ? null : normalized.toUpperCase(Locale.ROOT);
+    }
+
     private String normalizePspPayload(String pspPayload) {
         if (pspPayload == null || pspPayload.isBlank()) {
             return null;
@@ -491,10 +497,22 @@ public class OperationService {
             String redirectUrl,
             String paymentMethod,
             String pspStatus,
-            String pspPayload
+            String pspPayload,
+            String pspCountry
     ) {
+        public PspMetadata(String pspReference,
+                           String paymentId,
+                           String payoutId,
+                           String providerReference,
+                           String redirectUrl,
+                           String paymentMethod,
+                           String pspStatus,
+                           String pspPayload) {
+            this(pspReference, paymentId, payoutId, providerReference, redirectUrl, paymentMethod, pspStatus, pspPayload, null);
+        }
+
         public static PspMetadata legacyReference(String pspReference) {
-            return new PspMetadata(pspReference, null, null, null, null, null, null, null);
+            return new PspMetadata(pspReference, null, null, null, null, null, null, null, null);
         }
 
         public static PspMetadata payment(String paymentId,
@@ -502,18 +520,35 @@ public class OperationService {
                                           String redirectUrl,
                                           String paymentMethod,
                                           String pspStatus) {
-            return new PspMetadata(paymentId, paymentId, null, providerReference, redirectUrl, paymentMethod, pspStatus, null);
+            return payment(paymentId, providerReference, redirectUrl, paymentMethod, pspStatus, null);
+        }
+
+        public static PspMetadata payment(String paymentId,
+                                          String providerReference,
+                                          String redirectUrl,
+                                          String paymentMethod,
+                                          String pspStatus,
+                                          String pspCountry) {
+            return new PspMetadata(paymentId, paymentId, null, providerReference, redirectUrl, paymentMethod, pspStatus, null, pspCountry);
         }
 
         public static PspMetadata payout(String payoutId,
                                          String providerReference,
                                          String paymentMethod,
                                          String pspStatus) {
-            return new PspMetadata(payoutId, null, payoutId, providerReference, null, paymentMethod, pspStatus, null);
+            return payout(payoutId, providerReference, paymentMethod, pspStatus, null);
+        }
+
+        public static PspMetadata payout(String payoutId,
+                                         String providerReference,
+                                         String paymentMethod,
+                                         String pspStatus,
+                                         String pspCountry) {
+            return new PspMetadata(payoutId, null, payoutId, providerReference, null, paymentMethod, pspStatus, null, pspCountry);
         }
 
         public static PspMetadata statusOnly(String pspStatus) {
-            return new PspMetadata(null, null, null, null, null, null, pspStatus, null);
+            return new PspMetadata(null, null, null, null, null, null, pspStatus, null, null);
         }
     }
 

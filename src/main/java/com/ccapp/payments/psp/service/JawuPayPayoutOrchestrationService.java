@@ -126,7 +126,8 @@ public class JawuPayPayoutOrchestrationService {
                 payout.payoutId() == null ? null : payout.payoutId().toString(),
                 payout.providerReference(),
                 paymentMethodId,
-                PENDING_PSP_STATUS
+                PENDING_PSP_STATUS,
+                country
         ));
         log.info("Payout pending PSP: operationId={} payoutId={}", operation.getId(), payout.payoutId());
 

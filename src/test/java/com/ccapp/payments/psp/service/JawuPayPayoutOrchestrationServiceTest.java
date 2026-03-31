@@ -85,6 +85,7 @@ class JawuPayPayoutOrchestrationServiceTest {
         assertThat(metadataCaptor.getValue().payoutId()).isEqualTo(PAYOUT_ID.toString());
         assertThat(metadataCaptor.getValue().providerReference()).isEqualTo("PAYOUT-REF-1");
         assertThat(metadataCaptor.getValue().paymentMethod()).isEqualTo("MOBILE_MONEY_MTN");
+        assertThat(metadataCaptor.getValue().pspCountry()).isEqualTo("CI");
         assertThat(metadataCaptor.getValue().pspStatus()).isEqualTo("PENDING_PSP");
     }
 
@@ -122,6 +123,7 @@ class JawuPayPayoutOrchestrationServiceTest {
         assertThat(metadataCaptor.getValue().payoutId()).isEqualTo(PAYOUT_ID.toString());
         assertThat(metadataCaptor.getValue().providerReference()).isEqualTo("PAYOUT-REF-2");
         assertThat(metadataCaptor.getValue().paymentMethod()).isEqualTo("MOBILE_MONEY_MTN");
+        assertThat(metadataCaptor.getValue().pspCountry()).isEqualTo("CI");
         assertThat(metadataCaptor.getValue().pspStatus()).isEqualTo("PENDING_PSP");
     }
 

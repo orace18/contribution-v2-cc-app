@@ -178,7 +178,8 @@ class OperationServiceTest {
                         "PROVIDER-456",
                         "https://checkout.example/pay/PAY-123",
                         "MOBILE_MONEY_MTN",
-                        "pending"
+                        "pending",
+                        "CI"
                 )
         );
 
@@ -188,6 +189,7 @@ class OperationServiceTest {
         assertEquals("PROVIDER-456", result.getProviderReference());
         assertEquals("https://checkout.example/pay/PAY-123", result.getRedirectUrl());
         assertEquals("MOBILE_MONEY_MTN", result.getPaymentMethod());
+        assertEquals("CI", result.getPspCountry());
         assertEquals("PENDING", result.getPspStatus());
         verify(operationRepository).save(operation);
     }
@@ -205,6 +207,7 @@ class OperationServiceTest {
                 .currency("XOF")
                 .idempotencyKey("idem-5")
                 .pspReference("PROVIDER-LEGACY")
+                .pspCountry("CI")
                 .build();
 
         when(operationRepository.findById(operationId)).thenReturn(Optional.of(operation));
@@ -228,6 +231,7 @@ class OperationServiceTest {
         assertEquals("PAY-789", result.getPaymentId());
         assertEquals("PROVIDER-LEGACY", result.getProviderReference());
         assertEquals("CARD", result.getPaymentMethod());
+        assertEquals("CI", result.getPspCountry());
         assertEquals("COMPLETED", result.getPspStatus());
         assertEquals("{\"status\":\"completed\"}", result.getPspPayload());
         verify(operationRepository).save(operation);
