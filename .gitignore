@@ -1,3 +1,4 @@
+src/main/resources/firebase/*.json
 .env
 .env.*
 !.env.example
