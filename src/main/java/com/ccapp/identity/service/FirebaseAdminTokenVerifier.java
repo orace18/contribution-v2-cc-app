@@ -9,6 +9,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.Map;
 
 @Service
@@ -48,11 +49,23 @@ public class FirebaseAdminTokenVerifier implements FirebaseTokenVerifier {
             return;
         }
         String expectedIssuer = "https://securetoken.google.com/" + firebaseProjectId;
-        String audience = stringClaim(decodedToken.getClaims(), "aud");
+        String audience = resolveAudience(decodedToken.getClaims());
         String issuer = stringClaim(decodedToken.getClaims(), "iss");
         if (!firebaseProjectId.equals(audience) || !expectedIssuer.equals(issuer)) {
+            log.warn("Firebase project mismatch expectedProjectId={} audience={} issuer={}", firebaseProjectId, audience, issuer);
             throw new UnauthorizedException("Firebase project mismatch");
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private String resolveAudience(Map<String, Object> claims) {
+        if (claims == null) return null;
+        Object aud = claims.get("aud");
+        if (aud instanceof List) {
+            List<Object> list = (List<Object>) aud;
+            return list.isEmpty() ? null : list.get(0).toString();
+        }
+        return aud == null ? null : aud.toString();
     }
 
     private String stringClaim(Map<String, Object> claims, String key) {
