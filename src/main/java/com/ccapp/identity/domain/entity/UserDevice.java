@@ -45,6 +45,9 @@ public class UserDevice extends AuditableEntity {
     @Column(name = "deleted", nullable = false)
     private boolean deleted;
 
+    @Column(name = "push_token", length = 512)
+    private String pushToken;
+
     @Column(name = "last_seen_at")
     private OffsetDateTime lastSeenAt;
 }

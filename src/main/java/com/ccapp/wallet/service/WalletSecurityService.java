@@ -6,9 +6,9 @@ import com.ccapp.country.config.domain.enums.CountryConfigType;
 import com.ccapp.country.config.service.CountryConfigResolver;
 import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
 import com.ccapp.identity.account_holder.repository.AccountHolderRepository;
+import com.ccapp.identity.verification.service.UnifiedOtpService;
 import com.ccapp.identity.wallet.domain.entity.Wallet;
 import com.ccapp.identity.wallet.repository.WalletRepository;
-import com.ccapp.notifications.dispatcher.PhoneMessageGateway;
 import com.ccapp.payments.operation.domain.entity.Operation;
 import com.ccapp.payments.operation.domain.enums.OperationType;
 import com.ccapp.wallet.domain.entity.WalletOtpChallenge;
@@ -28,16 +28,11 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.nio.charset.StandardCharsets;
 import java.math.BigDecimal;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.OffsetDateTime;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
-import java.util.concurrent.ThreadLocalRandom;
 
 @Service
 @RequiredArgsConstructor
@@ -49,7 +44,7 @@ public class WalletSecurityService {
     private final WalletOtpChallengeRepository walletOtpChallengeRepository;
     private final AccountHolderRepository accountHolderRepository;
     private final CountryConfigResolver countryConfigResolver;
-    private final PhoneMessageGateway phoneMessageGateway;
+    private final UnifiedOtpService unifiedOtpService;
     private final DomainEventPublisher eventPublisher;
     private final PasswordEncoder passwordEncoder;
 
@@ -251,11 +246,14 @@ public class WalletSecurityService {
                                                  String fingerprint,
                                                  WalletSecurityPolicy policy) {
         OperationType operationType = operation.getType();
-        String fingerprintHash = hash(fingerprint);
+        String fingerprintHash = unifiedOtpService.hashOtp(fingerprint);
         expirePendingChallenges(wallet.getId(), operationType, fingerprintHash);
 
-        String otpCode = generateOtpCode(otpCodeLength);
-        OffsetDateTime now = OffsetDateTime.now();
+        UnifiedOtpService.OtpMaterial otpMaterial = unifiedOtpService.generateOtp(
+                otpCodeLength,
+                policy.otpTtlSeconds(),
+                "WALLET_OTP_CODE_LENGTH_INVALID"
+        );
         String phoneNumber = resolveOtpPhone(wallet, holder);
 
         WalletOtpChallenge challenge = walletOtpChallengeRepository.save(WalletOtpChallenge.builder()
@@ -264,16 +262,20 @@ public class WalletSecurityService {
                 .operationId(operation.getId())
                 .operationType(operationType)
                 .fingerprintHash(fingerprintHash)
-                .otpHash(hash(otpCode))
+                .otpHash(otpMaterial.hash())
                 .phoneNumber(phoneNumber)
                 .status(WalletOtpChallengeStatus.PENDING)
                 .attemptCount(0)
                 .maxAttempts(policy.otpMaxAttempts())
-                .sentAt(now)
-                .expiresAt(now.plusSeconds(policy.otpTtlSeconds()))
+                .sentAt(OffsetDateTime.now())
+                .expiresAt(otpMaterial.expiresAt())
                 .build());
 
-        phoneMessageGateway.sendSms(phoneNumber, buildOtpMessage(otpCode, policy.otpTtlSeconds()));
+        unifiedOtpService.sendOtp(
+                UnifiedOtpService.OtpDeliveryChannel.SMS,
+                phoneNumber,
+                buildOtpMessage(otpMaterial.code(), policy.otpTtlSeconds())
+        );
         eventPublisher.publish(WalletOtpSentEvent.create(
                 wallet.getId(),
                 holder.getId(),
@@ -302,7 +304,7 @@ public class WalletSecurityService {
         if (!challenge.getOperationId().equals(operation.getId())
                 || !challenge.getAccountHolderId().equals(accountHolderId)
                 || challenge.getOperationType() != operationType
-                || !challenge.getFingerprintHash().equals(hash(fingerprint))) {
+                || !challenge.getFingerprintHash().equals(unifiedOtpService.hashOtp(fingerprint))) {
             throw new BusinessException("WALLET_OTP_INVALID");
         }
 
@@ -310,9 +312,19 @@ public class WalletSecurityService {
             throw new BusinessException("WALLET_OTP_INVALID");
         }
 
-        if (challenge.getExpiresAt().isBefore(OffsetDateTime.now())) {
+        int attempts = challenge.getAttemptCount() + 1;
+        challenge.setAttemptCount(attempts);
+        UnifiedOtpService.VerificationOutcome outcome = unifiedOtpService.verifyOtp(
+                otpCode.trim(),
+                challenge.getOtpHash(),
+                challenge.getExpiresAt(),
+                attempts,
+                challenge.getMaxAttempts()
+        );
+        if (outcome == UnifiedOtpService.VerificationOutcome.EXPIRED) {
             challenge.setStatus(WalletOtpChallengeStatus.EXPIRED);
             walletOtpChallengeRepository.save(challenge);
+            unifiedOtpService.invalidateOtp("wallet-otp:" + challenge.getId(), "OTP_EXPIRED");
             eventPublisher.publish(WalletOtpFailedEvent.create(
                     wallet.getId(),
                     accountHolderId,
@@ -325,12 +337,11 @@ public class WalletSecurityService {
             throw new BusinessException("WALLET_OTP_EXPIRED");
         }
 
-        int attempts = challenge.getAttemptCount() + 1;
-        challenge.setAttemptCount(attempts);
-        if (!challenge.getOtpHash().equals(hash(otpCode.trim()))) {
+        if (outcome != UnifiedOtpService.VerificationOutcome.VERIFIED) {
             int remainingAttempts = Math.max(challenge.getMaxAttempts() - attempts, 0);
-            if (attempts >= challenge.getMaxAttempts()) {
+            if (outcome == UnifiedOtpService.VerificationOutcome.TOO_MANY_ATTEMPTS) {
                 challenge.setStatus(WalletOtpChallengeStatus.FAILED);
+                unifiedOtpService.invalidateOtp("wallet-otp:" + challenge.getId(), "TOO_MANY_ATTEMPTS");
             }
             walletOtpChallengeRepository.save(challenge);
             eventPublisher.publish(WalletOtpFailedEvent.create(
@@ -342,7 +353,7 @@ public class WalletSecurityService {
                     "OTP_INVALID",
                     remainingAttempts
             ));
-            throw new BusinessException(attempts >= challenge.getMaxAttempts()
+            throw new BusinessException(outcome == UnifiedOtpService.VerificationOutcome.TOO_MANY_ATTEMPTS
                     ? "WALLET_OTP_TOO_MANY_ATTEMPTS"
                     : "WALLET_OTP_INVALID");
         }
@@ -417,25 +428,6 @@ public class WalletSecurityService {
     private String buildOtpMessage(String otpCode, long ttlSeconds) {
         long ttlMinutes = Math.max(1, Math.round(Math.ceil(ttlSeconds / 60.0)));
         return "Votre code OTP CC App est: " + otpCode + ". Expire dans " + ttlMinutes + " minute(s).";
-    }
-
-    private String generateOtpCode(int length) {
-        if (length < 4 || length > 8) {
-            throw new BusinessException("WALLET_OTP_CODE_LENGTH_INVALID");
-        }
-        int min = (int) Math.pow(10, length - 1);
-        int maxExclusive = (int) Math.pow(10, length);
-        return Integer.toString(ThreadLocalRandom.current().nextInt(min, maxExclusive));
-    }
-
-    private String hash(String value) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hashed = digest.digest(value.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(hashed);
-        } catch (NoSuchAlgorithmException ex) {
-            throw new IllegalStateException("SHA-256 not available", ex);
-        }
     }
 
     private boolean readBoolean(JsonNode nestedNode,

@@ -1,8 +1,8 @@
 package com.ccapp.identity.verification.service;
 
+import com.ccapp.common.events.DomainEventPublisher;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.common.exception.NotFoundException;
-import com.ccapp.common.events.DomainEventPublisher;
 import com.ccapp.cpass.otp.CPassOtpGateway;
 import com.ccapp.cpass.otp.CPassOtpSendResponse;
 import com.ccapp.identity.verification.domain.entity.PhoneVerification;
@@ -12,7 +12,6 @@ import com.ccapp.identity.verification.dto.ConfirmPhoneVerificationRequest;
 import com.ccapp.identity.verification.dto.PhoneVerificationResponse;
 import com.ccapp.identity.verification.dto.StartPhoneVerificationRequest;
 import com.ccapp.identity.verification.repository.PhoneVerificationRepository;
-import com.ccapp.notifications.dispatcher.PhoneMessageGateway;
 import com.ccapp.progress.event.PhoneVerifiedEvent;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,13 +20,8 @@ import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.OffsetDateTime;
-import java.util.HexFormat;
 import java.util.UUID;
-import java.util.concurrent.ThreadLocalRandom;
 
 @Service
 @RequiredArgsConstructor
@@ -41,16 +35,15 @@ public class PhoneVerificationService {
     private static final String PHONE_VERIFICATION_RESEND_LIMIT_REACHED = "PHONE_VERIFICATION_RESEND_LIMIT_REACHED";
     private static final String PHONE_VERIFICATION_REQUIRED = "PHONE_VERIFICATION_REQUIRED";
     private static final String PHONE_VERIFICATION_PHONE_MISMATCH = "PHONE_VERIFICATION_PHONE_MISMATCH";
+    private static final String CPASS_DELEGATED = "CPASS_DELEGATED";
 
     private final PhoneVerificationRepository phoneVerificationRepository;
-    private final PhoneMessageGateway phoneMessageGateway;
+    private final UnifiedOtpService unifiedOtpService;
     private final DomainEventPublisher domainEventPublisher;
 
     @Nullable
     @Autowired(required = false)
     private CPassOtpGateway cPassOtpGateway;
-
-    private static final String CPASS_DELEGATED = "CPASS_DELEGATED";
 
     @Value("${identity.phone-verification.code-length:6}")
     private int codeLength;
@@ -83,29 +76,37 @@ public class PhoneVerificationService {
 
         String normalizedPhone = normalizePhone(request.phoneNumber());
 
-        if (cPassOtpGateway != null) {
+        if (shouldDelegateToCPass(request.channel())) {
             return startVerificationViaCPass(requesterAccountHolderId, request, normalizedPhone, now);
         }
 
-        String code = generateCode(codeLength);
+        UnifiedOtpService.OtpMaterial otpMaterial = unifiedOtpService.generateOtp(
+                codeLength,
+                ttlSeconds,
+                "PHONE_VERIFICATION_CODE_LENGTH_INVALID"
+        );
 
         PhoneVerification verification = PhoneVerification.builder()
                 .requesterAccountHolderId(requesterAccountHolderId)
                 .phoneNumber(normalizedPhone)
                 .channel(request.channel())
                 .status(PhoneVerificationStatus.PENDING)
-                .codeHash(hash(code))
+                .codeHash(otpMaterial.hash())
                 .attemptCount(0)
                 .maxAttempts(maxAttempts)
                 .sendCount(1)
                 .maxSendCount(maxSendCount)
                 .lastSentAt(now)
                 .resendAvailableAt(now.plusSeconds(resendCooldownSeconds))
-                .expiresAt(now.plusSeconds(ttlSeconds))
+                .expiresAt(otpMaterial.expiresAt())
                 .build();
 
         PhoneVerification saved = phoneVerificationRepository.save(verification);
-        sendCode(request.channel(), normalizedPhone, code);
+        unifiedOtpService.sendOtp(
+                toDeliveryChannel(request.channel()),
+                normalizedPhone,
+                buildOtpMessage(otpMaterial.code())
+        );
         return toResponse(saved);
     }
 
@@ -132,7 +133,6 @@ public class PhoneVerificationService {
         verification.setAttemptCount(verification.getAttemptCount() + 1);
 
         if (CPASS_DELEGATED.equals(verification.getCodeHash())) {
-            // OTP was delegated to CPass — validate remotely
             boolean verified = cPassOtpGateway.verifyOtp(
                     verification.getCpassReferenceId(),
                     request.code().trim()
@@ -140,15 +140,23 @@ public class PhoneVerificationService {
             if (!verified) {
                 if (verification.getAttemptCount() >= verification.getMaxAttempts()) {
                     verification.setStatus(PhoneVerificationStatus.FAILED);
+                    unifiedOtpService.invalidateOtp("phone-verification:" + verification.getId(), "TOO_MANY_ATTEMPTS");
                 }
                 phoneVerificationRepository.save(verification);
                 throw new BusinessException(PHONE_VERIFICATION_CODE_INVALID);
             }
         } else {
-            String providedCodeHash = hash(request.code().trim());
-            if (!verification.getCodeHash().equals(providedCodeHash)) {
+            UnifiedOtpService.VerificationOutcome outcome = unifiedOtpService.verifyOtp(
+                    request.code().trim(),
+                    verification.getCodeHash(),
+                    verification.getExpiresAt(),
+                    verification.getAttemptCount(),
+                    verification.getMaxAttempts()
+            );
+            if (outcome != UnifiedOtpService.VerificationOutcome.VERIFIED) {
                 if (verification.getAttemptCount() >= verification.getMaxAttempts()) {
                     verification.setStatus(PhoneVerificationStatus.FAILED);
+                    unifiedOtpService.invalidateOtp("phone-verification:" + verification.getId(), "TOO_MANY_ATTEMPTS");
                 }
                 phoneVerificationRepository.save(verification);
                 throw new BusinessException(PHONE_VERIFICATION_CODE_INVALID);
@@ -175,28 +183,40 @@ public class PhoneVerificationService {
             throw new BusinessException(PHONE_VERIFICATION_EXPIRED);
         }
 
-        OffsetDateTime now = OffsetDateTime.now();
-        if (now.isBefore(verification.getResendAvailableAt())) {
+        UnifiedOtpService.ResendOutcome resendOutcome = unifiedOtpService.evaluateResend(
+                verification.getResendAvailableAt(),
+                verification.getSendCount(),
+                verification.getMaxSendCount()
+        );
+        if (resendOutcome == UnifiedOtpService.ResendOutcome.TOO_EARLY) {
             throw new BusinessException(PHONE_VERIFICATION_RESEND_TOO_EARLY);
         }
-        if (verification.getSendCount() >= verification.getMaxSendCount()) {
+        if (resendOutcome == UnifiedOtpService.ResendOutcome.LIMIT_REACHED) {
             verification.setStatus(PhoneVerificationStatus.FAILED);
+            unifiedOtpService.invalidateOtp("phone-verification:" + verification.getId(), "RESEND_LIMIT_REACHED");
             phoneVerificationRepository.save(verification);
             throw new BusinessException(PHONE_VERIFICATION_RESEND_LIMIT_REACHED);
         }
 
-        if (cPassOtpGateway != null) {
-            CPassOtpSendResponse cpassResp = cPassOtpGateway.sendOtp(verification.getPhoneNumber());
+        OffsetDateTime now = OffsetDateTime.now();
+        if (shouldDelegateToCPass(verification.getChannel())) {
+            CPassOtpSendResponse cpassResp = cPassOtpGateway.sendOtp(verification.getPhoneNumber(), verification.getChannel());
             verification.setCpassReferenceId(cpassResp.referenceId());
             verification.setCodeHash(CPASS_DELEGATED);
-            OffsetDateTime expiresAt = cpassResp.expiresAt() != null
-                    ? cpassResp.expiresAt()
-                    : now.plusSeconds(ttlSeconds);
-            verification.setExpiresAt(expiresAt);
+            verification.setExpiresAt(cpassResp.expiresAt() != null ? cpassResp.expiresAt() : now.plusSeconds(ttlSeconds));
         } else {
-            String code = generateCode(codeLength);
-            verification.setCodeHash(hash(code));
-            sendCode(verification.getChannel(), verification.getPhoneNumber(), code);
+            UnifiedOtpService.OtpMaterial otpMaterial = unifiedOtpService.generateOtp(
+                    codeLength,
+                    ttlSeconds,
+                    "PHONE_VERIFICATION_CODE_LENGTH_INVALID"
+            );
+            verification.setCodeHash(otpMaterial.hash());
+            verification.setExpiresAt(otpMaterial.expiresAt());
+            unifiedOtpService.sendOtp(
+                    toDeliveryChannel(verification.getChannel()),
+                    verification.getPhoneNumber(),
+                    buildOtpMessage(otpMaterial.code())
+            );
         }
         verification.setSendCount(verification.getSendCount() + 1);
         verification.setLastSentAt(now);
@@ -212,6 +232,7 @@ public class PhoneVerificationService {
         if (verification.getStatus() == PhoneVerificationStatus.PENDING
                 && verification.getExpiresAt().isBefore(OffsetDateTime.now())) {
             verification.setStatus(PhoneVerificationStatus.EXPIRED);
+            unifiedOtpService.invalidateOtp("phone-verification:" + verification.getId(), "EXPIRED");
             verification = phoneVerificationRepository.save(verification);
         }
         return toResponse(verification);
@@ -231,13 +252,11 @@ public class PhoneVerificationService {
         }
     }
 
-    private PhoneVerificationResponse startVerificationViaCPass(
-            UUID requesterAccountHolderId,
-            StartPhoneVerificationRequest request,
-            String normalizedPhone,
-            OffsetDateTime now
-    ) {
-        CPassOtpSendResponse cpassResp = cPassOtpGateway.sendOtp(normalizedPhone);
+    private PhoneVerificationResponse startVerificationViaCPass(UUID requesterAccountHolderId,
+                                                                StartPhoneVerificationRequest request,
+                                                                String normalizedPhone,
+                                                                OffsetDateTime now) {
+        CPassOtpSendResponse cpassResp = cPassOtpGateway.sendOtp(normalizedPhone, request.channel());
         OffsetDateTime expiresAt = cpassResp.expiresAt() != null
                 ? cpassResp.expiresAt()
                 : now.plusSeconds(ttlSeconds);
@@ -261,15 +280,6 @@ public class PhoneVerificationService {
         return toResponse(phoneVerificationRepository.save(verification));
     }
 
-    private void sendCode(PhoneVerificationChannel channel, String phoneNumber, String code) {
-        String message = "Votre code de verification CC App est: " + code;
-        if (channel == PhoneVerificationChannel.WHATSAPP) {
-            phoneMessageGateway.sendWhatsApp(phoneNumber, message);
-            return;
-        }
-        phoneMessageGateway.sendSms(phoneNumber, message);
-    }
-
     private PhoneVerification getOwnedVerificationOrThrow(UUID requesterAccountHolderId, UUID verificationId) {
         return phoneVerificationRepository.findByIdAndRequesterAccountHolderId(verificationId, requesterAccountHolderId)
                 .orElseThrow(() -> new NotFoundException("Phone verification not found"));
@@ -279,6 +289,7 @@ public class PhoneVerificationService {
         if (verification.getStatus() == PhoneVerificationStatus.PENDING
                 && verification.getExpiresAt().isBefore(OffsetDateTime.now())) {
             verification.setStatus(PhoneVerificationStatus.EXPIRED);
+            unifiedOtpService.invalidateOtp("phone-verification:" + verification.getId(), "EXPIRED");
             phoneVerificationRepository.save(verification);
             throw new BusinessException(PHONE_VERIFICATION_EXPIRED);
         }
@@ -292,30 +303,10 @@ public class PhoneVerificationService {
         return normalized;
     }
 
-    private String generateCode(int length) {
-        if (length < 4 || length > 8) {
-            throw new BusinessException("PHONE_VERIFICATION_CODE_LENGTH_INVALID");
-        }
-        int min = (int) Math.pow(10, length - 1);
-        int maxExclusive = (int) Math.pow(10, length);
-        int value = ThreadLocalRandom.current().nextInt(min, maxExclusive);
-        return Integer.toString(value);
-    }
-
-    private String hash(String clearValue) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hashed = digest.digest(clearValue.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(hashed);
-        } catch (NoSuchAlgorithmException ex) {
-            throw new IllegalStateException("SHA-256 not available", ex);
-        }
-    }
-
     private PhoneVerificationResponse toResponse(PhoneVerification verification) {
         return new PhoneVerificationResponse(
                 verification.getId(),
-                maskPhone(verification.getPhoneNumber()),
+                unifiedOtpService.maskPhone(verification.getPhoneNumber()),
                 verification.getChannel(),
                 verification.getStatus(),
                 verification.getResendAvailableAt(),
@@ -324,11 +315,17 @@ public class PhoneVerificationService {
         );
     }
 
-    private String maskPhone(String phoneNumber) {
-        if (phoneNumber == null || phoneNumber.length() < 4) {
-            return "***";
-        }
-        int keep = Math.min(4, phoneNumber.length());
-        return "*".repeat(phoneNumber.length() - keep) + phoneNumber.substring(phoneNumber.length() - keep);
+    private boolean shouldDelegateToCPass(PhoneVerificationChannel channel) {
+        return cPassOtpGateway != null && cPassOtpGateway.supportsChannel(channel);
+    }
+
+    private UnifiedOtpService.OtpDeliveryChannel toDeliveryChannel(PhoneVerificationChannel channel) {
+        return channel == PhoneVerificationChannel.WHATSAPP
+                ? UnifiedOtpService.OtpDeliveryChannel.WHATSAPP
+                : UnifiedOtpService.OtpDeliveryChannel.SMS;
+    }
+
+    private String buildOtpMessage(String code) {
+        return "Votre code de verification CC App est: " + code;
     }
 }

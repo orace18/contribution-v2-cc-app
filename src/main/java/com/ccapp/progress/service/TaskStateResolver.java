@@ -19,8 +19,12 @@ import com.ccapp.financing.repository.LoanApplicationRepository;
 import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
 import com.ccapp.identity.account_holder.repository.AccountHolderRepository;
 import com.ccapp.identity.domain.enums.KycStatus;
+import com.ccapp.identity.wallet.repository.WalletRepository;
 import com.ccapp.identity.verification.domain.enums.PhoneVerificationStatus;
 import com.ccapp.identity.verification.repository.PhoneVerificationRepository;
+import com.ccapp.payments.operation.domain.enums.OperationStatus;
+import com.ccapp.payments.operation.domain.enums.OperationType;
+import com.ccapp.payments.operation.repository.OperationRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -54,6 +58,8 @@ public class TaskStateResolver {
     private final RepaymentScheduleRepository repaymentScheduleRepository;
     private final LoanApplicationRepository loanApplicationRepository;
     private final CountryConfigResolver countryConfigResolver;
+    private final WalletRepository walletRepository;
+    private final OperationRepository operationRepository;
 
     @Transactional(readOnly = true)
     public TaskUserState resolve(UUID accountHolderId) {
@@ -78,6 +84,16 @@ public class TaskStateResolver {
                 && hasText(accountHolder.getPhoneNumber())
                 && hasText(accountHolder.getCountryCode())
                 && hasText(accountHolder.getServiceCountryCode());
+        boolean walletActivated = walletRepository.findFirstByAccountHolderIdAndStatusOrderByCreatedAtDesc(accountHolderId, "ACTIVE").isPresent();
+        boolean walletFunded = operationRepository.findFirstByAccountHolderIdAndTypeAndStatusOrderByCreatedAtDesc(
+                accountHolderId,
+                OperationType.WALLET_DEPOSIT_PSP,
+                OperationStatus.CONFIRMED
+        ).isPresent() || operationRepository.findFirstByAccountHolderIdAndTypeAndStatusOrderByCreatedAtDesc(
+                accountHolderId,
+                OperationType.WALLET_DEPOSIT_AGENT,
+                OperationStatus.CONFIRMED
+        ).isPresent();
 
         boolean madeFirstContribution = circleContributionRepository.countCompletedByAccountHolderId(
                 accountHolderId,
@@ -104,6 +120,8 @@ public class TaskStateResolver {
                 accountHolder,
                 phoneVerified,
                 profileComplete,
+                walletActivated,
+                walletFunded,
                 accountHolder.getKycStatus() == KycStatus.VERIFIED,
                 !activeCircles.isEmpty(),
                 activeCircleId,
@@ -160,6 +178,8 @@ public class TaskStateResolver {
             AccountHolder accountHolder,
             boolean phoneVerified,
             boolean profileComplete,
+            boolean walletActivated,
+            boolean walletFunded,
             boolean kycCompleted,
             boolean joinedCircle,
             UUID activeCircleId,

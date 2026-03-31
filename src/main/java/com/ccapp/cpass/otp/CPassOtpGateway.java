@@ -2,13 +2,16 @@ package com.ccapp.cpass.otp;
 
 import com.ccapp.cpass.client.CPassAuthClient;
 import com.ccapp.cpass.client.CPassException;
+import com.ccapp.identity.verification.domain.enums.PhoneVerificationChannel;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClientResponseException;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 @Component
@@ -18,16 +21,29 @@ import java.util.Map;
 public class CPassOtpGateway {
 
     private final CPassAuthClient authClient;
+    @Value("${cpass.otp.supports-whatsapp:false}")
+    private boolean supportsWhatsapp;
 
     public CPassOtpSendResponse sendOtp(String phoneNumber) {
-        log.info("cpass: otp send to={}", mask(phoneNumber));
+        return sendOtp(phoneNumber, PhoneVerificationChannel.SMS);
+    }
+
+    public CPassOtpSendResponse sendOtp(String phoneNumber, PhoneVerificationChannel channel) {
+        PhoneVerificationChannel effectiveChannel = channel == null ? PhoneVerificationChannel.SMS : channel;
+        if (!supportsChannel(effectiveChannel)) {
+            throw new CPassException("CPASS_OTP_CHANNEL_UNSUPPORTED");
+        }
+        log.info("cpass: otp send channel={} to={}", effectiveChannel, mask(phoneNumber));
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("to", phoneNumber);
+        payload.put("channel", effectiveChannel.name());
         try {
             CPassOtpSendResponse response = authClient.restClient().post()
                     .uri("/otp/send")
                     .header("Authorization", "Bearer " + authClient.getBearerToken())
                     .header("X-Client-ID", authClient.getClientId())
                     .contentType(MediaType.APPLICATION_JSON)
-                    .body(Map.of("to", phoneNumber))
+                    .body(payload)
                     .retrieve()
                     .body(CPassOtpSendResponse.class);
             if (response == null || response.referenceId() == null) {
@@ -36,15 +52,20 @@ public class CPassOtpGateway {
             log.info("cpass: otp queued referenceId={} expiresAt={}", response.referenceId(), response.expiresAt());
             return response;
         } catch (RestClientResponseException ex) {
-            log.error("cpass: otp send failed status={} body={}",
-                    ex.getStatusCode().value(), ex.getResponseBodyAsString());
+            log.error("cpass: otp send failed channel={} status={} body={}",
+                    effectiveChannel, ex.getStatusCode().value(), ex.getResponseBodyAsString());
             throw new CPassException("CPASS_OTP_SEND_FAILED");
         } catch (CPassException ex) {
             throw ex;
         } catch (RuntimeException ex) {
-            log.error("cpass: otp send error reason={}", ex.getMessage());
+            log.error("cpass: otp send error channel={} reason={}", effectiveChannel, ex.getMessage());
             throw new CPassException("CPASS_OTP_SEND_FAILED");
         }
+    }
+
+    public boolean supportsChannel(PhoneVerificationChannel channel) {
+        PhoneVerificationChannel effectiveChannel = channel == null ? PhoneVerificationChannel.SMS : channel;
+        return effectiveChannel == PhoneVerificationChannel.SMS || supportsWhatsapp;
     }
 
     public CPassOtpVerifyResponse verifyOtp(String referenceId, String otpCode) {

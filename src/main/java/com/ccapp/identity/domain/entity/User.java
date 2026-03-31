@@ -42,7 +42,7 @@ public class User extends AuditableEntity {
     private AccountStatus accountStatus;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "kyc_status", nullable = false, length = 16)
+    @Column(name = "kyc_status", nullable = false, length = 32)
     private KycStatus kycStatus;
 
     @Column(name = "blocked_reason", length = 255)

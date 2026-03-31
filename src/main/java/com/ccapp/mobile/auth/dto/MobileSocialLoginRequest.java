@@ -11,6 +11,8 @@ public record MobileSocialLoginRequest(
         @NotNull(message = "platform is required")
         Platform platform,
 
+        String pushToken,
+
         String idToken
 ) {
 }

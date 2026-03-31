@@ -58,10 +58,10 @@ public class AfricasTalkingPhoneMessageGateway implements PhoneMessageGateway {
         String body = buildSmsFormBody(toPhoneNumber, message);
         String endpoint = resolveEndpoint(smsPath);
         log.info(
-                "Outbound API request provider=africastalking channel=sms method=POST endpoint={} token={} body={}",
+                "Outbound API request provider=africastalking channel=sms method=POST endpoint={} recipient={} messageLength={}",
                 endpoint,
-                tokenForLog(),
-                body
+                maskPhone(toPhoneNumber),
+                messageLength(message)
         );
         try {
             ResponseEntity<String> response = restClient.post()
@@ -72,29 +72,28 @@ public class AfricasTalkingPhoneMessageGateway implements PhoneMessageGateway {
                     .retrieve()
                     .toEntity(String.class);
             log.info(
-                    "Outbound API response provider=africastalking channel=sms method=POST endpoint={} status={} body={}",
+                    "Outbound API response provider=africastalking channel=sms method=POST endpoint={} recipient={} status={} providerResponseLength={}",
                     endpoint,
+                    maskPhone(toPhoneNumber),
                     response.getStatusCode().value(),
-                    trimResponse(response.getBody())
+                    responseLength(response.getBody())
             );
             return new PhoneMessageDispatchResult(true, trimResponse(response.getBody()));
         } catch (RestClientResponseException ex) {
             log.error(
-                    "Outbound API error provider=africastalking channel=sms method=POST endpoint={} status={} token={} requestBody={} responseBody={} reason={}",
+                    "Outbound API error provider=africastalking channel=sms method=POST endpoint={} recipient={} status={} responseLength={} reason={}",
                     endpoint,
+                    maskPhone(toPhoneNumber),
                     ex.getStatusCode().value(),
-                    tokenForLog(),
-                    body,
-                    trimResponse(ex.getResponseBodyAsString()),
+                    responseLength(ex.getResponseBodyAsString()),
                     ex.getMessage()
             );
             throw new BusinessException("PHONE_MESSAGE_DELIVERY_FAILED");
         } catch (RuntimeException ex) {
             log.error(
-                    "Outbound API error provider=africastalking channel=sms method=POST endpoint={} token={} requestBody={} reason={}",
+                    "Outbound API error provider=africastalking channel=sms method=POST endpoint={} recipient={} reason={}",
                     endpoint,
-                    tokenForLog(),
-                    body,
+                    maskPhone(toPhoneNumber),
                     ex.getMessage()
             );
             throw new BusinessException("PHONE_MESSAGE_DELIVERY_FAILED");
@@ -113,10 +112,10 @@ public class AfricasTalkingPhoneMessageGateway implements PhoneMessageGateway {
         }
         String endpoint = resolveEndpoint(whatsappPath);
         log.info(
-                "Outbound API request provider=africastalking channel=whatsapp method=POST endpoint={} token={} body={}",
+                "Outbound API request provider=africastalking channel=whatsapp method=POST endpoint={} recipient={} messageLength={}",
                 endpoint,
-                tokenForLog(),
-                payload
+                maskPhone(toPhoneNumber),
+                messageLength(message)
         );
 
         try {
@@ -128,29 +127,28 @@ public class AfricasTalkingPhoneMessageGateway implements PhoneMessageGateway {
                     .retrieve()
                     .toEntity(String.class);
             log.info(
-                    "Outbound API response provider=africastalking channel=whatsapp method=POST endpoint={} status={} body={}",
+                    "Outbound API response provider=africastalking channel=whatsapp method=POST endpoint={} recipient={} status={} providerResponseLength={}",
                     endpoint,
+                    maskPhone(toPhoneNumber),
                     response.getStatusCode().value(),
-                    trimResponse(response.getBody())
+                    responseLength(response.getBody())
             );
             return new PhoneMessageDispatchResult(true, trimResponse(response.getBody()));
         } catch (RestClientResponseException ex) {
             log.error(
-                    "Outbound API error provider=africastalking channel=whatsapp method=POST endpoint={} status={} token={} requestBody={} responseBody={} reason={}",
+                    "Outbound API error provider=africastalking channel=whatsapp method=POST endpoint={} recipient={} status={} responseLength={} reason={}",
                     endpoint,
+                    maskPhone(toPhoneNumber),
                     ex.getStatusCode().value(),
-                    tokenForLog(),
-                    payload,
-                    trimResponse(ex.getResponseBodyAsString()),
+                    responseLength(ex.getResponseBodyAsString()),
                     ex.getMessage()
             );
             throw new BusinessException("PHONE_MESSAGE_DELIVERY_FAILED");
         } catch (RuntimeException ex) {
             log.error(
-                    "Outbound API error provider=africastalking channel=whatsapp method=POST endpoint={} token={} requestBody={} reason={}",
+                    "Outbound API error provider=africastalking channel=whatsapp method=POST endpoint={} recipient={} reason={}",
                     endpoint,
-                    tokenForLog(),
-                    payload,
+                    maskPhone(toPhoneNumber),
                     ex.getMessage()
             );
             throw new BusinessException("PHONE_MESSAGE_DELIVERY_FAILED");
@@ -182,23 +180,6 @@ public class AfricasTalkingPhoneMessageGateway implements PhoneMessageGateway {
         return trimmed.length() > 500 ? trimmed.substring(0, 500) : trimmed;
     }
 
-    private String tokenForLog() {
-        if (!hasText(apiKey)) {
-            return "";
-        }
-        if (logRawToken) {
-            return apiKey;
-        }
-        return maskToken(apiKey);
-    }
-
-    private String maskToken(String token) {
-        if (token.length() <= 4) {
-            return "****";
-        }
-        return token.substring(0, 2) + "****" + token.substring(token.length() - 2);
-    }
-
     private String resolveEndpoint(String path) {
         if (path == null || path.isBlank()) {
             return baseUrl;
@@ -217,5 +198,21 @@ public class AfricasTalkingPhoneMessageGateway implements PhoneMessageGateway {
 
     private boolean hasText(String value) {
         return value != null && !value.isBlank();
+    }
+
+    private String maskPhone(String phoneNumber) {
+        if (phoneNumber == null || phoneNumber.length() < 4) {
+            return "***";
+        }
+        int keep = Math.min(4, phoneNumber.length());
+        return "*".repeat(phoneNumber.length() - keep) + phoneNumber.substring(phoneNumber.length() - keep);
+    }
+
+    private int messageLength(String message) {
+        return message == null ? 0 : message.length();
+    }
+
+    private int responseLength(String response) {
+        return response == null ? 0 : response.length();
     }
 }

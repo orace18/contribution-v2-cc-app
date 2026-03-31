@@ -5,8 +5,10 @@ import java.util.List;
 
 public enum TaskType {
     COMPLETE_KYC(TaskCategory.ONBOARDING, false, true, 700, false),
+    FUND_WALLET(TaskCategory.FINANCIAL, false, true, 625, false),
     JOIN_CIRCLE(TaskCategory.ENGAGEMENT, false, true, 600, false),
     MAKE_FIRST_CONTRIBUTION(TaskCategory.FINANCIAL, false, true, 650, false),
+    INVITE_FRIENDS(TaskCategory.ENGAGEMENT, false, true, 360, false),
     INVITE_MEMBER(TaskCategory.ENGAGEMENT, false, true, 350, false),
     APPLY_LOAN(TaskCategory.FINANCIAL, false, true, 800, false),
     REPAY_INSTALLMENT(TaskCategory.FINANCIAL, true, false, 950, false),

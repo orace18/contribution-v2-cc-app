@@ -9,6 +9,8 @@ public record RegisterDeviceRequest(
         String deviceIdentifier,
 
         @NotNull(message = "platform is required")
-        Platform platform
+        Platform platform,
+
+        String pushToken
 ) {
 }

@@ -4,6 +4,8 @@ import com.ccapp.common.events.IdempotentEventListenerExecutor;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.identity.wallet.domain.entity.Wallet;
 import com.ccapp.identity.wallet.repository.WalletRepository;
+import com.ccapp.identity.wallet.service.WalletService;
+import com.ccapp.mobile.onboarding.service.MobileOnboardingJourneyService;
 import com.ccapp.progress.event.PhoneVerifiedEvent;
 import com.ccapp.wallet.domain.enums.WalletType;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +28,8 @@ import java.util.UUID;
 public class WalletPhoneBindingListener {
 
     private final WalletRepository walletRepository;
+    private final WalletService walletService;
+    private final MobileOnboardingJourneyService mobileOnboardingJourneyService;
     private final IdempotentEventListenerExecutor idempotentExecutor;
 
     @EventListener
@@ -55,12 +59,14 @@ public class WalletPhoneBindingListener {
                     || !activeWallet.getMobileMoneyNumber().trim().equals(normalizedPhone)) {
                 activeWallet.setMobileMoneyNumber(normalizedPhone);
                 walletRepository.save(activeWallet);
+                mobileOnboardingJourneyService.markWalletActivated(accountHolderId);
                 log.info("wallet_phone_binding_reconciled walletId={} accountHolderId={} phone={}",
-                        activeWallet.getId(), accountHolderId, normalizedPhone);
+                        activeWallet.getId(), accountHolderId, maskPhone(normalizedPhone));
                 return;
             }
+            mobileOnboardingJourneyService.markWalletActivated(accountHolderId);
             log.info("wallet_phone_binding_verified walletId={} accountHolderId={} phone={}",
-                    activeWallet.getId(), accountHolderId, normalizedPhone);
+                    activeWallet.getId(), accountHolderId, maskPhone(normalizedPhone));
             return;
         }
 
@@ -68,15 +74,20 @@ public class WalletPhoneBindingListener {
             throw new BusinessException("WALLET_PHONE_BINDING_REQUIRES_MANUAL_REVIEW");
         }
 
-        Wallet wallet = walletRepository.save(Wallet.builder()
-                .accountHolderId(accountHolderId)
-                .provider("MOBILE")
-                .mobileMoneyNumber(normalizedPhone)
-                .status("ACTIVE")
-                .walletType(WalletType.USER)
-                .build());
+        Wallet wallet = walletService.createWallet(accountHolderId, "MOBILE", normalizedPhone, "ACTIVE");
+        wallet.setWalletType(WalletType.USER);
+        walletRepository.save(wallet);
+        mobileOnboardingJourneyService.markWalletActivated(accountHolderId);
 
         log.info("wallet_created_on_phone_verification walletId={} accountHolderId={} phone={}",
-                wallet.getId(), accountHolderId, phoneNumber);
+                wallet.getId(), accountHolderId, maskPhone(phoneNumber));
+    }
+
+    private String maskPhone(String phoneNumber) {
+        if (phoneNumber == null || phoneNumber.length() < 4) {
+            return "***";
+        }
+        int keep = Math.min(4, phoneNumber.length());
+        return "*".repeat(phoneNumber.length() - keep) + phoneNumber.substring(phoneNumber.length() - keep);
     }
 }

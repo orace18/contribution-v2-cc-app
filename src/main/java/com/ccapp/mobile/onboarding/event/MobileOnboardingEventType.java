@@ -2,6 +2,7 @@ package com.ccapp.mobile.onboarding.event;
 
 public enum MobileOnboardingEventType {
     USER_AUTHENTICATED,
+    WALLET_ACTIVATED,
     COUNTRY_SELECTED,
     SPONSOR_SELECTED,
     PLAN_SELECTED,

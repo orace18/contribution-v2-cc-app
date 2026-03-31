@@ -9,6 +9,7 @@ import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
 import com.ccapp.identity.account_holder.service.AccountHolderService;
 import com.ccapp.identity.delegation.domain.enums.PermissionLevel;
 import com.ccapp.identity.delegation.service.AccessControlService;
+import com.ccapp.identity.wallet.repository.WalletRepository;
 import com.ccapp.mlm.domain.entity.MlmRelationship;
 import com.ccapp.mlm.domain.entity.MlmMemberLink;
 import com.ccapp.mlm.repository.MlmMemberLinkRepository;
@@ -74,6 +75,7 @@ public class MobileOnboardingJourneyService {
     private final MlmGraphSyncService mlmGraphSyncService;
     private final DomainEventPublisher domainEventPublisher;
     private final CountryContextService countryContextService;
+    private final WalletRepository walletRepository;
 
     @Transactional
     public MobileOnboardingJourney markAuthenticated(UUID accountHolderId) {
@@ -85,13 +87,23 @@ public class MobileOnboardingJourneyService {
     }
 
     @Transactional
+    public MobileOnboardingJourney markWalletActivated(UUID accountHolderId) {
+        MobileOnboardingJourney journey = getOrCreate(accountHolderId);
+        promoteStatus(journey, MobileOnboardingJourneyStatus.AUTHENTICATED);
+        if (promoteStatus(journey, MobileOnboardingJourneyStatus.WALLET_ACTIVATED)) {
+            publish(accountHolderId, MobileOnboardingEventType.WALLET_ACTIVATED, Map.of());
+        }
+        return journeyRepository.save(journey);
+    }
+
+    @Transactional
     public MobileCountrySelectionResponse selectCountry(UUID actorUserId,
                                                         UUID accountHolderId,
                                                         String requestedCountryCode) {
         accessControlService.assertCanActOnAccountHolder(actorUserId, accountHolderId, PermissionLevel.TRANSACT);
         MobileOnboardingJourney journey = getOrCreate(accountHolderId);
         promoteStatus(journey, MobileOnboardingJourneyStatus.AUTHENTICATED);
-        requireAtLeast(journey, MobileOnboardingJourneyStatus.AUTHENTICATED, "User must be authenticated first");
+        requireAtLeast(journey, MobileOnboardingJourneyStatus.WALLET_ACTIVATED, "Wallet must be activated after phone verification");
 
         AccountHolder accountHolder = accountHolderService.selectCountry(accountHolderId, normalizeCountryCode(requestedCountryCode));
         boolean changed = journey.getCountryCode() == null
@@ -364,6 +376,10 @@ public class MobileOnboardingJourneyService {
         MobileOnboardingJourney copy = copyOf(base);
         promoteStatus(copy, MobileOnboardingJourneyStatus.AUTHENTICATED);
 
+        if (walletRepository.findFirstByAccountHolderIdAndStatusOrderByCreatedAtDesc(accountHolderId, "ACTIVE").isPresent()) {
+            promoteStatus(copy, MobileOnboardingJourneyStatus.WALLET_ACTIVATED);
+        }
+
         AccountHolder accountHolder = accountHolderService.getById(accountHolderId);
         if (accountHolder.getCountryCode() != null && !accountHolder.getCountryCode().isBlank()) {
             copy.setCountryCode(accountHolder.getCountryCode());
@@ -618,6 +634,12 @@ public class MobileOnboardingJourneyService {
         }
         return switch (journey.getStatus()) {
             case REGISTERED, AUTHENTICATED -> new MobileOnboardingStatusResponse.NextStep(
+                    "VERIFY_PHONE",
+                    "POST",
+                    "/api/mobile/phone-verifications/start",
+                    "Verify your phone to activate your wallet"
+            );
+            case WALLET_ACTIVATED -> new MobileOnboardingStatusResponse.NextStep(
                     "SELECT_COUNTRY",
                     "POST",
                     "/api/mobile/onboarding/select-country",

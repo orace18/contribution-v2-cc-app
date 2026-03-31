@@ -31,7 +31,8 @@ public class MobileAuthService {
         FirebaseUserClaims claims = resolveClaims(request.idToken());
         SyncResponse sync = identityService.sync(claims, new SyncRequest(
                 request.deviceIdentifier(),
-                request.platform()
+                request.platform(),
+                request.pushToken()
         ));
 
         UUID accountHolderId = sync.userId();

@@ -66,7 +66,7 @@ public class IdentityDeviceSessionService {
         ensureDelegatedIdentityModel(user);
         ensureAccountActive(user);
 
-        UserDevice device = upsertDevice(user, request.deviceIdentifier(), request.platform());
+        UserDevice device = upsertDevice(user, request.deviceIdentifier(), request.platform(), request.pushToken());
         SessionCreation sessionCreation = createSession(user, device);
 
         log.info("Identity sync success userId={} sessionId={}", user.getId(), sessionCreation.session().getId());
@@ -88,7 +88,7 @@ public class IdentityDeviceSessionService {
                 userId, request.platform(), request.deviceIdentifier());
         User user = findUser(userId);
         ensureAccountActive(user);
-        UserDevice saved = upsertDevice(user, request.deviceIdentifier(), request.platform());
+        UserDevice saved = upsertDevice(user, request.deviceIdentifier(), request.platform(), request.pushToken());
         return new UserDeviceDto(
                 saved.getId(),
                 saved.getDeviceIdentifier(),
@@ -173,7 +173,7 @@ public class IdentityDeviceSessionService {
                 .orElseThrow(() -> new NotFoundException("User not found"));
     }
 
-    private UserDevice upsertDevice(User user, String deviceIdentifier, Platform platform) {
+    private UserDevice upsertDevice(User user, String deviceIdentifier, Platform platform, String pushToken) {
         UserDevice device = userDeviceRepository.findByUserIdAndDeviceIdentifierAndDeletedFalse(user.getId(), deviceIdentifier)
                 .orElseGet(() -> UserDevice.builder()
                         .user(user)
@@ -182,6 +182,10 @@ public class IdentityDeviceSessionService {
                         .build());
         device.setPlatform(platform);
         device.setLastSeenAt(OffsetDateTime.now());
+        String normalizedPushToken = normalizeOptional(pushToken);
+        if (normalizedPushToken != null || device.getPushToken() == null) {
+            device.setPushToken(normalizedPushToken);
+        }
         if (!device.isBlocked()) {
             device.setBlocked(false);
             device.setBlockedAt(null);
@@ -231,6 +235,13 @@ public class IdentityDeviceSessionService {
                 .role(user.getRole())
                 .createdAt(user.getCreatedAt())
                 .build());
+    }
+
+    private String normalizeOptional(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
     }
 
     private record SessionCreation(UserSession session, String rawRefreshToken) {

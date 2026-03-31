@@ -139,11 +139,14 @@ public class TaskEngineService {
                         "countryCode", nullable(state.accountHolder().getCountryCode()),
                         "serviceCountryCode", nullable(state.accountHolder().getServiceCountryCode())
                 )), null, newTasks);
+        syncOneOffTask(state, TaskType.FUND_WALLET,
+                state.walletActivated() && !state.walletFunded(),
+                objectNode(Map.of("accountHolderId", state.accountHolder().getId().toString())), null, newTasks);
         syncOneOffTask(state, TaskType.JOIN_CIRCLE, state.kycCompleted() && !state.joinedCircle(),
                 objectNode(Map.of("countryCode", nullable(state.accountHolder().getServiceCountryCode()))), null, newTasks);
         syncOneOffTask(state, TaskType.MAKE_FIRST_CONTRIBUTION, state.joinedCircle() && !state.madeFirstContribution(),
                 objectNode(Map.of("circleId", nullableUuid(state.activeCircleId()))), null, newTasks);
-        syncOneOffTask(state, TaskType.INVITE_MEMBER, state.joinedCircle() && !state.invitedMember(),
+        syncOneOffTask(state, TaskType.INVITE_FRIENDS, state.joinedCircle() && !state.invitedMember(),
                 objectNode(Map.of("circleId", nullableUuid(state.activeCircleId()))), null, newTasks);
         syncOneOffTask(state, TaskType.APPLY_LOAN,
                 state.joinedCircle() && state.financingEnabled() && !state.appliedLoan(),

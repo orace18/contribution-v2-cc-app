@@ -10,12 +10,14 @@ import com.ccapp.circles.repository.CircleInviteRepository;
 import com.ccapp.circles.repository.CircleMemberRepository;
 import com.ccapp.circles.repository.CircleRepository;
 import com.ccapp.circles.repository.InviteCodeRepository;
+import com.ccapp.common.events.DomainEventPublisher;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.common.exception.NotFoundException;
 import com.ccapp.country.config.domain.enums.CountryConfigType;
 import com.ccapp.country.config.service.CountryConfigResolver;
 import com.ccapp.notifications.dispatcher.PhoneMessageDispatchResult;
 import com.ccapp.notifications.dispatcher.PhoneMessageGateway;
+import com.ccapp.progress.event.FriendInvitedEvent;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -44,6 +46,7 @@ public class CircleInviteService {
     private final CircleService circleService;
     private final PhoneMessageGateway phoneMessageGateway;
     private final CountryConfigResolver countryConfigResolver;
+    private final DomainEventPublisher domainEventPublisher;
 
     @Value("${circles.invite.default-expiration-hours:72}")
     private int defaultExpirationHours;
@@ -101,6 +104,8 @@ public class CircleInviteService {
                 .circle(circle)
                 .expiresAt(OffsetDateTime.now().plusHours(codeExpirationHours))
                 .build());
+
+        domainEventPublisher.publish(FriendInvitedEvent.create(actorAccountHolderId, circleId, invite.getId()));
 
         return toResponse(invite, inviteCode.getCode());
     }

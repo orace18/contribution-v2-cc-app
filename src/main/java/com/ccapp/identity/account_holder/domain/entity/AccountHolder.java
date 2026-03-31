@@ -49,7 +49,7 @@ public class AccountHolder {
     private AccountCreatedVia createdVia;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "kyc_status", nullable = false, length = 16)
+    @Column(name = "kyc_status", nullable = false, length = 32)
     private KycStatus kycStatus;
 
     @Column(name = "kyc_verified_at")

@@ -11,13 +11,25 @@ public class LoggingPhoneMessageGateway implements PhoneMessageGateway {
 
     @Override
     public PhoneMessageDispatchResult sendSms(String toPhoneNumber, String message) {
-        log.info("PhoneMessageGateway fallback SMS to={} message={}", toPhoneNumber, message);
+        log.info("PhoneMessageGateway fallback SMS to={} messageLength={}", maskPhone(toPhoneNumber), messageLength(message));
         return new PhoneMessageDispatchResult(true, "fallback:sms:accepted");
     }
 
     @Override
     public PhoneMessageDispatchResult sendWhatsApp(String toPhoneNumber, String message) {
-        log.info("PhoneMessageGateway fallback WHATSAPP to={} message={}", toPhoneNumber, message);
+        log.info("PhoneMessageGateway fallback WHATSAPP to={} messageLength={}", maskPhone(toPhoneNumber), messageLength(message));
         return new PhoneMessageDispatchResult(true, "fallback:whatsapp:accepted");
+    }
+
+    private String maskPhone(String phoneNumber) {
+        if (phoneNumber == null || phoneNumber.length() < 4) {
+            return "***";
+        }
+        int keep = Math.min(4, phoneNumber.length());
+        return "*".repeat(phoneNumber.length() - keep) + phoneNumber.substring(phoneNumber.length() - keep);
+    }
+
+    private int messageLength(String message) {
+        return message == null ? 0 : message.length();
     }
 }
