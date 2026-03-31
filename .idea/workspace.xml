@@ -4,14 +4,17 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="ticket 5" />
+    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="ticket 6">
+      <change beforePath="$PROJECT_DIR$/.env.example" beforeDir="false" afterPath="$PROJECT_DIR$/.env.example" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
   <component name="EmbeddingIndexingInfo">
-    <option name="cachedIndexableFilesCount" value="1107" />
+    <option name="cachedIndexableFilesCount" value="1162" />
   </component>
   <component name="FileTemplateManagerImpl">
     <option name="RECENT_TEMPLATES">
@@ -141,14 +144,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1772553173766</updated>
-    </task>
-    <task id="LOCAL-00042" summary="Firebase">
-      <option name="closed" value="true" />
-      <created>1773162136384</created>
-      <option name="number" value="00042" />
-      <option name="presentableId" value="LOCAL-00042" />
-      <option name="project" value="LOCAL" />
-      <updated>1773162136384</updated>
     </task>
     <task id="LOCAL-00043" summary="Firebase config">
       <option name="closed" value="true" />
@@ -534,7 +529,15 @@
       <option name="project" value="LOCAL" />
       <updated>1774884025061</updated>
     </task>
-    <option name="localTasksCounter" value="91" />
+    <task id="LOCAL-00091" summary="ticket 6">
+      <option name="closed" value="true" />
+      <created>1774884516328</created>
+      <option name="number" value="00091" />
+      <option name="presentableId" value="LOCAL-00091" />
+      <option name="project" value="LOCAL" />
+      <updated>1774884516328</updated>
+    </task>
+    <option name="localTasksCounter" value="92" />
     <servers />
   </component>
   <component name="UnknownFeatures">
@@ -565,7 +568,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="Refactoring" />
     <MESSAGE value="Resolve error" />
     <MESSAGE value="chat et revue" />
     <MESSAGE value="revue de post" />
@@ -590,7 +592,8 @@
     <MESSAGE value="ticket 3" />
     <MESSAGE value="ticket 4" />
     <MESSAGE value="ticket 5" />
-    <option name="LAST_COMMIT_MESSAGE" value="ticket 5" />
+    <MESSAGE value="ticket 6" />
+    <option name="LAST_COMMIT_MESSAGE" value="ticket 6" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />
