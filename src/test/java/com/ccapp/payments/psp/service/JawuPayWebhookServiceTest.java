@@ -35,7 +35,12 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
 import java.time.OffsetDateTime;
 import java.util.Optional;
 import java.util.UUID;
@@ -73,10 +78,12 @@ class JawuPayWebhookServiceTest {
     private static final String PAYMENT_ID = UUID.randomUUID().toString();
     private static final String PROVIDER_REFERENCE = "PROVIDER-REF-001";
     private static final String PAYOUT_ID = UUID.randomUUID().toString();
+    private static final String WEBHOOK_SECRET = "jawupay-webhook-test-secret";
 
     @BeforeEach
     void setUp() {
         ReflectionTestUtils.setField(service, "allowedIpsConfig", "127.0.0.1");
+        ReflectionTestUtils.setField(service, "webhookHmacSecret", WEBHOOK_SECRET);
         service.init();
         when(webhookEventRepository.save(any(JawuPayWebhookEvent.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -95,16 +102,79 @@ class JawuPayWebhookServiceTest {
     void processWebhook_ipNotInAllowlist_throwsAccessDeniedException() {
         JawuPayWebhookRequest request = request("JAWUPAY", "SUCCESS", PAYMENT_ID, null, null);
 
-        assertThatThrownBy(() -> service.processWebhook(request, "1.2.3.4"))
+        SignedWebhook signedWebhook = signedWebhook(request);
+
+        assertThatThrownBy(() -> service.processWebhook(
+                request,
+                signedWebhook.rawRequestBody(),
+                signedWebhook.signature(),
+                "1.2.3.4"
+        ))
                 .isInstanceOf(AccessDeniedException.class)
                 .hasMessageContaining("unauthorized IP");
+    }
+
+    @Test
+    void processWebhook_validSignature_accepted() {
+        Operation op = pendingPspOperation(OperationType.WALLET_DEPOSIT_PSP);
+        when(operationService.findByPaymentIdOrPspReference(PAYMENT_ID)).thenReturn(Optional.of(op));
+        when(operationService.recordPspMetadata(eq(OPERATION_ID), any())).thenReturn(op);
+
+        Operation confirmed = confirmedOperation(OperationType.WALLET_DEPOSIT_PSP);
+        when(operationService.confirmOperation(OPERATION_ID)).thenReturn(confirmed);
+
+        processWebhook(request("JAWUPAY", "SUCCESS", PAYMENT_ID, null, null), "127.0.0.1");
+
+        verify(walletDepositService).confirmPspDeposit(OPERATION_ID);
+    }
+
+    @Test
+    void processWebhook_invalidSignature_rejected() {
+        JawuPayWebhookRequest request = request("JAWUPAY", "SUCCESS", PAYMENT_ID, null, null);
+        SignedWebhook signedWebhook = signedWebhook(request);
+
+        assertThatThrownBy(() -> service.processWebhook(
+                request,
+                signedWebhook.rawRequestBody(),
+                "deadbeef",
+                "127.0.0.1"
+        )).isInstanceOf(AccessDeniedException.class)
+                .hasMessageContaining("Invalid JawuPay webhook signature");
+
+        verifyNoInteractions(operationService, webhookEventRepository, walletDepositService);
+    }
+
+    @Test
+    void processWebhook_tamperedPayloadRejected() throws Exception {
+        JawuPayWebhookRequest request = request("JAWUPAY", "SUCCESS", PAYMENT_ID, null, null);
+        SignedWebhook signedWebhook = signedWebhook(request);
+        String tamperedJson = new String(signedWebhook.rawRequestBody(), StandardCharsets.UTF_8)
+                .replace("\"amount\":150000", "\"amount\":150001");
+        JawuPayWebhookRequest tamperedRequest = objectMapper.readValue(tamperedJson, JawuPayWebhookRequest.class);
+
+        assertThatThrownBy(() -> service.processWebhook(
+                tamperedRequest,
+                tamperedJson.getBytes(StandardCharsets.UTF_8),
+                signedWebhook.signature(),
+                "127.0.0.1"
+        )).isInstanceOf(AccessDeniedException.class)
+                .hasMessageContaining("Invalid JawuPay webhook signature");
+
+        verifyNoInteractions(operationService, webhookEventRepository, walletDepositService);
     }
 
     @Test
     void processWebhook_invalidProvider_rejected() {
         JawuPayWebhookRequest request = request("OTHER", "SUCCESS", PAYMENT_ID, null, null);
 
-        assertThatThrownBy(() -> service.processWebhook(request, "127.0.0.1"))
+        SignedWebhook signedWebhook = signedWebhook(request);
+
+        assertThatThrownBy(() -> service.processWebhook(
+                request,
+                signedWebhook.rawRequestBody(),
+                signedWebhook.signature(),
+                "127.0.0.1"
+        ))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Only JawuPay provider");
     }
@@ -115,9 +185,13 @@ class JawuPayWebhookServiceTest {
         when(operationService.findByPaymentIdOrPspReference(PAYMENT_ID)).thenReturn(Optional.of(op));
         when(webhookEventRepository.save(any(JawuPayWebhookEvent.class)))
                 .thenThrow(new DataIntegrityViolationException("duplicate"));
+        JawuPayWebhookRequest request = request("JAWUPAY", "SUCCESS", PAYMENT_ID, null, null);
+        SignedWebhook signedWebhook = signedWebhook(request);
 
         assertThatThrownBy(() -> service.processWebhook(
-                request("JAWUPAY", "SUCCESS", PAYMENT_ID, null, null),
+                request,
+                signedWebhook.rawRequestBody(),
+                signedWebhook.signature(),
                 "127.0.0.1"
         )).isInstanceOf(ConflictException.class)
                 .hasMessageContaining("Duplicate JawuPay webhook event");
@@ -141,7 +215,14 @@ class JawuPayWebhookServiceTest {
                 "evt-amount-mismatch"
         );
 
-        assertThatThrownBy(() -> service.processWebhook(request, "127.0.0.1"))
+        SignedWebhook signedWebhook = signedWebhook(request);
+
+        assertThatThrownBy(() -> service.processWebhook(
+                request,
+                signedWebhook.rawRequestBody(),
+                signedWebhook.signature(),
+                "127.0.0.1"
+        ))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("amount mismatch");
     }
@@ -164,7 +245,14 @@ class JawuPayWebhookServiceTest {
                 "evt-operation-mismatch"
         );
 
-        assertThatThrownBy(() -> service.processWebhook(request, "127.0.0.1"))
+        SignedWebhook signedWebhook = signedWebhook(request);
+
+        assertThatThrownBy(() -> service.processWebhook(
+                request,
+                signedWebhook.rawRequestBody(),
+                signedWebhook.signature(),
+                "127.0.0.1"
+        ))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("operationId");
     }
@@ -179,7 +267,7 @@ class JawuPayWebhookServiceTest {
         Operation confirmed = confirmedOperation(OperationType.WALLET_DEPOSIT_PSP);
         when(operationService.confirmOperation(OPERATION_ID)).thenReturn(confirmed);
 
-        service.processWebhook(request("JAWUPAY", rawStatus, PAYMENT_ID, null, null), "127.0.0.1");
+        processWebhook(request("JAWUPAY", rawStatus, PAYMENT_ID, null, null), "127.0.0.1");
 
         verify(operationService).confirmOperation(OPERATION_ID);
         verify(walletDepositService).confirmPspDeposit(OPERATION_ID);
@@ -193,7 +281,7 @@ class JawuPayWebhookServiceTest {
         when(operationService.findByPaymentIdOrPspReference(PAYMENT_ID)).thenReturn(Optional.of(op));
         when(operationService.recordPspMetadata(eq(OPERATION_ID), any())).thenReturn(op);
 
-        service.processWebhook(request("JAWUPAY", rawStatus, PAYMENT_ID, null, null), "127.0.0.1");
+        processWebhook(request("JAWUPAY", rawStatus, PAYMENT_ID, null, null), "127.0.0.1");
 
         verify(operationService).markFailed(OPERATION_ID);
         verifyNoInteractions(walletDepositService, accountingPostingService);
@@ -205,7 +293,7 @@ class JawuPayWebhookServiceTest {
         when(operationService.findByPaymentIdOrPspReference(PAYMENT_ID)).thenReturn(Optional.of(op));
         when(operationService.recordPspMetadata(eq(OPERATION_ID), any())).thenReturn(op);
 
-        service.processWebhook(request("JAWUPAY", "PENDING", PAYMENT_ID, null, null), "127.0.0.1");
+        processWebhook(request("JAWUPAY", "PENDING", PAYMENT_ID, null, null), "127.0.0.1");
 
         verify(operationService, never()).confirmOperation(any());
         verify(operationService, never()).markFailed(any());
@@ -217,7 +305,7 @@ class JawuPayWebhookServiceTest {
         when(operationService.findByPaymentIdOrPspReference(PAYMENT_ID)).thenReturn(Optional.of(op));
         when(operationService.recordPspMetadata(eq(OPERATION_ID), any())).thenReturn(op);
 
-        service.processWebhook(request("JAWUPAY", "SUCCESS", PAYMENT_ID, null, null), "127.0.0.1");
+        processWebhook(request("JAWUPAY", "SUCCESS", PAYMENT_ID, null, null), "127.0.0.1");
 
         verify(operationService, never()).confirmOperation(any());
     }
@@ -232,10 +320,7 @@ class JawuPayWebhookServiceTest {
         Operation confirmed = confirmedOperation(OperationType.WALLET_DEPOSIT_PSP);
         when(operationService.confirmOperation(OPERATION_ID)).thenReturn(confirmed);
 
-        service.processWebhook(
-                request("JAWUPAY", "SUCCESS", PAYMENT_ID, null, PROVIDER_REFERENCE),
-                "127.0.0.1"
-        );
+        processWebhook(request("JAWUPAY", "SUCCESS", PAYMENT_ID, null, PROVIDER_REFERENCE), "127.0.0.1");
 
         ArgumentCaptor<OperationService.PspMetadata> metadataCaptor =
                 ArgumentCaptor.forClass(OperationService.PspMetadata.class);
@@ -254,10 +339,7 @@ class JawuPayWebhookServiceTest {
         when(operationService.findByPayoutIdOrPspReference(PAYOUT_ID)).thenReturn(Optional.of(op));
         when(operationService.recordPspMetadata(eq(OPERATION_ID), any())).thenReturn(op);
 
-        service.processWebhook(
-                request("JAWUPAY", "SUCCESS", null, PAYOUT_ID, "PAYOUT-REF-9"),
-                "127.0.0.1"
-        );
+        processWebhook(request("JAWUPAY", "SUCCESS", null, PAYOUT_ID, "PAYOUT-REF-9"), "127.0.0.1");
 
         ArgumentCaptor<OperationService.PspMetadata> metadataCaptor =
                 ArgumentCaptor.forClass(OperationService.PspMetadata.class);
@@ -276,10 +358,7 @@ class JawuPayWebhookServiceTest {
         Operation confirmed = confirmedOperation(OperationType.SUBSCRIPTION);
         when(operationService.confirmOperation(OPERATION_ID)).thenReturn(confirmed);
 
-        service.processWebhook(
-                request("JAWUPAY", "SUCCESS", PAYMENT_ID, null, PROVIDER_REFERENCE),
-                "127.0.0.1"
-        );
+        processWebhook(request("JAWUPAY", "SUCCESS", PAYMENT_ID, null, PROVIDER_REFERENCE), "127.0.0.1");
 
         verify(operationService).confirmOperation(OPERATION_ID);
         verify(membershipService).activateForConfirmedOperation(confirmed);
@@ -298,10 +377,7 @@ class JawuPayWebhookServiceTest {
         Operation failed = failedOperation(OperationType.SUBSCRIPTION);
         when(operationService.markFailed(OPERATION_ID)).thenReturn(failed);
 
-        service.processWebhook(
-                request("JAWUPAY", "FAILED", PAYMENT_ID, null, PROVIDER_REFERENCE),
-                "127.0.0.1"
-        );
+        processWebhook(request("JAWUPAY", "FAILED", PAYMENT_ID, null, PROVIDER_REFERENCE), "127.0.0.1");
 
         verify(operationService).markFailed(OPERATION_ID);
         verify(membershipService).cancelPendingMembership(OPERATION_ID);
@@ -318,10 +394,7 @@ class JawuPayWebhookServiceTest {
         Operation failed = failedOperation(OperationType.WALLET_WITHDRAWAL);
         when(operationService.markFailed(OPERATION_ID)).thenReturn(failed);
 
-        service.processWebhook(
-                request("JAWUPAY", "FAILED", null, PAYOUT_ID, "PAYOUT-REF-9"),
-                "127.0.0.1"
-        );
+        processWebhook(request("JAWUPAY", "FAILED", null, PAYOUT_ID, "PAYOUT-REF-9"), "127.0.0.1");
 
         verify(operationService).markFailed(OPERATION_ID);
         verify(walletWithdrawalService).handlePspWithdrawalFailure(OPERATION_ID);
@@ -335,7 +408,7 @@ class JawuPayWebhookServiceTest {
         when(operationService.recordPspMetadata(eq(OPERATION_ID), any())).thenReturn(op);
         when(operationService.confirmOperation(OPERATION_ID)).thenThrow(new RuntimeException("ledger unavailable"));
 
-        assertThatCode(() -> service.processWebhook(
+        assertThatCode(() -> processWebhook(
                 request("JAWUPAY", "SUCCESS", PAYMENT_ID, null, null),
                 "127.0.0.1"
         )).doesNotThrowAnyException();
@@ -433,6 +506,36 @@ class JawuPayWebhookServiceTest {
                 UUID.randomUUID().toString()
         );
     }
+
+    private void processWebhook(JawuPayWebhookRequest request, String remoteIp) {
+        SignedWebhook signedWebhook = signedWebhook(request);
+        service.processWebhook(request, signedWebhook.rawRequestBody(), signedWebhook.signature(), remoteIp);
+    }
+
+    private SignedWebhook signedWebhook(JawuPayWebhookRequest request) {
+        try {
+            byte[] rawRequestBody = objectMapper.writeValueAsBytes(request);
+            return new SignedWebhook(rawRequestBody, hexEncode(sign(rawRequestBody)));
+        } catch (Exception ex) {
+            throw new IllegalStateException("Failed to build signed webhook payload", ex);
+        }
+    }
+
+    private byte[] sign(byte[] payload) throws NoSuchAlgorithmException, InvalidKeyException {
+        Mac mac = Mac.getInstance("HmacSHA256");
+        mac.init(new SecretKeySpec(WEBHOOK_SECRET.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+        return mac.doFinal(payload);
+    }
+
+    private String hexEncode(byte[] bytes) {
+        StringBuilder builder = new StringBuilder(bytes.length * 2);
+        for (byte value : bytes) {
+            builder.append(String.format("%02x", value));
+        }
+        return builder.toString();
+    }
+
+    private record SignedWebhook(byte[] rawRequestBody, String signature) {}
 
     private Operation pendingPspOperation(OperationType type) {
         Operation op = new Operation();

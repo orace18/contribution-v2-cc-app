@@ -30,8 +30,11 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
+import java.security.InvalidKeyException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.OffsetDateTime;
@@ -51,6 +54,8 @@ public class JawuPayWebhookService {
 
     private static final String JAWUPAY_PROVIDER = "JAWUPAY";
     private static final String RECONCILIATION_REQUIRED = "RECONCILIATION_REQUIRED";
+    private static final String HMAC_SHA256 = "HmacSHA256";
+    private static final String INVALID_SIGNATURE_MESSAGE = "Invalid JawuPay webhook signature";
 
     private final OperationService operationService;
     private final JawuPayPspClient pspClient;
@@ -66,7 +71,11 @@ public class JawuPayWebhookService {
     @Value("${psp.jawupay.webhook.allowedIps:${psp.jawupay.webhook.allowed-ips:}}")
     private String allowedIpsConfig;
 
+    @Value("${psp.jawupay.webhook.hmac-secret:${psp.jawupay.hmac-secret:}}")
+    private String webhookHmacSecret;
+
     private Set<String> allowedIps;
+    private byte[] webhookHmacSecretBytes;
 
     @PostConstruct
     void init() {
@@ -77,10 +86,19 @@ public class JawuPayWebhookService {
         if (allowedIps.isEmpty()) {
             throw new IllegalStateException("psp.jawupay.webhook.allowedIps must not be empty");
         }
+        String normalizedSecret = normalizeIdentifier(webhookHmacSecret);
+        if (normalizedSecret == null) {
+            throw new IllegalStateException("psp.jawupay.webhook.hmac-secret must not be empty");
+        }
+        webhookHmacSecretBytes = normalizedSecret.getBytes(StandardCharsets.UTF_8);
     }
 
-    public void processWebhook(JawuPayWebhookRequest request, String remoteIp) {
+    public void processWebhook(JawuPayWebhookRequest request,
+                               byte[] rawRequestBody,
+                               String signatureHeader,
+                               String remoteIp) {
         validateIp(remoteIp);
+        validateSignature(rawRequestBody, signatureHeader, remoteIp);
         validateProvider(request.provider());
 
         String paymentId = normalizeIdentifier(request.paymentId());
@@ -468,11 +486,64 @@ public class JawuPayWebhookService {
         }
     }
 
+    private void validateSignature(byte[] rawRequestBody,
+                                   String signatureHeader,
+                                   String remoteIp) {
+        if (rawRequestBody == null || rawRequestBody.length == 0) {
+            log.warn("Webhook blocked: empty body during signature verification remoteIp={}", remoteIp);
+            throw new AccessDeniedException(INVALID_SIGNATURE_MESSAGE);
+        }
+
+        byte[] providedSignature = decodeSignature(signatureHeader);
+        byte[] expectedSignature = computeWebhookHmac(rawRequestBody);
+        if (!MessageDigest.isEqual(expectedSignature, providedSignature)) {
+            log.warn("Webhook blocked: invalid signature remoteIp={} signaturePresent={} bodyBytes={}",
+                    remoteIp,
+                    signatureHeader != null && !signatureHeader.isBlank(),
+                    rawRequestBody.length);
+            throw new AccessDeniedException(INVALID_SIGNATURE_MESSAGE);
+        }
+    }
+
     private String normalizeIdentifier(String value) {
         if (value == null || value.isBlank()) {
             return null;
         }
         return value.trim();
+    }
+
+    private byte[] decodeSignature(String signatureHeader) {
+        String normalizedSignature = normalizeIdentifier(signatureHeader);
+        if (normalizedSignature == null) {
+            throw new AccessDeniedException(INVALID_SIGNATURE_MESSAGE);
+        }
+        if (normalizedSignature.regionMatches(true, 0, "sha256=", 0, 7)) {
+            normalizedSignature = normalizedSignature.substring(7).trim();
+        }
+        if ((normalizedSignature.length() & 1) != 0) {
+            throw new AccessDeniedException(INVALID_SIGNATURE_MESSAGE);
+        }
+
+        byte[] decoded = new byte[normalizedSignature.length() / 2];
+        for (int i = 0; i < normalizedSignature.length(); i += 2) {
+            int high = Character.digit(normalizedSignature.charAt(i), 16);
+            int low = Character.digit(normalizedSignature.charAt(i + 1), 16);
+            if (high < 0 || low < 0) {
+                throw new AccessDeniedException(INVALID_SIGNATURE_MESSAGE);
+            }
+            decoded[i / 2] = (byte) ((high << 4) + low);
+        }
+        return decoded;
+    }
+
+    private byte[] computeWebhookHmac(byte[] rawRequestBody) {
+        try {
+            Mac mac = Mac.getInstance(HMAC_SHA256);
+            mac.init(new SecretKeySpec(webhookHmacSecretBytes, HMAC_SHA256));
+            return mac.doFinal(rawRequestBody);
+        } catch (NoSuchAlgorithmException | InvalidKeyException ex) {
+            throw new IllegalStateException("Unable to verify JawuPay webhook signature", ex);
+        }
     }
 
     private void verifyAmountCurrencyMatch(Operation operation, long pspAmountMinorUnits, String pspCurrency) {
