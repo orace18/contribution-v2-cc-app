@@ -14,8 +14,8 @@ import com.ccapp.payments.operation.domain.entity.Operation;
 import com.ccapp.payments.operation.domain.enums.OperationStatus;
 import com.ccapp.payments.operation.domain.enums.OperationType;
 import com.ccapp.payments.operation.service.OperationService;
-import com.ccapp.payments.psp.dto.JawupayPayoutResponse;
-import com.ccapp.payments.service.PaymentService;
+import com.ccapp.payments.psp.service.JawuPayPayoutOrchestrationService;
+import com.ccapp.wallet.dto.WalletReserveRequest;
 import com.ccapp.wallet.dto.WalletWithdrawRequest;
 import com.ccapp.wallet.dto.WalletWithdrawResponse;
 import com.ccapp.wallet.event.WalletDebitedEvent;
@@ -25,6 +25,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.OffsetDateTime;
+import java.util.Locale;
 import java.util.UUID;
 
 /**
@@ -36,13 +38,16 @@ import java.util.UUID;
 @Transactional
 public class WalletWithdrawalService {
 
+    private static final long WITHDRAWAL_RESERVATION_EXPIRY_MINUTES = 30;
+
     private final WalletGuardService walletGuardService;
     private final WalletDebitFacade walletDebitFacade;
     private final CountryChartOfAccountsService countryChartOfAccountsService;
     private final AccountHolderRepository accountHolderRepository;
     private final WalletRepository walletRepository;
     private final OperationService operationService;
-    private final PaymentService paymentService;
+    private final JawuPayPayoutOrchestrationService jawuPayPayoutOrchestrationService;
+    private final WalletReservationService walletReservationService;
     private final AccountingPostingService accountingPostingService;
     private final DomainEventPublisher eventPublisher;
 
@@ -125,23 +130,35 @@ public class WalletWithdrawalService {
         }
 
         Operation operation = operationService.getById(result.operationId());
+        String reservationReason = reservationReason(operation.getId());
+        walletReservationService.reserveSystem(accountHolderId, new WalletReserveRequest(
+                request.amount(),
+                request.currency(),
+                reservationReason,
+                OffsetDateTime.now().plusMinutes(WITHDRAWAL_RESERVATION_EXPIRY_MINUTES),
+                null
+        ));
         try {
-            JawupayPayoutResponse payoutResponse = paymentService.initiatePayout(
+            JawuPayPayoutOrchestrationService.InitiatePayoutResult orchestrationResult =
+                    jawuPayPayoutOrchestrationService.createPayout(
                     operation.getId(),
-                    request.idempotencyKey(),
+                    countryCode,
+                    resolvePayoutPaymentMethod(wallet),
+                    resolvePayoutPhone(wallet, holder),
+                    resolvePayoutOperatorHint(wallet)
+            );
+            Operation pending = operationService.getById(orchestrationResult.operationId());
+
+            log.info("wallet_withdrawal_pending_psp operationId={} accountHolderId={} amount={} currency={} payoutId={} pspReference={}",
+                    pending.getId(),
+                    accountHolderId,
                     request.amount(),
                     request.currency(),
-                    accountHolderId,
-                    actorUserId,
-                    resolvePayoutPhone(wallet, holder),
-                    operation.getDescription()
-            );
-            operationService.markPendingPsp(operation.getId(), payoutResponse.pspReference());
-
-            log.info("wallet_withdrawal_pending_psp operationId={} accountHolderId={} amount={} currency={} pspReference={}",
-                    operation.getId(), accountHolderId, request.amount(), request.currency(), payoutResponse.pspReference());
-            return pendingResponse(operation.getId(), request.amount(), request.currency(), payoutResponse.pspReference());
+                    pending.getPayoutId(),
+                    pending.getPspReference());
+            return pendingResponse(pending.getId(), request.amount(), request.currency(), pending.getPspReference());
         } catch (RuntimeException ex) {
+            walletReservationService.releaseSystem(accountHolderId, reservationReason);
             operationService.markFailed(operation.getId());
             throw ex;
         }
@@ -151,6 +168,7 @@ public class WalletWithdrawalService {
         Operation current = operationService.getById(operationId);
         boolean alreadyConfirmed = current.getStatus() == OperationStatus.CONFIRMED;
         Operation operation = alreadyConfirmed ? current : operationService.confirmOperation(operationId);
+        walletReservationService.consumeSystem(operation.getAccountHolderId(), reservationReason(operation.getId()));
         Wallet wallet = walletRepository.findByAccountHolderIdOrderByCreatedAtDesc(operation.getAccountHolderId())
                 .stream()
                 .findFirst()
@@ -170,11 +188,8 @@ public class WalletWithdrawalService {
 
     public void handlePspWithdrawalFailure(UUID operationId) {
         Operation operation = operationService.getById(operationId);
-
-        // The current withdrawal flow does not persist a reservation link yet.
-        // This hook keeps webhook-side payout failure handling centralized so
-        // reservation release can be wired here as soon as reservation support lands.
-        log.warn("wallet_withdrawal_psp_failed operationId={} accountHolderId={} amount={} currency={} reservationRelease=not_linked",
+        walletReservationService.releaseSystem(operation.getAccountHolderId(), reservationReason(operation.getId()));
+        log.warn("wallet_withdrawal_psp_failed operationId={} accountHolderId={} amount={} currency={} reservationRelease=completed",
                 operation.getId(),
                 operation.getAccountHolderId(),
                 operation.getAmount(),
@@ -214,9 +229,35 @@ public class WalletWithdrawalService {
         return phone.trim();
     }
 
+    private String resolvePayoutPaymentMethod(Wallet wallet) {
+        String operator = normalizeOperatorToken(resolvePayoutOperatorHint(wallet));
+        if (operator.startsWith("MOBILE_MONEY_")) {
+            return operator;
+        }
+        return "MOBILE_MONEY_" + operator;
+    }
+
+    private String resolvePayoutOperatorHint(Wallet wallet) {
+        if (wallet.getProvider() == null || wallet.getProvider().isBlank()) {
+            throw new BusinessException("WALLET_WITHDRAWAL_PROVIDER_REQUIRED");
+        }
+        return wallet.getProvider().trim();
+    }
+
+    private String normalizeOperatorToken(String value) {
+        return value.trim()
+                .toUpperCase(Locale.ROOT)
+                .replace('-', '_')
+                .replace(' ', '_');
+    }
+
     private String resolveWalletAccountCode(UUID accountHolderId) {
         AccountHolder holder = resolveHolder(accountHolderId);
         return countryChartOfAccountsService.findOrCreateWallet(holder).getAccountCode();
+    }
+
+    private String reservationReason(UUID operationId) {
+        return "wallet-withdrawal-hold:" + operationId;
     }
 
     private WalletWithdrawResponse pendingResponse(UUID operationId,

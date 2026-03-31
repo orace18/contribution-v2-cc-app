@@ -85,7 +85,44 @@ class JawuPayPayoutOrchestrationServiceTest {
         assertThat(metadataCaptor.getValue().payoutId()).isEqualTo(PAYOUT_ID.toString());
         assertThat(metadataCaptor.getValue().providerReference()).isEqualTo("PAYOUT-REF-1");
         assertThat(metadataCaptor.getValue().paymentMethod()).isEqualTo("MOBILE_MONEY_MTN");
-        assertThat(metadataCaptor.getValue().pspStatus()).isEqualTo("PROCESSING");
+        assertThat(metadataCaptor.getValue().pspStatus()).isEqualTo("PENDING_PSP");
+    }
+
+    @Test
+    void createPayout_existingInitiatedOperation_submitsPspPayout() {
+        Operation initiated = operationWithStatus(OperationStatus.INITIATED);
+        when(operationService.getById(OPERATION_ID)).thenReturn(initiated);
+
+        JawuPayCreatePayoutResponse payout = new JawuPayCreatePayoutResponse(
+                PAYOUT_ID, "PROCESSING", "MOCK_PSP", "PAYOUT-REF-2");
+        when(pspClient.createPayout(any())).thenReturn(payout);
+
+        JawuPayPayoutOrchestrationService.InitiatePayoutResult result =
+                service.createPayout(
+                        OPERATION_ID,
+                        "CI",
+                        "MOBILE_MONEY_MTN",
+                        "22501234567",
+                        "MTN"
+                );
+
+        assertThat(result.operationId()).isEqualTo(OPERATION_ID);
+        assertThat(result.payoutId()).isEqualTo(PAYOUT_ID);
+
+        ArgumentCaptor<JawuPayCreatePayoutRequest> requestCaptor =
+                ArgumentCaptor.forClass(JawuPayCreatePayoutRequest.class);
+        verify(pspClient).createPayout(requestCaptor.capture());
+        assertThat(requestCaptor.getValue().amount()).isEqualTo(250000L);
+        assertThat(requestCaptor.getValue().clientId()).isEqualTo(ACCOUNT_HOLDER_ID.toString());
+        assertThat(requestCaptor.getValue().beneficiaryRef()).isEqualTo("22501234567");
+
+        ArgumentCaptor<OperationService.PspMetadata> metadataCaptor =
+                ArgumentCaptor.forClass(OperationService.PspMetadata.class);
+        verify(operationService).markPendingPsp(eq(OPERATION_ID), metadataCaptor.capture());
+        assertThat(metadataCaptor.getValue().payoutId()).isEqualTo(PAYOUT_ID.toString());
+        assertThat(metadataCaptor.getValue().providerReference()).isEqualTo("PAYOUT-REF-2");
+        assertThat(metadataCaptor.getValue().paymentMethod()).isEqualTo("MOBILE_MONEY_MTN");
+        assertThat(metadataCaptor.getValue().pspStatus()).isEqualTo("PENDING_PSP");
     }
 
     @Test
@@ -117,6 +154,8 @@ class JawuPayPayoutOrchestrationServiceTest {
     private Operation operationWithStatus(OperationStatus status) {
         Operation op = new Operation();
         op.setId(OPERATION_ID);
+        op.setAccountHolderId(ACCOUNT_HOLDER_ID);
+        op.setActorUserId(ACTOR_USER_ID);
         op.setStatus(status);
         op.setType(OperationType.WALLET_WITHDRAWAL);
         op.setAmount(new BigDecimal("2500.00"));
