@@ -71,7 +71,11 @@ public class JawuPayPspClientImpl implements JawuPayPspClient {
 
     @Override
     public JawuPayQuoteResponse createQuote(JawuPayQuoteRequest request) {
-        log.info("PSP request provider=jawupay endpoint=POST /api/v1/payment/quote body={}", request);
+        log.info("PSP request provider=jawupay endpoint=POST /api/v1/payment/quote clientId={} country={} paymentMethodId={} amountMinor={}",
+                safeValue(request.clientId()),
+                safeValue(request.country()),
+                safeValue(request.paymentMethodId()),
+                request.amount());
         if (mockEnabled) {
             JawuPayQuoteResponse response = new JawuPayQuoteResponse(
                     UUID.randomUUID(),
@@ -80,7 +84,11 @@ public class JawuPayPspClientImpl implements JawuPayPspClient {
                     request.amount(),
                     OffsetDateTime.now().plusMinutes(5)
             );
-            log.info("PSP response (mock) endpoint=POST /api/v1/payment/quote body={}", response);
+            log.info("PSP response provider=jawupay mode=mock endpoint=POST /api/v1/payment/quote quoteId={} amountMinor={} totalAmountMinor={} expiresAt={}",
+                    safeUuid(response.quoteId()),
+                    response.amount(),
+                    response.totalAmount(),
+                    response.expiresAt());
             return response;
         }
         JawuPayQuoteResponse response = restClient.post()
@@ -89,7 +97,11 @@ public class JawuPayPspClientImpl implements JawuPayPspClient {
                 .body(request)
                 .retrieve()
                 .body(JawuPayQuoteResponse.class);
-        log.info("PSP response endpoint=POST /api/v1/payment/quote body={}", response);
+        log.info("PSP response provider=jawupay mode=live endpoint=POST /api/v1/payment/quote quoteId={} amountMinor={} totalAmountMinor={} expiresAt={}",
+                safeUuid(response == null ? null : response.quoteId()),
+                response == null ? null : response.amount(),
+                response == null ? null : response.totalAmount(),
+                response == null ? null : response.expiresAt());
         return response;
     }
 
@@ -99,7 +111,12 @@ public class JawuPayPspClientImpl implements JawuPayPspClient {
 
     @Override
     public JawuPayConfirmResponse confirmPayment(JawuPayConfirmRequest request, String idempotencyKey) {
-        log.info("PSP request provider=jawupay endpoint=POST /api/v1/payment/confirm body={}", request);
+        log.info("PSP request provider=jawupay endpoint=POST /api/v1/payment/confirm quoteId={} currency={} payerMsisdnPresent={} payerCardPresent={} idempotencyKey={}",
+                safeUuid(request.quoteId()),
+                safeValue(request.currency()),
+                request.payerInfo() != null && request.payerInfo().msisdn() != null,
+                request.payerInfo() != null && request.payerInfo().cardNumber() != null,
+                safeValue(idempotencyKey));
         if (mockEnabled) {
             UUID paymentId = UUID.randomUUID();
             JawuPayConfirmResponse response = new JawuPayConfirmResponse(
@@ -110,7 +127,11 @@ public class JawuPayPspClientImpl implements JawuPayPspClient {
                     null,
                     "MOCK-REF-" + paymentId
             );
-            log.info("PSP response (mock) endpoint=POST /api/v1/payment/confirm body={}", response);
+            log.info("PSP response provider=jawupay mode=mock endpoint=POST /api/v1/payment/confirm paymentId={} status={} provider={} redirectPresent={}",
+                    safeUuid(response.paymentId()),
+                    safeValue(response.status()),
+                    safeValue(response.pspProvider()),
+                    response.redirectUrl() != null);
             return response;
         }
         JawuPayConfirmResponse response = restClient.post()
@@ -120,7 +141,11 @@ public class JawuPayPspClientImpl implements JawuPayPspClient {
                 .body(request)
                 .retrieve()
                 .body(JawuPayConfirmResponse.class);
-        log.info("PSP response endpoint=POST /api/v1/payment/confirm body={}", response);
+        log.info("PSP response provider=jawupay mode=live endpoint=POST /api/v1/payment/confirm paymentId={} status={} provider={} redirectPresent={}",
+                safeUuid(response == null ? null : response.paymentId()),
+                safeValue(response == null ? null : response.status()),
+                safeValue(response == null ? null : response.pspProvider()),
+                response != null && response.redirectUrl() != null);
         return response;
     }
 
@@ -135,14 +160,26 @@ public class JawuPayPspClientImpl implements JawuPayPspClient {
             JawuPayPaymentResponse response = new JawuPayPaymentResponse(
                     UUID.fromString(paymentId), null, "PENDING", 0L, "XOF",
                     null, null, "MOCK_PSP", null, OffsetDateTime.now(), OffsetDateTime.now());
-            log.info("PSP response (mock) endpoint=GET /api/v1/payment/{} body={}", paymentId, response);
+            log.info("PSP response provider=jawupay mode=mock endpoint=GET /api/v1/payment/{} paymentId={} status={} provider={} amountMinor={} currency={}",
+                    paymentId,
+                    safeUuid(response.paymentId()),
+                    safeValue(response.status()),
+                    safeValue(response.pspProvider()),
+                    response.amount(),
+                    safeValue(response.currency()));
             return response;
         }
         JawuPayPaymentResponse response = restClient.get()
                 .uri("/api/v1/payment/{paymentId}", paymentId)
                 .retrieve()
                 .body(JawuPayPaymentResponse.class);
-        log.info("PSP response endpoint=GET /api/v1/payment/{} body={}", paymentId, response);
+        log.info("PSP response provider=jawupay mode=live endpoint=GET /api/v1/payment/{} paymentId={} status={} provider={} amountMinor={} currency={}",
+                paymentId,
+                safeUuid(response == null ? null : response.paymentId()),
+                safeValue(response == null ? null : response.status()),
+                safeValue(response == null ? null : response.pspProvider()),
+                response == null ? null : response.amount(),
+                safeValue(response == null ? null : response.currency()));
         return response;
     }
 
@@ -152,11 +189,19 @@ public class JawuPayPspClientImpl implements JawuPayPspClient {
 
     @Override
     public JawuPayCreatePayoutResponse createPayout(JawuPayCreatePayoutRequest request) {
-        log.info("PSP request provider=jawupay endpoint=POST /api/v1/payout body={}", request);
+        log.info("PSP request provider=jawupay endpoint=POST /api/v1/payout clientId={} country={} paymentMethodId={} amountMinor={} beneficiaryPresent={}",
+                safeValue(request.clientId()),
+                safeValue(request.country()),
+                safeValue(request.paymentMethodId()),
+                request.amount(),
+                request.beneficiaryRef() != null);
         if (mockEnabled) {
             JawuPayCreatePayoutResponse response = new JawuPayCreatePayoutResponse(
                     UUID.randomUUID(), "PENDING", "MOCK_PSP", "MOCK-PAYOUT-REF-" + UUID.randomUUID());
-            log.info("PSP response (mock) endpoint=POST /api/v1/payout body={}", response);
+            log.info("PSP response provider=jawupay mode=mock endpoint=POST /api/v1/payout payoutId={} status={} provider={}",
+                    safeUuid(response.payoutId()),
+                    safeValue(response.status()),
+                    safeValue(response.pspProvider()));
             return response;
         }
         JawuPayCreatePayoutResponse response = restClient.post()
@@ -165,7 +210,10 @@ public class JawuPayPspClientImpl implements JawuPayPspClient {
                 .body(request)
                 .retrieve()
                 .body(JawuPayCreatePayoutResponse.class);
-        log.info("PSP response endpoint=POST /api/v1/payout body={}", response);
+        log.info("PSP response provider=jawupay mode=live endpoint=POST /api/v1/payout payoutId={} status={} provider={}",
+                safeUuid(response == null ? null : response.payoutId()),
+                safeValue(response == null ? null : response.status()),
+                safeValue(response == null ? null : response.pspProvider()));
         return response;
     }
 
@@ -176,14 +224,26 @@ public class JawuPayPspClientImpl implements JawuPayPspClient {
             JawuPayPayoutDetailsResponse response = new JawuPayPayoutDetailsResponse(
                     UUID.fromString(payoutId), null, "PENDING", 0L, "XOF",
                     null, null, "MOCK_PSP", null, OffsetDateTime.now(), OffsetDateTime.now());
-            log.info("PSP response (mock) endpoint=GET /api/v1/payout/{} body={}", payoutId, response);
+            log.info("PSP response provider=jawupay mode=mock endpoint=GET /api/v1/payout/{} payoutId={} status={} provider={} amountMinor={} currency={}",
+                    payoutId,
+                    safeUuid(response.payoutId()),
+                    safeValue(response.status()),
+                    safeValue(response.pspProvider()),
+                    response.amount(),
+                    safeValue(response.currency()));
             return response;
         }
         JawuPayPayoutDetailsResponse response = restClient.get()
                 .uri("/api/v1/payout/{id}", payoutId)
                 .retrieve()
                 .body(JawuPayPayoutDetailsResponse.class);
-        log.info("PSP response endpoint=GET /api/v1/payout/{} body={}", payoutId, response);
+        log.info("PSP response provider=jawupay mode=live endpoint=GET /api/v1/payout/{} payoutId={} status={} provider={} amountMinor={} currency={}",
+                payoutId,
+                safeUuid(response == null ? null : response.payoutId()),
+                safeValue(response == null ? null : response.status()),
+                safeValue(response == null ? null : response.pspProvider()),
+                response == null ? null : response.amount(),
+                safeValue(response == null ? null : response.currency()));
         return response;
     }
 
@@ -199,7 +259,9 @@ public class JawuPayPspClientImpl implements JawuPayPspClient {
                     new JawuPayPaymentMethod("MOBILE_MONEY_MTN", "MTN Mobile Money"),
                     new JawuPayPaymentMethod("MOBILE_MONEY_ORANGE", "Orange Money")
             );
-            log.info("PSP response (mock) endpoint=GET /api/v1/payment-methods body={}", response);
+            log.info("PSP response provider=jawupay mode=mock endpoint=GET /api/v1/payment-methods country={} methodCount={}",
+                    safeValue(country),
+                    response.size());
             return response;
         }
         List<JawuPayPaymentMethod> response = restClient.get()
@@ -208,7 +270,17 @@ public class JawuPayPspClientImpl implements JawuPayPspClient {
                         .build())
                 .retrieve()
                 .body(new ParameterizedTypeReference<>() {});
-        log.info("PSP response endpoint=GET /api/v1/payment-methods body={}", response);
+        log.info("PSP response provider=jawupay mode=live endpoint=GET /api/v1/payment-methods country={} methodCount={}",
+                safeValue(country),
+                response == null ? 0 : response.size());
         return response;
+    }
+
+    private String safeUuid(UUID value) {
+        return value == null ? "n/a" : value.toString();
+    }
+
+    private String safeValue(String value) {
+        return value == null || value.isBlank() ? "n/a" : value;
     }
 }
