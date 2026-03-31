@@ -34,6 +34,8 @@ import java.util.UUID;
 @Slf4j
 public class JawuPayPaymentOrchestrationService {
 
+    private static final String PENDING_PSP_STATUS = "PENDING_PSP";
+
     private final OperationService operationService;
     private final JawuPayPspClient pspClient;
 
@@ -63,11 +65,40 @@ public class JawuPayPaymentOrchestrationService {
                                                  String operatorHint,
                                                  String idempotencyKey,
                                                  String description) {
+        return initiatePayment(
+                accountHolderId,
+                actorUserId,
+                amount,
+                currency,
+                country,
+                paymentMethodId,
+                msisdn,
+                operatorHint,
+                idempotencyKey,
+                description,
+                OperationType.WALLET_DEPOSIT_PSP
+        );
+    }
 
+    @Transactional
+    public InitiatePaymentResult initiatePayment(UUID accountHolderId,
+                                                 UUID actorUserId,
+                                                 BigDecimal amount,
+                                                 String currency,
+                                                 String country,
+                                                 String paymentMethodId,
+                                                 String msisdn,
+                                                 String operatorHint,
+                                                 String idempotencyKey,
+                                                 String description,
+                                                 OperationType operationType) {
+        if (operationType == null) {
+            throw new IllegalArgumentException("Operation type is required");
+        }
         // Step 1 — create or retrieve idempotent operation
         Operation operation = operationService.createInitiatedOperation(
                 accountHolderId, actorUserId,
-                OperationType.WALLET_DEPOSIT_PSP,
+                operationType,
                 amount, currency, idempotencyKey, description
         );
 
@@ -109,7 +140,7 @@ public class JawuPayPaymentOrchestrationService {
                 confirm.providerReference(),
                 confirm.redirectUrl(),
                 paymentMethodId,
-                confirm.status()
+                PENDING_PSP_STATUS
         ));
         log.info("Payment pending PSP: operationId={} paymentId={}", operation.getId(), confirm.paymentId());
 

@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.domain.Pageable;
 
 import java.util.List;
+import java.time.OffsetDateTime;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -25,6 +26,11 @@ public interface OperationRepository extends JpaRepository<Operation, UUID> {
     List<Operation> findByTypeAndStatusOrderByCreatedAtAsc(OperationType type, OperationStatus status);
 
     List<Operation> findByStatusOrderByCreatedAtAsc(OperationStatus status);
+
+    List<Operation> findByStatusAndPspStatusAndCreatedAtBeforeOrderByCreatedAtAsc(OperationStatus status,
+                                                                                   String pspStatus,
+                                                                                   OffsetDateTime createdAtBefore,
+                                                                                   Pageable pageable);
 
     Optional<Operation> findFirstByAccountHolderIdAndTypeAndStatusOrderByCreatedAtDesc(UUID accountHolderId,
                                                                                          OperationType type,

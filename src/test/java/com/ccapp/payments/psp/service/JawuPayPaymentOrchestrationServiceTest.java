@@ -96,7 +96,41 @@ class JawuPayPaymentOrchestrationServiceTest {
         assertThat(metadataCaptor.getValue().redirectUrl())
                 .isEqualTo("https://checkout.example/pay/" + PAYMENT_ID);
         assertThat(metadataCaptor.getValue().paymentMethod()).isEqualTo("MOBILE_MONEY_MTN");
-        assertThat(metadataCaptor.getValue().pspStatus()).isEqualTo("PENDING");
+        assertThat(metadataCaptor.getValue().pspStatus()).isEqualTo("PENDING_PSP");
+    }
+
+    @Test
+    void initiatePayment_withExplicitOperationType_usesProvidedOperationType() {
+        BigDecimal amount = new BigDecimal("1500.00");
+        Operation initiated = operationWithStatus(OperationStatus.INITIATED);
+        when(operationService.createInitiatedOperation(
+                eq(ACCOUNT_HOLDER_ID), eq(ACTOR_USER_ID),
+                eq(OperationType.SUBSCRIPTION),
+                eq(amount), eq("XOF"), eq("idem-sub"), eq("desc-sub")))
+                .thenReturn(initiated);
+
+        JawuPayQuoteResponse quote = new JawuPayQuoteResponse(
+                QUOTE_ID, 150000L, 0L, 150000L, OffsetDateTime.now().plusMinutes(5));
+        when(pspClient.createQuote(any())).thenReturn(quote);
+
+        JawuPayConfirmResponse confirm = new JawuPayConfirmResponse(
+                PAYMENT_ID, "PENDING", "MOCK_PSP",
+                "https://checkout.example/pay/" + PAYMENT_ID, null, "REF-SUB-1");
+        when(pspClient.confirmPayment(any(), eq("idem-sub"))).thenReturn(confirm);
+
+        JawuPayPaymentOrchestrationService.InitiatePaymentResult result =
+                service.initiatePayment(
+                        ACCOUNT_HOLDER_ID, ACTOR_USER_ID,
+                        amount, "XOF", "BJ",
+                        "MOBILE_MONEY_MTN", "22961000000", "MTN",
+                        "idem-sub", "desc-sub", OperationType.SUBSCRIPTION
+                );
+
+        assertThat(result.operationId()).isEqualTo(OPERATION_ID);
+        verify(operationService).createInitiatedOperation(
+                ACCOUNT_HOLDER_ID, ACTOR_USER_ID, OperationType.SUBSCRIPTION,
+                amount, "XOF", "idem-sub", "desc-sub"
+        );
     }
 
     @Test

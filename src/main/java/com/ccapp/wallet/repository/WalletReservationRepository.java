@@ -16,6 +16,8 @@ public interface WalletReservationRepository extends JpaRepository<WalletReserva
 
     List<WalletReservation> findByWalletIdAndStatus(UUID walletId, WalletReservationStatus status);
 
+    Optional<WalletReservation> findByOperationId(UUID operationId);
+
     @Query("SELECT COALESCE(SUM(r.amount), 0) FROM WalletReservation r " +
             "WHERE r.walletId = :walletId AND r.status = 'ACTIVE' " +
             "AND (r.expiryDate IS NULL OR r.expiryDate > :now)")

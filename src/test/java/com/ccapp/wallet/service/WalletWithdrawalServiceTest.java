@@ -94,7 +94,7 @@ class WalletWithdrawalServiceTest {
         when(walletDebitFacade.executeSecureDebit(any()))
                 .thenReturn(WalletDebitFacade.WalletDebitExecutionResult.authorized(initiated));
         when(operationService.getById(OPERATION_ID)).thenReturn(initiated, pending);
-        when(walletReservationService.reserveSystem(eq(ACCOUNT_HOLDER_ID), any()))
+        when(walletReservationService.reserveSystem(eq(ACCOUNT_HOLDER_ID), any(), eq(OPERATION_ID)))
                 .thenReturn(new WalletReserveResponse(UUID.randomUUID(), WALLET_ID, initiated.getAmount(), "ACTIVE", null));
         when(jawuPayPayoutOrchestrationService.createPayout(
                 OPERATION_ID,
@@ -116,7 +116,7 @@ class WalletWithdrawalServiceTest {
 
         ArgumentCaptor<WalletReserveRequest> reservationCaptor = ArgumentCaptor.forClass(WalletReserveRequest.class);
         InOrder inOrder = inOrder(walletReservationService, jawuPayPayoutOrchestrationService);
-        inOrder.verify(walletReservationService).reserveSystem(eq(ACCOUNT_HOLDER_ID), reservationCaptor.capture());
+        inOrder.verify(walletReservationService).reserveSystem(eq(ACCOUNT_HOLDER_ID), reservationCaptor.capture(), eq(OPERATION_ID));
         inOrder.verify(jawuPayPayoutOrchestrationService).createPayout(
                 OPERATION_ID,
                 "CI",
@@ -127,7 +127,7 @@ class WalletWithdrawalServiceTest {
 
         WalletReserveRequest reservationRequest = reservationCaptor.getValue();
         assertThat(reservationRequest.amount()).isEqualByComparingTo("2500.00");
-        assertThat(reservationRequest.currency()).isEqualTo("xof");
+        assertThat(reservationRequest.currency()).isEqualTo("XOF");
         assertThat(reservationRequest.reason()).isEqualTo("wallet-withdrawal-hold:" + OPERATION_ID);
         assertThat(reservationRequest.expiryDate()).isNotNull();
     }
@@ -147,11 +147,16 @@ class WalletWithdrawalServiceTest {
                 .thenReturn(pspClearing);
         when(walletDebitFacade.executeSecureDebit(any()))
                 .thenReturn(WalletDebitFacade.WalletDebitExecutionResult.authorized(initiated));
-        when(operationService.getById(OPERATION_ID)).thenReturn(initiated);
-        when(walletReservationService.reserveSystem(eq(ACCOUNT_HOLDER_ID), any()))
+        when(operationService.getById(OPERATION_ID)).thenReturn(initiated, initiated);
+        when(walletReservationService.reserveSystem(eq(ACCOUNT_HOLDER_ID), any(), eq(OPERATION_ID)))
                 .thenReturn(new WalletReserveResponse(UUID.randomUUID(), WALLET_ID, initiated.getAmount(), "ACTIVE", null));
-        when(jawuPayPayoutOrchestrationService.createPayout(any(), any(), any(), any(), any()))
-                .thenThrow(new IllegalStateException("PSP unavailable"));
+        when(jawuPayPayoutOrchestrationService.createPayout(
+                OPERATION_ID,
+                "CI",
+                "MOBILE_MONEY_MTN",
+                "22501234567",
+                "MTN"
+        )).thenThrow(new IllegalStateException("PSP unavailable"));
 
         IllegalStateException thrown = assertThrows(IllegalStateException.class, () -> service.withdraw(
                 ACCOUNT_HOLDER_ID,
@@ -160,12 +165,12 @@ class WalletWithdrawalServiceTest {
         ));
 
         assertEquals("PSP unavailable", thrown.getMessage());
-        verify(walletReservationService).releaseSystem(ACCOUNT_HOLDER_ID, "wallet-withdrawal-hold:" + OPERATION_ID);
+        verify(walletReservationService).releaseReservation(OPERATION_ID);
         verify(operationService).markFailed(OPERATION_ID);
     }
 
     @Test
-    void confirmPspWithdrawal_consumesReservationAndPostsLedger() {
+    void confirmWithdrawal_consumesReservationAndPostsLedger() {
         Operation pending = withdrawalOperation(OperationStatus.PENDING_PSP);
         Operation confirmed = withdrawalOperation(OperationStatus.CONFIRMED);
         AccountHolder holder = verifiedHolder();
@@ -180,21 +185,24 @@ class WalletWithdrawalServiceTest {
         when(accountHolderRepository.findById(ACCOUNT_HOLDER_ID)).thenReturn(Optional.of(holder));
         when(countryChartOfAccountsService.findOrCreateWallet(holder)).thenReturn(walletAccount);
 
-        service.confirmPspWithdrawal(OPERATION_ID);
+        service.confirmWithdrawal(OPERATION_ID);
 
-        verify(walletReservationService).consumeSystem(ACCOUNT_HOLDER_ID, "wallet-withdrawal-hold:" + OPERATION_ID);
+        verify(walletReservationService).consumeReservation(OPERATION_ID);
         verify(accountingPostingService).postWalletWithdrawal(confirmed, "WALLET-ACCOUNT");
         verify(eventPublisher).publish(any());
     }
 
     @Test
-    void handlePspWithdrawalFailure_releasesReservationOnly() {
+    void handlePspWithdrawalFailure_releasesReservationAndMarksFailed() {
         Operation pending = withdrawalOperation(OperationStatus.PENDING_PSP);
+        Operation failed = withdrawalOperation(OperationStatus.FAILED);
         when(operationService.getById(OPERATION_ID)).thenReturn(pending);
+        when(operationService.markFailed(OPERATION_ID)).thenReturn(failed);
 
         service.handlePspWithdrawalFailure(OPERATION_ID);
 
-        verify(walletReservationService).releaseSystem(ACCOUNT_HOLDER_ID, "wallet-withdrawal-hold:" + OPERATION_ID);
+        verify(operationService).markFailed(OPERATION_ID);
+        verify(walletReservationService).releaseReservation(OPERATION_ID);
         verify(accountingPostingService, never()).postWalletWithdrawal(any(), any());
     }
 

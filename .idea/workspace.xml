@@ -4,14 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Config deep link">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/BACKEND_DOCUMENTATION.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/POINT_COUNTRY_DATA_API_2026-03-19.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/POINT_DEBUG_WORLD_COUNTRIES_2026-03-19.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/POINT_SCOPE_COUNTRY_FLOW_2026-03-19.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/POINT_WALLET_SYSTEM_2026-03-23.txt" beforeDir="false" />
-    </list>
+    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="ticket 5" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -148,54 +141,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1772553173766</updated>
-    </task>
-    <task id="LOCAL-00036" summary="Ajout des apis de community">
-      <option name="closed" value="true" />
-      <created>1773150348520</created>
-      <option name="number" value="00036" />
-      <option name="presentableId" value="LOCAL-00036" />
-      <option name="project" value="LOCAL" />
-      <updated>1773150348520</updated>
-    </task>
-    <task id="LOCAL-00037" summary="Ajout des apis de community">
-      <option name="closed" value="true" />
-      <created>1773151430123</created>
-      <option name="number" value="00037" />
-      <option name="presentableId" value="LOCAL-00037" />
-      <option name="project" value="LOCAL" />
-      <updated>1773151430123</updated>
-    </task>
-    <task id="LOCAL-00038" summary="Revue des configs firebase">
-      <option name="closed" value="true" />
-      <created>1773155647468</created>
-      <option name="number" value="00038" />
-      <option name="presentableId" value="LOCAL-00038" />
-      <option name="project" value="LOCAL" />
-      <updated>1773155647468</updated>
-    </task>
-    <task id="LOCAL-00039" summary="Revue des configs firebase">
-      <option name="closed" value="true" />
-      <created>1773156976862</created>
-      <option name="number" value="00039" />
-      <option name="presentableId" value="LOCAL-00039" />
-      <option name="project" value="LOCAL" />
-      <updated>1773156976862</updated>
-    </task>
-    <task id="LOCAL-00040" summary="Revue des cors">
-      <option name="closed" value="true" />
-      <created>1773159592488</created>
-      <option name="number" value="00040" />
-      <option name="presentableId" value="LOCAL-00040" />
-      <option name="project" value="LOCAL" />
-      <updated>1773159592488</updated>
-    </task>
-    <task id="LOCAL-00041" summary="Ajout de logs">
-      <option name="closed" value="true" />
-      <created>1773161541860</created>
-      <option name="number" value="00041" />
-      <option name="presentableId" value="LOCAL-00041" />
-      <option name="project" value="LOCAL" />
-      <updated>1773161541860</updated>
     </task>
     <task id="LOCAL-00042" summary="Firebase">
       <option name="closed" value="true" />
@@ -541,7 +486,55 @@
       <option name="project" value="LOCAL" />
       <updated>1774860548425</updated>
     </task>
-    <option name="localTasksCounter" value="85" />
+    <task id="LOCAL-00085" summary="rebuild">
+      <option name="closed" value="true" />
+      <created>1774868581771</created>
+      <option name="number" value="00085" />
+      <option name="presentableId" value="LOCAL-00085" />
+      <option name="project" value="LOCAL" />
+      <updated>1774868581771</updated>
+    </task>
+    <task id="LOCAL-00086" summary="fix @Lob sur PostgreSQL mappe vers oid mais la colonne en DB est TEXT">
+      <option name="closed" value="true" />
+      <created>1774881316390</created>
+      <option name="number" value="00086" />
+      <option name="presentableId" value="LOCAL-00086" />
+      <option name="project" value="LOCAL" />
+      <updated>1774881316390</updated>
+    </task>
+    <task id="LOCAL-00087" summary="fix context path">
+      <option name="closed" value="true" />
+      <created>1774881893985</created>
+      <option name="number" value="00087" />
+      <option name="presentableId" value="LOCAL-00087" />
+      <option name="project" value="LOCAL" />
+      <updated>1774881893985</updated>
+    </task>
+    <task id="LOCAL-00088" summary="ticket 3">
+      <option name="closed" value="true" />
+      <created>1774882828399</created>
+      <option name="number" value="00088" />
+      <option name="presentableId" value="LOCAL-00088" />
+      <option name="project" value="LOCAL" />
+      <updated>1774882828399</updated>
+    </task>
+    <task id="LOCAL-00089" summary="ticket 4">
+      <option name="closed" value="true" />
+      <created>1774883474877</created>
+      <option name="number" value="00089" />
+      <option name="presentableId" value="LOCAL-00089" />
+      <option name="project" value="LOCAL" />
+      <updated>1774883474877</updated>
+    </task>
+    <task id="LOCAL-00090" summary="ticket 5">
+      <option name="closed" value="true" />
+      <created>1774884025061</created>
+      <option name="number" value="00090" />
+      <option name="presentableId" value="LOCAL-00090" />
+      <option name="project" value="LOCAL" />
+      <updated>1774884025061</updated>
+    </task>
+    <option name="localTasksCounter" value="91" />
     <servers />
   </component>
   <component name="UnknownFeatures">
@@ -572,12 +565,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="Mise en place des base mlm commissions" />
-    <MESSAGE value="Revue des migrations flyway" />
-    <MESSAGE value="Ajout de fonctionnalités" />
-    <MESSAGE value="Revue des configs" />
-    <MESSAGE value="Refactoring configs" />
-    <MESSAGE value="Refactoring configs pays" />
     <MESSAGE value="Refactoring" />
     <MESSAGE value="Resolve error" />
     <MESSAGE value="chat et revue" />
@@ -597,7 +584,13 @@
     <MESSAGE value="integration de cpass" />
     <MESSAGE value="fix de cpass variable" />
     <MESSAGE value="Config deep link" />
-    <option name="LAST_COMMIT_MESSAGE" value="Config deep link" />
+    <MESSAGE value="rebuild" />
+    <MESSAGE value="fix @Lob sur PostgreSQL mappe vers oid mais la colonne en DB est TEXT" />
+    <MESSAGE value="fix context path" />
+    <MESSAGE value="ticket 3" />
+    <MESSAGE value="ticket 4" />
+    <MESSAGE value="ticket 5" />
+    <option name="LAST_COMMIT_MESSAGE" value="ticket 5" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />

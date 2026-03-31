@@ -22,7 +22,11 @@ public class MobilePaymentService {
         return mobileOnboardingJourneyService.initiatePaidPlanPayment(
                 actorUserId,
                 accountHolderId,
-                request == null ? null : request.idempotencyKey()
+                request == null ? null : request.idempotencyKey(),
+                request == null ? null : request.country(),
+                request == null ? null : request.paymentMethodId(),
+                request == null ? null : request.msisdn(),
+                request == null ? null : request.operatorHint()
         );
     }
 }

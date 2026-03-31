@@ -185,6 +185,10 @@ public class JawuPayWebhookService {
 
         switch (mapped) {
             case SUCCESS -> {
+                if (operation.getType() == OperationType.WALLET_WITHDRAWAL) {
+                    walletWithdrawalService.confirmWithdrawal(operation.getId());
+                    return;
+                }
                 Operation confirmed = operationService.confirmOperation(operation.getId());
                 dispatchConfirmedSideEffects(confirmed);
             }
@@ -203,7 +207,7 @@ public class JawuPayWebhookService {
         }
         switch (operation.getType()) {
             case WALLET_DEPOSIT_PSP -> walletDepositService.confirmPspDeposit(operation.getId());
-            case WALLET_WITHDRAWAL -> walletWithdrawalService.confirmPspWithdrawal(operation.getId());
+            case WALLET_WITHDRAWAL -> walletWithdrawalService.confirmWithdrawal(operation.getId());
             case SUBSCRIPTION -> {
                 membershipService.activateForConfirmedOperation(operation);
                 accountingPostingService.postConfirmedOperation(operation.getId());

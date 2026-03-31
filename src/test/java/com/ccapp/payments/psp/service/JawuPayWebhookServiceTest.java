@@ -191,9 +191,6 @@ class JawuPayWebhookServiceTest {
         when(operationService.findByPayoutIdOrPspReference(PAYOUT_ID)).thenReturn(Optional.of(op));
         when(operationService.recordPspMetadata(eq(OPERATION_ID), any())).thenReturn(op);
 
-        Operation confirmed = confirmedOperation(OperationType.WALLET_WITHDRAWAL);
-        when(operationService.confirmOperation(OPERATION_ID)).thenReturn(confirmed);
-
         service.processWebhook(
                 new JawuPayWebhookRequest("JAWUPAY", "SUCCESS", null, PAYOUT_ID, "PAYOUT-REF-9"),
                 "127.0.0.1"
@@ -204,7 +201,7 @@ class JawuPayWebhookServiceTest {
         verify(operationService).recordPspMetadata(eq(OPERATION_ID), metadataCaptor.capture());
         assertThat(metadataCaptor.getValue().payoutId()).isEqualTo(PAYOUT_ID);
         assertThat(metadataCaptor.getValue().providerReference()).isEqualTo("PAYOUT-REF-9");
-        verify(walletWithdrawalService).confirmPspWithdrawal(OPERATION_ID);
+        verify(walletWithdrawalService).confirmWithdrawal(OPERATION_ID);
     }
 
     @Test
@@ -343,9 +340,6 @@ class JawuPayWebhookServiceTest {
         when(pspClient.getPayout(PAYOUT_ID)).thenReturn(payout);
         when(operationService.recordPspMetadata(eq(OPERATION_ID), any())).thenReturn(op);
 
-        Operation confirmed = confirmedOperation(OperationType.WALLET_WITHDRAWAL);
-        when(operationService.confirmOperation(OPERATION_ID)).thenReturn(confirmed);
-
         service.checkAndApplyPayoutStatus(PAYOUT_ID);
 
         ArgumentCaptor<OperationService.PspMetadata> metadataCaptor =
@@ -355,7 +349,7 @@ class JawuPayWebhookServiceTest {
         assertThat(metadataCaptor.getValue().providerReference()).isEqualTo("PAYOUT-REF-9");
         assertThat(metadataCaptor.getValue().paymentMethod()).isEqualTo("MOBILE_MONEY_MTN");
         assertThat(metadataCaptor.getValue().pspStatus()).isEqualTo("SUCCESS");
-        verify(walletWithdrawalService).confirmPspWithdrawal(OPERATION_ID);
+        verify(walletWithdrawalService).confirmWithdrawal(OPERATION_ID);
     }
 
     private Operation pendingPspOperation(OperationType type) {

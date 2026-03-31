@@ -130,23 +130,28 @@ public class WalletWithdrawalService {
         }
 
         Operation operation = operationService.getById(result.operationId());
-        String reservationReason = reservationReason(operation.getId());
-        walletReservationService.reserveSystem(accountHolderId, new WalletReserveRequest(
+        WalletReserveRequest reservationRequest = new WalletReserveRequest(
                 request.amount(),
-                request.currency(),
-                reservationReason,
+                request.currency().trim().toUpperCase(Locale.ROOT),
+                reservationReason(operation.getId()),
                 OffsetDateTime.now().plusMinutes(WITHDRAWAL_RESERVATION_EXPIRY_MINUTES),
                 null
-        ));
+        );
+        walletReservationService.reserveSystem(accountHolderId, reservationRequest, operation.getId());
+
         try {
             JawuPayPayoutOrchestrationService.InitiatePayoutResult orchestrationResult =
                     jawuPayPayoutOrchestrationService.createPayout(
-                    operation.getId(),
-                    countryCode,
-                    resolvePayoutPaymentMethod(wallet),
-                    resolvePayoutPhone(wallet, holder),
-                    resolvePayoutOperatorHint(wallet)
-            );
+                            operation.getId(),
+                            countryCode,
+                            resolvePayoutPaymentMethod(wallet),
+                            resolvePayoutPhone(wallet, holder),
+                            resolvePayoutOperatorHint(wallet)
+                    );
+            if (!operation.getId().equals(orchestrationResult.operationId())) {
+                throw new IllegalStateException("Wallet withdrawal orchestration returned an unexpected operation id");
+            }
+
             Operation pending = operationService.getById(orchestrationResult.operationId());
 
             log.info("wallet_withdrawal_pending_psp operationId={} accountHolderId={} amount={} currency={} payoutId={} pspReference={}",
@@ -158,17 +163,20 @@ public class WalletWithdrawalService {
                     pending.getPspReference());
             return pendingResponse(pending.getId(), request.amount(), request.currency(), pending.getPspReference());
         } catch (RuntimeException ex) {
-            walletReservationService.releaseSystem(accountHolderId, reservationReason);
-            operationService.markFailed(operation.getId());
+            walletReservationService.releaseReservation(operation.getId());
+            Operation latest = operationService.getById(operation.getId());
+            if (latest.getStatus() != OperationStatus.CONFIRMED) {
+                operationService.markFailed(operation.getId());
+            }
             throw ex;
         }
     }
 
-    public void confirmPspWithdrawal(UUID operationId) {
+    public void confirmWithdrawal(UUID operationId) {
         Operation current = operationService.getById(operationId);
         boolean alreadyConfirmed = current.getStatus() == OperationStatus.CONFIRMED;
         Operation operation = alreadyConfirmed ? current : operationService.confirmOperation(operationId);
-        walletReservationService.consumeSystem(operation.getAccountHolderId(), reservationReason(operation.getId()));
+        walletReservationService.consumeReservation(operation.getId());
         Wallet wallet = walletRepository.findByAccountHolderIdOrderByCreatedAtDesc(operation.getAccountHolderId())
                 .stream()
                 .findFirst()
@@ -186,14 +194,27 @@ public class WalletWithdrawalService {
         }
     }
 
+    public void confirmPspWithdrawal(UUID operationId) {
+        confirmWithdrawal(operationId);
+    }
+
     public void handlePspWithdrawalFailure(UUID operationId) {
-        Operation operation = operationService.getById(operationId);
-        walletReservationService.releaseSystem(operation.getAccountHolderId(), reservationReason(operation.getId()));
-        log.warn("wallet_withdrawal_psp_failed operationId={} accountHolderId={} amount={} currency={} reservationRelease=completed",
-                operation.getId(),
-                operation.getAccountHolderId(),
-                operation.getAmount(),
-                operation.getCurrency());
+        Operation current = operationService.getById(operationId);
+        if (current.getStatus() == OperationStatus.CONFIRMED) {
+            log.warn("wallet_withdrawal_psp_failed_skip operationId={} reason=already_confirmed", operationId);
+            return;
+        }
+
+        Operation failed = current.getStatus() == OperationStatus.FAILED
+                ? current
+                : operationService.markFailed(operationId);
+
+        walletReservationService.releaseReservation(operationId);
+        log.warn("wallet_withdrawal_psp_failed operationId={} accountHolderId={} amount={} currency={} reservationRelease=done",
+                failed.getId(),
+                failed.getAccountHolderId(),
+                failed.getAmount(),
+                failed.getCurrency());
     }
 
     private AccountHolder resolveHolder(UUID id) {

@@ -33,8 +33,7 @@ import com.ccapp.payments.operation.domain.enums.OperationStatus;
 import com.ccapp.payments.operation.domain.enums.OperationType;
 import com.ccapp.payments.operation.repository.OperationRepository;
 import com.ccapp.payments.operation.service.OperationService;
-import com.ccapp.payments.psp.dto.JawupayInitiateResponse;
-import com.ccapp.payments.service.PaymentService;
+import com.ccapp.payments.psp.service.JawuPayPaymentOrchestrationService;
 import com.ccapp.payments.subscription.domain.entity.Membership;
 import com.ccapp.payments.subscription.domain.entity.SubscriptionPlan;
 import com.ccapp.payments.subscription.domain.enums.MembershipStatus;
@@ -68,7 +67,7 @@ public class MobileOnboardingJourneyService {
     private final OperationService operationService;
     private final OperationRepository operationRepository;
     private final MembershipService membershipService;
-    private final PaymentService paymentService;
+    private final JawuPayPaymentOrchestrationService jawuPayPaymentOrchestrationService;
     private final MLMPlacementService mlmPlacementService;
     private final MlmRelationshipRepository mlmRelationshipRepository;
     private final MlmMemberLinkRepository mlmMemberLinkRepository;
@@ -201,7 +200,11 @@ public class MobileOnboardingJourneyService {
     @Transactional
     public MobilePaymentInitiateResponse initiatePaidPlanPayment(UUID actorUserId,
                                                                  UUID accountHolderId,
-                                                                 String requestedIdempotencyKey) {
+                                                                 String requestedIdempotencyKey,
+                                                                 String requestedCountryCode,
+                                                                 String paymentMethodId,
+                                                                 String msisdn,
+                                                                 String operatorHint) {
         accessControlService.assertCanActOnAccountHolder(actorUserId, accountHolderId, PermissionLevel.TRANSACT);
         MobileOnboardingJourney journey = getOrCreate(accountHolderId);
         promoteStatus(journey, MobileOnboardingJourneyStatus.AUTHENTICATED);
@@ -215,6 +218,14 @@ public class MobileOnboardingJourneyService {
         String idempotencyKey = (requestedIdempotencyKey == null || requestedIdempotencyKey.isBlank())
                 ? "mobile-paid-sub:" + accountHolderId + ":" + plan.getId() + ":" + UUID.randomUUID()
                 : requestedIdempotencyKey.trim();
+        String paymentCountry = normalizeRequiredCountryCode(requestedCountryCode);
+        String normalizedPaymentMethodId = normalizeRequiredPaymentMethodId(paymentMethodId);
+        String normalizedMsisdn = normalizeMsisdn(msisdn, normalizedPaymentMethodId);
+        String normalizedOperatorHint = normalizeOptional(operatorHint);
+
+        if (!paymentCountry.equalsIgnoreCase(plan.getCountry())) {
+            throw new BusinessException("Selected plan is not available for requested payment country");
+        }
 
         Operation operation = operationService.createInitiatedOperation(
                 accountHolderId,
@@ -247,28 +258,39 @@ public class MobileOnboardingJourneyService {
                     operation.getId(),
                     operation.getStatus().name(),
                     operation.getPspReference(),
-                    null
+                    operation.getRedirectUrl()
             );
         }
 
-        JawupayInitiateResponse pspResponse = paymentService.initiatePayment(
-                operation.getId(),
-                idempotencyKey,
-                plan.getPrice(),
-                plan.getCurrency(),
-                accountHolderId,
-                actorUserId,
-                operation.getDescription()
-        );
-        Operation pendingOperation = operationService.markPendingPsp(operation.getId(), pspResponse.pspReference());
-        updatePaymentPending(journey, pendingOperation.getId(), pspResponse.pspReference(), false);
+        JawuPayPaymentOrchestrationService.InitiatePaymentResult orchestrationResult =
+                jawuPayPaymentOrchestrationService.initiatePayment(
+                        accountHolderId,
+                        actorUserId,
+                        plan.getPrice(),
+                        plan.getCurrency(),
+                        paymentCountry,
+                        normalizedPaymentMethodId,
+                        normalizedMsisdn,
+                        normalizedOperatorHint,
+                        idempotencyKey,
+                        operation.getDescription(),
+                        OperationType.SUBSCRIPTION
+                );
+        if (!operation.getId().equals(orchestrationResult.operationId())) {
+            throw new IllegalStateException("Onboarding payment orchestration returned an unexpected operation id");
+        }
+        Operation pendingOperation = operationService.getById(operation.getId());
+
+        updatePaymentPending(journey, pendingOperation.getId(), pendingOperation.getPspReference(), false);
         journeyRepository.save(journey);
 
         return new MobilePaymentInitiateResponse(
                 pendingOperation.getId(),
                 pendingOperation.getStatus().name(),
-                pspResponse.pspReference(),
-                pspResponse.checkoutUrl()
+                pendingOperation.getPspReference(),
+                pendingOperation.getRedirectUrl() != null
+                        ? pendingOperation.getRedirectUrl()
+                        : orchestrationResult.redirectUrl()
         );
     }
 
@@ -508,6 +530,45 @@ public class MobileOnboardingJourneyService {
     private boolean isMembershipActive(Membership membership) {
         return membership.getStatus() == MembershipStatus.ACTIVE
                 && (membership.getExpiresAt() == null || membership.getExpiresAt().isAfter(OffsetDateTime.now()));
+    }
+
+    private String normalizeRequiredCountryCode(String value) {
+        if (value == null || value.isBlank()) {
+            throw new BusinessException("Payment country is required");
+        }
+        String normalized = normalizeCountryCode(value);
+        if (normalized.length() < 2 || normalized.length() > 3) {
+            throw new BusinessException("Payment country must be ISO code length 2 or 3");
+        }
+        return normalized;
+    }
+
+    private String normalizeRequiredPaymentMethodId(String value) {
+        if (value == null || value.isBlank()) {
+            throw new BusinessException("Payment method is required");
+        }
+        return value.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private String normalizeMsisdn(String value, String paymentMethodId) {
+        String normalized = normalizeOptional(value);
+        if (isMsisdnRequired(paymentMethodId) && normalized == null) {
+            throw new BusinessException("MSISDN is required for payment method " + paymentMethodId);
+        }
+        return normalized;
+    }
+
+    private boolean isMsisdnRequired(String paymentMethodId) {
+        return paymentMethodId != null
+                && (paymentMethodId.startsWith("MOBILE_MONEY")
+                || paymentMethodId.contains("MOMO"));
+    }
+
+    private String normalizeOptional(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
     }
 
     private String normalizeCountryCode(String value) {

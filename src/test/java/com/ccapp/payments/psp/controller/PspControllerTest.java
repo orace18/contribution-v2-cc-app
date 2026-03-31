@@ -2,7 +2,6 @@ package com.ccapp.payments.psp.controller;
 
 import com.ccapp.common.api.CommonResponse;
 import com.ccapp.payments.psp.dto.JawuPayWebhookRequest;
-import com.ccapp.payments.psp.service.JawupayService;
 import com.ccapp.payments.psp.service.JawuPayWebhookService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -21,8 +20,6 @@ import static org.mockito.Mockito.verifyNoInteractions;
 @ExtendWith(MockitoExtension.class)
 class PspControllerTest {
 
-    @Mock
-    private JawupayService jawupayService;
     @Mock
     private JawuPayWebhookService jawuPayWebhookService;
 
