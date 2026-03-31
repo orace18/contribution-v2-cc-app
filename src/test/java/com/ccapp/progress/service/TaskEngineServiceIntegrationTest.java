@@ -332,6 +332,8 @@ class TaskEngineServiceIntegrationTest {
                 accountHolder,
                 phoneVerified,
                 profileComplete,
+                false,
+                false,
                 kycCompleted,
                 joinedCircle,
                 joinedCircle ? UUID.randomUUID() : null,
