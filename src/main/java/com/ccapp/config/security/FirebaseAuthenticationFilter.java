@@ -6,6 +6,7 @@ import com.ccapp.identity.app_user.repository.AppUserRepository;
 import com.ccapp.identity.repository.UserRepository;
 import com.ccapp.identity.service.FirebaseTokenVerifier;
 import com.ccapp.identity.service.FirebaseUserClaims;
+import org.springframework.beans.factory.annotation.Value;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -32,6 +33,24 @@ public class FirebaseAuthenticationFilter extends OncePerRequestFilter {
     private final AppUserRepository appUserRepository;
     private final UserRepository userRepository;
 
+    @Value("${firebase.auth.enabled:false}")
+    private boolean firebaseAuthEnabled;
+
+    @Value("${firebase.dev-bypass.mock-user.enabled:false}")
+    private boolean devBypassMockUserEnabled;
+
+    @Value("${firebase.dev-bypass.uid:}")
+    private String devBypassUid;
+
+    @Value("${firebase.dev-bypass.email:}")
+    private String devBypassEmail;
+
+    @Value("${firebase.dev-bypass.user-id:}")
+    private String devBypassUserId;
+
+    @Value("${firebase.dev-bypass.account-holder-id:}")
+    private String devBypassAccountHolderId;
+
     @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
@@ -49,6 +68,9 @@ public class FirebaseAuthenticationFilter extends OncePerRequestFilter {
 
         String authHeader = request.getHeader("Authorization");
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            if (!firebaseAuthEnabled) {
+                maybeApplyDevMockAuthentication(path);
+            }
             filterChain.doFilter(request, response);
             return;
         }
@@ -92,5 +114,55 @@ public class FirebaseAuthenticationFilter extends OncePerRequestFilter {
         SecurityContextHolder.getContext().setAuthentication(authentication);
 
         filterChain.doFilter(request, response);
+    }
+
+    private void maybeApplyDevMockAuthentication(String path) {
+        if (!devBypassMockUserEnabled) {
+            return;
+        }
+
+        String firebaseUid = normalizeOptional(devBypassUid);
+        UUID userId = parseOptionalUuid(devBypassUserId);
+        UUID accountHolderId = parseOptionalUuid(devBypassAccountHolderId);
+        if (firebaseUid == null || (userId == null && accountHolderId == null)) {
+            log.warn("Firebase dev bypass mock user ignored path={} reason=missing-config", path);
+            return;
+        }
+
+        AuthenticatedPrincipal principal = AuthenticatedPrincipal.builder()
+                .firebaseUid(firebaseUid)
+                .email(normalizeOptional(devBypassEmail))
+                .userId(userId)
+                .accountHolderId(accountHolderId)
+                .internal(false)
+                .build();
+
+        UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+                principal,
+                null,
+                List.of(new SimpleGrantedAuthority("ROLE_USER"))
+        );
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+        log.warn("Firebase auth DISABLED - running in dev bypass mode source=mock-user path={}", path);
+    }
+
+    private UUID parseOptionalUuid(String value) {
+        String normalized = normalizeOptional(value);
+        if (normalized == null) {
+            return null;
+        }
+        try {
+            return UUID.fromString(normalized);
+        } catch (IllegalArgumentException ex) {
+            log.warn("Firebase dev bypass mock user ignored invalid uuid value");
+            return null;
+        }
+    }
+
+    private String normalizeOptional(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
     }
 }

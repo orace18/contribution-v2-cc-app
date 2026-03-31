@@ -12,6 +12,7 @@ import com.ccapp.mobile.auth.dto.MobileSocialLoginRequest;
 import com.ccapp.mobile.auth.dto.MobileSocialLoginResponse;
 import com.ccapp.mobile.onboarding.service.MobileOnboardingJourneyService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,6 +26,9 @@ public class MobileAuthService {
     private final FirebaseTokenVerifier firebaseTokenVerifier;
     private final IdentitySecurityService identitySecurityService;
     private final MobileOnboardingJourneyService mobileOnboardingJourneyService;
+
+    @Value("${firebase.auth.enabled:false}")
+    private boolean firebaseAuthEnabled;
 
     @Transactional
     public MobileSocialLoginResponse socialLogin(MobileSocialLoginRequest request) {
@@ -79,9 +83,9 @@ public class MobileAuthService {
     }
 
     private FirebaseUserClaims resolveClaims(String idToken) {
-        if (idToken == null || idToken.isBlank()) {
+        if (firebaseAuthEnabled && (idToken == null || idToken.isBlank())) {
             throw new UnauthorizedException("Firebase token is required");
         }
-        return firebaseTokenVerifier.verify(idToken.trim());
+        return firebaseTokenVerifier.verify(idToken == null ? "" : idToken.trim());
     }
 }

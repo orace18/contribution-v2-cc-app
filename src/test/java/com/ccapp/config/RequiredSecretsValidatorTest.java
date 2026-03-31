@@ -33,6 +33,7 @@ class RequiredSecretsValidatorTest {
         MockEnvironment environment = baseEnvironment();
         environment.setProperty("firebase.auth.enabled", "false");
         environment.setProperty("firebase.credentials.path", "");
+        environment.setProperty("firebase.credentials.json", "");
         environment.setProperty("firebase.credentials.base64", "");
         RequiredSecretsValidator validator = new RequiredSecretsValidator(environment);
 
@@ -40,10 +41,11 @@ class RequiredSecretsValidatorTest {
     }
 
     @Test
-    void validateRequiredSecrets_shouldPass_whenFirebaseAuthUsesBase64Credentials() {
+    void validateRequiredSecrets_shouldPass_whenFirebaseAuthUsesInlineJsonCredentials() {
         MockEnvironment environment = baseEnvironment();
         environment.setProperty("firebase.credentials.path", "");
-        environment.setProperty("firebase.credentials.base64", "eyJ0eXBlIjoic2VydmljZV9hY2NvdW50In0=");
+        environment.setProperty("firebase.credentials.json", "{\"type\":\"service_account\"}");
+        environment.setProperty("firebase.credentials.base64", "");
         RequiredSecretsValidator validator = new RequiredSecretsValidator(environment);
 
         assertDoesNotThrow(validator::validateRequiredSecrets);
@@ -53,12 +55,36 @@ class RequiredSecretsValidatorTest {
     void validateRequiredSecrets_shouldThrow_whenFirebaseAuthIsEnabledWithoutAnyCredentialSource() {
         MockEnvironment environment = baseEnvironment();
         environment.setProperty("firebase.credentials.path", "");
+        environment.setProperty("firebase.credentials.json", "");
         environment.setProperty("firebase.credentials.base64", "");
         RequiredSecretsValidator validator = new RequiredSecretsValidator(environment);
 
         IllegalStateException ex = assertThrows(IllegalStateException.class, validator::validateRequiredSecrets);
 
-        assertTrue(ex.getMessage().contains("firebase.credentials.path|firebase.credentials.base64"));
+        assertTrue(ex.getMessage().contains("firebase.credentials.path|firebase.credentials.json|firebase.credentials.base64"));
+    }
+
+    @Test
+    void validateRequiredSecrets_shouldThrow_whenFirebaseProjectIdIsMissingWhileAuthEnabled() {
+        MockEnvironment environment = baseEnvironment();
+        environment.setProperty("firebase.project-id", "");
+        RequiredSecretsValidator validator = new RequiredSecretsValidator(environment);
+
+        IllegalStateException ex = assertThrows(IllegalStateException.class, validator::validateRequiredSecrets);
+
+        assertTrue(ex.getMessage().contains("firebase.project-id"));
+    }
+
+    @Test
+    void validateRequiredSecrets_shouldThrow_whenFirebaseAuthIsDisabledInProd() {
+        MockEnvironment environment = baseEnvironment();
+        environment.setActiveProfiles("prod");
+        environment.setProperty("firebase.auth.enabled", "false");
+        RequiredSecretsValidator validator = new RequiredSecretsValidator(environment);
+
+        IllegalStateException ex = assertThrows(IllegalStateException.class, validator::validateRequiredSecrets);
+
+        assertTrue(ex.getMessage().contains("Firebase auth must be enabled in PROD"));
     }
 
     private MockEnvironment baseEnvironment() {
@@ -67,7 +93,9 @@ class RequiredSecretsValidatorTest {
                 .withProperty("jwt.secret", "jwt-secret")
                 .withProperty("admin.jwt.secret", "admin-jwt-secret")
                 .withProperty("admin.bootstrap.password", "bootstrap-password")
+                .withProperty("firebase.project-id", "jawupay-bbc9f")
                 .withProperty("firebase.credentials.path", "/opt/secrets/firebase.json")
+                .withProperty("firebase.credentials.json", "")
                 .withProperty("firebase.credentials.base64", "")
                 .withProperty("psp.jawupay.hmac-secret", "jawupay-secret")
                 .withProperty("security.internal-api-key", "internal-api-key")
