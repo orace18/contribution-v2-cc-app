@@ -3,9 +3,10 @@ package com.ccapp.payments.operation.repository;
 import com.ccapp.payments.operation.domain.entity.Operation;
 import com.ccapp.payments.operation.domain.enums.OperationStatus;
 import com.ccapp.payments.operation.domain.enums.OperationType;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.domain.Pageable;
+import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.time.OffsetDateTime;
@@ -31,6 +32,18 @@ public interface OperationRepository extends JpaRepository<Operation, UUID> {
                                                                                    String pspStatus,
                                                                                    OffsetDateTime createdAtBefore,
                                                                                    Pageable pageable);
+
+    @Query("""
+            select o
+            from Operation o
+            where o.createdAt < :createdAtBefore
+              and (o.status = :pendingStatus or o.pspStatus = :reconciliationStatus)
+            order by o.createdAt asc
+            """)
+    List<Operation> findBatchForPspReconciliation(@Param("pendingStatus") OperationStatus pendingStatus,
+                                                  @Param("reconciliationStatus") String reconciliationStatus,
+                                                  @Param("createdAtBefore") OffsetDateTime createdAtBefore,
+                                                  Pageable pageable);
 
     Optional<Operation> findFirstByAccountHolderIdAndTypeAndStatusOrderByCreatedAtDesc(UUID accountHolderId,
                                                                                          OperationType type,

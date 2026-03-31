@@ -18,6 +18,8 @@ import java.util.List;
 @Slf4j
 public class PspReconciliationJob {
 
+    private static final String RECONCILIATION_REQUIRED = "RECONCILIATION_REQUIRED";
+
     private final OperationRepository operationRepository;
     private final JawuPayWebhookService jawuPayWebhookService;
 
@@ -34,9 +36,9 @@ public class PspReconciliationJob {
         int effectiveBatchSize = Math.max(1, batchSize);
 
         List<Operation> stalePending = operationRepository
-                .findByStatusAndPspStatusAndCreatedAtBeforeOrderByCreatedAtAsc(
+                .findBatchForPspReconciliation(
                         OperationStatus.PENDING_PSP,
-                        OperationStatus.PENDING_PSP.name(),
+                        RECONCILIATION_REQUIRED,
                         cutoff,
                         PageRequest.of(0, effectiveBatchSize)
                 );
@@ -46,10 +48,6 @@ public class PspReconciliationJob {
 
         for (Operation operation : stalePending) {
             try {
-                if (operation.getStatus() != OperationStatus.PENDING_PSP) {
-                    continue;
-                }
-
                 String paymentId = normalizeIdentifier(operation.getPaymentId());
                 if (paymentId != null) {
                     jawuPayWebhookService.checkAndApplyPaymentStatus(paymentId);
