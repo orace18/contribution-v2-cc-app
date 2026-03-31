@@ -15,12 +15,22 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.ResourceAccessException;
 
+import java.io.InterruptedIOException;
+import java.net.SocketTimeoutException;
+import java.net.http.HttpClient;
+import java.net.http.HttpTimeoutException;
+import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
+import java.util.concurrent.TimeoutException;
+import java.util.function.Supplier;
 
 /**
  * Real HTTP adapter for the JawuPay PSP orchestrator service.
@@ -47,14 +57,29 @@ public class JawuPayPspClientImpl implements JawuPayPspClient {
     @Value("${psp.jawupay.mock-enabled:false}")
     private boolean mockEnabled;
 
+    @Value("${psp.jawupay.http.connect-timeout-ms:5000}")
+    private int connectTimeoutMs = 5000;
+
+    @Value("${psp.jawupay.http.read-timeout-ms:10000}")
+    private int readTimeoutMs = 10000;
+
+    @Value("${psp.jawupay.http.safe-retry.max-attempts:3}")
+    private int safeRetryMaxAttempts = 3;
+
+    @Value("${psp.jawupay.http.safe-retry.initial-delay-ms:500}")
+    private long safeRetryInitialDelayMs = 500L;
+
     private RestClient restClient;
+    private RetrySleeper retrySleeper = Thread::sleep;
 
     @PostConstruct
     void init() {
+        validateHttpConfiguration();
         restClient = RestClient.builder()
                 .baseUrl(baseUrl)
                 .defaultHeader("X-Api-Key", apiKey)
                 .defaultHeader("Accept", MediaType.APPLICATION_JSON_VALUE)
+                .requestFactory(createRequestFactory())
                 .defaultStatusHandler(
                         status -> status.is4xxClientError() || status.is5xxServerError(),
                         (req, resp) -> {
@@ -63,6 +88,15 @@ public class JawuPayPspClientImpl implements JawuPayPspClient {
                                             + " for " + req.getMethod() + " " + req.getURI());
                         })
                 .build();
+    }
+
+    JdkClientHttpRequestFactory createRequestFactory() {
+        HttpClient httpClient = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofMillis(connectTimeoutMs))
+                .build();
+        JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
+        requestFactory.setReadTimeout(Duration.ofMillis(readTimeoutMs));
+        return requestFactory;
     }
 
     // -----------------------------------------------------------------------
@@ -91,12 +125,12 @@ public class JawuPayPspClientImpl implements JawuPayPspClient {
                     response.expiresAt());
             return response;
         }
-        JawuPayQuoteResponse response = restClient.post()
-                .uri("/api/v1/payment/quote")
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(request)
-                .retrieve()
-                .body(JawuPayQuoteResponse.class);
+        JawuPayQuoteResponse response = executeWithoutRetry(
+                "POST /api/v1/payment/quote",
+                "clientId",
+                request.clientId(),
+                () -> doCreateQuoteRequest(request)
+        );
         log.info("PSP response provider=jawupay mode=live endpoint=POST /api/v1/payment/quote quoteId={} amountMinor={} totalAmountMinor={} expiresAt={}",
                 safeUuid(response == null ? null : response.quoteId()),
                 response == null ? null : response.amount(),
@@ -134,13 +168,12 @@ public class JawuPayPspClientImpl implements JawuPayPspClient {
                     response.redirectUrl() != null);
             return response;
         }
-        JawuPayConfirmResponse response = restClient.post()
-                .uri("/api/v1/payment/confirm")
-                .header("Idempotency-Key", idempotencyKey)
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(request)
-                .retrieve()
-                .body(JawuPayConfirmResponse.class);
+        JawuPayConfirmResponse response = executeWithoutRetry(
+                "POST /api/v1/payment/confirm",
+                "quoteId",
+                safeUuid(request.quoteId()),
+                () -> doConfirmPaymentRequest(request, idempotencyKey)
+        );
         log.info("PSP response provider=jawupay mode=live endpoint=POST /api/v1/payment/confirm paymentId={} status={} provider={} redirectPresent={}",
                 safeUuid(response == null ? null : response.paymentId()),
                 safeValue(response == null ? null : response.status()),
@@ -169,10 +202,12 @@ public class JawuPayPspClientImpl implements JawuPayPspClient {
                     safeValue(response.currency()));
             return response;
         }
-        JawuPayPaymentResponse response = restClient.get()
-                .uri("/api/v1/payment/{paymentId}", paymentId)
-                .retrieve()
-                .body(JawuPayPaymentResponse.class);
+        JawuPayPaymentResponse response = executeWithSafeRetry(
+                "GET /api/v1/payment/{paymentId}",
+                "paymentId",
+                paymentId,
+                () -> doGetPaymentRequest(paymentId)
+        );
         log.info("PSP response provider=jawupay mode=live endpoint=GET /api/v1/payment/{} paymentId={} status={} provider={} amountMinor={} currency={}",
                 paymentId,
                 safeUuid(response == null ? null : response.paymentId()),
@@ -204,12 +239,12 @@ public class JawuPayPspClientImpl implements JawuPayPspClient {
                     safeValue(response.pspProvider()));
             return response;
         }
-        JawuPayCreatePayoutResponse response = restClient.post()
-                .uri("/api/v1/payout")
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(request)
-                .retrieve()
-                .body(JawuPayCreatePayoutResponse.class);
+        JawuPayCreatePayoutResponse response = executeWithoutRetry(
+                "POST /api/v1/payout",
+                "clientId",
+                request.clientId(),
+                () -> doCreatePayoutRequest(request)
+        );
         log.info("PSP response provider=jawupay mode=live endpoint=POST /api/v1/payout payoutId={} status={} provider={}",
                 safeUuid(response == null ? null : response.payoutId()),
                 safeValue(response == null ? null : response.status()),
@@ -233,10 +268,12 @@ public class JawuPayPspClientImpl implements JawuPayPspClient {
                     safeValue(response.currency()));
             return response;
         }
-        JawuPayPayoutDetailsResponse response = restClient.get()
-                .uri("/api/v1/payout/{id}", payoutId)
-                .retrieve()
-                .body(JawuPayPayoutDetailsResponse.class);
+        JawuPayPayoutDetailsResponse response = executeWithSafeRetry(
+                "GET /api/v1/payout/{payoutId}",
+                "payoutId",
+                payoutId,
+                () -> doGetPayoutRequest(payoutId)
+        );
         log.info("PSP response provider=jawupay mode=live endpoint=GET /api/v1/payout/{} payoutId={} status={} provider={} amountMinor={} currency={}",
                 payoutId,
                 safeUuid(response == null ? null : response.payoutId()),
@@ -264,16 +301,193 @@ public class JawuPayPspClientImpl implements JawuPayPspClient {
                     response.size());
             return response;
         }
-        List<JawuPayPaymentMethod> response = restClient.get()
+        List<JawuPayPaymentMethod> response = executeWithoutRetry(
+                "GET /api/v1/payment-methods",
+                "country",
+                country,
+                () -> doGetPaymentMethodsRequest(country)
+        );
+        log.info("PSP response provider=jawupay mode=live endpoint=GET /api/v1/payment-methods country={} methodCount={}",
+                safeValue(country),
+                response == null ? 0 : response.size());
+        return response;
+    }
+
+    JawuPayQuoteResponse doCreateQuoteRequest(JawuPayQuoteRequest request) {
+        return restClient.post()
+                .uri("/api/v1/payment/quote")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(request)
+                .retrieve()
+                .body(JawuPayQuoteResponse.class);
+    }
+
+    JawuPayConfirmResponse doConfirmPaymentRequest(JawuPayConfirmRequest request, String idempotencyKey) {
+        return restClient.post()
+                .uri("/api/v1/payment/confirm")
+                .header("Idempotency-Key", idempotencyKey)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(request)
+                .retrieve()
+                .body(JawuPayConfirmResponse.class);
+    }
+
+    JawuPayPaymentResponse doGetPaymentRequest(String paymentId) {
+        return restClient.get()
+                .uri("/api/v1/payment/{paymentId}", paymentId)
+                .retrieve()
+                .body(JawuPayPaymentResponse.class);
+    }
+
+    JawuPayCreatePayoutResponse doCreatePayoutRequest(JawuPayCreatePayoutRequest request) {
+        return restClient.post()
+                .uri("/api/v1/payout")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(request)
+                .retrieve()
+                .body(JawuPayCreatePayoutResponse.class);
+    }
+
+    JawuPayPayoutDetailsResponse doGetPayoutRequest(String payoutId) {
+        return restClient.get()
+                .uri("/api/v1/payout/{payoutId}", payoutId)
+                .retrieve()
+                .body(JawuPayPayoutDetailsResponse.class);
+    }
+
+    List<JawuPayPaymentMethod> doGetPaymentMethodsRequest(String country) {
+        return restClient.get()
                 .uri(uriBuilder -> uriBuilder.path("/api/v1/payment-methods")
                         .queryParam("country", country)
                         .build())
                 .retrieve()
                 .body(new ParameterizedTypeReference<>() {});
-        log.info("PSP response provider=jawupay mode=live endpoint=GET /api/v1/payment-methods country={} methodCount={}",
-                safeValue(country),
-                response == null ? 0 : response.size());
-        return response;
+    }
+
+    private <T> T executeWithoutRetry(String endpoint,
+                                      String identifierLabel,
+                                      String identifierValue,
+                                      Supplier<T> supplier) {
+        try {
+            return supplier.get();
+        } catch (ResourceAccessException ex) {
+            throw translateCommunicationException(endpoint, identifierLabel, identifierValue, ex, 1, 1, false);
+        }
+    }
+
+    private <T> T executeWithSafeRetry(String endpoint,
+                                       String identifierLabel,
+                                       String identifierValue,
+                                       Supplier<T> supplier) {
+        long retryDelayMs = safeRetryInitialDelayMs;
+        for (int attempt = 1; attempt <= safeRetryMaxAttempts; attempt++) {
+            try {
+                return supplier.get();
+            } catch (ResourceAccessException ex) {
+                boolean timeout = isTimeoutException(ex);
+                if (!timeout) {
+                    throw translateCommunicationException(endpoint, identifierLabel, identifierValue, ex, attempt, safeRetryMaxAttempts, false);
+                }
+                if (attempt >= safeRetryMaxAttempts) {
+                    throw translateCommunicationException(endpoint, identifierLabel, identifierValue, ex, attempt, safeRetryMaxAttempts, false);
+                }
+                log.warn("PSP timeout provider=jawupay endpoint={} {}={} attempt={} maxAttempts={} retryingInMs={}",
+                        endpoint,
+                        identifierLabel,
+                        safeValue(identifierValue),
+                        attempt,
+                        safeRetryMaxAttempts,
+                        retryDelayMs);
+                sleepBeforeRetry(endpoint, identifierLabel, identifierValue, retryDelayMs);
+                retryDelayMs = nextRetryDelay(retryDelayMs);
+            }
+        }
+        throw new IllegalStateException("Unexpected retry loop exit for " + endpoint);
+    }
+
+    private void sleepBeforeRetry(String endpoint,
+                                  String identifierLabel,
+                                  String identifierValue,
+                                  long retryDelayMs) {
+        if (retryDelayMs <= 0) {
+            return;
+        }
+        try {
+            retrySleeper.sleep(retryDelayMs);
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw new PSPCommunicationException(
+                    "JawuPay retry interrupted for " + endpoint + " " + identifierLabel + "=" + safeValue(identifierValue),
+                    ex
+            );
+        }
+    }
+
+    private long nextRetryDelay(long currentDelayMs) {
+        if (currentDelayMs <= 0) {
+            return 0L;
+        }
+        return currentDelayMs > Long.MAX_VALUE / 2 ? Long.MAX_VALUE : currentDelayMs * 2;
+    }
+
+    private PSPCommunicationException translateCommunicationException(String endpoint,
+                                                                     String identifierLabel,
+                                                                     String identifierValue,
+                                                                     ResourceAccessException ex,
+                                                                     int attempt,
+                                                                     int maxAttempts,
+                                                                     boolean retryScheduled) {
+        boolean timeout = isTimeoutException(ex);
+        if (timeout) {
+            log.warn("PSP timeout provider=jawupay endpoint={} {}={} attempt={} maxAttempts={} retryScheduled={}",
+                    endpoint,
+                    identifierLabel,
+                    safeValue(identifierValue),
+                    attempt,
+                    maxAttempts,
+                    retryScheduled);
+            return new PSPCommunicationException(
+                    "JawuPay timeout for " + endpoint + " " + identifierLabel + "=" + safeValue(identifierValue),
+                    ex
+            );
+        }
+        return new PSPCommunicationException(
+                "JawuPay communication failure for " + endpoint + " " + identifierLabel + "=" + safeValue(identifierValue),
+                ex
+        );
+    }
+
+    private boolean isTimeoutException(Throwable ex) {
+        Throwable current = ex;
+        while (current != null) {
+            if (current instanceof SocketTimeoutException
+                    || current instanceof HttpTimeoutException
+                    || current instanceof InterruptedIOException
+                    || current instanceof TimeoutException) {
+                return true;
+            }
+            String message = current.getMessage();
+            if (message != null && message.toLowerCase(Locale.ROOT).contains("timed out")) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
+    }
+
+    private void validateHttpConfiguration() {
+        if (connectTimeoutMs <= 0) {
+            throw new IllegalStateException("psp.jawupay.http.connect-timeout-ms must be positive");
+        }
+        if (readTimeoutMs <= 0) {
+            throw new IllegalStateException("psp.jawupay.http.read-timeout-ms must be positive");
+        }
+        if (safeRetryMaxAttempts <= 0) {
+            throw new IllegalStateException("psp.jawupay.http.safe-retry.max-attempts must be positive");
+        }
+        if (safeRetryInitialDelayMs < 0) {
+            throw new IllegalStateException("psp.jawupay.http.safe-retry.initial-delay-ms must not be negative");
+        }
     }
 
     private String safeUuid(UUID value) {
@@ -282,5 +496,17 @@ public class JawuPayPspClientImpl implements JawuPayPspClient {
 
     private String safeValue(String value) {
         return value == null || value.isBlank() ? "n/a" : value;
+    }
+
+    @FunctionalInterface
+    interface RetrySleeper {
+        void sleep(long delayMillis) throws InterruptedException;
+    }
+
+    public static final class PSPCommunicationException extends RuntimeException {
+
+        public PSPCommunicationException(String message, Throwable cause) {
+            super(message, cause);
+        }
     }
 }
