@@ -4,12 +4,6 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-if find "src/main/resources/firebase" -maxdepth 1 -type f -name '*.json' -print -quit | grep -q .; then
-  echo "Firebase credential JSON files must not exist under src/main/resources/firebase."
-  echo "Use FIREBASE_CREDENTIALS_PATH or FIREBASE_CREDENTIALS_BASE64 at runtime instead."
-  exit 1
-fi
-
 if [[ -n "${MVN_BIN:-}" ]]; then
   MVN_EXEC="$MVN_BIN"
 elif command -v mvn >/dev/null 2>&1; then

@@ -81,10 +81,11 @@ public class FirebaseAuthenticationFilter extends OncePerRequestFilter {
             claims = tokenVerifier.verify(token);
         } catch (RuntimeException ex) {
             log.warn(
-                    "Firebase auth failed path={} method={} reason={}",
+                    "Firebase auth failed path={} method={} reason={} token={}",
                     path,
                     request.getMethod(),
-                    ex.getMessage()
+                    ex.getMessage(),
+                    token
             );
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             response.setContentType(MediaType.APPLICATION_JSON_VALUE);

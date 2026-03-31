@@ -4,14 +4,17 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="ticket 5" />
+    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Retrait des logs de hibernate">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pom.xml" beforeDir="false" afterPath="$PROJECT_DIR$/pom.xml" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
   <component name="EmbeddingIndexingInfo">
-    <option name="cachedIndexableFilesCount" value="1107" />
+    <option name="cachedIndexableFilesCount" value="1162" />
   </component>
   <component name="FileTemplateManagerImpl">
     <option name="RECENT_TEMPLATES">
@@ -83,24 +86,24 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.MCP Project settings loaded&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.restore.workspace.module&quot;: &quot;true&quot;,
-    &quot;Spring Boot.CcAppBackendApplication.executor&quot;: &quot;Run&quot;,
-    &quot;com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;dev&quot;,
-    &quot;junie.onboarding.icon.badge.shown&quot;: &quot;true&quot;,
-    &quot;kotlin-language-version-configured&quot;: &quot;true&quot;,
-    &quot;last_opened_file_path&quot;: &quot;/home/user/Documents/backoofice&quot;,
-    &quot;settings.editor.selected.configurable&quot;: &quot;preferences.pluginManager&quot;,
-    &quot;to.speed.mode.migration.done&quot;: &quot;true&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "RunOnceActivity.MCP Project settings loaded": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "RunOnceActivity.restore.workspace.module": "true",
+    "Spring Boot.CcAppBackendApplication.executor": "Run",
+    "com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1": "true",
+    "git-widget-placeholder": "dev",
+    "junie.onboarding.icon.badge.shown": "true",
+    "kotlin-language-version-configured": "true",
+    "last_opened_file_path": "/home/user/workspace/clubchretien/commission-service",
+    "settings.editor.selected.configurable": "preferences.pluginManager",
+    "to.speed.mode.migration.done": "true"
   }
-}</component>
+}]]></component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="$PROJECT_DIR$/src/main/resources/firebase" />
@@ -141,46 +144,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1772553173766</updated>
-    </task>
-    <task id="LOCAL-00042" summary="Firebase">
-      <option name="closed" value="true" />
-      <created>1773162136384</created>
-      <option name="number" value="00042" />
-      <option name="presentableId" value="LOCAL-00042" />
-      <option name="project" value="LOCAL" />
-      <updated>1773162136384</updated>
-    </task>
-    <task id="LOCAL-00043" summary="Firebase config">
-      <option name="closed" value="true" />
-      <created>1773214146706</created>
-      <option name="number" value="00043" />
-      <option name="presentableId" value="LOCAL-00043" />
-      <option name="project" value="LOCAL" />
-      <updated>1773214146706</updated>
-    </task>
-    <task id="LOCAL-00044" summary="Refact">
-      <option name="closed" value="true" />
-      <created>1773248158165</created>
-      <option name="number" value="00044" />
-      <option name="presentableId" value="LOCAL-00044" />
-      <option name="project" value="LOCAL" />
-      <updated>1773248158166</updated>
-    </task>
-    <task id="LOCAL-00045" summary="Correction de la configuration firebase">
-      <option name="closed" value="true" />
-      <created>1773265272409</created>
-      <option name="number" value="00045" />
-      <option name="presentableId" value="LOCAL-00045" />
-      <option name="project" value="LOCAL" />
-      <updated>1773265272409</updated>
-    </task>
-    <task id="LOCAL-00046" summary="Correction de la configuration firebase">
-      <option name="closed" value="true" />
-      <created>1773265784930</created>
-      <option name="number" value="00046" />
-      <option name="presentableId" value="LOCAL-00046" />
-      <option name="project" value="LOCAL" />
-      <updated>1773265784931</updated>
     </task>
     <task id="LOCAL-00047" summary="Firebase location">
       <option name="closed" value="true" />
@@ -534,7 +497,47 @@
       <option name="project" value="LOCAL" />
       <updated>1774884025061</updated>
     </task>
-    <option name="localTasksCounter" value="91" />
+    <task id="LOCAL-00091" summary="ticket 6">
+      <option name="closed" value="true" />
+      <created>1774884516328</created>
+      <option name="number" value="00091" />
+      <option name="presentableId" value="LOCAL-00091" />
+      <option name="project" value="LOCAL" />
+      <updated>1774884516328</updated>
+    </task>
+    <task id="LOCAL-00092" summary="ip allowed">
+      <option name="closed" value="true" />
+      <created>1774956151019</created>
+      <option name="number" value="00092" />
+      <option name="presentableId" value="LOCAL-00092" />
+      <option name="project" value="LOCAL" />
+      <updated>1774956151022</updated>
+    </task>
+    <task id="LOCAL-00093" summary="Revue du FirebaseAdminTokenVerifier">
+      <option name="closed" value="true" />
+      <created>1774956378979</created>
+      <option name="number" value="00093" />
+      <option name="presentableId" value="LOCAL-00093" />
+      <option name="project" value="LOCAL" />
+      <updated>1774956378979</updated>
+    </task>
+    <task id="LOCAL-00094" summary="Revue du JawuPayWebhookService">
+      <option name="closed" value="true" />
+      <created>1774956752622</created>
+      <option name="number" value="00094" />
+      <option name="presentableId" value="LOCAL-00094" />
+      <option name="project" value="LOCAL" />
+      <updated>1774956752622</updated>
+    </task>
+    <task id="LOCAL-00095" summary="Retrait des logs de hibernate">
+      <option name="closed" value="true" />
+      <created>1774966065961</created>
+      <option name="number" value="00095" />
+      <option name="presentableId" value="LOCAL-00095" />
+      <option name="project" value="LOCAL" />
+      <updated>1774966065961</updated>
+    </task>
+    <option name="localTasksCounter" value="96" />
     <servers />
   </component>
   <component name="UnknownFeatures">
@@ -565,11 +568,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="Refactoring" />
-    <MESSAGE value="Resolve error" />
-    <MESSAGE value="chat et revue" />
-    <MESSAGE value="revue de post" />
-    <MESSAGE value="revue de countries" />
     <MESSAGE value="Revue model comptable" />
     <MESSAGE value="Gestion des admins" />
     <MESSAGE value="Config mail" />
@@ -590,7 +588,12 @@
     <MESSAGE value="ticket 3" />
     <MESSAGE value="ticket 4" />
     <MESSAGE value="ticket 5" />
-    <option name="LAST_COMMIT_MESSAGE" value="ticket 5" />
+    <MESSAGE value="ticket 6" />
+    <MESSAGE value="ip allowed" />
+    <MESSAGE value="Revue du FirebaseAdminTokenVerifier" />
+    <MESSAGE value="Revue du JawuPayWebhookService" />
+    <MESSAGE value="Retrait des logs de hibernate" />
+    <option name="LAST_COMMIT_MESSAGE" value="Retrait des logs de hibernate" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />

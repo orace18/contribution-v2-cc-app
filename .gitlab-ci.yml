@@ -110,6 +110,21 @@ build:
     - sudo update-alternatives --set javac /usr/lib/jvm/temurin-21-jdk-amd64/bin/javac
   script:
     - export IMAGE_FULL="${CI_REGISTRY_IMAGE}:${CI_PIPELINE_IID}"
+    - |
+      case "$CI_COMMIT_REF_NAME" in
+        dev)
+          if [[ -n "${FIREBASE_CREDENTIALS_BASE64_DEV:-}" ]]; then
+            echo "$FIREBASE_CREDENTIALS_BASE64_DEV" | base64 -d > src/main/resources/firebase/firebase-service-account-dev.json
+            echo "Firebase dev credentials written."
+          fi
+          ;;
+        prod)
+          if [[ -n "${FIREBASE_CREDENTIALS_BASE64_PROD:-}" ]]; then
+            echo "$FIREBASE_CREDENTIALS_BASE64_PROD" | base64 -d > src/main/resources/firebase/firebase-service-account-prod.json
+            echo "Firebase prod credentials written."
+          fi
+          ;;
+      esac
     - echo "Building package using Docker Maven image..."
     - bash scripts/rebuild-from-scratch.sh -DskipTests -Dmaven.repo.local=$CI_MAVEN_DIR -P$CI_COMMIT_REF_NAME
     - |

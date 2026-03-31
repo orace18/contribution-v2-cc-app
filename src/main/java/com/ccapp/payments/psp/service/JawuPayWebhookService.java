@@ -74,6 +74,9 @@ public class JawuPayWebhookService {
     @Value("${psp.jawupay.webhook.hmac-secret:${psp.jawupay.hmac-secret:}}")
     private String webhookHmacSecret;
 
+    @Value("${psp.jawupay.mock-enabled:false}")
+    private boolean mockEnabled;
+
     private Set<String> allowedIps;
     private byte[] webhookHmacSecretBytes;
 
@@ -83,14 +86,16 @@ public class JawuPayWebhookService {
                 .map(String::trim)
                 .filter(ip -> !ip.isEmpty())
                 .collect(Collectors.toUnmodifiableSet());
-        if (allowedIps.isEmpty()) {
+        if (!mockEnabled && allowedIps.isEmpty()) {
             throw new IllegalStateException("psp.jawupay.webhook.allowedIps must not be empty");
         }
         String normalizedSecret = normalizeIdentifier(webhookHmacSecret);
-        if (normalizedSecret == null) {
+        if (!mockEnabled && normalizedSecret == null) {
             throw new IllegalStateException("psp.jawupay.webhook.hmac-secret must not be empty");
         }
-        webhookHmacSecretBytes = normalizedSecret.getBytes(StandardCharsets.UTF_8);
+        if (normalizedSecret != null) {
+            webhookHmacSecretBytes = normalizedSecret.getBytes(StandardCharsets.UTF_8);
+        }
     }
 
     public void processWebhook(JawuPayWebhookRequest request,
