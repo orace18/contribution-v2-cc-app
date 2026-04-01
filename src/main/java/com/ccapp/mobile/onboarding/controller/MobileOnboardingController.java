@@ -15,6 +15,7 @@ import com.ccapp.mobile.onboarding.dto.ActivateFreePlanResponse;
 import com.ccapp.mobile.onboarding.service.MobileOnboardingJourneyService;
 import com.ccapp.mobile.onboarding.service.MobileOnboardingService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -49,7 +50,9 @@ public class MobileOnboardingController {
             @ApiResponse(responseCode = "200", description = "Success", content = @Content(schema = @Schema(implementation = ApiEnvelope.class))),
             @ApiResponse(responseCode = "400", description = "Invalid catalog configuration", content = @Content(schema = @Schema(implementation = ApiEnvelope.class)))
     })
-    public ResponseEntity<ApiEnvelope<List<MobileOnboardingPlanResponse>>> getPlans(@RequestParam(name = "country", required = false) String country) {
+    public ResponseEntity<ApiEnvelope<List<MobileOnboardingPlanResponse>>> getPlans(
+            @Parameter(description = "Code pays ISO 3166-1 alpha-2 (ex: BJ, CI, CD). Si absent, retourne le catalogue international.", example = "BJ")
+            @RequestParam(name = "country", required = false) String country) {
         return ResponseEntity.ok(ApiEnvelope.success(
                 "Onboarding plans",
                 mobileOnboardingService.getPlans(country)
