@@ -109,6 +109,21 @@ public class CircleController {
         return ResponseEntity.ok(CommonResponse.success("Circle members", circleService.listMembers(circleId)));
     }
 
+    @DeleteMapping("/{circleId}/members/{memberAccountHolderId}")
+    @Operation(summary = "Retirer un membre du cercle (createur uniquement)")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Membre retire"),
+            @ApiResponse(responseCode = "400", description = "Regle metier invalide (CIRCLE_LOCKED_BY_ACTIVE_LOAN, creator cannot remove themselves)"),
+            @ApiResponse(responseCode = "403", description = "Acces refuse — pas le createur du cercle"),
+            @ApiResponse(responseCode = "404", description = "Cercle ou membre introuvable")
+    })
+    public ResponseEntity<CommonResponse<Void>> removeMember(@PathVariable UUID circleId,
+                                                             @PathVariable UUID memberAccountHolderId) {
+        UUID accountHolderId = SecurityUtils.currentAccountHolderId();
+        circleService.removeMember(accountHolderId, circleId, memberAccountHolderId);
+        return ResponseEntity.ok(CommonResponse.success("Member removed", null));
+    }
+
     @GetMapping("/{circleId}/members/{memberAccountHolderId}")
     @Operation(summary = "Recuperer le profil d'un membre dans un cercle")
     public ResponseEntity<CommonResponse<CircleMemberProfileResponse>> memberProfile(@PathVariable UUID circleId,

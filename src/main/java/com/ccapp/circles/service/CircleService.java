@@ -25,6 +25,8 @@ import com.ccapp.identity.account_holder.domain.enums.AccountType;
 import com.ccapp.identity.account_holder.repository.AccountHolderRepository;
 import com.ccapp.identity.app_user.domain.entity.AppUser;
 import com.ccapp.identity.app_user.repository.AppUserRepository;
+import com.ccapp.identity.domain.entity.UserProfile;
+import com.ccapp.identity.repository.UserProfileRepository;
 import com.ccapp.identity.delegation.domain.enums.DelegatedActionType;
 import com.ccapp.identity.delegation.service.DelegatedActionService;
 import com.ccapp.identity.delegation.service.DelegationService;
@@ -91,6 +93,7 @@ public class CircleService {
     private final CountryConfigResolver countryConfigResolver;
     private final ObjectMapper objectMapper;
     private final ChatConversationService chatConversationService;
+    private final UserProfileRepository userProfileRepository;
 
     @Value("${circles.assisted-member.require-phone-verification:false}")
     private boolean requirePhoneVerification;
@@ -198,6 +201,37 @@ public class CircleService {
         ));
         domainEventPublisher.publish(CircleJoinedEvent.create(accountHolderId, circleId));
         return toMemberResponse(member);
+    }
+
+    @Transactional
+    public void removeMember(UUID requesterAccountHolderId, UUID circleId, UUID targetAccountHolderId) {
+        Circle circle = circleRepository.findByIdAndStatus(circleId, CircleStatus.ACTIVE)
+                .orElseThrow(() -> new NotFoundException("Active circle not found"));
+
+        if (!Objects.equals(circle.getCoachId(), requesterAccountHolderId)) {
+            throw new BusinessException("Only the circle creator can remove members");
+        }
+        if (Objects.equals(targetAccountHolderId, requesterAccountHolderId)) {
+            throw new BusinessException("Creator cannot remove themselves from the circle");
+        }
+
+        CircleMember member = circleMemberRepository
+                .findByCircle_IdAndAccountHolderId(circleId, targetAccountHolderId)
+                .orElseThrow(() -> new NotFoundException("Member not found in this circle"));
+
+        if (loanRepository.existsByAccountHolderIdAndStatusIn(targetAccountHolderId, CIRCLE_LOCKING_LOAN_STATUSES)) {
+            throw new BusinessException(CIRCLE_LOCKED_BY_ACTIVE_LOAN);
+        }
+
+        circleMemberRepository.delete(member);
+
+        domainEventPublisher.publish(CircleActivityRequestedEvent.create(
+                circle.getId(),
+                requesterAccountHolderId,
+                ActivityType.MEMBER_REMOVED,
+                member.getId(),
+                "Member removed from circle"
+        ));
     }
 
     @Transactional(readOnly = true, noRollbackFor = NotFoundException.class)
@@ -356,7 +390,9 @@ public class CircleService {
     private CircleMemberResponse toMemberResponse(CircleMember member) {
         AccountHolder accountHolder = accountHolderRepository.findById(member.getAccountHolderId())
                 .orElseThrow(() -> new NotFoundException("Account holder not found"));
-        String memberName = displayName(accountHolder.getFirstName(), accountHolder.getLastName());
+        UserProfile profile = userProfileRepository.findByUserId(member.getAccountHolderId()).orElse(null);
+        String memberName = resolveDisplayName(accountHolder, profile);
+        UUID profilePhotoMediaId = profile != null ? profile.getProfilePhotoMediaId() : null;
         String memberType = accountHolder.getAccountType().name();
         String managerName = resolveManagerName(accountHolder);
 
@@ -365,6 +401,7 @@ public class CircleService {
                 member.getAccountHolderId(),
                 member.getRole(),
                 memberName,
+                profilePhotoMediaId,
                 member.getBusinessActivity(),
                 memberType,
                 managerName,
@@ -384,6 +421,14 @@ public class CircleService {
                 .flatMap(appUser -> accountHolderRepository.findById(appUser.getAccountHolderId()))
                 .map(manager -> displayName(manager.getFirstName(), manager.getLastName()))
                 .orElse(null);
+    }
+
+    private String resolveDisplayName(AccountHolder accountHolder, UserProfile profile) {
+        String name = displayName(accountHolder.getFirstName(), accountHolder.getLastName());
+        if (name.equals("Unknown") && profile != null) {
+            name = displayName(profile.getFirstName(), profile.getLastName());
+        }
+        return name;
     }
 
     private String displayName(String firstName, String lastName) {

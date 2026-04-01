@@ -11,6 +11,7 @@ public record CircleMemberResponse(
         UUID accountHolderId,
         CircleMemberRole role,
         String name,
+        UUID profilePhotoMediaId,
         String activity,
         String memberType,
         String managerName,

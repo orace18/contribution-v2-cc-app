@@ -6,6 +6,10 @@
   <component name="ChangeListManager">
     <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="rebuild">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/controller/CircleController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/controller/CircleController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/dto/CircleMemberResponse.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/dto/CircleMemberResponse.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/service/CircleService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/service/CircleService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/circlesocial/domain/enums/ActivityType.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/circlesocial/domain/enums/ActivityType.java" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -13,7 +17,7 @@
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
   <component name="EmbeddingIndexingInfo">
-    <option name="cachedIndexableFilesCount" value="1198" />
+    <option name="cachedIndexableFilesCount" value="1200" />
   </component>
   <component name="FileTemplateManagerImpl">
     <option name="RECENT_TEMPLATES">
@@ -85,24 +89,24 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "ModuleVcsDetector.initialDetectionPerformed": "true",
-    "RunOnceActivity.MCP Project settings loaded": "true",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
-    "RunOnceActivity.git.unshallow": "true",
-    "RunOnceActivity.restore.workspace.module": "true",
-    "Spring Boot.CcAppBackendApplication.executor": "Run",
-    "com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1": "true",
-    "git-widget-placeholder": "dev",
-    "junie.onboarding.icon.badge.shown": "true",
-    "kotlin-language-version-configured": "true",
-    "last_opened_file_path": "/home/user/workspace/clubchretien/commission-service",
-    "settings.editor.selected.configurable": "ml.llm.AcpAgentsConfigurable",
-    "to.speed.mode.migration.done": "true"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.MCP Project settings loaded&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.restore.workspace.module&quot;: &quot;true&quot;,
+    &quot;Spring Boot.CcAppBackendApplication.executor&quot;: &quot;Run&quot;,
+    &quot;com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;dev&quot;,
+    &quot;junie.onboarding.icon.badge.shown&quot;: &quot;true&quot;,
+    &quot;kotlin-language-version-configured&quot;: &quot;true&quot;,
+    &quot;last_opened_file_path&quot;: &quot;/home/user/workspace/clubchretien/commission-service&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;ml.llm.AcpAgentsConfigurable&quot;,
+    &quot;to.speed.mode.migration.done&quot;: &quot;true&quot;
   }
-}]]></component>
+}</component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="$PROJECT_DIR$/src/main/resources/firebase" />
@@ -143,14 +147,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1772553173766</updated>
-    </task>
-    <task id="LOCAL-00056" summary="Revue des migrations flyway">
-      <option name="closed" value="true" />
-      <created>1773656970302</created>
-      <option name="number" value="00056" />
-      <option name="presentableId" value="LOCAL-00056" />
-      <option name="project" value="LOCAL" />
-      <updated>1773656970302</updated>
     </task>
     <task id="LOCAL-00057" summary="Ajout de fonctionnalités">
       <option name="closed" value="true" />
@@ -536,7 +532,15 @@
       <option name="project" value="LOCAL" />
       <updated>1775053767258</updated>
     </task>
-    <option name="localTasksCounter" value="105" />
+    <task id="LOCAL-00105" summary="rebuild">
+      <option name="closed" value="true" />
+      <created>1775063743865</created>
+      <option name="number" value="00105" />
+      <option name="presentableId" value="LOCAL-00105" />
+      <option name="project" value="LOCAL" />
+      <updated>1775063743865</updated>
+    </task>
+    <option name="localTasksCounter" value="106" />
     <servers />
   </component>
   <component name="UnknownFeatures">
