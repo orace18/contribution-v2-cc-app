@@ -29,6 +29,9 @@ public class HttpRouteLoggingFilter extends OncePerRequestFilter {
     @Value("${observability.http.trace.max-payload-length:4000}")
     private int maxPayloadLength;
 
+    @Value("${observability.http.trace.log-authorization-token:false}")
+    private boolean logAuthorizationToken;
+
     @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
@@ -73,7 +76,9 @@ public class HttpRouteLoggingFilter extends OncePerRequestFilter {
                              Exception chainError) {
         long durationMs = System.currentTimeMillis() - startedAt;
         String route = formatRoute(request);
-        String authorization = formatCredentialPresence(request.getHeader("Authorization"));
+        String authorization = logAuthorizationToken
+                ? safeValue(request.getHeader("Authorization"))
+                : formatCredentialPresence(request.getHeader("Authorization"));
         String apiKey = formatCredentialPresence(request.getHeader("X-API-KEY"));
         String error = chainError == null ? NO_VALUE : chainError.getClass().getSimpleName() + ":" + chainError.getMessage();
         int status = response.getStatus();
