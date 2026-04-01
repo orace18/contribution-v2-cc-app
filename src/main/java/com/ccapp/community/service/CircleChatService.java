@@ -1,7 +1,9 @@
 package com.ccapp.community.service;
 
+import com.ccapp.circles.domain.entity.CircleMember;
 import com.ccapp.circles.repository.CircleMemberRepository;
 import com.ccapp.circles.repository.CircleRepository;
+import com.ccapp.common.events.SpringDomainEventPublisher;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.common.exception.NotFoundException;
 import com.ccapp.community.domain.entity.CircleChatMessage;
@@ -16,6 +18,7 @@ import com.ccapp.media.domain.entity.MediaFile;
 import com.ccapp.media.domain.enums.MediaStatus;
 import com.ccapp.media.repository.MediaFileRepository;
 import com.ccapp.media.storage.ObjectStorageService;
+import com.ccapp.notifications.event.MessageSentEvent;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
@@ -44,6 +47,7 @@ public class CircleChatService {
     private final MediaFileRepository mediaFileRepository;
     private final ObjectStorageService objectStorageService;
     private final SimpMessagingTemplate messagingTemplate;
+    private final SpringDomainEventPublisher domainEventPublisher;
 
     @Value("${media.download-url-ttl-minutes:15}")
     private long downloadUrlTtlMinutes;
@@ -94,6 +98,16 @@ public class CircleChatService {
                 "/topic/circles/" + circleId + "/chat",
                 CircleChatEvent.newMessage(response)
         );
+
+        circleMemberRepository.findByCircle_IdOrderByJoinedAtAsc(circleId).stream()
+                .map(CircleMember::getAccountHolderId)
+                .filter(memberId -> !memberId.equals(senderId))
+                .forEach(memberId -> domainEventPublisher.publish(MessageSentEvent.create(
+                        message.getId(),
+                        senderId,
+                        memberId,
+                        "CIRCLE"
+                )));
 
         return response;
     }
