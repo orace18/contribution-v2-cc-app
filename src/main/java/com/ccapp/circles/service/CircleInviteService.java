@@ -60,7 +60,7 @@ public class CircleInviteService {
     @Value("${circles.invite.deep-link-base:ccapp://circles/join}")
     private String inviteDeepLinkBase;
 
-    @Value("${circles.invite.qr-base-url:https://app.clubchretien.org/join}")
+    @Value("${circles.invite.qr-base-url:ccapp://circles/join}")
     private String inviteQrBaseUrl;
 
     @Value("${circles.invite.code-expiration-hours:24}")
