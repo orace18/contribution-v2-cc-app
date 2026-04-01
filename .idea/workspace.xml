@@ -4,9 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Check nom dans cercle">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-    </list>
+    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="View cercle" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -143,14 +141,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1772553173766</updated>
-    </task>
-    <task id="LOCAL-00061" summary="Refactoring configs pays">
-      <option name="closed" value="true" />
-      <created>1773845111981</created>
-      <option name="number" value="00061" />
-      <option name="presentableId" value="LOCAL-00061" />
-      <option name="project" value="LOCAL" />
-      <updated>1773845111981</updated>
     </task>
     <task id="LOCAL-00062" summary="Refactoring">
       <option name="closed" value="true" />
@@ -536,7 +526,15 @@
       <option name="project" value="LOCAL" />
       <updated>1775077731577</updated>
     </task>
-    <option name="localTasksCounter" value="110" />
+    <task id="LOCAL-00110" summary="View cercle">
+      <option name="closed" value="true" />
+      <created>1775078927683</created>
+      <option name="number" value="00110" />
+      <option name="presentableId" value="LOCAL-00110" />
+      <option name="project" value="LOCAL" />
+      <updated>1775078927683</updated>
+    </task>
+    <option name="localTasksCounter" value="111" />
     <servers />
   </component>
   <component name="UnknownFeatures">
@@ -567,7 +565,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="Fix 500 code status error" />
     <MESSAGE value="Fix migrantion and beans error" />
     <MESSAGE value="Le onbording ready for test" />
     <MESSAGE value="notif" />
@@ -592,7 +589,8 @@
     <MESSAGE value="Exposer une api pour moyen de paiement." />
     <MESSAGE value="rebuild" />
     <MESSAGE value="Check nom dans cercle" />
-    <option name="LAST_COMMIT_MESSAGE" value="Check nom dans cercle" />
+    <MESSAGE value="View cercle" />
+    <option name="LAST_COMMIT_MESSAGE" value="View cercle" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />

@@ -1,7 +1,9 @@
 package com.ccapp.community.controller;
 
 import com.ccapp.common.api.CommonResponse;
+import com.ccapp.common.security.AuthenticatedPrincipal;
 import com.ccapp.common.security.SecurityUtils;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import com.ccapp.community.dto.CircleChatMessageRequest;
 import com.ccapp.community.dto.CircleChatMessageResponse;
 import com.ccapp.community.service.CircleChatService;
@@ -100,7 +102,7 @@ public class CircleChatController {
             @DestinationVariable UUID circleId,
             @Payload CircleChatMessageRequest request,
             Principal principal) {
-        UUID senderId = UUID.fromString(principal.getName());
+        UUID senderId = resolveAccountHolderId(principal);
         circleChatService.sendMessage(circleId, senderId, request);
     }
 
@@ -113,7 +115,16 @@ public class CircleChatController {
             @DestinationVariable UUID circleId,
             @DestinationVariable UUID messageId,
             Principal principal) {
-        UUID memberId = UUID.fromString(principal.getName());
+        UUID memberId = resolveAccountHolderId(principal);
         circleChatService.markRead(circleId, messageId, memberId);
+    }
+
+    private UUID resolveAccountHolderId(Principal principal) {
+        if (principal instanceof UsernamePasswordAuthenticationToken token
+                && token.getPrincipal() instanceof AuthenticatedPrincipal ap) {
+            if (ap.accountHolderId() != null) return ap.accountHolderId();
+            if (ap.userId() != null) return ap.userId();
+        }
+        throw new IllegalStateException("Cannot resolve accountHolderId from WebSocket principal");
     }
 }
