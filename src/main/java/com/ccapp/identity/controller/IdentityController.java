@@ -4,6 +4,7 @@ import com.ccapp.common.api.CommonResponse;
 import com.ccapp.common.security.AuthenticatedPrincipal;
 import com.ccapp.common.security.SecurityUtils;
 import com.ccapp.identity.dto.*;
+import com.ccapp.identity.dto.UpdateNameRequest;
 import com.ccapp.identity.service.FirebaseUserClaims;
 import com.ccapp.identity.service.IdentityService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -128,6 +129,21 @@ public class IdentityController {
         UUID userId = SecurityUtils.currentUserId();
         log.info("IdentityController onboardingStep3 userId={}", userId);
         return ResponseEntity.ok(CommonResponse.success("Onboarding step 3 updated", identityService.onboardingStep3(userId, request)));
+    }
+
+    @PatchMapping("/profile/name")
+    @Operation(summary = "Modifier le nom et prenom de l'utilisateur")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "204", description = "Nom mis a jour"),
+            @ApiResponse(responseCode = "400", description = "Validation invalide", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Non authentifie", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Utilisateur introuvable", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
+    })
+    public ResponseEntity<Void> updateName(@Valid @RequestBody UpdateNameRequest request) {
+        UUID userId = SecurityUtils.currentUserId();
+        log.info("IdentityController updateName userId={}", userId);
+        identityService.updateName(userId, request);
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/me")

@@ -1,7 +1,9 @@
 package com.ccapp.identity.service;
 
+import com.ccapp.identity.account_holder.service.AccountHolderService;
 import com.ccapp.identity.dto.LinkAssistedAccountRequest;
 import com.ccapp.identity.dto.LinkAssistedAccountResponse;
+import com.ccapp.identity.dto.UpdateNameRequest;
 import com.ccapp.identity.dto.MeResponse;
 import com.ccapp.identity.dto.OnboardingRequest;
 import com.ccapp.identity.dto.OnboardingStatusResponse;
@@ -30,6 +32,7 @@ public class IdentityService {
     private final IdentityProfileService identityProfileService;
     private final IdentityDelegationService identityDelegationService;
     private final IdentityDeviceSessionService identityDeviceSessionService;
+    private final AccountHolderService accountHolderService;
 
     @Transactional
     public SyncResponse sync(FirebaseUserClaims claims, SyncRequest request) {
@@ -107,6 +110,11 @@ public class IdentityService {
                                                            String email,
                                                            LinkAssistedAccountRequest request) {
         return identityDelegationService.linkAssistedAccount(firebaseUid, email, request);
+    }
+
+    @Transactional
+    public void updateName(UUID userId, UpdateNameRequest request) {
+        accountHolderService.updateName(userId, request.firstName(), request.lastName());
     }
 
     @Transactional

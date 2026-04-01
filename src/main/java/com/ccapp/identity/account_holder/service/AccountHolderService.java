@@ -100,6 +100,15 @@ public class AccountHolderService {
     }
 
     @Transactional
+    public void updateName(UUID accountHolderId, String firstName, String lastName) {
+        log.info("Identity account-holder updateName accountHolderId={}", accountHolderId);
+        AccountHolder accountHolder = getById(accountHolderId);
+        accountHolder.setFirstName(firstName.trim());
+        accountHolder.setLastName(lastName.trim());
+        accountHolderRepository.save(accountHolder);
+    }
+
+    @Transactional
     public AccountHolder updateProfile(UUID accountHolderId,
                                        String firstName,
                                        String lastName,
