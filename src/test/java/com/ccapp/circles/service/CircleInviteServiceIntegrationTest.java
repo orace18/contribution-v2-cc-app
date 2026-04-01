@@ -119,6 +119,7 @@ class CircleInviteServiceIntegrationTest {
                 UUID.randomUUID(),
                 CircleMemberRole.MEMBER,
                 "Invited Member",
+                null,
                 "",
                 "STANDARD",
                 null,

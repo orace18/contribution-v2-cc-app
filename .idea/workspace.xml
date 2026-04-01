@@ -4,13 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="rebuild">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/controller/CircleController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/controller/CircleController.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/dto/CircleMemberResponse.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/dto/CircleMemberResponse.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/service/CircleService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/circles/service/CircleService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/circlesocial/domain/enums/ActivityType.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/circlesocial/domain/enums/ActivityType.java" afterDir="false" />
-    </list>
+    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Check nom dans cercle" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -147,14 +141,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1772553173766</updated>
-    </task>
-    <task id="LOCAL-00057" summary="Ajout de fonctionnalités">
-      <option name="closed" value="true" />
-      <created>1773673787607</created>
-      <option name="number" value="00057" />
-      <option name="presentableId" value="LOCAL-00057" />
-      <option name="project" value="LOCAL" />
-      <updated>1773673787607</updated>
     </task>
     <task id="LOCAL-00058" summary="Revue des configs">
       <option name="closed" value="true" />
@@ -540,7 +526,15 @@
       <option name="project" value="LOCAL" />
       <updated>1775063743865</updated>
     </task>
-    <option name="localTasksCounter" value="106" />
+    <task id="LOCAL-00106" summary="Check nom dans cercle">
+      <option name="closed" value="true" />
+      <created>1775075926931</created>
+      <option name="number" value="00106" />
+      <option name="presentableId" value="LOCAL-00106" />
+      <option name="project" value="LOCAL" />
+      <updated>1775075926931</updated>
+    </task>
+    <option name="localTasksCounter" value="107" />
     <servers />
   </component>
   <component name="UnknownFeatures">
@@ -571,7 +565,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="Correction du bug" />
     <MESSAGE value="Fix 500 code status error" />
     <MESSAGE value="Fix migrantion and beans error" />
     <MESSAGE value="Le onbording ready for test" />
@@ -596,7 +589,8 @@
     <MESSAGE value="Rebuild firebase" />
     <MESSAGE value="Exposer une api pour moyen de paiement." />
     <MESSAGE value="rebuild" />
-    <option name="LAST_COMMIT_MESSAGE" value="rebuild" />
+    <MESSAGE value="Check nom dans cercle" />
+    <option name="LAST_COMMIT_MESSAGE" value="Check nom dans cercle" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />
