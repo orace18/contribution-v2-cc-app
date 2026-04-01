@@ -144,14 +144,6 @@
       <option name="presentableId" value="Default" />
       <updated>1772553173766</updated>
     </task>
-    <task id="LOCAL-00060" summary="Refactoring configs">
-      <option name="closed" value="true" />
-      <created>1773841922271</created>
-      <option name="number" value="00060" />
-      <option name="presentableId" value="LOCAL-00060" />
-      <option name="project" value="LOCAL" />
-      <updated>1773841922271</updated>
-    </task>
     <task id="LOCAL-00061" summary="Refactoring configs pays">
       <option name="closed" value="true" />
       <created>1773845111981</created>
@@ -536,7 +528,15 @@
       <option name="project" value="LOCAL" />
       <updated>1775077047216</updated>
     </task>
-    <option name="localTasksCounter" value="109" />
+    <task id="LOCAL-00109" summary="Check nom dans cercle">
+      <option name="closed" value="true" />
+      <created>1775077731577</created>
+      <option name="number" value="00109" />
+      <option name="presentableId" value="LOCAL-00109" />
+      <option name="project" value="LOCAL" />
+      <updated>1775077731577</updated>
+    </task>
+    <option name="localTasksCounter" value="110" />
     <servers />
   </component>
   <component name="UnknownFeatures">

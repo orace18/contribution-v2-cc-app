@@ -19,7 +19,7 @@ public class CircleJoinRedirectController {
     @Value("${app.store.ios:https://apps.apple.com/app/id000000000}")
     private String appStoreUrl;
 
-    @GetMapping(value = "/join", produces = MediaType.TEXT_HTML_VALUE)
+    @GetMapping(value = "/circles/join", produces = MediaType.TEXT_HTML_VALUE)
     public ResponseEntity<String> join(@RequestParam String token) {
         String deepLink = deepLinkBase + "?token=" + token;
         String html = """
