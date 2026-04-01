@@ -3,6 +3,8 @@ package com.ccapp.payments.psp.controller;
 import com.ccapp.common.api.CommonResponse;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.common.exception.ConflictException;
+import com.ccapp.payments.psp.client.JawuPayPspClient;
+import com.ccapp.payments.psp.dto.JawuPayPaymentMethod;
 import com.ccapp.payments.psp.dto.JawuPayWebhookRequest;
 import com.ccapp.payments.psp.service.JawuPayWebhookService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -16,15 +18,18 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.security.access.AccessDeniedException;
 
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class PspControllerTest {
@@ -32,11 +37,39 @@ class PspControllerTest {
     @Mock
     private JawuPayWebhookService jawuPayWebhookService;
 
+    @Mock
+    private JawuPayPspClient jawuPayPspClient;
+
     @Spy
     private ObjectMapper objectMapper = new ObjectMapper();
 
     @InjectMocks
     private PspController controller;
+
+    @Test
+    void jawuPayPaymentMethods_returnsMethods() {
+        when(jawuPayPspClient.getPaymentMethods("CI"))
+                .thenReturn(List.of(new JawuPayPaymentMethod("MOBILE_MONEY_MTN", "MTN Mobile Money")));
+
+        ResponseEntity<CommonResponse<List<JawuPayPaymentMethod>>> response =
+                controller.jawuPayPaymentMethods("ci");
+
+        assertThat(response.getStatusCode().value()).isEqualTo(200);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().success()).isTrue();
+        assertThat(response.getBody().data()).hasSize(1);
+        assertThat(response.getBody().data().get(0).id()).isEqualTo("MOBILE_MONEY_MTN");
+        verify(jawuPayPspClient).getPaymentMethods("CI");
+    }
+
+    @Test
+    void jawuPayPaymentMethods_invalidCountry_throwsBusinessException() {
+        assertThatThrownBy(() -> controller.jawuPayPaymentMethods("C"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("country must be ISO code length 2 or 3");
+
+        verifyNoInteractions(jawuPayPspClient);
+    }
 
     @Test
     void jawuPayWebhook_missingReferences_returnsBadRequest() {

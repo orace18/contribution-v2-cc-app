@@ -3,6 +3,8 @@ package com.ccapp.payments.psp.controller;
 import com.ccapp.common.api.CommonResponse;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.common.exception.ConflictException;
+import com.ccapp.payments.psp.client.JawuPayPspClient;
+import com.ccapp.payments.psp.dto.JawuPayPaymentMethod;
 import com.ccapp.payments.psp.dto.JawuPayWebhookRequest;
 import com.ccapp.payments.psp.service.JawuPayWebhookService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -20,6 +22,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+import java.util.Locale;
+
 @RestController
 @RequestMapping("/psp")
 @RequiredArgsConstructor
@@ -28,7 +33,22 @@ import org.springframework.web.bind.annotation.*;
 public class PspController {
 
     private final JawuPayWebhookService jawuPayWebhookService;
+    private final JawuPayPspClient jawuPayPspClient;
     private final ObjectMapper objectMapper;
+
+    @GetMapping("/jawupay/payment-methods")
+    @Operation(summary = "Lister les moyens de paiement JawuPay par pays")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Moyens de paiement recuperes", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Code pays invalide", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Non authentifie", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
+    })
+    public ResponseEntity<CommonResponse<List<JawuPayPaymentMethod>>> jawuPayPaymentMethods(
+            @RequestParam("country") String country) {
+        String normalizedCountry = normalizeCountry(country);
+        List<JawuPayPaymentMethod> paymentMethods = jawuPayPspClient.getPaymentMethods(normalizedCountry);
+        return ResponseEntity.ok(CommonResponse.success("JawuPay payment methods", paymentMethods));
+    }
 
     @PostMapping("/jawupay/webhook")
     @Operation(summary = "Recevoir un webhook JawuPay (public)")
@@ -67,6 +87,17 @@ public class PspController {
 
     private String extractRemoteIp(HttpServletRequest request) {
         return request.getRemoteAddr() == null ? "unknown" : request.getRemoteAddr();
+    }
+
+    private String normalizeCountry(String country) {
+        if (country == null || country.isBlank()) {
+            throw new BusinessException("country is required");
+        }
+        String normalized = country.trim().toUpperCase(Locale.ROOT);
+        if (normalized.length() < 2 || normalized.length() > 3) {
+            throw new BusinessException("country must be ISO code length 2 or 3");
+        }
+        return normalized;
     }
 
     private JawuPayWebhookRequest parseRequest(byte[] rawRequestBody) {
