@@ -49,7 +49,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/actuator/health", "/actuator/info", "/error").permitAll()
                         .requestMatchers("/.well-known/apple-app-site-association", "/.well-known/assetlinks.json").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/join").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/circles/join").permitAll()
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         .requestMatchers("/ws/**").permitAll()
                         .requestMatchers("/api/admin/auth/**").permitAll()
