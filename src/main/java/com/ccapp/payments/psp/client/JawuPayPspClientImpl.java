@@ -103,6 +103,9 @@ public class JawuPayPspClientImpl implements JawuPayPspClient {
                 .defaultStatusHandler(
                         status -> status.is4xxClientError() || status.is5xxServerError(),
                         (req, resp) -> {
+                            String responseBody = new String(resp.getBody().readAllBytes(), StandardCharsets.UTF_8);
+                            log.error("JawuPay error response method={} uri={} status={} body={}",
+                                    req.getMethod(), req.getURI(), resp.getStatusCode(), responseBody);
                             throw new BusinessException(
                                     "JawuPay PSP error: HTTP " + resp.getStatusCode()
                                             + " for " + req.getMethod() + " " + req.getURI());
@@ -115,11 +118,13 @@ public class JawuPayPspClientImpl implements JawuPayPspClient {
             return execution.execute(request, body);
         }
         String timestamp = String.valueOf(System.currentTimeMillis() / 1000);
+        String nonce = UUID.randomUUID().toString().replace("-", "");
         byte[] bodyToSign = body != null ? body : new byte[0];
         String signature = computeHmacHex(bodyToSign);
         HttpHeaders newHeaders = new HttpHeaders();
         newHeaders.putAll(request.getHeaders());
         newHeaders.set("X-TIMESTAMP", timestamp);
+        newHeaders.set("X-NONCE", nonce);
         newHeaders.set("X-SIGNATURE", signature);
         return execution.execute(new HttpRequestWrapper(request) {
             @Override
