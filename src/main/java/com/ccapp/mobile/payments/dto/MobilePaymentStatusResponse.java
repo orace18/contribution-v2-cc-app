@@ -7,6 +7,7 @@ import java.util.UUID;
 public record MobilePaymentStatusResponse(
         UUID operationId,
         String status,
+        String message,
         String pspReference,
         BigDecimal amount,
         String currency,

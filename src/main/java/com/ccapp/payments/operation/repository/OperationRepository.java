@@ -10,6 +10,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.time.OffsetDateTime;
+import java.util.Collection;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -50,6 +51,11 @@ public interface OperationRepository extends JpaRepository<Operation, UUID> {
     Optional<Operation> findFirstByAccountHolderIdAndTypeAndStatusOrderByCreatedAtDesc(UUID accountHolderId,
                                                                                          OperationType type,
                                                                                          OperationStatus status);
+
+    Optional<Operation> findFirstByAccountHolderIdAndTypeAndPlanIdAndStatusInOrderByCreatedAtDesc(UUID accountHolderId,
+                                                                                                       OperationType type,
+                                                                                                       UUID planId,
+                                                                                                       Collection<OperationStatus> statuses);
 
     long countByType(OperationType type);
 

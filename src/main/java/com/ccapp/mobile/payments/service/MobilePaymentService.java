@@ -36,7 +36,7 @@ public class MobilePaymentService {
         return mobileOnboardingJourneyService.initiatePaidPlanPayment(
                 actorUserId,
                 accountHolderId,
-                request == null ? null : request.idempotencyKey(),
+                null,
                 request == null ? null : request.country(),
                 request == null ? null : request.paymentMethodId(),
                 request == null ? null : request.msisdn(),
@@ -49,9 +49,11 @@ public class MobilePaymentService {
         Operation operation = operationRepository.findByIdAndAccountHolderId(operationId, accountHolderId)
                 .orElseThrow(() -> new NotFoundException("Payment operation not found"));
 
+        String mobileStatus = toMobileStatus(operation.getStatus());
         return new MobilePaymentStatusResponse(
                 operation.getId(),
-                toMobileStatus(operation.getStatus()),
+                mobileStatus,
+                resolveStatusMessage(operation, mobileStatus),
                 operation.getPspReference(),
                 operation.getAmount(),
                 operation.getCurrency(),
@@ -83,10 +85,25 @@ public class MobilePaymentService {
             return "PENDING";
         }
         return switch (status) {
+            case INITIATED -> "INITIATED";
+            case PENDING_PSP -> "PENDING";
             case CONFIRMED -> "SUCCESS";
             case FAILED, EXPIRED, CANCELED -> "FAILED";
             default -> "PENDING";
         };
+    }
+
+    private String resolveStatusMessage(Operation operation, String mobileStatus) {
+        if ("SUCCESS".equals(mobileStatus)) {
+            return "Payment confirmed";
+        }
+        if ("FAILED".equals(mobileStatus)) {
+            return firstNonBlank(resolveFailureReason(operation), "Payment failed");
+        }
+        if ("INITIATED".equals(mobileStatus)) {
+            return "Payment initialized";
+        }
+        return "Payment pending confirmation";
     }
 
     private String resolveFailureReason(Operation operation) {
