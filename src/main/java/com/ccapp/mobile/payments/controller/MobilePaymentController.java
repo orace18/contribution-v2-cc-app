@@ -5,6 +5,7 @@ import com.ccapp.common.security.AuthenticatedPrincipal;
 import com.ccapp.common.security.SecurityUtils;
 import com.ccapp.mobile.payments.dto.MobilePaymentInitiateRequest;
 import com.ccapp.mobile.payments.dto.MobilePaymentInitiateResponse;
+import com.ccapp.mobile.payments.dto.MobilePaymentStatusResponse;
 import com.ccapp.mobile.payments.service.MobilePaymentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -16,6 +17,8 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -45,6 +48,21 @@ public class MobilePaymentController {
         return ResponseEntity.ok(ApiEnvelope.success(
                 "Payment initiated",
                 mobilePaymentService.initiate(resolveActorUserId(), accountHolderId, request)
+        ));
+    }
+
+    @GetMapping("/{operationId}/status")
+    @Operation(summary = "Get payment operation status")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Success", content = @Content(schema = @Schema(implementation = ApiEnvelope.class))),
+            @ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content(schema = @Schema(implementation = ApiEnvelope.class))),
+            @ApiResponse(responseCode = "404", description = "Payment operation not found", content = @Content(schema = @Schema(implementation = ApiEnvelope.class)))
+    })
+    public ResponseEntity<ApiEnvelope<MobilePaymentStatusResponse>> getStatus(@PathVariable UUID operationId) {
+        UUID accountHolderId = SecurityUtils.currentAccountHolderId();
+        return ResponseEntity.ok(ApiEnvelope.success(
+                "Payment status",
+                mobilePaymentService.getStatus(accountHolderId, operationId)
         ));
     }
 

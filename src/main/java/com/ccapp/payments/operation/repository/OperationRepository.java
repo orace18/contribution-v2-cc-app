@@ -24,6 +24,8 @@ public interface OperationRepository extends JpaRepository<Operation, UUID> {
 
     Optional<Operation> findByProviderReference(String providerReference);
 
+    Optional<Operation> findByIdAndAccountHolderId(UUID id, UUID accountHolderId);
+
     List<Operation> findByTypeAndStatusOrderByCreatedAtAsc(OperationType type, OperationStatus status);
 
     List<Operation> findByStatusOrderByCreatedAtAsc(OperationStatus status);
