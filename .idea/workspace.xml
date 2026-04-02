@@ -4,9 +4,8 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Migration flyway">
+    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="fingerprint">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/resources/application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/application.properties" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -144,14 +143,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1772553173766</updated>
-    </task>
-    <task id="LOCAL-00064" summary="chat et revue">
-      <option name="closed" value="true" />
-      <created>1773918601729</created>
-      <option name="number" value="00064" />
-      <option name="presentableId" value="LOCAL-00064" />
-      <option name="project" value="LOCAL" />
-      <updated>1773918601729</updated>
     </task>
     <task id="LOCAL-00065" summary="revue de post">
       <option name="closed" value="true" />
@@ -537,7 +528,15 @@
       <option name="project" value="LOCAL" />
       <updated>1775084238735</updated>
     </task>
-    <option name="localTasksCounter" value="113" />
+    <task id="LOCAL-00113" summary="fingerprint">
+      <option name="closed" value="true" />
+      <created>1775116892559</created>
+      <option name="number" value="00113" />
+      <option name="presentableId" value="LOCAL-00113" />
+      <option name="project" value="LOCAL" />
+      <updated>1775116892559</updated>
+    </task>
+    <option name="localTasksCounter" value="114" />
     <servers />
   </component>
   <component name="UnknownFeatures">
@@ -568,7 +567,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="Le onbording ready for test" />
     <MESSAGE value="notif" />
     <MESSAGE value="Refactoring conplete du model MLM" />
     <MESSAGE value="fix bug" />
@@ -593,7 +591,8 @@
     <MESSAGE value="Check nom dans cercle" />
     <MESSAGE value="View cercle" />
     <MESSAGE value="Migration flyway" />
-    <option name="LAST_COMMIT_MESSAGE" value="Migration flyway" />
+    <MESSAGE value="fingerprint" />
+    <option name="LAST_COMMIT_MESSAGE" value="fingerprint" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />
