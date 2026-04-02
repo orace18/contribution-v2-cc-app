@@ -4,11 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="mise en place de api numero parent">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docker-compose-dev.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/docker-compose-dev.yaml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/resources/application-dev.properties" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/application-dev.properties" afterDir="false" />
-    </list>
+    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="configuration des cles jawupay" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -145,30 +141,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1772553173766</updated>
-    </task>
-    <task id="LOCAL-00068" summary="Revue model comptable">
-      <option name="closed" value="true" />
-      <created>1773993829626</created>
-      <option name="number" value="00068" />
-      <option name="presentableId" value="LOCAL-00068" />
-      <option name="project" value="LOCAL" />
-      <updated>1773993829626</updated>
-    </task>
-    <task id="LOCAL-00069" summary="Revue model comptable">
-      <option name="closed" value="true" />
-      <created>1773999281401</created>
-      <option name="number" value="00069" />
-      <option name="presentableId" value="LOCAL-00069" />
-      <option name="project" value="LOCAL" />
-      <updated>1773999281401</updated>
-    </task>
-    <task id="LOCAL-00070" summary="Gestion des admins">
-      <option name="closed" value="true" />
-      <created>1774017286650</created>
-      <option name="number" value="00070" />
-      <option name="presentableId" value="LOCAL-00070" />
-      <option name="project" value="LOCAL" />
-      <updated>1774017286650</updated>
     </task>
     <task id="LOCAL-00071" summary="Gestion des admins">
       <option name="closed" value="true" />
@@ -538,7 +510,31 @@
       <option name="project" value="LOCAL" />
       <updated>1775125168487</updated>
     </task>
-    <option name="localTasksCounter" value="117" />
+    <task id="LOCAL-00117" summary="configuration des cles jawupay">
+      <option name="closed" value="true" />
+      <created>1775144329948</created>
+      <option name="number" value="00117" />
+      <option name="presentableId" value="LOCAL-00117" />
+      <option name="project" value="LOCAL" />
+      <updated>1775144329948</updated>
+    </task>
+    <task id="LOCAL-00118" summary="configuration des cles jawupay">
+      <option name="closed" value="true" />
+      <created>1775144918536</created>
+      <option name="number" value="00118" />
+      <option name="presentableId" value="LOCAL-00118" />
+      <option name="project" value="LOCAL" />
+      <updated>1775144918537</updated>
+    </task>
+    <task id="LOCAL-00119" summary="configuration des cles jawupay">
+      <option name="closed" value="true" />
+      <created>1775145777949</created>
+      <option name="number" value="00119" />
+      <option name="presentableId" value="LOCAL-00119" />
+      <option name="project" value="LOCAL" />
+      <updated>1775145777950</updated>
+    </task>
+    <option name="localTasksCounter" value="120" />
     <servers />
   </component>
   <component name="UnknownFeatures">
@@ -569,7 +565,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="fix bug" />
     <MESSAGE value="integration de cpass" />
     <MESSAGE value="fix de cpass variable" />
     <MESSAGE value="Config deep link" />
@@ -594,7 +589,8 @@
     <MESSAGE value="fingerprint" />
     <MESSAGE value="synchronisation" />
     <MESSAGE value="mise en place de api numero parent" />
-    <option name="LAST_COMMIT_MESSAGE" value="mise en place de api numero parent" />
+    <MESSAGE value="configuration des cles jawupay" />
+    <option name="LAST_COMMIT_MESSAGE" value="configuration des cles jawupay" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />
