@@ -4,14 +4,17 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="View cercle" />
+    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Migration flyway">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/resources/application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/application.properties" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
   <component name="EmbeddingIndexingInfo">
-    <option name="cachedIndexableFilesCount" value="1200" />
+    <option name="cachedIndexableFilesCount" value="1202" />
   </component>
   <component name="FileTemplateManagerImpl">
     <option name="RECENT_TEMPLATES">
@@ -141,22 +144,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1772553173766</updated>
-    </task>
-    <task id="LOCAL-00062" summary="Refactoring">
-      <option name="closed" value="true" />
-      <created>1773908751919</created>
-      <option name="number" value="00062" />
-      <option name="presentableId" value="LOCAL-00062" />
-      <option name="project" value="LOCAL" />
-      <updated>1773908751919</updated>
-    </task>
-    <task id="LOCAL-00063" summary="Resolve error">
-      <option name="closed" value="true" />
-      <created>1773911030186</created>
-      <option name="number" value="00063" />
-      <option name="presentableId" value="LOCAL-00063" />
-      <option name="project" value="LOCAL" />
-      <updated>1773911030186</updated>
     </task>
     <task id="LOCAL-00064" summary="chat et revue">
       <option name="closed" value="true" />
@@ -534,7 +521,23 @@
       <option name="project" value="LOCAL" />
       <updated>1775078927683</updated>
     </task>
-    <option name="localTasksCounter" value="111" />
+    <task id="LOCAL-00111" summary="Migration flyway">
+      <option name="closed" value="true" />
+      <created>1775081998752</created>
+      <option name="number" value="00111" />
+      <option name="presentableId" value="LOCAL-00111" />
+      <option name="project" value="LOCAL" />
+      <updated>1775081998753</updated>
+    </task>
+    <task id="LOCAL-00112" summary="Migration flyway">
+      <option name="closed" value="true" />
+      <created>1775084238735</created>
+      <option name="number" value="00112" />
+      <option name="presentableId" value="LOCAL-00112" />
+      <option name="project" value="LOCAL" />
+      <updated>1775084238735</updated>
+    </task>
+    <option name="localTasksCounter" value="113" />
     <servers />
   </component>
   <component name="UnknownFeatures">
@@ -565,7 +568,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="Fix migrantion and beans error" />
     <MESSAGE value="Le onbording ready for test" />
     <MESSAGE value="notif" />
     <MESSAGE value="Refactoring conplete du model MLM" />
@@ -590,7 +592,8 @@
     <MESSAGE value="rebuild" />
     <MESSAGE value="Check nom dans cercle" />
     <MESSAGE value="View cercle" />
-    <option name="LAST_COMMIT_MESSAGE" value="View cercle" />
+    <MESSAGE value="Migration flyway" />
+    <option name="LAST_COMMIT_MESSAGE" value="Migration flyway" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />
