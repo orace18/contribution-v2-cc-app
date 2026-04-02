@@ -57,7 +57,10 @@ public class IdentityOnboardingService {
     @Transactional
     public void selectCountry(UUID userId, String countryCode) {
         User user = findUser(userId);
-        accountHolderService.selectCountry(user.getId(), countryCode.trim().toUpperCase(Locale.ROOT));
+        var accountHolder = accountHolderService.selectCountry(user.getId(), countryCode.trim().toUpperCase(Locale.ROOT));
+        UserProfile profile = getOrCreateProfile(user);
+        profile.setCountry(accountHolder.getCountryCode());
+        userProfileRepository.save(profile);
     }
 
     @Transactional
