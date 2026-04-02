@@ -34,6 +34,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.security.InvalidKeyException;
+import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.OffsetDateTime;
@@ -119,10 +120,13 @@ public class JawuPayPspClientImpl implements JawuPayPspClient {
         }
         String timestamp = String.valueOf(System.currentTimeMillis() / 1000);
         String nonce = UUID.randomUUID().toString().replace("-", "");
-        byte[] bodyToSign = body != null ? body : new byte[0];
-        String signature = computeHmacHex(bodyToSign);
+        String bodyStr = body != null && body.length > 0 ? new String(body, StandardCharsets.UTF_8) : "";
+        String signature = computeJawuPaySignature(timestamp, nonce, bodyStr);
+        log.debug("JawuPay outgoing auth method={} uri={} timestamp={} nonce={} bodyLength={}",
+                request.getMethod(), request.getURI(), timestamp, nonce, bodyStr.length());
         HttpHeaders newHeaders = new HttpHeaders();
         newHeaders.putAll(request.getHeaders());
+        newHeaders.set("X-API-KEY", apiKey);
         newHeaders.set("X-TIMESTAMP", timestamp);
         newHeaders.set("X-NONCE", nonce);
         newHeaders.set("X-SIGNATURE", signature);
@@ -134,18 +138,42 @@ public class JawuPayPspClientImpl implements JawuPayPspClient {
         }, body);
     }
 
-    private String computeHmacHex(byte[] body) {
+    /**
+     * Calcule la signature HMAC-SHA256 JawuPay.
+     * Payload signé : timestamp + nonce + body (concaténés)
+     * Résultat : hex lowercase
+     */
+    String computeJawuPaySignature(String timestamp, String nonce, String body) {
+        String payload = timestamp + nonce + body;
+        return computeHmacHex(payload.getBytes(StandardCharsets.UTF_8));
+    }
+
+    /**
+     * Vérifie une signature HMAC-SHA256 JawuPay (constant-time comparison).
+     */
+    boolean verifyJawuPaySignature(String timestamp, String nonce, String body, String expectedSignature) {
+        if (hmacSecretBytes == null || expectedSignature == null) {
+            return false;
+        }
+        String computed = computeJawuPaySignature(timestamp, nonce, body);
+        return MessageDigest.isEqual(
+                computed.getBytes(StandardCharsets.UTF_8),
+                expectedSignature.getBytes(StandardCharsets.UTF_8)
+        );
+    }
+
+    private String computeHmacHex(byte[] payload) {
         try {
             Mac mac = Mac.getInstance("HmacSHA256");
             mac.init(new SecretKeySpec(hmacSecretBytes, "HmacSHA256"));
-            byte[] result = mac.doFinal(body);
+            byte[] result = mac.doFinal(payload);
             StringBuilder sb = new StringBuilder(result.length * 2);
             for (byte b : result) {
                 sb.append(String.format("%02x", b));
             }
             return sb.toString();
         } catch (NoSuchAlgorithmException | InvalidKeyException ex) {
-            throw new IllegalStateException("Unable to compute JawuPay request signature", ex);
+            throw new IllegalStateException("Unable to compute JawuPay HMAC signature", ex);
         }
     }
 
