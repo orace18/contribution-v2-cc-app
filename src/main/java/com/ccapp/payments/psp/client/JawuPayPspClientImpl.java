@@ -114,10 +114,12 @@ public class JawuPayPspClientImpl implements JawuPayPspClient {
         if (hmacSecretBytes == null) {
             return execution.execute(request, body);
         }
+        String timestamp = String.valueOf(System.currentTimeMillis() / 1000);
         byte[] bodyToSign = body != null ? body : new byte[0];
         String signature = computeHmacHex(bodyToSign);
         HttpHeaders newHeaders = new HttpHeaders();
         newHeaders.putAll(request.getHeaders());
+        newHeaders.set("X-TIMESTAMP", timestamp);
         newHeaders.set("X-SIGNATURE", signature);
         return execution.execute(new HttpRequestWrapper(request) {
             @Override
