@@ -2,6 +2,7 @@ package com.ccapp.identity.verification.service;
 
 import com.ccapp.common.events.DomainEventPublisher;
 import com.ccapp.common.exception.BusinessException;
+import com.ccapp.common.exception.TooManyRequestsException;
 import com.ccapp.common.exception.NotFoundException;
 import com.ccapp.cpass.otp.CPassOtpGateway;
 import com.ccapp.cpass.otp.CPassOtpSendResponse;
@@ -10,9 +11,14 @@ import com.ccapp.identity.verification.domain.enums.PhoneVerificationChannel;
 import com.ccapp.identity.verification.domain.enums.PhoneVerificationSource;
 import com.ccapp.identity.verification.domain.enums.PhoneVerificationStatus;
 import com.ccapp.identity.verification.dto.ConfirmPhoneVerificationRequest;
+import com.ccapp.identity.verification.dto.FirebasePhoneVerificationRequest;
+import com.ccapp.identity.verification.dto.FirebasePhoneVerificationResponse;
 import com.ccapp.identity.verification.dto.PhoneVerificationResponse;
 import com.ccapp.identity.verification.dto.StartPhoneVerificationRequest;
+import com.ccapp.identity.account_holder.repository.AccountHolderRepository;
 import com.ccapp.identity.verification.repository.PhoneVerificationRepository;
+import com.ccapp.identity.service.FirebaseTokenVerifier;
+import com.ccapp.identity.service.FirebaseUserClaims;
 import com.ccapp.identity.service.IdentitySecurityService;
 import com.ccapp.progress.event.PhoneVerifiedEvent;
 import lombok.RequiredArgsConstructor;
@@ -37,9 +43,14 @@ public class PhoneVerificationService {
     private static final String PHONE_VERIFICATION_RESEND_LIMIT_REACHED = "PHONE_VERIFICATION_RESEND_LIMIT_REACHED";
     private static final String PHONE_VERIFICATION_REQUIRED = "PHONE_VERIFICATION_REQUIRED";
     private static final String PHONE_VERIFICATION_PHONE_MISMATCH = "PHONE_VERIFICATION_PHONE_MISMATCH";
+    private static final String PHONE_ALREADY_LINKED_TO_ANOTHER_USER = "PHONE_ALREADY_LINKED_TO_ANOTHER_USER";
+    private static final String FIREBASE_PHONE_MISMATCH = "PHONE_MISMATCH";
+    private static final String FIREBASE_VERIFIED = "FIREBASE_VERIFIED";
     private static final String CPASS_DELEGATED = "CPASS_DELEGATED";
 
     private final PhoneVerificationRepository phoneVerificationRepository;
+    private final AccountHolderRepository accountHolderRepository;
+    private final FirebaseTokenVerifier firebaseTokenVerifier;
     private final UnifiedOtpService unifiedOtpService;
     private final DomainEventPublisher domainEventPublisher;
     private final PhoneVerificationTrustService phoneVerificationTrustService;
@@ -66,6 +77,9 @@ public class PhoneVerificationService {
 
     @Value("${identity.phone-verification.start-rate-limit-per-hour:20}")
     private int startRateLimitPerHour;
+
+    @Value("${identity.phone-verification.firebase-rate-limit-per-hour:5}")
+    private int firebaseRateLimitPerHour;
 
     @Transactional
     public PhoneVerificationResponse startVerification(UUID requesterAccountHolderId, StartPhoneVerificationRequest request) {
@@ -182,6 +196,73 @@ public class PhoneVerificationService {
                 saved.getPhoneNumber()
         ));
         return toResponse(saved);
+    }
+
+    @Transactional
+    public FirebasePhoneVerificationResponse verifyFirebasePhone(UUID requesterAccountHolderId,
+                                                                 UUID requesterUserId,
+                                                                 FirebasePhoneVerificationRequest request) {
+        OffsetDateTime now = OffsetDateTime.now();
+        long attemptsInPastHour = phoneVerificationRepository.countByRequesterAccountHolderIdAndCreatedAtAfter(
+                requesterAccountHolderId,
+                now.minusHours(1)
+        );
+        if (attemptsInPastHour >= firebaseRateLimitPerHour) {
+            throw new TooManyRequestsException(PHONE_VERIFICATION_RATE_LIMIT_EXCEEDED);
+        }
+
+        String normalizedPhone = normalizePhone(request.phoneNumber());
+        var requestMetadata = identitySecurityService.currentRequestMetadata();
+        identitySecurityService.assertFreshFirebaseToken(
+                request.firebaseToken(),
+                requestMetadata.deviceIdentifier(),
+                requestMetadata.ipAddress(),
+                requestMetadata.countryCode()
+        );
+
+        FirebaseUserClaims claims = firebaseTokenVerifier.verify(request.firebaseToken());
+        String tokenPhone = normalizePhone(claims.phoneNumber());
+        if (!normalizedPhone.equals(tokenPhone)) {
+            throw new BusinessException(FIREBASE_PHONE_MISMATCH);
+        }
+        if (accountHolderRepository.existsByPhoneNumberAndIdNot(normalizedPhone, requesterAccountHolderId)) {
+            throw new BusinessException(PHONE_ALREADY_LINKED_TO_ANOTHER_USER);
+        }
+
+        PhoneVerification verification = PhoneVerification.builder()
+                .requesterAccountHolderId(requesterAccountHolderId)
+                .phoneNumber(normalizedPhone)
+                .channel(PhoneVerificationChannel.SMS)
+                .status(PhoneVerificationStatus.VERIFIED)
+                .codeHash(FIREBASE_VERIFIED)
+                .attemptCount(1)
+                .maxAttempts(maxAttempts)
+                .sendCount(1)
+                .maxSendCount(maxSendCount)
+                .lastSentAt(now)
+                .resendAvailableAt(now)
+                .expiresAt(now.plusSeconds(ttlSeconds))
+                .verifiedAt(now)
+                .build();
+        PhoneVerification saved = phoneVerificationRepository.save(verification);
+
+        phoneVerificationTrustService.markPhoneVerified(
+                requesterAccountHolderId,
+                normalizedPhone,
+                PhoneVerificationSource.FIREBASE,
+                requestMetadata.ipAddress()
+        );
+        identitySecurityService.recordFirebaseTokenUsage(
+                request.firebaseToken(),
+                requesterUserId,
+                requestMetadata.deviceIdentifier()
+        );
+        domainEventPublisher.publish(PhoneVerifiedEvent.create(
+                requesterAccountHolderId,
+                saved.getId(),
+                saved.getPhoneNumber()
+        ));
+        return new FirebasePhoneVerificationResponse(true, true, normalizedPhone);
     }
 
     @Transactional
