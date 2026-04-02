@@ -54,6 +54,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -256,9 +257,6 @@ public class MobileOnboardingJourneyService {
             throw new BusinessException("Use activate-free for FREE plan");
         }
 
-        String idempotencyKey = (requestedIdempotencyKey == null || requestedIdempotencyKey.isBlank())
-                ? "mobile-paid-sub:" + accountHolderId + ":" + plan.getId() + ":" + UUID.randomUUID()
-                : requestedIdempotencyKey.trim();
         String paymentCountry = normalizeRequiredCountryCode(requestedCountryCode);
         String normalizedPaymentMethodId = normalizeRequiredPaymentMethodId(paymentMethodId);
         String normalizedMsisdn = normalizeMsisdn(msisdn, normalizedPaymentMethodId);
@@ -268,41 +266,21 @@ public class MobileOnboardingJourneyService {
             throw new BusinessException("Selected plan is not available for requested payment country");
         }
 
-        Operation operation = operationService.createInitiatedOperation(
-                accountHolderId,
-                actorUserId,
-                OperationType.SUBSCRIPTION,
-                plan.getPrice(),
-                plan.getCurrency(),
-                idempotencyKey,
-                "Mobile paid onboarding subscription " + plan.getCode(),
-                plan.getId()
-        );
-
-        membershipService.createPendingMembership(operation.getId(), accountHolderId, plan);
-
-        if (operation.getStatus() == OperationStatus.CONFIRMED) {
-            transitionAfterMembershipActivated(journey, actorUserId, operation, false);
+        Operation reusableOperation = findReusablePendingSubscriptionOperation(accountHolderId, plan.getId()).orElse(null);
+        if (reusableOperation != null) {
+            membershipService.createPendingMembership(reusableOperation.getId(), accountHolderId, plan);
+            updatePaymentPending(journey, reusableOperation.getId(), reusableOperation.getPspReference(), true);
             journeyRepository.save(journey);
             return new MobilePaymentInitiateResponse(
-                    operation.getId(),
-                    operation.getStatus().name(),
-                    operation.getPspReference(),
-                    null
+                    reusableOperation.getId(),
+                    reusableOperation.getStatus().name(),
+                    reusableOperation.getPspReference(),
+                    reusableOperation.getRedirectUrl()
             );
         }
 
-        if (operation.getStatus() == OperationStatus.PENDING_PSP) {
-            updatePaymentPending(journey, operation.getId(), operation.getPspReference(), true);
-            journeyRepository.save(journey);
-            return new MobilePaymentInitiateResponse(
-                    operation.getId(),
-                    operation.getStatus().name(),
-                    operation.getPspReference(),
-                    operation.getRedirectUrl()
-            );
-        }
-
+        String idempotencyKey = generateMobilePaymentIdempotencyKey(accountHolderId, plan.getId());
+        String description = "Mobile paid onboarding subscription " + plan.getCode();
         JawuPayPaymentOrchestrationService.InitiatePaymentResult orchestrationResult =
                 jawuPayPaymentOrchestrationService.initiatePayment(
                         accountHolderId,
@@ -314,23 +292,35 @@ public class MobileOnboardingJourneyService {
                         normalizedMsisdn,
                         normalizedOperatorHint,
                         idempotencyKey,
-                        operation.getDescription(),
+                        description,
                         OperationType.SUBSCRIPTION
                 );
-        if (!operation.getId().equals(orchestrationResult.operationId())) {
-            throw new IllegalStateException("Onboarding payment orchestration returned an unexpected operation id");
-        }
-        Operation pendingOperation = operationService.getById(operation.getId());
+        Operation paymentOperation = operationService.getById(orchestrationResult.operationId());
+        paymentOperation.setPlanId(plan.getId());
+        paymentOperation = operationRepository.save(paymentOperation);
 
-        updatePaymentPending(journey, pendingOperation.getId(), pendingOperation.getPspReference(), false);
+        membershipService.createPendingMembership(paymentOperation.getId(), accountHolderId, plan);
+
+        if (paymentOperation.getStatus() == OperationStatus.CONFIRMED) {
+            transitionAfterMembershipActivated(journey, actorUserId, paymentOperation, false);
+            journeyRepository.save(journey);
+            return new MobilePaymentInitiateResponse(
+                    paymentOperation.getId(),
+                    paymentOperation.getStatus().name(),
+                    paymentOperation.getPspReference(),
+                    paymentOperation.getRedirectUrl()
+            );
+        }
+
+        updatePaymentPending(journey, paymentOperation.getId(), paymentOperation.getPspReference(), false);
         journeyRepository.save(journey);
 
         return new MobilePaymentInitiateResponse(
-                pendingOperation.getId(),
-                pendingOperation.getStatus().name(),
-                pendingOperation.getPspReference(),
-                pendingOperation.getRedirectUrl() != null
-                        ? pendingOperation.getRedirectUrl()
+                paymentOperation.getId(),
+                paymentOperation.getStatus().name(),
+                paymentOperation.getPspReference(),
+                paymentOperation.getRedirectUrl() != null
+                        ? paymentOperation.getRedirectUrl()
                         : orchestrationResult.redirectUrl()
         );
     }
@@ -639,6 +629,19 @@ public class MobileOnboardingJourneyService {
             throw new BusinessException("Selected plan is not available for the requested country catalog");
         }
         return plan;
+    }
+
+    private java.util.Optional<Operation> findReusablePendingSubscriptionOperation(UUID accountHolderId, UUID planId) {
+        return operationRepository.findFirstByAccountHolderIdAndTypeAndPlanIdAndStatusInOrderByCreatedAtDesc(
+                accountHolderId,
+                OperationType.SUBSCRIPTION,
+                planId,
+                EnumSet.of(OperationStatus.INITIATED, OperationStatus.PENDING_PSP)
+        );
+    }
+
+    private String generateMobilePaymentIdempotencyKey(UUID accountHolderId, UUID planId) {
+        return "mobile-paid-sub:" + accountHolderId + ":" + planId + ":" + UUID.randomUUID();
     }
 
     private boolean isFreePlan(SubscriptionPlan plan) {
