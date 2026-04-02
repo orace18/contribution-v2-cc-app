@@ -14,16 +14,27 @@ import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpRequest;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.ClientHttpRequestExecution;
+import org.springframework.http.client.ClientHttpResponse;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
+import org.springframework.http.client.support.HttpRequestWrapper;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.ResourceAccessException;
 
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import java.io.InterruptedIOException;
+import java.io.IOException;
 import java.net.SocketTimeoutException;
 import java.net.http.HttpClient;
 import java.net.http.HttpTimeoutException;
+import java.nio.charset.StandardCharsets;
+import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -54,8 +65,13 @@ public class JawuPayPspClientImpl implements JawuPayPspClient {
     @Value("${psp.jawupay.api-key:}")
     private String apiKey;
 
+    @Value("${psp.jawupay.hmac-secret:}")
+    private String hmacSecret;
+
     @Value("${psp.jawupay.mock-enabled:false}")
     private boolean mockEnabled;
+
+    private byte[] hmacSecretBytes;
 
     @Value("${psp.jawupay.http.connect-timeout-ms:5000}")
     private int connectTimeoutMs = 5000;
@@ -75,10 +91,14 @@ public class JawuPayPspClientImpl implements JawuPayPspClient {
     @PostConstruct
     void init() {
         validateHttpConfiguration();
+        if (hmacSecret != null && !hmacSecret.isBlank()) {
+            hmacSecretBytes = hmacSecret.trim().getBytes(StandardCharsets.UTF_8);
+        }
         restClient = RestClient.builder()
                 .baseUrl(baseUrl)
                 .defaultHeader("X-Api-Key", apiKey)
                 .defaultHeader("Accept", MediaType.APPLICATION_JSON_VALUE)
+                .requestInterceptor(this::signRequest)
                 .requestFactory(createRequestFactory())
                 .defaultStatusHandler(
                         status -> status.is4xxClientError() || status.is5xxServerError(),
@@ -88,6 +108,38 @@ public class JawuPayPspClientImpl implements JawuPayPspClient {
                                             + " for " + req.getMethod() + " " + req.getURI());
                         })
                 .build();
+    }
+
+    private ClientHttpResponse signRequest(HttpRequest request, byte[] body, ClientHttpRequestExecution execution) throws IOException {
+        if (hmacSecretBytes == null) {
+            return execution.execute(request, body);
+        }
+        byte[] bodyToSign = body != null ? body : new byte[0];
+        String signature = computeHmacHex(bodyToSign);
+        HttpHeaders newHeaders = new HttpHeaders();
+        newHeaders.putAll(request.getHeaders());
+        newHeaders.set("X-SIGNATURE", signature);
+        return execution.execute(new HttpRequestWrapper(request) {
+            @Override
+            public HttpHeaders getHeaders() {
+                return newHeaders;
+            }
+        }, body);
+    }
+
+    private String computeHmacHex(byte[] body) {
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(new SecretKeySpec(hmacSecretBytes, "HmacSHA256"));
+            byte[] result = mac.doFinal(body);
+            StringBuilder sb = new StringBuilder(result.length * 2);
+            for (byte b : result) {
+                sb.append(String.format("%02x", b));
+            }
+            return sb.toString();
+        } catch (NoSuchAlgorithmException | InvalidKeyException ex) {
+            throw new IllegalStateException("Unable to compute JawuPay request signature", ex);
+        }
     }
 
     JdkClientHttpRequestFactory createRequestFactory() {
