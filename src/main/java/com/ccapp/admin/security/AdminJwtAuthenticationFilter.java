@@ -40,8 +40,9 @@ public class AdminJwtAuthenticationFilter extends OncePerRequestFilter {
                                     FilterChain filterChain) throws ServletException, IOException {
         String path = request.getServletPath();
         boolean adminRoute = path.startsWith("/api/admin/") || path.startsWith("/admin/");
+        boolean sharedEventRoute = path.startsWith("/api/events");
         boolean adminAuthRoute = path.startsWith("/api/admin/auth/") || path.startsWith("/admin/auth/");
-        if (!adminRoute || adminAuthRoute) {
+        if ((!adminRoute && !sharedEventRoute) || adminAuthRoute) {
             filterChain.doFilter(request, response);
             return;
         }
@@ -93,6 +94,10 @@ public class AdminJwtAuthenticationFilter extends OncePerRequestFilter {
             SecurityContextHolder.getContext().setAuthentication(authentication);
             filterChain.doFilter(request, response);
         } catch (RuntimeException ex) {
+            if (sharedEventRoute && !adminRoute) {
+                filterChain.doFilter(request, response);
+                return;
+            }
             log.warn(
                     "Admin JWT auth failed path={} method={} reason={}",
                     path,
