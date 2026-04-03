@@ -63,7 +63,7 @@ class PhoneVerificationServiceIntegrationTest {
                 .thenReturn(new PhoneMessageDispatchResult(true, "sms:accepted"));
         when(phoneMessageGateway.sendWhatsApp(anyString(), anyString()))
                 .thenReturn(new PhoneMessageDispatchResult(true, "whatsapp:accepted"));
-        when(identitySecurityService.currentRequestMetadata()).thenReturn(new ClientRequestMetadata("203.0.113.30", "BJ"));
+        when(identitySecurityService.currentRequestMetadata()).thenReturn(new ClientRequestMetadata("203.0.113.30", "BJ", null));
     }
 
     @Test
