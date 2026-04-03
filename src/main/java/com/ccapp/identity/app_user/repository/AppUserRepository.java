@@ -3,6 +3,7 @@ package com.ccapp.identity.app_user.repository;
 import com.ccapp.identity.app_user.domain.entity.AppUser;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -14,4 +15,6 @@ public interface AppUserRepository extends JpaRepository<AppUser, UUID> {
     List<AppUser> findByAccountHolderId(UUID accountHolderId);
 
     Optional<AppUser> findFirstByAccountHolderIdOrderByCreatedAtAsc(UUID accountHolderId);
+
+    List<AppUser> findByAccountHolderIdIn(Collection<UUID> accountHolderIds);
 }

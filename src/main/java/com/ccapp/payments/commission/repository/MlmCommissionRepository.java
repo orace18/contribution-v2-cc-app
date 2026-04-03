@@ -67,6 +67,14 @@ public interface MlmCommissionRepository extends JpaRepository<MlmCommission, UU
             select coalesce(sum(c.amount), 0)
             from MlmCommission c
             where c.beneficiaryAccountHolderId = :accountHolderId
+              and c.createdAt >= :fromDate
+            """)
+    BigDecimal sumAmountByBeneficiaryAccountHolderIdSince(UUID accountHolderId, OffsetDateTime fromDate);
+
+    @Query("""
+            select coalesce(sum(c.amount), 0)
+            from MlmCommission c
+            where c.beneficiaryAccountHolderId = :accountHolderId
               and c.weekId = :weekId
               and c.commissionType = :commissionType
             """)
@@ -108,6 +116,8 @@ public interface MlmCommissionRepository extends JpaRepository<MlmCommission, UU
                                        CommissionType commissionType,
                                        CommissionStatus commissionStatus,
                                        Pageable pageable);
+
+    List<MlmCommission> findByBeneficiaryAccountHolderIdOrderByCreatedAtDesc(UUID accountHolderId);
 
     @Query("""
             select count(c)
