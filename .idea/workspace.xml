@@ -4,9 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="review ttl">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-    </list>
+    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="rebuild" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -143,14 +141,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1772553173766</updated>
-    </task>
-    <task id="LOCAL-00079" summary="Refactoring conplete du model MLM">
-      <option name="closed" value="true" />
-      <created>1774436112457</created>
-      <option name="number" value="00079" />
-      <option name="presentableId" value="LOCAL-00079" />
-      <option name="project" value="LOCAL" />
-      <updated>1774436112458</updated>
     </task>
     <task id="LOCAL-00080" summary="fix bug">
       <option name="closed" value="true" />
@@ -536,7 +526,15 @@
       <option name="project" value="LOCAL" />
       <updated>1775245367999</updated>
     </task>
-    <option name="localTasksCounter" value="128" />
+    <task id="LOCAL-00128" summary="rebuild">
+      <option name="closed" value="true" />
+      <created>1775250815611</created>
+      <option name="number" value="00128" />
+      <option name="presentableId" value="LOCAL-00128" />
+      <option name="project" value="LOCAL" />
+      <updated>1775250815611</updated>
+    </task>
+    <option name="localTasksCounter" value="129" />
     <servers />
   </component>
   <component name="UnknownFeatures">
@@ -580,7 +578,6 @@
     <MESSAGE value="Configuration firebase" />
     <MESSAGE value="Rebuild firebase" />
     <MESSAGE value="Exposer une api pour moyen de paiement." />
-    <MESSAGE value="rebuild" />
     <MESSAGE value="Check nom dans cercle" />
     <MESSAGE value="View cercle" />
     <MESSAGE value="Migration flyway" />
@@ -592,7 +589,8 @@
     <MESSAGE value="revue du application-dev.properties" />
     <MESSAGE value="fix bug" />
     <MESSAGE value="review ttl" />
-    <option name="LAST_COMMIT_MESSAGE" value="review ttl" />
+    <MESSAGE value="rebuild" />
+    <option name="LAST_COMMIT_MESSAGE" value="rebuild" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />

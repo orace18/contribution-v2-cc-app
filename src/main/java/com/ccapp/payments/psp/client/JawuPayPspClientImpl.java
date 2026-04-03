@@ -402,45 +402,50 @@ public class JawuPayPspClientImpl implements JawuPayPspClient {
     }
 
     JawuPayQuoteResponse doCreateQuoteRequest(JawuPayQuoteRequest request) {
-        return restClient.post()
+        JawuPayApiResponse<JawuPayQuoteResponse> response = restClient.post()
                 .uri("/api/v1/payment/quote")
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(request)
                 .retrieve()
-                .body(JawuPayQuoteResponse.class);
+                .body(new ParameterizedTypeReference<>() {});
+        return response != null ? response.data() : null;
     }
 
     JawuPayConfirmResponse doConfirmPaymentRequest(JawuPayConfirmRequest request, String idempotencyKey) {
-        return restClient.post()
+        JawuPayApiResponse<JawuPayConfirmResponse> response = restClient.post()
                 .uri("/api/v1/payment/confirm")
                 .header("Idempotency-Key", idempotencyKey)
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(request)
                 .retrieve()
-                .body(JawuPayConfirmResponse.class);
+                .body(new ParameterizedTypeReference<>() {});
+        return response != null ? response.data() : null;
     }
 
     JawuPayPaymentResponse doGetPaymentRequest(String paymentId) {
-        return restClient.get()
+        JawuPayApiResponse<JawuPayPaymentResponse> response = restClient.get()
                 .uri("/api/v1/payment/{paymentId}", paymentId)
                 .retrieve()
-                .body(JawuPayPaymentResponse.class);
+                .body(new ParameterizedTypeReference<>() {});
+        return response != null ? response.data() : null;
     }
 
     JawuPayCreatePayoutResponse doCreatePayoutRequest(JawuPayCreatePayoutRequest request) {
-        return restClient.post()
+        JawuPayApiResponse<JawuPayCreatePayoutResponse> response = restClient.post()
                 .uri("/api/v1/payout")
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(request)
                 .retrieve()
-                .body(JawuPayCreatePayoutResponse.class);
+                .body(new ParameterizedTypeReference<>() {});
+        return response != null ? response.data() : null;
     }
 
     JawuPayPayoutDetailsResponse doGetPayoutRequest(String payoutId) {
-        return restClient.get()
+        JawuPayApiResponse<JawuPayPayoutDetailsResponse> response = restClient.get()
                 .uri("/api/v1/payout/{payoutId}", payoutId)
                 .retrieve()
-                .body(JawuPayPayoutDetailsResponse.class);
+                .body(new ParameterizedTypeReference<>() {});
+        return response != null ? response.data() : null;
     }
 
     List<JawuPayPaymentMethod> doGetPaymentMethodsRequest(String country) {
