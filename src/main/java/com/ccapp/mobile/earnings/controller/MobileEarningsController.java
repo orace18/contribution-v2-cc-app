@@ -17,6 +17,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -46,12 +47,13 @@ public class MobileEarningsController {
     }
 
     @GetMapping("/history")
-    @Operation(summary = "Get earnings history")
-    public ResponseEntity<ApiEnvelope<List<MobileEarningHistoryItemResponse>>> history() {
+    @Operation(summary = "Get earnings history — filter: all (default) | today | week")
+    public ResponseEntity<ApiEnvelope<List<MobileEarningHistoryItemResponse>>> history(
+            @RequestParam(defaultValue = "all") String filter) {
         UUID accountHolderId = SecurityUtils.currentAccountHolderId();
         return ResponseEntity.ok(ApiEnvelope.success(
                 "Mobile earnings history",
-                mobileEarningsService.getHistory(resolveActorUserId(), accountHolderId)
+                mobileEarningsService.getHistory(resolveActorUserId(), accountHolderId, filter)
         ));
     }
 

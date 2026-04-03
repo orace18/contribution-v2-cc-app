@@ -129,6 +129,70 @@ public class MobileNetworkService {
         return new MobileNetworkTodayActivityResponse(newMembers, paidToday.size());
     }
 
+    /**
+     * Returns the direct sponsored members of a specific member within the
+     * actor's network. The actor must have VIEW access on their own accountHolderId;
+     * the target member must belong to their sponsor tree.
+     */
+    @Transactional(readOnly = true)
+    public MobileNetworkMembersResponse getMemberDirects(UUID actorUserId,
+                                                         UUID actorAccountHolderId,
+                                                         UUID targetMemberId) {
+        assertViewAccess(actorUserId, actorAccountHolderId);
+        NetworkContext context = loadContext(targetMemberId, MobileNetworkTreeView.GENEALOGY, false);
+
+        List<MobileNetworkMemberSummaryResponse> members = context.rows.stream()
+                .filter(row -> row.generation() == 1)
+                .map(row -> toMemberSummary(context, row))
+                .toList();
+
+        return new MobileNetworkMembersResponse(members);
+    }
+
+    /**
+     * Returns sponsor-tree members who have not yet been placed in the binary tree.
+     */
+    @Transactional(readOnly = true)
+    public MobileNetworkMembersResponse getUnplacedMembers(UUID actorUserId, UUID accountHolderId) {
+        assertViewAccess(actorUserId, accountHolderId);
+
+        List<MlmTreeMemberProjection> projections = mlmMemberLinkRepository.findUnplacedInSponsorTree(accountHolderId);
+        if (projections.isEmpty()) {
+            return new MobileNetworkMembersResponse(List.of());
+        }
+
+        Set<UUID> memberIds = new HashSet<>();
+        projections.forEach(p -> memberIds.add(UUID.fromString(p.getMemberId())));
+
+        Map<UUID, AccountHolder> accountHolderById = loadAccountHolders(memberIds);
+        Map<UUID, Membership> latestMembershipByMemberId = loadLatestMemberships(memberIds);
+        Map<UUID, String> avatarByMemberId = loadAvatars(memberIds);
+
+        List<MobileNetworkMemberSummaryResponse> members = projections.stream()
+                .map(p -> {
+                    UUID memberId = UUID.fromString(p.getMemberId());
+                    AccountHolder accountHolder = accountHolderById.get(memberId);
+                    MemberLifecycle lifecycle = deriveLifecycle(
+                            latestMembershipByMemberId.get(memberId),
+                            accountHolder,
+                            p.getLinkedAt()
+                    );
+                    return new MobileNetworkMemberSummaryResponse(
+                            memberId,
+                            accountHolder == null ? null : accountHolder.getFirstName(),
+                            accountHolder == null ? null : accountHolder.getLastName(),
+                            avatarByMemberId.get(memberId),
+                            1,
+                            0L,
+                            lifecycle.membershipStatus(),
+                            lifecycle.nextAction()
+                    );
+                })
+                .toList();
+
+        return new MobileNetworkMembersResponse(members);
+    }
+
     @Transactional(readOnly = true)
     public List<MobileNetworkFollowUpResponse> getFollowUps(UUID actorUserId, UUID accountHolderId) {
         assertViewAccess(actorUserId, accountHolderId);

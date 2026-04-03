@@ -10,6 +10,7 @@ import com.ccapp.mobile.network.dto.MobileNetworkTodayActivityResponse;
 import com.ccapp.mobile.network.dto.MobileNetworkTreeResponse;
 import com.ccapp.mobile.network.dto.MobileNetworkTreeView;
 import com.ccapp.mobile.network.service.MobileNetworkService;
+import org.springframework.web.bind.annotation.PathVariable;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -98,6 +99,27 @@ public class MobileNetworkController {
         return ResponseEntity.ok(ApiEnvelope.success(
                 "Mobile network search",
                 mobileNetworkService.search(resolveActorUserId(), accountHolderId, query)
+        ));
+    }
+
+    @GetMapping("/member/{memberId}/directs")
+    @Operation(summary = "List direct sponsored members of a specific network member")
+    public ResponseEntity<ApiEnvelope<MobileNetworkMembersResponse>> memberDirects(
+            @PathVariable UUID memberId) {
+        UUID accountHolderId = SecurityUtils.currentAccountHolderId();
+        return ResponseEntity.ok(ApiEnvelope.success(
+                "Mobile network member directs",
+                mobileNetworkService.getMemberDirects(resolveActorUserId(), accountHolderId, memberId)
+        ));
+    }
+
+    @GetMapping("/unplaced")
+    @Operation(summary = "List sponsor-network members not yet placed in the binary tree")
+    public ResponseEntity<ApiEnvelope<MobileNetworkMembersResponse>> unplaced() {
+        UUID accountHolderId = SecurityUtils.currentAccountHolderId();
+        return ResponseEntity.ok(ApiEnvelope.success(
+                "Mobile network unplaced members",
+                mobileNetworkService.getUnplacedMembers(resolveActorUserId(), accountHolderId)
         ));
     }
 

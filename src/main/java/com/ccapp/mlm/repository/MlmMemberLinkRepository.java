@@ -35,6 +35,33 @@ public interface MlmMemberLinkRepository extends JpaRepository<MlmMemberLink, UU
             """, nativeQuery = true)
     List<MlmTreeMemberProjection> findSponsorTree(UUID accountHolderId);
 
+    /**
+     * Returns direct sponsor-children of {@code accountHolderId} whose placement
+     * points to themselves (i.e. not yet placed anywhere in the binary tree).
+     */
+    @Query(value = """
+            with recursive sponsor_tree as (
+                select links.account_holder_id as member_id,
+                       links.created_at as linked_at
+                from mlm_member_links links
+                where links.sponsor_account_holder_id = :accountHolderId
+                union all
+                select child.account_holder_id as member_id,
+                       child.created_at as linked_at
+                from mlm_member_links child
+                join sponsor_tree on child.sponsor_account_holder_id = sponsor_tree.member_id
+            )
+            select cast(s.member_id as varchar) as memberId,
+                   null as parentId,
+                   1 as generation,
+                   s.linked_at as linkedAt
+            from sponsor_tree s
+            join mlm_member_links l on l.account_holder_id = s.member_id
+            where l.placement_account_holder_id = l.account_holder_id
+            order by s.linked_at asc, s.member_id asc
+            """, nativeQuery = true)
+    List<MlmTreeMemberProjection> findUnplacedInSponsorTree(UUID accountHolderId);
+
     @Query(value = """
             with recursive placement_tree as (
                 select links.account_holder_id as member_id,

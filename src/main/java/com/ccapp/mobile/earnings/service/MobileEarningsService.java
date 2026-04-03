@@ -56,9 +56,17 @@ public class MobileEarningsService {
 
     @Transactional(readOnly = true)
     public List<MobileEarningHistoryItemResponse> getHistory(UUID actorUserId, UUID accountHolderId) {
+        return getHistory(actorUserId, accountHolderId, "all");
+    }
+
+    @Transactional(readOnly = true)
+    public List<MobileEarningHistoryItemResponse> getHistory(UUID actorUserId, UUID accountHolderId, String filter) {
         assertViewAccess(actorUserId, accountHolderId);
 
+        OffsetDateTime since = resolveFilterSince(filter);
+
         return mlmCommissionRepository.findByBeneficiaryAccountHolderIdOrderByCreatedAtDesc(accountHolderId).stream()
+                .filter(c -> since == null || !c.getCreatedAt().isBefore(since))
                 .map(commission -> new MobileEarningHistoryItemResponse(
                         safeAmount(commission.getAmount()),
                         mapType(commission),
@@ -66,6 +74,16 @@ public class MobileEarningsService {
                         commission.getPaidAt() != null ? commission.getPaidAt() : commission.getCreatedAt()
                 ))
                 .toList();
+    }
+
+    private OffsetDateTime resolveFilterSince(String filter) {
+        if (filter == null) return null;
+        OffsetDateTime now = OffsetDateTime.now(ZoneId.of(networkZone));
+        return switch (filter.trim().toLowerCase()) {
+            case "today" -> now.toLocalDate().atStartOfDay().atOffset(now.getOffset());
+            case "week" -> startOfWeek();
+            default -> null;
+        };
     }
 
     private void assertViewAccess(UUID actorUserId, UUID accountHolderId) {
