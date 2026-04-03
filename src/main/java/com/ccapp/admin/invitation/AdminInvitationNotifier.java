@@ -11,6 +11,7 @@ import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 
 @Component
@@ -26,12 +27,16 @@ public class AdminInvitationNotifier {
     @Value("${admin.invitation.base-url:https://backoffice.platform.com/activate}")
     private String baseUrl;
 
+    @Value("${admin.invitation.timezone:Africa/Porto-Novo}")
+    private String invitationTimezone;
+
     @Async
     public void sendInvitation(AdminInvitation invitation) {
         String activationLink = baseUrl + "?token=" + invitation.getInvitationToken();
         String roleName = formatRole(invitation.getRole().name());
         String expiresAt = invitation.getExpiresAt()
-                .format(DateTimeFormatter.ofPattern("dd/MM/yyyy à HH:mm"));
+                .atZoneSameInstant(ZoneId.of(invitationTimezone))
+                .format(DateTimeFormatter.ofPattern("dd/MM/yyyy à HH:mm (zzz)"));
 
         String subject = "Invitation Administrateur — Club Chrétien";
         String body = buildInvitationEmailBody(invitation.getEmail(), roleName, activationLink, expiresAt);

@@ -3,6 +3,8 @@ package com.ccapp.identity.controller;
 import com.ccapp.common.api.CommonResponse;
 import com.ccapp.common.security.SecurityUtils;
 import com.ccapp.identity.verification.dto.ConfirmPhoneVerificationRequest;
+import com.ccapp.identity.verification.dto.FirebasePhoneVerificationRequest;
+import com.ccapp.identity.verification.dto.FirebasePhoneVerificationResponse;
 import com.ccapp.identity.verification.dto.PhoneVerificationResponse;
 import com.ccapp.identity.verification.dto.StartPhoneVerificationRequest;
 import com.ccapp.identity.verification.service.PhoneVerificationService;
@@ -28,6 +30,24 @@ import java.util.UUID;
 public class MobilePhoneVerificationController {
 
     private final PhoneVerificationService phoneVerificationService;
+
+    @PostMapping("/firebase")
+    @Operation(summary = "Confirm phone verification using Firebase Phone Auth")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Success", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Validation or business rule error", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
+    })
+    public ResponseEntity<CommonResponse<FirebasePhoneVerificationResponse>> verifyFirebase(@Valid @RequestBody FirebasePhoneVerificationRequest request) {
+        UUID requesterAccountHolderId = SecurityUtils.currentAccountHolderId();
+        UUID requesterUserId = SecurityUtils.currentUserId();
+        FirebasePhoneVerificationResponse response = phoneVerificationService.verifyFirebasePhone(
+                requesterAccountHolderId,
+                requesterUserId,
+                request
+        );
+        return ResponseEntity.ok(CommonResponse.success("Phone verification confirmed", response));
+    }
 
     @PostMapping("/start")
     @Operation(summary = "Start phone verification")

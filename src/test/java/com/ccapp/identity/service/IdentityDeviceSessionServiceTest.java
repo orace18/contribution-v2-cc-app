@@ -79,7 +79,7 @@ class IdentityDeviceSessionServiceTest {
                 .kycStatus(KycStatus.NOT_STARTED)
                 .build();
 
-        when(identitySecurityService.currentRequestMetadata()).thenReturn(new ClientRequestMetadata("203.0.113.20", "BJ"));
+        when(identitySecurityService.currentRequestMetadata()).thenReturn(new ClientRequestMetadata("203.0.113.20", "BJ", null));
         when(userRepository.findByFirebaseUid("firebase-uid")).thenReturn(Optional.of(existingUser));
         when(userProfileRepository.findByUserId(userId)).thenReturn(Optional.empty());
         when(appUserRepository.findById(userId)).thenReturn(Optional.of(AppUser.builder()

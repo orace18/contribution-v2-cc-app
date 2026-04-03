@@ -11,16 +11,20 @@ public class ClientRequestMetadataResolver {
     public ClientRequestMetadata current() {
         ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
         if (attributes == null) {
-            return new ClientRequestMetadata(null, null);
+            return new ClientRequestMetadata(null, null, null);
         }
         return resolve(attributes.getRequest());
     }
 
     public ClientRequestMetadata resolve(HttpServletRequest request) {
         if (request == null) {
-            return new ClientRequestMetadata(null, null);
+            return new ClientRequestMetadata(null, null, null);
         }
-        return new ClientRequestMetadata(resolveIpAddress(request), resolveCountryCode(request));
+        return new ClientRequestMetadata(
+                resolveIpAddress(request),
+                resolveCountryCode(request),
+                resolveDeviceIdentifier(request)
+        );
     }
 
     private String resolveIpAddress(HttpServletRequest request) {
@@ -51,6 +55,14 @@ public class ClientRequestMetadataResolver {
             return null;
         }
         return candidate.trim().toUpperCase();
+    }
+
+    private String resolveDeviceIdentifier(HttpServletRequest request) {
+        String candidate = firstHeaderValue(request, "X-Device-ID");
+        if (candidate == null) {
+            candidate = firstHeaderValue(request, "X-Device-Id");
+        }
+        return candidate;
     }
 
     private String firstHeaderValue(HttpServletRequest request, String headerName) {
