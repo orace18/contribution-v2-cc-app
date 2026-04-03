@@ -4,9 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="configuration des cles jawupay">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-    </list>
+    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="Rebuild" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -143,14 +141,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1772553173766</updated>
-    </task>
-    <task id="LOCAL-00071" summary="Gestion des admins">
-      <option name="closed" value="true" />
-      <created>1774018084800</created>
-      <option name="number" value="00071" />
-      <option name="presentableId" value="LOCAL-00071" />
-      <option name="project" value="LOCAL" />
-      <updated>1774018084800</updated>
     </task>
     <task id="LOCAL-00072" summary="Config mail">
       <option name="closed" value="true" />
@@ -536,7 +526,15 @@
       <option name="project" value="LOCAL" />
       <updated>1775145777950</updated>
     </task>
-    <option name="localTasksCounter" value="120" />
+    <task id="LOCAL-00120" summary="Rebuild">
+      <option name="closed" value="true" />
+      <created>1775223445141</created>
+      <option name="number" value="00120" />
+      <option name="presentableId" value="LOCAL-00120" />
+      <option name="project" value="LOCAL" />
+      <updated>1775223445141</updated>
+    </task>
+    <option name="localTasksCounter" value="121" />
     <servers />
   </component>
   <component name="UnknownFeatures">
@@ -581,7 +579,6 @@
     <MESSAGE value="Revue du JawuPayWebhookService" />
     <MESSAGE value="Retrait des logs de hibernate" />
     <MESSAGE value="Configuration firebase" />
-    <MESSAGE value="Rebuild" />
     <MESSAGE value="Rebuild firebase" />
     <MESSAGE value="Exposer une api pour moyen de paiement." />
     <MESSAGE value="rebuild" />
@@ -592,7 +589,8 @@
     <MESSAGE value="synchronisation" />
     <MESSAGE value="mise en place de api numero parent" />
     <MESSAGE value="configuration des cles jawupay" />
-    <option name="LAST_COMMIT_MESSAGE" value="configuration des cles jawupay" />
+    <MESSAGE value="Rebuild" />
+    <option name="LAST_COMMIT_MESSAGE" value="Rebuild" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />
