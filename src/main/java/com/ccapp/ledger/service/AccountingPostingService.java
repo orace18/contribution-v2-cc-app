@@ -198,6 +198,33 @@ public class AccountingPostingService {
     }
 
     @Transactional
+    public AccountingEvent postCommerceDsbPayout(Operation operation,
+                                                 UUID beneficiaryAccountHolderId,
+                                                 String countryCode) {
+        if (operation.getType() != OperationType.COMMERCE_DSB_PAYOUT) {
+            throw new BusinessException("Operation type must be COMMERCE_DSB_PAYOUT");
+        }
+        if (operation.getStatus() != OperationStatus.CONFIRMED) {
+            throw new BusinessException("Only CONFIRMED DSB payout operations can be posted");
+        }
+        AccountHolder beneficiary = resolveAccountHolder(beneficiaryAccountHolderId);
+        List<PostingLine> lines = List.of(
+                new PostingLine(resolveAccountCode(countryCode, CountryAccountSystemTag.MARKETPLACE_POOL),
+                        LedgerEntryType.DEBIT,
+                        operation.getAmount(),
+                        operation.getCurrency(),
+                        "Commerce DSB payout"),
+                new PostingLine(resolveWalletAccountCode(beneficiary),
+                        LedgerEntryType.CREDIT,
+                        operation.getAmount(),
+                        operation.getCurrency(),
+                        "Commerce DSB wallet credit")
+        );
+        return accountingEventRepository.findByOperationId(operation.getId())
+                .orElseGet(() -> doPost(operation, lines, AccountingEventType.OPERATION_CONFIRMED));
+    }
+
+    @Transactional
     public AccountingEvent postMarketplaceMerchantPayoutReversal(Operation operation,
                                                                  UUID merchantAccountHolderId,
                                                                  String countryCode) {
@@ -536,6 +563,12 @@ public class AccountingPostingService {
             );
             case MARKETPLACE_COMMISSION_ALLOCATION_REVERSAL -> throw new BusinessException(
                     "Use postMarketplaceCommissionAllocationReversal for MARKETPLACE_COMMISSION_ALLOCATION_REVERSAL operations"
+            );
+            case COMMERCE_DSB_PAYOUT -> throw new BusinessException(
+                    "Use postCommerceDsbPayout for COMMERCE_DSB_PAYOUT operations"
+            );
+            case COMMERCE_DSB_REVERSAL -> throw new BusinessException(
+                    "Use WalletDebitFacade for COMMERCE_DSB_REVERSAL operations"
             );
             case WALLET_PAYMENT, WALLET_DEPOSIT_PSP, WALLET_DEPOSIT_AGENT, WALLET_WITHDRAWAL ->
                     throw new BusinessException(

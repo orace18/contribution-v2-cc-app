@@ -9,4 +9,6 @@ import java.util.UUID;
 public interface ShopProductRepository extends JpaRepository<ShopProduct, UUID> {
 
     List<ShopProduct> findByActiveTrueOrderByNameAsc();
+
+    List<ShopProduct> findByMerchantIdOrderByNameAsc(UUID merchantId);
 }

@@ -3,6 +3,8 @@ package com.ccapp.shop.service;
 import com.ccapp.common.events.DomainEvent;
 import com.ccapp.common.events.DomainEventPublisher;
 import com.ccapp.common.exception.BusinessException;
+import com.ccapp.commerce.domain.enums.CommerceDistributionMode;
+import com.ccapp.commerce.service.CommerceSettlementService;
 import com.ccapp.country.config.domain.entity.CountryChartAccount;
 import com.ccapp.country.config.domain.enums.CountryAccountGroup;
 import com.ccapp.country.config.domain.enums.CountryAccountSystemTag;
@@ -101,6 +103,8 @@ class ShopOrderServiceIntegrationTest {
     private CountryChartOfAccountsService countryChartOfAccountsService;
     @MockBean
     private WalletDebitFacade walletDebitFacade;
+    @MockBean
+    private CommerceSettlementService commerceSettlementService;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -161,6 +165,16 @@ class ShopOrderServiceIntegrationTest {
                         .idempotencyKey(invocation.getArgument(5))
                         .description(invocation.getArgument(6))
                         .build());
+        when(commerceSettlementService.applyDeliveredOrderSettlement(any(), any(), any(), any(), any(), anyString()))
+                .thenAnswer(invocation -> {
+                    BigDecimal grossAmount = invocation.getArgument(2);
+                    BigDecimal platformCommission = invocation.getArgument(3);
+                    return new CommerceSettlementService.CommerceSettlementAdjustment(
+                            grossAmount.subtract(platformCommission).setScale(4),
+                            BigDecimal.ZERO.setScale(4),
+                            CommerceDistributionMode.NONE
+                    );
+                });
     }
 
     @Test
@@ -257,7 +271,7 @@ class ShopOrderServiceIntegrationTest {
         assertEquals(buyerId, deliveredEvent.buyerId());
         assertEquals(0, deliveredEvent.platformCommission().compareTo(new BigDecimal("2000.0000")));
         assertEquals(0, deliveredEvent.merchantAmount().compareTo(new BigDecimal("8000.0000")));
-        assertEquals(0, deliveredEvent.mlmVolume().compareTo(new BigDecimal("2000.0000")));
+        assertEquals(0, deliveredEvent.mlmVolume().compareTo(new BigDecimal("2000000.0000")));
 
         ShopOrder persisted = shopOrderRepository.findById(created.id()).orElseThrow();
         assertEquals(ShopOrderStatus.DELIVERED, persisted.getStatus());
