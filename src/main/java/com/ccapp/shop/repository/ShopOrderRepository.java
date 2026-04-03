@@ -14,6 +14,8 @@ public interface ShopOrderRepository extends JpaRepository<ShopOrder, UUID> {
 
     List<ShopOrder> findByBuyerIdOrderByCreatedAtDesc(UUID buyerId);
 
+    List<ShopOrder> findByMerchantIdOrderByCreatedAtDesc(UUID merchantId);
+
     Page<ShopOrder> findByStatusOrderByCreatedAtAsc(ShopOrderStatus status, Pageable pageable);
 
     @Query("""

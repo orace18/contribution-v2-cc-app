@@ -3,6 +3,7 @@ package com.ccapp.shop.service;
 import com.ccapp.common.events.DomainEventPublisher;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.common.exception.NotFoundException;
+import com.ccapp.commerce.service.CommerceSettlementService;
 import com.ccapp.country.config.domain.enums.CountryAccountSystemTag;
 import com.ccapp.country.config.domain.enums.CountryConfigType;
 import com.ccapp.country.config.service.CountryChartOfAccountsService;
@@ -77,6 +78,7 @@ public class ShopOrderService {
     private final AccountingPostingService accountingPostingService;
     private final WalletDebitFacade walletDebitFacade;
     private final DomainEventPublisher domainEventPublisher;
+    private final CommerceSettlementService commerceSettlementService;
 
     @Transactional
     public ShopOrderResponse checkout(UUID buyerId, CheckoutRequest request) {
@@ -351,6 +353,7 @@ public class ShopOrderService {
         String countryCode = resolveOrderCountryCode(order);
         BigDecimal totalAmount = ZERO;
         BigDecimal commissionAmount = ZERO;
+        BigDecimal businessVolume = ZERO;
         for (ShopOrderItem item : items) {
             BigDecimal lineAmount = item.getUnitPrice()
                     .multiply(BigDecimal.valueOf(item.getQuantity()))
@@ -360,10 +363,19 @@ public class ShopOrderService {
                     .divide(HUNDRED, 4, RoundingMode.HALF_UP);
             totalAmount = totalAmount.add(lineAmount).setScale(4, RoundingMode.HALF_UP);
             commissionAmount = commissionAmount.add(lineCommission).setScale(4, RoundingMode.HALF_UP);
+            businessVolume = businessVolume.add(scale(item.getCvValue())).setScale(4, RoundingMode.HALF_UP);
         }
 
-        BigDecimal merchantNetAmount = totalAmount.subtract(commissionAmount).setScale(4, RoundingMode.HALF_UP);
-        BigDecimal businessVolume = commissionAmount;
+        CommerceSettlementService.CommerceSettlementAdjustment commerceAdjustment =
+                commerceSettlementService.applyDeliveredOrderSettlement(
+                        order,
+                        items,
+                        totalAmount,
+                        commissionAmount,
+                        businessVolume,
+                        countryCode
+                );
+        BigDecimal merchantNetAmount = commerceAdjustment.merchantNetAmount();
 
         ShopCommissionPool pool = shopCommissionPoolRepository.findByOrderId(order.getId())
                 .orElseGet(() -> ShopCommissionPool.builder().order(order).build());

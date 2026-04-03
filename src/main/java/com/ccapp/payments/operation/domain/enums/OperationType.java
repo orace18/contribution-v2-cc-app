@@ -11,6 +11,8 @@ public enum OperationType {
     MARKETPLACE_COMMISSION_ALLOCATION,
     MARKETPLACE_MERCHANT_PAYOUT_REVERSAL,
     MARKETPLACE_COMMISSION_ALLOCATION_REVERSAL,
+    COMMERCE_DSB_PAYOUT,
+    COMMERCE_DSB_REVERSAL,
 
     /** Peer-to-peer wallet payment (sender debited, recipient credited). */
     WALLET_PAYMENT,
