@@ -1,6 +1,7 @@
 package com.ccapp.payments.psp.client;
 
 import com.ccapp.common.exception.BusinessException;
+import com.ccapp.payments.psp.dto.JawuPayApiResponse;
 import com.ccapp.payments.psp.dto.JawuPayConfirmRequest;
 import com.ccapp.payments.psp.dto.JawuPayConfirmResponse;
 import com.ccapp.payments.psp.dto.JawuPayCreatePayoutRequest;
@@ -443,12 +444,13 @@ public class JawuPayPspClientImpl implements JawuPayPspClient {
     }
 
     List<JawuPayPaymentMethod> doGetPaymentMethodsRequest(String country) {
-        return restClient.get()
+        JawuPayApiResponse<List<JawuPayPaymentMethod>> response = restClient.get()
                 .uri(uriBuilder -> uriBuilder.path("/api/v1/payment-methods")
                         .queryParam("country", country)
                         .build())
                 .retrieve()
                 .body(new ParameterizedTypeReference<>() {});
+        return response != null && response.data() != null ? response.data() : List.of();
     }
 
     private <T> T executeWithoutRetry(String endpoint,

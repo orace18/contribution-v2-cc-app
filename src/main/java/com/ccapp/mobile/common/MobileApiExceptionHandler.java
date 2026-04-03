@@ -5,6 +5,7 @@ import com.ccapp.common.exception.BusinessException;
 import com.ccapp.common.exception.ConflictException;
 import com.ccapp.common.exception.NotFoundException;
 import com.ccapp.common.exception.UnauthorizedException;
+import com.ccapp.payments.psp.client.JawuPayPspClientImpl;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
@@ -65,6 +66,12 @@ public class MobileApiExceptionHandler {
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ApiEnvelope<Void>> handleAccessDenied(AccessDeniedException ex) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiEnvelope.error("Access denied"));
+    }
+
+    @ExceptionHandler(JawuPayPspClientImpl.PSPCommunicationException.class)
+    public ResponseEntity<ApiEnvelope<Void>> handlePspCommunication(JawuPayPspClientImpl.PSPCommunicationException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                .body(ApiEnvelope.error("Payment service unavailable, please try again"));
     }
 
     @ExceptionHandler(Exception.class)

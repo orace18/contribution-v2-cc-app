@@ -203,4 +203,4 @@ deploy:
     - echo "Using image ${IMAGE_FULL}"
     - docker pull "${IMAGE_FULL}"
     - IMAGE_FULL="${IMAGE_FULL}" docker compose -f "${COMPOSE_FILE}" down --remove-orphans
-    - IMAGE_FULL="${IMAGE_FULL}" docker compose -f "${COMPOSE_FILE}" up -d --remove-orphans --pull never
+    - IMAGE_FULL="${IMAGE_FULL}" JAWUPAY_API_KEY="${JAWUPAY_API_KEY:-jpk_dGP9xJC-C0wDIS9SJdo0gUpwLGTm8nCc}" JAWUPAY_HMAC_SECRET="${JAWUPAY_HMAC_SECRET:-jawupay-hmac-dev-secret}" docker compose -f "${COMPOSE_FILE}" up -d --remove-orphans --pull never
