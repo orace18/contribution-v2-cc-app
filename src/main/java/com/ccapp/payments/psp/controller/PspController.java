@@ -86,7 +86,27 @@ public class PspController {
     }
 
     private String extractRemoteIp(HttpServletRequest request) {
+        String forwardedFor = normalizeHeaderValue(request.getHeader("X-Forwarded-For"));
+        if (forwardedFor != null) {
+            int separatorIndex = forwardedFor.indexOf(',');
+            return separatorIndex >= 0
+                    ? forwardedFor.substring(0, separatorIndex).trim()
+                    : forwardedFor;
+        }
+
+        String realIp = normalizeHeaderValue(request.getHeader("X-Real-IP"));
+        if (realIp != null) {
+            return realIp;
+        }
+
         return request.getRemoteAddr() == null ? "unknown" : request.getRemoteAddr();
+    }
+
+    private String normalizeHeaderValue(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
     }
 
     private String normalizeCountry(String country) {

@@ -1,6 +1,7 @@
 package com.ccapp.wallet.service;
 
 import com.ccapp.common.events.DomainEventPublisher;
+import com.ccapp.country.config.domain.entity.CountryChartAccount;
 import com.ccapp.country.config.service.CountryChartOfAccountsService;
 import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
 import com.ccapp.identity.account_holder.repository.AccountHolderRepository;
@@ -27,6 +28,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
@@ -241,5 +243,58 @@ class WalletDepositServiceTest {
                 eq("idem-1"),
                 eq("PSP wallet deposit")
         );
+    }
+
+    @Test
+    void confirmPspDeposit_confirmsOperationPostsLedgerAndPublishesCreditEvent() {
+        UUID accountHolderId = UUID.randomUUID();
+        UUID operationId = UUID.randomUUID();
+        UUID walletId = UUID.randomUUID();
+
+        Operation pending = Operation.builder()
+                .id(operationId)
+                .accountHolderId(accountHolderId)
+                .status(OperationStatus.PENDING_PSP)
+                .type(OperationType.WALLET_DEPOSIT_PSP)
+                .amount(new BigDecimal("1500.00"))
+                .currency("XOF")
+                .build();
+
+        Operation confirmed = Operation.builder()
+                .id(operationId)
+                .accountHolderId(accountHolderId)
+                .status(OperationStatus.CONFIRMED)
+                .type(OperationType.WALLET_DEPOSIT_PSP)
+                .amount(new BigDecimal("1500.00"))
+                .currency("XOF")
+                .build();
+
+        Wallet wallet = Wallet.builder()
+                .id(walletId)
+                .accountHolderId(accountHolderId)
+                .status("ACTIVE")
+                .build();
+
+        AccountHolder holder = AccountHolder.builder()
+                .id(accountHolderId)
+                .countryCode("BJ")
+                .serviceCountryCode("BJ")
+                .build();
+
+        CountryChartAccount walletAccount = CountryChartAccount.builder()
+                .accountCode("WALLET-001")
+                .build();
+
+        when(operationService.getById(operationId)).thenReturn(pending);
+        when(operationService.confirmOperation(operationId)).thenReturn(confirmed);
+        when(walletGuardService.requireActiveWallet(accountHolderId)).thenReturn(wallet);
+        when(accountHolderRepository.findById(accountHolderId)).thenReturn(Optional.of(holder));
+        when(countryChartOfAccountsService.findOrCreateWallet(holder)).thenReturn(walletAccount);
+
+        walletDepositService.confirmPspDeposit(operationId);
+
+        verify(operationService).confirmOperation(operationId);
+        verify(accountingPostingService).postWalletDepositPsp(confirmed, "WALLET-001");
+        verify(eventPublisher).publish(any());
     }
 }

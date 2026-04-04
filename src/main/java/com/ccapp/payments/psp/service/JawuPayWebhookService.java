@@ -114,7 +114,7 @@ public class JawuPayWebhookService {
         Operation operation = findOperationForWebhook(paymentId, payoutId, providerReference)
                 .orElseThrow(() -> new BusinessException("Operation not found for JawuPay webhook identifiers"));
 
-        validateRequiredOperationId(request.operationId(), operation.getId());
+        validateOperationIdIfPresent(request.operationId(), operation.getId());
         verifyAmountCurrencyMatch(operation, requireAmount(request.amount()), requireCurrency(request.currency()));
         recordWebhookEvent(request, operation, paymentId, payoutId, providerReference);
 
@@ -343,11 +343,8 @@ public class JawuPayWebhookService {
         }
     }
 
-    private void validateRequiredOperationId(UUID requestOperationId, UUID operationId) {
-        if (requestOperationId == null) {
-            throw new BusinessException("operationId is required");
-        }
-        if (!requestOperationId.equals(operationId)) {
+    private void validateOperationIdIfPresent(UUID requestOperationId, UUID operationId) {
+        if (requestOperationId != null && !requestOperationId.equals(operationId)) {
             throw new BusinessException("Webhook operationId does not match stored operation");
         }
     }

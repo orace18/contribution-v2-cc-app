@@ -228,6 +228,34 @@ class JawuPayWebhookServiceTest {
     }
 
     @Test
+    void processWebhook_missingOperationId_acceptsWhenIdentifiersMatch() {
+        Operation op = pendingPspOperation(OperationType.WALLET_DEPOSIT_PSP);
+        when(operationService.findByPaymentIdOrPspReference(PAYMENT_ID)).thenReturn(Optional.of(op));
+        when(operationService.recordPspMetadata(eq(OPERATION_ID), any())).thenReturn(op);
+
+        Operation confirmed = confirmedOperation(OperationType.WALLET_DEPOSIT_PSP);
+        when(operationService.confirmOperation(OPERATION_ID)).thenReturn(confirmed);
+
+        JawuPayWebhookRequest request = new JawuPayWebhookRequest(
+                "JAWUPAY",
+                "SUCCESS",
+                PAYMENT_ID,
+                null,
+                null,
+                null,
+                null,
+                150000L,
+                "XOF",
+                "evt-operation-optional"
+        );
+
+        processWebhook(request, "127.0.0.1");
+
+        verify(operationService).confirmOperation(OPERATION_ID);
+        verify(walletDepositService).confirmPspDeposit(OPERATION_ID);
+    }
+
+    @Test
     void processWebhook_operationIdMismatch_rejected() {
         Operation op = pendingPspOperation(OperationType.WALLET_DEPOSIT_PSP);
         when(operationService.findByPaymentIdOrPspReference(PAYMENT_ID)).thenReturn(Optional.of(op));

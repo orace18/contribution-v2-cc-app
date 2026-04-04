@@ -95,7 +95,21 @@ class PspControllerTest {
                 controller.jawuPayWebhook(rawBody, "sig", remoteRequest("9.9.9.9", "1.1.1.1, 2.2.2.2"));
 
         assertThat(response.getStatusCode().value()).isEqualTo(200);
-        verify(jawuPayWebhookService).processWebhook(eq(request), any(byte[].class), eq("sig"), eq("9.9.9.9"));
+        verify(jawuPayWebhookService).processWebhook(eq(request), any(byte[].class), eq("sig"), eq("1.1.1.1"));
+    }
+
+    @Test
+    void jawuPayWebhook_xRealIpFallback_isAccepted() {
+        JawuPayWebhookRequest request = validRequest();
+        byte[] rawBody = rawBody(request);
+        MockHttpServletRequest httpRequest = remoteRequest("9.9.9.9", null);
+        httpRequest.addHeader("X-Real-IP", "3.3.3.3");
+
+        ResponseEntity<CommonResponse<Void>> response =
+                controller.jawuPayWebhook(rawBody, "sig", httpRequest);
+
+        assertThat(response.getStatusCode().value()).isEqualTo(200);
+        verify(jawuPayWebhookService).processWebhook(eq(request), any(byte[].class), eq("sig"), eq("3.3.3.3"));
     }
 
     @Test
