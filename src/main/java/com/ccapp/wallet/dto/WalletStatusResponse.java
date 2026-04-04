@@ -4,6 +4,7 @@ import java.util.UUID;
 
 public record WalletStatusResponse(
         UUID walletId,
-        boolean active
+        boolean active,
+        boolean hasPin
 ) {
 }

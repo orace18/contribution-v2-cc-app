@@ -60,10 +60,10 @@ public class WalletController {
         return walletBalanceService.findActiveWallet(accountHolderId)
                 .map(wallet -> ResponseEntity.ok(CommonResponse.success(
                         "Wallet status",
-                        new WalletStatusResponse(wallet.getId(), true))))
+                        new WalletStatusResponse(wallet.getId(), true, wallet.getPinHash() != null))))
                 .orElseGet(() -> ResponseEntity.ok(CommonResponse.success(
                         "Wallet status",
-                        new WalletStatusResponse(null, false))));
+                        new WalletStatusResponse(null, false, false))));
     }
 
     @GetMapping("/balance")
