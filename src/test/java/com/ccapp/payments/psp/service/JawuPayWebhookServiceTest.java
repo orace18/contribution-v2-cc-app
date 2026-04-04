@@ -519,6 +519,37 @@ class JawuPayWebhookServiceTest {
     }
 
     @Test
+    void checkAndApplyPaymentStatus_providerReferenceConflict_keepsExistingReferenceAndConfirms() {
+        Operation op = pendingPspOperation(OperationType.WALLET_DEPOSIT_PSP);
+        op.setPaymentId(PAYMENT_ID);
+        op.setProviderReference("sbx-" + PAYMENT_ID);
+        when(operationService.findByPaymentIdOrPspReference(PAYMENT_ID)).thenReturn(Optional.of(op));
+
+        JawuPayPaymentResponse payment = new JawuPayPaymentResponse(
+                UUID.fromString(PAYMENT_ID), null, "SUCCESS",
+                150000L, "XOF", "BJ", "MOBILE_MONEY_MTN", "SANDBOX", PAYMENT_ID,
+                OffsetDateTime.now(), OffsetDateTime.now());
+        when(pspClient.getPayment(PAYMENT_ID)).thenReturn(payment);
+        when(operationService.recordPspMetadata(eq(OPERATION_ID), any())).thenReturn(op);
+
+        Operation confirmed = confirmedOperation(OperationType.WALLET_DEPOSIT_PSP);
+        when(operationService.confirmOperation(OPERATION_ID)).thenReturn(confirmed);
+
+        service.checkAndApplyPaymentStatus(PAYMENT_ID);
+
+        ArgumentCaptor<OperationService.PspMetadata> metadataCaptor =
+                ArgumentCaptor.forClass(OperationService.PspMetadata.class);
+        verify(operationService).recordPspMetadata(eq(OPERATION_ID), metadataCaptor.capture());
+        assertThat(metadataCaptor.getValue().paymentId()).isEqualTo(PAYMENT_ID);
+        assertThat(metadataCaptor.getValue().providerReference()).isEqualTo("sbx-" + PAYMENT_ID);
+        assertThat(metadataCaptor.getValue().paymentMethod()).isEqualTo("MOBILE_MONEY_MTN");
+        assertThat(metadataCaptor.getValue().pspCountry()).isEqualTo("BJ");
+        assertThat(metadataCaptor.getValue().pspStatus()).isEqualTo("SUCCESS");
+        verify(operationService).confirmOperation(OPERATION_ID);
+        verify(walletDepositService).confirmPspDeposit(OPERATION_ID);
+    }
+
+    @Test
     void markOperationAsTimedOut_marksFailedWithoutCreditingWallet() {
         Operation op = pendingPspOperation(OperationType.WALLET_DEPOSIT_PSP);
 
@@ -555,6 +586,32 @@ class JawuPayWebhookServiceTest {
         verify(operationService).recordPspMetadata(eq(OPERATION_ID), metadataCaptor.capture());
         assertThat(metadataCaptor.getValue().payoutId()).isEqualTo(PAYOUT_ID);
         assertThat(metadataCaptor.getValue().providerReference()).isEqualTo("PAYOUT-REF-9");
+        assertThat(metadataCaptor.getValue().paymentMethod()).isEqualTo("MOBILE_MONEY_MTN");
+        assertThat(metadataCaptor.getValue().pspStatus()).isEqualTo("SUCCESS");
+        verify(walletWithdrawalService).confirmWithdrawal(OPERATION_ID);
+    }
+
+    @Test
+    void checkAndApplyPayoutStatus_providerReferenceConflict_keepsExistingReferenceAndConfirms() {
+        Operation op = pendingPspOperation(OperationType.WALLET_WITHDRAWAL);
+        op.setPayoutId(PAYOUT_ID);
+        op.setProviderReference("sbx-" + PAYOUT_ID);
+        when(operationService.findByPayoutIdOrPspReference(PAYOUT_ID)).thenReturn(Optional.of(op));
+
+        JawuPayPayoutDetailsResponse payout = new JawuPayPayoutDetailsResponse(
+                UUID.fromString(PAYOUT_ID), null, "SUCCESS",
+                150000L, "XOF", "BJ", "MOBILE_MONEY_MTN", "SANDBOX", PAYOUT_ID,
+                OffsetDateTime.now(), OffsetDateTime.now());
+        when(pspClient.getPayout(PAYOUT_ID)).thenReturn(payout);
+        when(operationService.recordPspMetadata(eq(OPERATION_ID), any())).thenReturn(op);
+
+        service.checkAndApplyPayoutStatus(PAYOUT_ID);
+
+        ArgumentCaptor<OperationService.PspMetadata> metadataCaptor =
+                ArgumentCaptor.forClass(OperationService.PspMetadata.class);
+        verify(operationService).recordPspMetadata(eq(OPERATION_ID), metadataCaptor.capture());
+        assertThat(metadataCaptor.getValue().payoutId()).isEqualTo(PAYOUT_ID);
+        assertThat(metadataCaptor.getValue().providerReference()).isEqualTo("sbx-" + PAYOUT_ID);
         assertThat(metadataCaptor.getValue().paymentMethod()).isEqualTo("MOBILE_MONEY_MTN");
         assertThat(metadataCaptor.getValue().pspStatus()).isEqualTo("SUCCESS");
         verify(walletWithdrawalService).confirmWithdrawal(OPERATION_ID);

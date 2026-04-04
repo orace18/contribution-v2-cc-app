@@ -182,27 +182,10 @@ public class JawuPayWebhookService {
                 payment.status(), operation.getId(), paymentLookupReference);
         verifyAmountCurrencyMatch(operation, payment.amount(), payment.currency());
 
-        Operation updatedOperation;
-        try {
-            updatedOperation = operationService.recordPspMetadata(
-                    operation.getId(),
-                    PspMetadata.payment(
-                            resolvePaymentId(payment, operation),
-                            firstNonBlank(payment.providerReference(), operation.getProviderReference()),
-                            null,
-                            payment.paymentMethodId(),
-                            payment.status(),
-                            payment.country()
-                    )
-            );
-        } catch (ConflictException ex) {
-            log.warn("Reconciliation providerReference conflict for lookupReference={}, applying status-only update",
-                    paymentLookupReference);
-            updatedOperation = operationService.recordPspMetadata(
-                    operation.getId(),
-                    PspMetadata.statusOnly(payment.status())
-            );
-        }
+        Operation updatedOperation = operationService.recordPspMetadata(
+                operation.getId(),
+                buildReconciliationPaymentMetadata(operation, payment, paymentLookupReference)
+        );
 
         applyPspStatusToOperation(updatedOperation, payment.status());
     }
@@ -231,24 +214,10 @@ public class JawuPayWebhookService {
         JawuPayPayoutDetailsResponse payout = pspClient.getPayout(payoutId);
         verifyAmountCurrencyMatch(operation, payout.amount(), payout.currency());
 
-        Operation updatedOperation;
-        try {
-            updatedOperation = operationService.recordPspMetadata(
-                    operation.getId(),
-                    PspMetadata.payout(
-                            payout.payoutId() == null ? payoutId : payout.payoutId().toString(),
-                            payout.providerReference(),
-                            payout.paymentMethodId(),
-                            payout.status()
-                    )
-            );
-        } catch (ConflictException ex) {
-            log.warn("Reconciliation providerReference conflict for payoutId={}, applying status-only update", payoutId);
-            updatedOperation = operationService.recordPspMetadata(
-                    operation.getId(),
-                    PspMetadata.statusOnly(payout.status())
-            );
-        }
+        Operation updatedOperation = operationService.recordPspMetadata(
+                operation.getId(),
+                buildReconciliationPayoutMetadata(operation, payout, payoutId)
+        );
 
         applyPspStatusToOperation(updatedOperation, payout.status());
     }
@@ -537,6 +506,90 @@ public class JawuPayWebhookService {
             return payment.paymentId().toString();
         }
         return normalizeIdentifier(operation.getPaymentId());
+    }
+
+    private PspMetadata buildReconciliationPaymentMetadata(Operation operation,
+                                                           JawuPayPaymentResponse payment,
+                                                           String paymentLookupReference) {
+        return PspMetadata.payment(
+                preferExistingWhenConflict(
+                        "paymentId",
+                        operation.getPaymentId(),
+                        resolvePaymentId(payment, operation),
+                        "lookupReference",
+                        paymentLookupReference
+                ),
+                preferExistingWhenConflict(
+                        "providerReference",
+                        operation.getProviderReference(),
+                        firstNonBlank(payment.providerReference(), operation.getProviderReference()),
+                        "lookupReference",
+                        paymentLookupReference
+                ),
+                null,
+                preferExistingWhenConflict(
+                        "paymentMethod",
+                        operation.getPaymentMethod(),
+                        payment.paymentMethodId(),
+                        "lookupReference",
+                        paymentLookupReference
+                ),
+                payment.status(),
+                preferExistingWhenConflict(
+                        "pspCountry",
+                        operation.getPspCountry(),
+                        payment.country(),
+                        "lookupReference",
+                        paymentLookupReference
+                )
+        );
+    }
+
+    private PspMetadata buildReconciliationPayoutMetadata(Operation operation,
+                                                          JawuPayPayoutDetailsResponse payout,
+                                                          String payoutLookupReference) {
+        String payoutId = payout.payoutId() == null ? payoutLookupReference : payout.payoutId().toString();
+        return PspMetadata.payout(
+                preferExistingWhenConflict(
+                        "payoutId",
+                        operation.getPayoutId(),
+                        payoutId,
+                        "payoutId",
+                        payoutLookupReference
+                ),
+                preferExistingWhenConflict(
+                        "providerReference",
+                        operation.getProviderReference(),
+                        payout.providerReference(),
+                        "payoutId",
+                        payoutLookupReference
+                ),
+                preferExistingWhenConflict(
+                        "paymentMethod",
+                        operation.getPaymentMethod(),
+                        payout.paymentMethodId(),
+                        "payoutId",
+                        payoutLookupReference
+                ),
+                payout.status()
+        );
+    }
+
+    private String preferExistingWhenConflict(String fieldLabel,
+                                              String existingValue,
+                                              String candidateValue,
+                                              String lookupLabel,
+                                              String lookupValue) {
+        String normalizedExisting = normalizeIdentifier(existingValue);
+        String normalizedCandidate = normalizeIdentifier(candidateValue);
+        if (normalizedCandidate == null) {
+            return normalizedExisting;
+        }
+        if (normalizedExisting != null && !normalizedExisting.equals(normalizedCandidate)) {
+            log.warn("Reconciliation {} conflict for {}={}, keeping existing value", fieldLabel, lookupLabel, lookupValue);
+            return normalizedExisting;
+        }
+        return normalizedCandidate;
     }
 
     private String firstNonBlank(String first, String second) {
