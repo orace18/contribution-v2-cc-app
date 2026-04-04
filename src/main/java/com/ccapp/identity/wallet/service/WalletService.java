@@ -1,8 +1,11 @@
 package com.ccapp.identity.wallet.service;
 
+import com.ccapp.country.config.service.CountryChartOfAccountsService;
+import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
 import com.ccapp.identity.account_holder.service.AccountHolderService;
 import com.ccapp.identity.wallet.domain.entity.Wallet;
 import com.ccapp.identity.wallet.repository.WalletRepository;
+import com.ccapp.wallet.repository.WalletLedgerRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -18,17 +21,21 @@ public class WalletService {
 
     private final WalletRepository walletRepository;
     private final AccountHolderService accountHolderService;
+    private final CountryChartOfAccountsService countryChartOfAccountsService;
+    private final WalletLedgerRepository walletLedgerRepository;
 
     @Transactional
     public Wallet createWallet(UUID accountHolderId, String provider, String mobileMoneyNumber, String status) {
         log.info("Identity wallet create accountHolderId={} provider={} status={}", accountHolderId, provider, status);
-        accountHolderService.getById(accountHolderId);
+        AccountHolder accountHolder = accountHolderService.getById(accountHolderId);
         Wallet saved = walletRepository.save(Wallet.builder()
                 .accountHolderId(accountHolderId)
                 .provider(provider)
                 .mobileMoneyNumber(mobileMoneyNumber)
                 .status(status)
                 .build());
+        var walletLedgerAccount = countryChartOfAccountsService.findOrCreateWallet(accountHolder);
+        walletLedgerRepository.createBalanceIfMissing(walletLedgerAccount.getAccountCode(), walletLedgerAccount.getCurrency());
         log.info("Identity wallet created walletId={} accountHolderId={}", saved.getId(), saved.getAccountHolderId());
         return saved;
     }

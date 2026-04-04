@@ -33,6 +33,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Locale;
 import java.util.UUID;
 
 @RestController
@@ -86,19 +87,19 @@ public class WalletController {
     }
 
     @GetMapping("/balance")
-    @Operation(summary = "Get wallet balance (derived from ledger)")
+    @Operation(summary = "Get wallet balance (derived from ledger, zero when no transactions exist yet)")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Balance retrieved",
                     content = @Content(schema = @Schema(implementation = CommonResponse.class))),
-            @ApiResponse(responseCode = "401", description = "Unauthenticated"),
-            @ApiResponse(responseCode = "404", description = "No active wallet found")
+            @ApiResponse(responseCode = "401", description = "Unauthenticated")
     })
     public ResponseEntity<CommonResponse<WalletBalanceResponse>> balance(
             @RequestParam String currency) {
         UUID accountHolderId = SecurityUtils.currentAccountHolderId();
+        String normalizedCurrency = currency.trim().toUpperCase(Locale.ROOT);
         return ResponseEntity.ok(CommonResponse.success(
                 "Wallet balance",
-                walletBalanceService.getBalance(accountHolderId, currency.toUpperCase())));
+                walletBalanceService.getBalance(accountHolderId, normalizedCurrency)));
     }
 
     @PostMapping("/pin")
