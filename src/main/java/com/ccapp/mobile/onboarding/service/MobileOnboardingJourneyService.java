@@ -9,6 +9,7 @@ import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
 import com.ccapp.identity.account_holder.service.AccountHolderService;
 import com.ccapp.identity.delegation.domain.enums.PermissionLevel;
 import com.ccapp.identity.delegation.service.AccessControlService;
+import com.ccapp.identity.service.IdentityOnboardingService;
 import com.ccapp.identity.verification.domain.enums.PhoneVerificationStatus;
 import com.ccapp.identity.verification.repository.PhoneVerificationRepository;
 import com.ccapp.identity.wallet.domain.entity.Wallet;
@@ -80,6 +81,7 @@ public class MobileOnboardingJourneyService {
     private final MlmGraphSyncService mlmGraphSyncService;
     private final DomainEventPublisher domainEventPublisher;
     private final CountryContextService countryContextService;
+    private final IdentityOnboardingService identityOnboardingService;
     private final PhoneVerificationRepository phoneVerificationRepository;
     private final WalletRepository walletRepository;
     private final WalletService walletService;
@@ -115,11 +117,8 @@ public class MobileOnboardingJourneyService {
         MobileOnboardingJourney journey = getOrCreate(accountHolderId);
         promoteStatus(journey, MobileOnboardingJourneyStatus.AUTHENTICATED);
 
-        if (journey.getStatus().ordinal() < MobileOnboardingJourneyStatus.ACTIVE_MEMBER.ordinal()) {
-            return journeyRepository.save(journey);
-        }
-
-        if (promoteStatus(journey, MobileOnboardingJourneyStatus.PHONE_VERIFIED)) {
+        if (isIdentityOnboardingCompleted(accountHolderId)
+                && promoteStatus(journey, MobileOnboardingJourneyStatus.PHONE_VERIFIED)) {
             publish(accountHolderId, MobileOnboardingEventType.PHONE_VERIFIED, Map.of());
         }
         activateWalletIfEligible(journey, normalizeOptional(phoneNumber), accountHolderId);
@@ -429,13 +428,14 @@ public class MobileOnboardingJourneyService {
             promoteStatus(copy, MobileOnboardingJourneyStatus.ACTIVE_MEMBER);
         }
 
+        boolean identityCompleted = isIdentityOnboardingCompleted(accountHolderId);
         String verifiedPhoneNumber = findVerifiedPhoneNumber(accountHolderId);
-        if (verifiedPhoneNumber != null && copy.getStatus().ordinal() >= MobileOnboardingJourneyStatus.ACTIVE_MEMBER.ordinal()) {
+        if (identityCompleted && verifiedPhoneNumber != null) {
             promoteStatus(copy, MobileOnboardingJourneyStatus.PHONE_VERIFIED);
         }
 
-        if (verifiedPhoneNumber != null
-                && copy.getStatus().ordinal() >= MobileOnboardingJourneyStatus.ACTIVE_MEMBER.ordinal()
+        if (identityCompleted
+                && verifiedPhoneNumber != null
                 && walletRepository.findFirstByAccountHolderIdAndStatusOrderByCreatedAtDesc(accountHolderId, "ACTIVE").isPresent()) {
             promoteStatus(copy, MobileOnboardingJourneyStatus.WALLET_ACTIVATED);
         }
@@ -544,7 +544,7 @@ public class MobileOnboardingJourneyService {
     private void activateWalletIfEligible(MobileOnboardingJourney journey,
                                           String verifiedPhoneNumber,
                                           UUID actorUserId) {
-        if (journey.getStatus().ordinal() < MobileOnboardingJourneyStatus.ACTIVE_MEMBER.ordinal()) {
+        if (!isIdentityOnboardingCompleted(journey.getAccountHolderId())) {
             return;
         }
 
@@ -609,6 +609,10 @@ public class MobileOnboardingJourneyService {
                 )
                 .map(verification -> normalizeOptional(verification.getPhoneNumber()))
                 .orElse(null);
+    }
+
+    private boolean isIdentityOnboardingCompleted(UUID accountHolderId) {
+        return identityOnboardingService.getOnboardingStatus(accountHolderId).onboardingCompleted();
     }
 
     private SubscriptionPlan resolveSelectedPlan(MobileOnboardingJourney journey, UUID accountHolderId) {

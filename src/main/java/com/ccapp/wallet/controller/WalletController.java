@@ -15,6 +15,7 @@ import com.ccapp.wallet.dto.WalletReserveResponse;
 import com.ccapp.wallet.dto.WalletWithdrawRequest;
 import com.ccapp.wallet.dto.WalletWithdrawResponse;
 import com.ccapp.wallet.service.WalletBalanceService;
+import com.ccapp.wallet.service.WalletActivationService;
 import com.ccapp.wallet.service.WalletDepositService;
 import com.ccapp.wallet.service.WalletPaymentService;
 import com.ccapp.wallet.service.WalletReservationService;
@@ -42,6 +43,7 @@ import java.util.UUID;
 public class WalletController {
 
     private final WalletBalanceService walletBalanceService;
+    private final WalletActivationService walletActivationService;
     private final WalletPaymentService walletPaymentService;
     private final WalletDepositService walletDepositService;
     private final WalletWithdrawalService walletWithdrawalService;
@@ -57,6 +59,7 @@ public class WalletController {
     })
     public ResponseEntity<CommonResponse<WalletStatusResponse>> status() {
         UUID accountHolderId = SecurityUtils.currentAccountHolderId();
+        walletActivationService.activateIfEligible(accountHolderId);
         return walletBalanceService.findActiveWallet(accountHolderId)
                 .map(wallet -> ResponseEntity.ok(CommonResponse.success(
                         "Wallet status",
@@ -64,6 +67,22 @@ public class WalletController {
                 .orElseGet(() -> ResponseEntity.ok(CommonResponse.success(
                         "Wallet status",
                         new WalletStatusResponse(null, false, false))));
+    }
+
+    @PostMapping("/activate")
+    @Operation(summary = "Activate the wallet when identity onboarding and phone verification are complete")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Wallet activated"),
+            @ApiResponse(responseCode = "400", description = "Identity onboarding incomplete or phone not verified"),
+            @ApiResponse(responseCode = "401", description = "Unauthenticated")
+    })
+    public ResponseEntity<CommonResponse<WalletStatusResponse>> activate() {
+        UUID accountHolderId = SecurityUtils.currentAccountHolderId();
+        var wallet = walletActivationService.activate(accountHolderId);
+        return ResponseEntity.ok(CommonResponse.success(
+                "Wallet activated",
+                new WalletStatusResponse(wallet.getId(), true, wallet.getPinHash() != null)
+        ));
     }
 
     @GetMapping("/balance")

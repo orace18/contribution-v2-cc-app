@@ -6,6 +6,9 @@ import com.ccapp.country.dto.CountryContext;
 import com.ccapp.country.service.CountryContextService;
 import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
 import com.ccapp.identity.account_holder.service.AccountHolderService;
+import com.ccapp.identity.domain.enums.OnboardingStep;
+import com.ccapp.identity.dto.OnboardingStatusResponse;
+import com.ccapp.identity.service.IdentityOnboardingService;
 import com.ccapp.identity.delegation.service.AccessControlService;
 import com.ccapp.identity.verification.domain.entity.PhoneVerification;
 import com.ccapp.identity.verification.domain.enums.PhoneVerificationChannel;
@@ -117,6 +120,8 @@ class MobileOnboardingJourneyServiceTest {
     @Mock
     private CountryContextService countryContextService;
     @Mock
+    private IdentityOnboardingService identityOnboardingService;
+    @Mock
     private PhoneVerificationRepository phoneVerificationRepository;
     @Mock
     private WalletRepository walletRepository;
@@ -142,6 +147,7 @@ class MobileOnboardingJourneyServiceTest {
         when(countryContextService.resolve(ACCOUNT_ID))
                 .thenReturn(new CountryContext("BJ", "BJ", "XOF"));
         when(subscriptionService.resolveCatalogCountryCode("BJ")).thenReturn("BJ");
+        when(identityOnboardingService.getOnboardingStatus(ACCOUNT_ID)).thenReturn(identityCompleted());
         when(mlmGraphSyncService.isNetworkReady(ACCOUNT_ID)).thenReturn(true);
         when(mlmMemberLinkRepository.existsById(ACCOUNT_ID)).thenReturn(false);
         when(mlmMemberLinkRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -318,16 +324,12 @@ class MobileOnboardingJourneyServiceTest {
                 .redirectUrl("https://checkout/reentry")
                 .planId(PLAN_ID)
                 .build();
-        when(operationService.createInitiatedOperation(
+        when(operationRepository.findFirstByAccountHolderIdAndTypeAndPlanIdAndStatusInOrderByCreatedAtDesc(
                 eq(ACCOUNT_ID),
-                eq(ACTOR_ID),
                 eq(OperationType.SUBSCRIPTION),
-                eq(new BigDecimal("15000.0000")),
-                eq("XOF"),
-                any(),
-                any(),
-                eq(PLAN_ID)
-        )).thenReturn(pending);
+                eq(PLAN_ID),
+                any()
+        )).thenReturn(Optional.of(pending));
         when(membershipService.createPendingMembership(OPERATION_ID, ACCOUNT_ID, paidPlan))
                 .thenReturn(Membership.builder().status(MembershipStatus.PENDING).build());
 
@@ -459,6 +461,45 @@ class MobileOnboardingJourneyServiceTest {
         assertTrue(response.completedSteps().contains("PLAN_SELECTED"));
     }
 
+    @Test
+    void getStatus_shouldExposePhoneVerifiedWithoutPlanSelectionWhenIdentityIsCompleted() {
+        MobileOnboardingJourney journey = journey(MobileOnboardingJourneyStatus.COUNTRY_SELECTED, false, null, null);
+        when(journeyRepository.findByAccountHolderId(ACCOUNT_ID)).thenReturn(Optional.of(journey));
+        when(accountHolderService.getById(ACCOUNT_ID)).thenReturn(AccountHolder.builder()
+                .id(ACCOUNT_ID)
+                .countryCode("BJ")
+                .serviceCountryCode("BJ")
+                .build());
+        when(phoneVerificationRepository.findTopByRequesterAccountHolderIdAndStatusOrderByVerifiedAtDescCreatedAtDesc(
+                ACCOUNT_ID,
+                PhoneVerificationStatus.VERIFIED
+        )).thenReturn(Optional.of(PhoneVerification.builder()
+                .id(UUID.randomUUID())
+                .requesterAccountHolderId(ACCOUNT_ID)
+                .phoneNumber("22961000000")
+                .channel(PhoneVerificationChannel.SMS)
+                .status(PhoneVerificationStatus.VERIFIED)
+                .codeHash("hash")
+                .attemptCount(0)
+                .maxAttempts(5)
+                .sendCount(1)
+                .maxSendCount(3)
+                .lastSentAt(OffsetDateTime.now())
+                .resendAvailableAt(OffsetDateTime.now())
+                .expiresAt(OffsetDateTime.now().plusMinutes(5))
+                .verifiedAt(OffsetDateTime.now())
+                .build()));
+        when(membershipService.findLatestMembership(ACCOUNT_ID)).thenReturn(Optional.empty());
+        when(mlmRelationshipRepository.existsByDescendantId(ACCOUNT_ID)).thenReturn(false);
+
+        MobileOnboardingStatusResponse response = mobileOnboardingJourneyService.getStatus(ACCOUNT_ID);
+
+        assertEquals("PHONE_VERIFIED", response.currentStatus());
+        assertNotNull(response.nextStep());
+        assertEquals("WAIT_WALLET_ACTIVATION", response.nextStep().code());
+        assertFalse(response.isActive());
+    }
+
     private MobileOnboardingJourney journey(MobileOnboardingJourneyStatus status,
                                             boolean sponsorSet,
                                             UUID sponsorId,
@@ -498,5 +539,21 @@ class MobileOnboardingJourneyServiceTest {
                 .map(MobileOnboardingEvent::eventType)
                 .toList();
         assertTrue(eventTypes.contains(expectedType), "Expected event not published: " + expectedType);
+    }
+
+    private OnboardingStatusResponse identityCompleted() {
+        return new OnboardingStatusResponse(
+                ACCOUNT_ID,
+                OnboardingStep.COMPLETED,
+                3,
+                3,
+                new BigDecimal("100.00"),
+                true,
+                true,
+                true,
+                true,
+                OffsetDateTime.now(),
+                null
+        );
     }
 }
