@@ -9,12 +9,12 @@ import org.springframework.test.util.ReflectionTestUtils;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import java.time.OffsetDateTime;
 
 import java.util.List;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
@@ -34,84 +34,82 @@ class PspReconciliationJobTest {
     private PspReconciliationJob pspReconciliationJob;
 
     @Test
-    void reconcileStuckOperations_shouldReconcilePaymentAndPayout() {
+    void reconcileStuckOperations_shouldReconcilePendingPayment() {
         Operation payment = pendingOperation();
         payment.setPaymentId("PAYMENT-123");
-        Operation payout = pendingOperation();
-        payout.setPayoutId("PAYOUT-456");
 
-        when(operationRepository.findBatchForPspReconciliation(
-                eq(OperationStatus.PENDING_PSP), eq("RECONCILIATION_REQUIRED"), any(), any()))
-                .thenReturn(List.of(payment, payout));
+        when(operationRepository.findPendingPaymentBatchForPspReconciliation(
+                eq(OperationStatus.PENDING_PSP), any(), any()))
+                .thenReturn(List.of(payment));
 
         pspReconciliationJob.reconcileStuckOperations();
 
-        verify(jawuPayWebhookService).checkAndApplyPaymentStatus("PAYMENT-123");
-        verify(jawuPayWebhookService).checkAndApplyPayoutStatus("PAYOUT-456");
-    }
-
-    @Test
-    void reconcileStuckOperations_shouldSkipWhenIdentifiersMissing() {
-        Operation missingIdentifiers = pendingOperation();
-
-        when(operationRepository.findBatchForPspReconciliation(
-                eq(OperationStatus.PENDING_PSP), eq("RECONCILIATION_REQUIRED"), any(), any()))
-                .thenReturn(List.of(missingIdentifiers));
-
-        pspReconciliationJob.reconcileStuckOperations();
-
-        verify(jawuPayWebhookService, never()).checkAndApplyPaymentStatus(anyString());
-        verify(jawuPayWebhookService, never()).checkAndApplyPayoutStatus(anyString());
+        verify(jawuPayWebhookService).checkAndApplyPaymentStatus(payment);
     }
 
     @Test
     void reconcileStuckOperations_shouldContinueWhenOneCallFails() {
         Operation payment = pendingOperation();
         payment.setPaymentId("PAYMENT-ERR");
-        Operation payout = pendingOperation();
-        payout.setPayoutId("PAYOUT-OK");
+        Operation nextPayment = pendingOperation();
+        nextPayment.setProviderReference("PAYMENT-OK");
 
-        when(operationRepository.findBatchForPspReconciliation(
-                eq(OperationStatus.PENDING_PSP), eq("RECONCILIATION_REQUIRED"), any(), any()))
-                .thenReturn(List.of(payment, payout));
+        when(operationRepository.findPendingPaymentBatchForPspReconciliation(
+                eq(OperationStatus.PENDING_PSP), any(), any()))
+                .thenReturn(List.of(payment, nextPayment));
         doThrow(new RuntimeException("PSP unavailable"))
-                .when(jawuPayWebhookService).checkAndApplyPaymentStatus("PAYMENT-ERR");
+                .when(jawuPayWebhookService).checkAndApplyPaymentStatus(payment);
 
         pspReconciliationJob.reconcileStuckOperations();
 
-        verify(jawuPayWebhookService).checkAndApplyPaymentStatus("PAYMENT-ERR");
-        verify(jawuPayWebhookService).checkAndApplyPayoutStatus("PAYOUT-OK");
+        verify(jawuPayWebhookService).checkAndApplyPaymentStatus(payment);
+        verify(jawuPayWebhookService).checkAndApplyPaymentStatus(nextPayment);
     }
 
     @Test
-    void reconcileStuckOperations_shouldProcessReconciliationRequiredOperations() {
-        Operation reconciliationRequired = pendingOperation();
-        reconciliationRequired.setStatus(OperationStatus.FAILED);
-        reconciliationRequired.setPspStatus("RECONCILIATION_REQUIRED");
-        reconciliationRequired.setPaymentId("PAYMENT-RETRY");
+    void reconcileStuckOperations_shouldMarkTimedOutOperationsAsFailed() {
+        Operation expiredPayment = pendingOperation();
+        expiredPayment.setPaymentId("PAYMENT-OLD");
+        expiredPayment.setCreatedAt(OffsetDateTime.now().minusHours(25));
 
-        when(operationRepository.findBatchForPspReconciliation(
-                eq(OperationStatus.PENDING_PSP), eq("RECONCILIATION_REQUIRED"), any(), any()))
-                .thenReturn(List.of(reconciliationRequired));
+        when(operationRepository.findPendingPaymentBatchForPspReconciliation(
+                eq(OperationStatus.PENDING_PSP), any(), any()))
+                .thenReturn(List.of(expiredPayment));
 
         pspReconciliationJob.reconcileStuckOperations();
 
-        verify(jawuPayWebhookService).checkAndApplyPaymentStatus("PAYMENT-RETRY");
+        verify(jawuPayWebhookService).markOperationAsTimedOut(expiredPayment);
+        verify(jawuPayWebhookService, never()).checkAndApplyPaymentStatus(any(Operation.class));
+    }
+
+    @Test
+    void reconcileStuckOperations_shouldSkipTimedOutRuleWhenCreatedAtMissing() {
+        Operation payment = pendingOperation();
+        payment.setProviderReference("PROVIDER-REF-1");
+        payment.setCreatedAt(null);
+
+        when(operationRepository.findPendingPaymentBatchForPspReconciliation(
+                eq(OperationStatus.PENDING_PSP), any(), any()))
+                .thenReturn(List.of(payment));
+
+        pspReconciliationJob.reconcileStuckOperations();
+
+        verify(jawuPayWebhookService).checkAndApplyPaymentStatus(payment);
+        verify(jawuPayWebhookService, never()).markOperationAsTimedOut(any(Operation.class));
     }
 
     @Test
     void reconcileStuckOperations_shouldHonorConfiguredBatchSize() {
         ReflectionTestUtils.setField(pspReconciliationJob, "batchSize", 25);
 
-        when(operationRepository.findBatchForPspReconciliation(
-                eq(OperationStatus.PENDING_PSP), eq("RECONCILIATION_REQUIRED"), any(), any()))
+        when(operationRepository.findPendingPaymentBatchForPspReconciliation(
+                eq(OperationStatus.PENDING_PSP), any(), any()))
                 .thenReturn(List.of());
 
         pspReconciliationJob.reconcileStuckOperations();
 
-        verify(operationRepository).findBatchForPspReconciliation(
+        verify(operationRepository).findPendingPaymentBatchForPspReconciliation(
                 eq(OperationStatus.PENDING_PSP),
-                eq("RECONCILIATION_REQUIRED"),
                 any(),
                 argThat(pageable -> pageable.getPageNumber() == 0 && pageable.getPageSize() == 25));
     }
@@ -121,6 +119,7 @@ class PspReconciliationJobTest {
         operation.setId(UUID.randomUUID());
         operation.setStatus(OperationStatus.PENDING_PSP);
         operation.setPspStatus("PENDING_PSP");
+        operation.setCreatedAt(OffsetDateTime.now().minusMinutes(2));
         return operation;
     }
 }

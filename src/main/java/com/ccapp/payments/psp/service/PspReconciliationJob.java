@@ -18,27 +18,30 @@ import java.util.List;
 @Slf4j
 public class PspReconciliationJob {
 
-    private static final String RECONCILIATION_REQUIRED = "RECONCILIATION_REQUIRED";
-
     private final OperationRepository operationRepository;
     private final JawuPayWebhookService jawuPayWebhookService;
 
-    @Value("${psp.jawupay.reconciliation.lookback-minutes:2}")
-    private long lookbackMinutes = 2;
+    @Value("${psp.jawupay.reconciliation.lookback-minutes:1}")
+    private long lookbackMinutes = 1;
 
-    @Value("${psp.jawupay.reconciliation.batch-size:200}")
-    private int batchSize = 200;
+    @Value("${psp.jawupay.reconciliation.max-age-hours:24}")
+    private long maxAgeHours = 24;
 
-    @Scheduled(cron = "${psp.jawupay.reconciliation.cron:0 */2 * * * *}",
-            zone = "${psp.jawupay.reconciliation.zone:Africa/Porto-Novo}")
+    @Value("${psp.jawupay.reconciliation.batch-size:50}")
+    private int batchSize = 50;
+
+    @Scheduled(fixedDelayString = "${psp.jawupay.reconciliation.fixed-delay-ms:60000}")
     public void reconcileStuckOperations() {
-        OffsetDateTime cutoff = OffsetDateTime.now().minusMinutes(Math.max(1, lookbackMinutes));
+        log.info("PSP reconciliation check started");
+
+        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime cutoff = now.minusMinutes(Math.max(1, lookbackMinutes));
+        OffsetDateTime maxAgeCutoff = now.minusHours(Math.max(1, maxAgeHours));
         int effectiveBatchSize = Math.max(1, batchSize);
 
         List<Operation> stalePending = operationRepository
-                .findBatchForPspReconciliation(
+                .findPendingPaymentBatchForPspReconciliation(
                         OperationStatus.PENDING_PSP,
-                        RECONCILIATION_REQUIRED,
                         cutoff,
                         PageRequest.of(0, effectiveBatchSize)
                 );
@@ -48,31 +51,22 @@ public class PspReconciliationJob {
 
         for (Operation operation : stalePending) {
             try {
-                String paymentId = normalizeIdentifier(operation.getPaymentId());
-                if (paymentId != null) {
-                    jawuPayWebhookService.checkAndApplyPaymentStatus(paymentId);
+                log.info("Checking operation {}", operation.getId());
+                if (isOlderThan(operation, maxAgeCutoff)) {
+                    log.warn("PSP reconciliation timeout reached for operationId={} createdAt={}",
+                            operation.getId(), operation.getCreatedAt());
+                    jawuPayWebhookService.markOperationAsTimedOut(operation);
                     continue;
                 }
-
-                String payoutId = normalizeIdentifier(operation.getPayoutId());
-                if (payoutId != null) {
-                    jawuPayWebhookService.checkAndApplyPayoutStatus(payoutId);
-                    continue;
-                }
-
-                log.warn("psp_reconciliation_skip_missing_identifiers operationId={} pspReference={}",
-                        operation.getId(), operation.getPspReference());
+                jawuPayWebhookService.checkAndApplyPaymentStatus(operation);
             } catch (Exception ex) {
-                log.error("psp_reconciliation_error operationId={} paymentId={} payoutId={}",
-                        operation.getId(), operation.getPaymentId(), operation.getPayoutId(), ex);
+                log.error("psp_reconciliation_error operationId={} paymentId={} providerReference={}",
+                        operation.getId(), operation.getPaymentId(), operation.getProviderReference(), ex);
             }
         }
     }
 
-    private String normalizeIdentifier(String value) {
-        if (value == null || value.isBlank()) {
-            return null;
-        }
-        return value.trim();
+    private boolean isOlderThan(Operation operation, OffsetDateTime cutoff) {
+        return operation.getCreatedAt() != null && !operation.getCreatedAt().isAfter(cutoff);
     }
 }

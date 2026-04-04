@@ -493,6 +493,50 @@ class JawuPayWebhookServiceTest {
     }
 
     @Test
+    void checkAndApplyPaymentStatus_providerReferenceFallback_resolvesOperationAndCallsPsp() {
+        Operation op = pendingPspOperation(OperationType.WALLET_DEPOSIT_PSP);
+        op.setPaymentId(null);
+        op.setProviderReference(PROVIDER_REFERENCE);
+        op.setPspReference(PROVIDER_REFERENCE);
+        when(operationService.findByPaymentIdOrPspReference(PROVIDER_REFERENCE)).thenReturn(Optional.empty());
+        when(operationService.findByProviderReferenceOrPspReference(PROVIDER_REFERENCE)).thenReturn(Optional.of(op));
+
+        JawuPayPaymentResponse payment = new JawuPayPaymentResponse(
+                UUID.fromString(PAYMENT_ID), null, "SUCCESS",
+                150000L, "XOF", "CI", "MOBILE_MONEY_MTN", "PSP", PROVIDER_REFERENCE,
+                OffsetDateTime.now(), OffsetDateTime.now());
+        when(pspClient.getPayment(PROVIDER_REFERENCE)).thenReturn(payment);
+        when(operationService.recordPspMetadata(eq(OPERATION_ID), any())).thenReturn(op);
+
+        Operation confirmed = confirmedOperation(OperationType.WALLET_DEPOSIT_PSP);
+        when(operationService.confirmOperation(OPERATION_ID)).thenReturn(confirmed);
+
+        service.checkAndApplyPaymentStatus(PROVIDER_REFERENCE);
+
+        verify(pspClient).getPayment(PROVIDER_REFERENCE);
+        verify(operationService).findByProviderReferenceOrPspReference(PROVIDER_REFERENCE);
+        verify(walletDepositService).confirmPspDeposit(OPERATION_ID);
+    }
+
+    @Test
+    void markOperationAsTimedOut_marksFailedWithoutCreditingWallet() {
+        Operation op = pendingPspOperation(OperationType.WALLET_DEPOSIT_PSP);
+
+        Operation failed = failedOperation(OperationType.WALLET_DEPOSIT_PSP);
+        when(operationService.recordPspMetadata(eq(OPERATION_ID), any())).thenReturn(op);
+        when(operationService.markFailed(OPERATION_ID)).thenReturn(failed);
+
+        service.markOperationAsTimedOut(op);
+
+        ArgumentCaptor<OperationService.PspMetadata> metadataCaptor =
+                ArgumentCaptor.forClass(OperationService.PspMetadata.class);
+        verify(operationService).recordPspMetadata(eq(OPERATION_ID), metadataCaptor.capture());
+        assertThat(metadataCaptor.getValue().pspStatus()).isEqualTo("TIMEOUT");
+        verify(operationService).markFailed(OPERATION_ID);
+        verifyNoInteractions(walletDepositService, accountingPostingService);
+    }
+
+    @Test
     void checkAndApplyPayoutStatus_matchingAmount_appliesStatusAndPersistsMetadata() {
         Operation op = pendingPspOperation(OperationType.WALLET_WITHDRAWAL);
         when(operationService.findByPayoutIdOrPspReference(PAYOUT_ID)).thenReturn(Optional.of(op));

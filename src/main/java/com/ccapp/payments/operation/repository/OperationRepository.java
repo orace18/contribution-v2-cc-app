@@ -48,6 +48,19 @@ public interface OperationRepository extends JpaRepository<Operation, UUID> {
                                                   @Param("createdAtBefore") OffsetDateTime createdAtBefore,
                                                   Pageable pageable);
 
+    @Query("""
+            select o
+            from Operation o
+            where o.status = :pendingStatus
+              and o.createdAt < :createdAtBefore
+              and o.payoutId is null
+              and (o.paymentId is not null or o.providerReference is not null or o.pspReference is not null)
+            order by o.createdAt asc
+            """)
+    List<Operation> findPendingPaymentBatchForPspReconciliation(@Param("pendingStatus") OperationStatus pendingStatus,
+                                                                @Param("createdAtBefore") OffsetDateTime createdAtBefore,
+                                                                Pageable pageable);
+
     Optional<Operation> findFirstByAccountHolderIdAndTypeAndStatusOrderByCreatedAtDesc(UUID accountHolderId,
                                                                                          OperationType type,
                                                                                          OperationStatus status);

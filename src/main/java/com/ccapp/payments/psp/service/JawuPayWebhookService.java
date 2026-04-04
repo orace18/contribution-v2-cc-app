@@ -146,14 +146,40 @@ public class JawuPayWebhookService {
 
     @Transactional
     public void checkAndApplyPaymentStatus(String paymentId) {
-        Optional<Operation> maybeOperation = operationService.findByPaymentIdOrPspReference(paymentId);
-        if (maybeOperation.isEmpty()) {
-            log.warn("Fallback check: no operation found for paymentId={}", paymentId);
+        String paymentLookupReference = normalizeIdentifier(paymentId);
+        if (paymentLookupReference == null) {
+            log.warn("Fallback check skipped: payment lookup reference is missing");
             return;
         }
-        Operation operation = maybeOperation.get();
 
-        JawuPayPaymentResponse payment = pspClient.getPayment(paymentId);
+        Optional<Operation> maybeOperation = operationService.findByPaymentIdOrPspReference(paymentLookupReference);
+        if (maybeOperation.isEmpty()) {
+            maybeOperation = operationService.findByProviderReferenceOrPspReference(paymentLookupReference);
+        }
+        if (maybeOperation.isEmpty()) {
+            log.warn("Fallback check: no operation found for paymentLookupReference={}", paymentLookupReference);
+            return;
+        }
+        checkAndApplyPaymentStatus(maybeOperation.get(), paymentLookupReference);
+    }
+
+    @Transactional
+    void checkAndApplyPaymentStatus(Operation operation) {
+        if (operation == null) {
+            return;
+        }
+        checkAndApplyPaymentStatus(operation, resolvePaymentLookupReference(operation));
+    }
+
+    private void checkAndApplyPaymentStatus(Operation operation, String paymentLookupReference) {
+        if (paymentLookupReference == null) {
+            log.warn("PSP reconciliation skipped: missing payment lookup reference operationId={}", operation.getId());
+            return;
+        }
+
+        JawuPayPaymentResponse payment = pspClient.getPayment(paymentLookupReference);
+        log.info("PSP status returned: {} for operationId={} lookupReference={}",
+                payment.status(), operation.getId(), paymentLookupReference);
         verifyAmountCurrencyMatch(operation, payment.amount(), payment.currency());
 
         Operation updatedOperation;
@@ -161,15 +187,17 @@ public class JawuPayWebhookService {
             updatedOperation = operationService.recordPspMetadata(
                     operation.getId(),
                     PspMetadata.payment(
-                            payment.paymentId() == null ? paymentId : payment.paymentId().toString(),
-                            payment.providerReference(),
+                            resolvePaymentId(payment, operation),
+                            firstNonBlank(payment.providerReference(), operation.getProviderReference()),
                             null,
                             payment.paymentMethodId(),
-                            payment.status()
+                            payment.status(),
+                            payment.country()
                     )
             );
         } catch (ConflictException ex) {
-            log.warn("Reconciliation providerReference conflict for paymentId={}, applying status-only update", paymentId);
+            log.warn("Reconciliation providerReference conflict for lookupReference={}, applying status-only update",
+                    paymentLookupReference);
             updatedOperation = operationService.recordPspMetadata(
                     operation.getId(),
                     PspMetadata.statusOnly(payment.status())
@@ -177,6 +205,18 @@ public class JawuPayWebhookService {
         }
 
         applyPspStatusToOperation(updatedOperation, payment.status());
+    }
+
+    @Transactional
+    void markOperationAsTimedOut(Operation operation) {
+        if (operation == null) {
+            return;
+        }
+        Operation updatedOperation = operationService.recordPspMetadata(
+                operation.getId(),
+                PspMetadata.statusOnly("TIMEOUT")
+        );
+        applyPspStatusToOperation(updatedOperation, "TIMEOUT");
     }
 
     @Transactional
@@ -478,6 +518,33 @@ public class JawuPayWebhookService {
         }
         String normalized = value.trim();
         return normalized.length() <= 200 ? normalized : normalized.substring(0, 200);
+    }
+
+    private String resolvePaymentLookupReference(Operation operation) {
+        String paymentId = normalizeIdentifier(operation.getPaymentId());
+        if (paymentId != null) {
+            return paymentId;
+        }
+        String providerReference = normalizeIdentifier(operation.getProviderReference());
+        if (providerReference != null) {
+            return providerReference;
+        }
+        return normalizeIdentifier(operation.getPspReference());
+    }
+
+    private String resolvePaymentId(JawuPayPaymentResponse payment, Operation operation) {
+        if (payment.paymentId() != null) {
+            return payment.paymentId().toString();
+        }
+        return normalizeIdentifier(operation.getPaymentId());
+    }
+
+    private String firstNonBlank(String first, String second) {
+        String normalizedFirst = normalizeIdentifier(first);
+        if (normalizedFirst != null) {
+            return normalizedFirst;
+        }
+        return normalizeIdentifier(second);
     }
 
     private enum InternalStatus { SUCCESS, FAILED, PENDING }
