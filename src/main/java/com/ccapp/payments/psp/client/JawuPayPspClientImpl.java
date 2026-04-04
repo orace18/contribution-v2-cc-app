@@ -123,10 +123,14 @@ public class JawuPayPspClientImpl implements JawuPayPspClient {
         String nonce = UUID.randomUUID().toString().replace("-", "");
         String bodyStr = body != null && body.length > 0 ? new String(body, StandardCharsets.UTF_8) : "";
         String method = request.getMethod().name();
-        String path = request.getURI().getPath();
+        String fullPath = request.getURI().getPath();
+        String basePath = java.net.URI.create(baseUrl).getPath();
+        String path = (basePath != null && !basePath.isEmpty() && fullPath.startsWith(basePath))
+                ? fullPath.substring(basePath.length())
+                : fullPath;
         String signature = computeJawuPaySignature(timestamp, nonce, bodyStr, method, path);
-        log.debug("JawuPay outgoing auth method={} uri={} timestamp={} nonce={} bodyLength={}",
-                request.getMethod(), request.getURI(), timestamp, nonce, bodyStr.length());
+        log.debug("JawuPay outgoing auth method={} uri={} signedPath={} timestamp={} nonce={} bodyLength={}",
+                request.getMethod(), request.getURI(), path, timestamp, nonce, bodyStr.length());
         HttpHeaders newHeaders = new HttpHeaders();
         newHeaders.putAll(request.getHeaders());
         newHeaders.set("X-API-KEY", apiKey);
