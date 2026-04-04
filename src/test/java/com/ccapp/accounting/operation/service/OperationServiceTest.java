@@ -1,4 +1,5 @@
 package com.ccapp.accounting.operation.service;
+
 import com.ccapp.payments.operation.domain.entity.Operation;
 import com.ccapp.payments.operation.domain.enums.OperationStatus;
 import com.ccapp.payments.operation.domain.enums.OperationType;
@@ -6,6 +7,7 @@ import com.ccapp.payments.operation.repository.OperationRepository;
 import com.ccapp.payments.operation.service.OperationService;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.common.exception.ConflictException;
+import com.ccapp.wallet.service.WalletLedgerProjectionService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -25,6 +27,9 @@ class OperationServiceTest {
 
     @Mock
     private OperationRepository operationRepository;
+
+    @Mock
+    private WalletLedgerProjectionService walletLedgerProjectionService;
 
     @InjectMocks
     private OperationService operationService;

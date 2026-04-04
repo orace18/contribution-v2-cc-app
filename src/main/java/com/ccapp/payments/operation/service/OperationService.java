@@ -4,6 +4,7 @@ import com.ccapp.payments.operation.domain.entity.Operation;
 import com.ccapp.payments.operation.domain.enums.OperationStatus;
 import com.ccapp.payments.operation.domain.enums.OperationType;
 import com.ccapp.payments.operation.repository.OperationRepository;
+import com.ccapp.wallet.service.WalletLedgerProjectionService;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.common.exception.ConflictException;
 import com.ccapp.common.exception.NotFoundException;
@@ -23,6 +24,7 @@ import java.util.function.Consumer;
 public class OperationService {
 
     private final OperationRepository operationRepository;
+    private final WalletLedgerProjectionService walletLedgerProjectionService;
 
     @Transactional
     public Operation createInitiatedOperation(UUID accountHolderId,
@@ -72,7 +74,7 @@ public class OperationService {
         OperationRouting normalizedRouting = normalizeRouting(routing);
         validateAmount(amount);
 
-        return operationRepository.findByIdempotencyKey(normalizedIdempotencyKey)
+        Operation operation = operationRepository.findByIdempotencyKey(normalizedIdempotencyKey)
                 .map(existing -> ensureCompatibleExistingOperation(
                         existing,
                         accountHolderId,
@@ -98,6 +100,8 @@ public class OperationService {
                         .destinationAccountCode(normalizedRouting.destinationAccountCode())
                         .description(normalizeDescription(description))
                         .build()));
+        syncWalletLedger(operation);
+        return operation;
     }
 
     @Transactional
@@ -129,7 +133,7 @@ public class OperationService {
         OperationRouting normalizedRouting = normalizeRouting(routing);
         validateAmount(amount);
 
-        return operationRepository.findByIdempotencyKey(normalizedIdempotencyKey)
+        Operation operation = operationRepository.findByIdempotencyKey(normalizedIdempotencyKey)
                 .map(existing -> ensureCompatibleExistingOperation(
                         existing,
                         accountHolderId,
@@ -154,6 +158,8 @@ public class OperationService {
                         .destinationAccountCode(normalizedRouting.destinationAccountCode())
                         .description(normalizeDescription(description))
                         .build()));
+        syncWalletLedger(operation);
+        return operation;
     }
 
     @Transactional(readOnly = true)
@@ -221,7 +227,9 @@ public class OperationService {
     public Operation recordPspMetadata(UUID operationId, PspMetadata metadata) {
         Operation operation = getById(operationId);
         mergePspMetadata(operation, metadata);
-        return operationRepository.save(operation);
+        Operation saved = operationRepository.save(operation);
+        syncWalletLedger(saved);
+        return saved;
     }
 
     @Transactional
@@ -234,14 +242,18 @@ public class OperationService {
         Operation operation = getById(operationId);
         mergePspMetadata(operation, metadata);
         if (operation.getStatus() == OperationStatus.PENDING_PSP) {
-            return operationRepository.save(operation);
+            Operation saved = operationRepository.save(operation);
+            syncWalletLedger(saved);
+            return saved;
         }
         if (operation.getStatus() != OperationStatus.INITIATED
                 && operation.getStatus() != OperationStatus.PAYOUT_INITIATED) {
             throw new BusinessException("Operation cannot move to PENDING_PSP");
         }
         operation.setStatus(OperationStatus.PENDING_PSP);
-        return operationRepository.save(operation);
+        Operation saved = operationRepository.save(operation);
+        syncWalletLedger(saved);
+        return saved;
     }
 
     @Transactional
@@ -265,13 +277,16 @@ public class OperationService {
         }
 
         operation.setStatus(OperationStatus.CONFIRMED);
-        return operationRepository.save(operation);
+        Operation saved = operationRepository.save(operation);
+        syncWalletLedger(saved);
+        return saved;
     }
 
     @Transactional
     public Operation confirmOperation(UUID operationId) {
         Operation operation = getById(operationId);
         if (operation.getStatus() == OperationStatus.CONFIRMED) {
+            syncWalletLedger(operation);
             return operation;
         }
         if (operation.getStatus() != OperationStatus.INITIATED
@@ -279,7 +294,9 @@ public class OperationService {
             throw new BusinessException("Operation not confirmable");
         }
         operation.setStatus(OperationStatus.CONFIRMED);
-        return operationRepository.save(operation);
+        Operation saved = operationRepository.save(operation);
+        syncWalletLedger(saved);
+        return saved;
     }
 
     @Transactional
@@ -298,26 +315,32 @@ public class OperationService {
     public Operation markFailed(UUID operationId) {
         Operation operation = getById(operationId);
         if (operation.getStatus() == OperationStatus.FAILED) {
+            syncWalletLedger(operation);
             return operation;
         }
         if (operation.getStatus() == OperationStatus.CONFIRMED) {
             throw new BusinessException("Confirmed operation cannot be failed");
         }
         operation.setStatus(OperationStatus.FAILED);
-        return operationRepository.save(operation);
+        Operation saved = operationRepository.save(operation);
+        syncWalletLedger(saved);
+        return saved;
     }
 
     @Transactional
     public Operation markExpired(UUID operationId) {
         Operation operation = getById(operationId);
         if (operation.getStatus() == OperationStatus.EXPIRED) {
+            syncWalletLedger(operation);
             return operation;
         }
         if (operation.getStatus() == OperationStatus.CONFIRMED) {
             throw new BusinessException("Confirmed operation cannot be expired");
         }
         operation.setStatus(OperationStatus.EXPIRED);
-        return operationRepository.save(operation);
+        Operation saved = operationRepository.save(operation);
+        syncWalletLedger(saved);
+        return saved;
     }
 
     @Transactional(readOnly = true)
@@ -487,6 +510,10 @@ public class OperationService {
         if (candidateValue != null) {
             setter.accept(candidateValue);
         }
+    }
+
+    private void syncWalletLedger(Operation operation) {
+        walletLedgerProjectionService.syncOperation(operation);
     }
 
     public record PspMetadata(
