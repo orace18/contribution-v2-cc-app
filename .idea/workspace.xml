@@ -4,7 +4,9 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="rebuild" />
+    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="fix: JawuPay valide la signature avec servletPath">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -141,14 +143,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1772553173766</updated>
-    </task>
-    <task id="LOCAL-00080" summary="fix bug">
-      <option name="closed" value="true" />
-      <created>1774556881119</created>
-      <option name="number" value="00080" />
-      <option name="presentableId" value="LOCAL-00080" />
-      <option name="project" value="LOCAL" />
-      <updated>1774556881120</updated>
     </task>
     <task id="LOCAL-00081" summary="integration de cpass">
       <option name="closed" value="true" />
@@ -534,7 +528,15 @@
       <option name="project" value="LOCAL" />
       <updated>1775250815611</updated>
     </task>
-    <option name="localTasksCounter" value="129" />
+    <task id="LOCAL-00129" summary="fix: JawuPay valide la signature avec servletPath">
+      <option name="closed" value="true" />
+      <created>1775292016388</created>
+      <option name="number" value="00129" />
+      <option name="presentableId" value="LOCAL-00129" />
+      <option name="project" value="LOCAL" />
+      <updated>1775292016389</updated>
+    </task>
+    <option name="localTasksCounter" value="130" />
     <servers />
   </component>
   <component name="UnknownFeatures">
@@ -565,7 +567,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="fix @Lob sur PostgreSQL mappe vers oid mais la colonne en DB est TEXT" />
     <MESSAGE value="fix context path" />
     <MESSAGE value="ticket 3" />
     <MESSAGE value="ticket 4" />
@@ -590,7 +591,8 @@
     <MESSAGE value="fix bug" />
     <MESSAGE value="review ttl" />
     <MESSAGE value="rebuild" />
-    <option name="LAST_COMMIT_MESSAGE" value="rebuild" />
+    <MESSAGE value="fix: JawuPay valide la signature avec servletPath" />
+    <option name="LAST_COMMIT_MESSAGE" value="fix: JawuPay valide la signature avec servletPath" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />
