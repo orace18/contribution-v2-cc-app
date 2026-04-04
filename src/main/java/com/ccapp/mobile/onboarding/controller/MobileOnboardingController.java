@@ -13,6 +13,7 @@ import com.ccapp.mobile.onboarding.dto.SelectMobileCountryRequest;
 import com.ccapp.mobile.onboarding.dto.MobileCountrySelectionResponse;
 import com.ccapp.mobile.onboarding.dto.ActivateFreePlanResponse;
 import com.ccapp.mobile.onboarding.service.MobileOnboardingJourneyService;
+import com.ccapp.mobile.onboarding.service.MobileOnboardingStatusService;
 import com.ccapp.mobile.onboarding.service.MobileOnboardingService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -43,6 +44,7 @@ public class MobileOnboardingController {
 
     private final MobileOnboardingService mobileOnboardingService;
     private final MobileOnboardingJourneyService mobileOnboardingJourneyService;
+    private final MobileOnboardingStatusService mobileOnboardingStatusService;
 
     @GetMapping("/plans")
     @Operation(summary = "List onboarding plans for the requested country catalog")
@@ -123,10 +125,13 @@ public class MobileOnboardingController {
     @Operation(summary = "Get onboarding journey status for mobile orchestration")
     @SecurityRequirement(name = "bearerAuth")
     public ResponseEntity<ApiEnvelope<MobileOnboardingStatusResponse>> status() {
-        UUID accountHolderId = SecurityUtils.currentAccountHolderId();
+        AuthenticatedPrincipal principal = SecurityUtils.currentPrincipal();
+        UUID accountHolderId = principal.accountHolderId() != null
+                ? principal.accountHolderId()
+                : SecurityUtils.currentAccountHolderId();
         return ResponseEntity.ok(ApiEnvelope.success(
                 "Onboarding status",
-                mobileOnboardingJourneyService.getStatus(accountHolderId)
+                mobileOnboardingStatusService.getStatus(principal.userId(), accountHolderId)
         ));
     }
 

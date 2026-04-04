@@ -373,6 +373,7 @@ public class MobileOnboardingJourneyService {
                 journey.getStatus().name(),
                 completedSteps(journey),
                 nextStep(journey, active),
+                null,
                 active,
                 networkReady,
                 journey.getPaymentOperationId(),
