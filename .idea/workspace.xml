@@ -4,16 +4,14 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-    </list>
+    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="fix: le payload signé" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
   <component name="EmbeddingIndexingInfo">
-    <option name="cachedIndexableFilesCount" value="1237" />
+    <option name="cachedIndexableFilesCount" value="1341" />
   </component>
   <component name="FileTemplateManagerImpl">
     <option name="RECENT_TEMPLATES">
@@ -143,46 +141,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1772553173766</updated>
-    </task>
-    <task id="LOCAL-00078" summary="notif">
-      <option name="closed" value="true" />
-      <created>1774385850102</created>
-      <option name="number" value="00078" />
-      <option name="presentableId" value="LOCAL-00078" />
-      <option name="project" value="LOCAL" />
-      <updated>1774385850103</updated>
-    </task>
-    <task id="LOCAL-00079" summary="Refactoring conplete du model MLM">
-      <option name="closed" value="true" />
-      <created>1774436112457</created>
-      <option name="number" value="00079" />
-      <option name="presentableId" value="LOCAL-00079" />
-      <option name="project" value="LOCAL" />
-      <updated>1774436112458</updated>
-    </task>
-    <task id="LOCAL-00080" summary="fix bug">
-      <option name="closed" value="true" />
-      <created>1774556881119</created>
-      <option name="number" value="00080" />
-      <option name="presentableId" value="LOCAL-00080" />
-      <option name="project" value="LOCAL" />
-      <updated>1774556881120</updated>
-    </task>
-    <task id="LOCAL-00081" summary="integration de cpass">
-      <option name="closed" value="true" />
-      <created>1774726533568</created>
-      <option name="number" value="00081" />
-      <option name="presentableId" value="LOCAL-00081" />
-      <option name="project" value="LOCAL" />
-      <updated>1774726533572</updated>
-    </task>
-    <task id="LOCAL-00082" summary="fix de cpass variable">
-      <option name="closed" value="true" />
-      <created>1774727459936</created>
-      <option name="number" value="00082" />
-      <option name="presentableId" value="LOCAL-00082" />
-      <option name="project" value="LOCAL" />
-      <updated>1774727459936</updated>
     </task>
     <task id="LOCAL-00083" summary="Config deep link">
       <option name="closed" value="true" />
@@ -536,7 +494,47 @@
       <option name="project" value="LOCAL" />
       <updated>1775226734990</updated>
     </task>
-    <option name="localTasksCounter" value="127" />
+    <task id="LOCAL-00127" summary="review ttl">
+      <option name="closed" value="true" />
+      <created>1775245367996</created>
+      <option name="number" value="00127" />
+      <option name="presentableId" value="LOCAL-00127" />
+      <option name="project" value="LOCAL" />
+      <updated>1775245367999</updated>
+    </task>
+    <task id="LOCAL-00128" summary="rebuild">
+      <option name="closed" value="true" />
+      <created>1775250815611</created>
+      <option name="number" value="00128" />
+      <option name="presentableId" value="LOCAL-00128" />
+      <option name="project" value="LOCAL" />
+      <updated>1775250815611</updated>
+    </task>
+    <task id="LOCAL-00129" summary="fix: JawuPay valide la signature avec servletPath">
+      <option name="closed" value="true" />
+      <created>1775292016388</created>
+      <option name="number" value="00129" />
+      <option name="presentableId" value="LOCAL-00129" />
+      <option name="project" value="LOCAL" />
+      <updated>1775292016389</updated>
+    </task>
+    <task id="LOCAL-00130" summary="fix: le payload signé">
+      <option name="closed" value="true" />
+      <created>1775293696761</created>
+      <option name="number" value="00130" />
+      <option name="presentableId" value="LOCAL-00130" />
+      <option name="project" value="LOCAL" />
+      <updated>1775293696761</updated>
+    </task>
+    <task id="LOCAL-00131" summary="fix: le payload signé">
+      <option name="closed" value="true" />
+      <created>1775295532534</created>
+      <option name="number" value="00131" />
+      <option name="presentableId" value="LOCAL-00131" />
+      <option name="project" value="LOCAL" />
+      <updated>1775295532535</updated>
+    </task>
+    <option name="localTasksCounter" value="132" />
     <servers />
   </component>
   <component name="UnknownFeatures">
@@ -567,9 +565,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="Config deep link" />
-    <MESSAGE value="fix @Lob sur PostgreSQL mappe vers oid mais la colonne en DB est TEXT" />
-    <MESSAGE value="fix context path" />
     <MESSAGE value="ticket 3" />
     <MESSAGE value="ticket 4" />
     <MESSAGE value="ticket 5" />
@@ -581,7 +576,6 @@
     <MESSAGE value="Configuration firebase" />
     <MESSAGE value="Rebuild firebase" />
     <MESSAGE value="Exposer une api pour moyen de paiement." />
-    <MESSAGE value="rebuild" />
     <MESSAGE value="Check nom dans cercle" />
     <MESSAGE value="View cercle" />
     <MESSAGE value="Migration flyway" />
@@ -592,7 +586,11 @@
     <MESSAGE value="Rebuild" />
     <MESSAGE value="revue du application-dev.properties" />
     <MESSAGE value="fix bug" />
-    <option name="LAST_COMMIT_MESSAGE" value="fix bug" />
+    <MESSAGE value="review ttl" />
+    <MESSAGE value="rebuild" />
+    <MESSAGE value="fix: JawuPay valide la signature avec servletPath" />
+    <MESSAGE value="fix: le payload signé" />
+    <option name="LAST_COMMIT_MESSAGE" value="fix: le payload signé" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />

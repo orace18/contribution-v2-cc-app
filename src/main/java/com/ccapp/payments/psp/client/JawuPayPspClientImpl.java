@@ -122,9 +122,11 @@ public class JawuPayPspClientImpl implements JawuPayPspClient {
         String timestamp = String.valueOf(System.currentTimeMillis() / 1000);
         String nonce = UUID.randomUUID().toString().replace("-", "");
         String bodyStr = body != null && body.length > 0 ? new String(body, StandardCharsets.UTF_8) : "";
-        String signature = computeJawuPaySignature(timestamp, nonce, bodyStr);
-        log.debug("JawuPay outgoing auth method={} uri={} timestamp={} nonce={} bodyLength={}",
-                request.getMethod(), request.getURI(), timestamp, nonce, bodyStr.length());
+        String method = request.getMethod().name();
+        String path = request.getURI().getPath();
+        String signature = computeJawuPaySignature(timestamp, nonce, bodyStr, method, path);
+        log.debug("JawuPay outgoing auth method={} uri={} signedPath={} timestamp={} nonce={} bodyLength={}",
+                request.getMethod(), request.getURI(), path, timestamp, nonce, bodyStr.length());
         HttpHeaders newHeaders = new HttpHeaders();
         newHeaders.putAll(request.getHeaders());
         newHeaders.set("X-API-KEY", apiKey);
@@ -141,11 +143,11 @@ public class JawuPayPspClientImpl implements JawuPayPspClient {
 
     /**
      * Calcule la signature HMAC-SHA256 JawuPay.
-     * Payload signé : timestamp + nonce + body (concaténés)
+     * Payload signé : {METHOD}:{path}:{timestamp}:{nonce}:{body}
      * Résultat : hex lowercase
      */
-    String computeJawuPaySignature(String timestamp, String nonce, String body) {
-        String payload = timestamp + nonce + body;
+    String computeJawuPaySignature(String timestamp, String nonce, String body, String method, String path) {
+        String payload = method + ":" + path + ":" + timestamp + ":" + nonce + ":" + body;
         return computeHmacHex(payload.getBytes(StandardCharsets.UTF_8));
     }
 
@@ -156,7 +158,7 @@ public class JawuPayPspClientImpl implements JawuPayPspClient {
         if (hmacSecretBytes == null || expectedSignature == null) {
             return false;
         }
-        String computed = computeJawuPaySignature(timestamp, nonce, body);
+        String computed = computeJawuPaySignature(timestamp, nonce, body, "POST", "");
         return MessageDigest.isEqual(
                 computed.getBytes(StandardCharsets.UTF_8),
                 expectedSignature.getBytes(StandardCharsets.UTF_8)
@@ -402,45 +404,50 @@ public class JawuPayPspClientImpl implements JawuPayPspClient {
     }
 
     JawuPayQuoteResponse doCreateQuoteRequest(JawuPayQuoteRequest request) {
-        return restClient.post()
+        JawuPayApiResponse<JawuPayQuoteResponse> response = restClient.post()
                 .uri("/api/v1/payment/quote")
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(request)
                 .retrieve()
-                .body(JawuPayQuoteResponse.class);
+                .body(new ParameterizedTypeReference<>() {});
+        return response != null ? response.data() : null;
     }
 
     JawuPayConfirmResponse doConfirmPaymentRequest(JawuPayConfirmRequest request, String idempotencyKey) {
-        return restClient.post()
+        JawuPayApiResponse<JawuPayConfirmResponse> response = restClient.post()
                 .uri("/api/v1/payment/confirm")
                 .header("Idempotency-Key", idempotencyKey)
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(request)
                 .retrieve()
-                .body(JawuPayConfirmResponse.class);
+                .body(new ParameterizedTypeReference<>() {});
+        return response != null ? response.data() : null;
     }
 
     JawuPayPaymentResponse doGetPaymentRequest(String paymentId) {
-        return restClient.get()
+        JawuPayApiResponse<JawuPayPaymentResponse> response = restClient.get()
                 .uri("/api/v1/payment/{paymentId}", paymentId)
                 .retrieve()
-                .body(JawuPayPaymentResponse.class);
+                .body(new ParameterizedTypeReference<>() {});
+        return response != null ? response.data() : null;
     }
 
     JawuPayCreatePayoutResponse doCreatePayoutRequest(JawuPayCreatePayoutRequest request) {
-        return restClient.post()
+        JawuPayApiResponse<JawuPayCreatePayoutResponse> response = restClient.post()
                 .uri("/api/v1/payout")
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(request)
                 .retrieve()
-                .body(JawuPayCreatePayoutResponse.class);
+                .body(new ParameterizedTypeReference<>() {});
+        return response != null ? response.data() : null;
     }
 
     JawuPayPayoutDetailsResponse doGetPayoutRequest(String payoutId) {
-        return restClient.get()
+        JawuPayApiResponse<JawuPayPayoutDetailsResponse> response = restClient.get()
                 .uri("/api/v1/payout/{payoutId}", payoutId)
                 .retrieve()
-                .body(JawuPayPayoutDetailsResponse.class);
+                .body(new ParameterizedTypeReference<>() {});
+        return response != null ? response.data() : null;
     }
 
     List<JawuPayPaymentMethod> doGetPaymentMethodsRequest(String country) {
