@@ -122,7 +122,9 @@ public class JawuPayPspClientImpl implements JawuPayPspClient {
         String timestamp = String.valueOf(System.currentTimeMillis() / 1000);
         String nonce = UUID.randomUUID().toString().replace("-", "");
         String bodyStr = body != null && body.length > 0 ? new String(body, StandardCharsets.UTF_8) : "";
-        String signature = computeJawuPaySignature(timestamp, nonce, bodyStr);
+        String method = request.getMethod().name();
+        String path = request.getURI().getPath();
+        String signature = computeJawuPaySignature(timestamp, nonce, bodyStr, method, path);
         log.debug("JawuPay outgoing auth method={} uri={} timestamp={} nonce={} bodyLength={}",
                 request.getMethod(), request.getURI(), timestamp, nonce, bodyStr.length());
         HttpHeaders newHeaders = new HttpHeaders();
@@ -141,11 +143,11 @@ public class JawuPayPspClientImpl implements JawuPayPspClient {
 
     /**
      * Calcule la signature HMAC-SHA256 JawuPay.
-     * Payload signé : timestamp + nonce + body (concaténés)
+     * Payload signé : {METHOD}:{path}:{timestamp}:{nonce}:{body}
      * Résultat : hex lowercase
      */
-    String computeJawuPaySignature(String timestamp, String nonce, String body) {
-        String payload = timestamp + nonce + body;
+    String computeJawuPaySignature(String timestamp, String nonce, String body, String method, String path) {
+        String payload = method + ":" + path + ":" + timestamp + ":" + nonce + ":" + body;
         return computeHmacHex(payload.getBytes(StandardCharsets.UTF_8));
     }
 
@@ -156,7 +158,7 @@ public class JawuPayPspClientImpl implements JawuPayPspClient {
         if (hmacSecretBytes == null || expectedSignature == null) {
             return false;
         }
-        String computed = computeJawuPaySignature(timestamp, nonce, body);
+        String computed = computeJawuPaySignature(timestamp, nonce, body, "POST", "");
         return MessageDigest.isEqual(
                 computed.getBytes(StandardCharsets.UTF_8),
                 expectedSignature.getBytes(StandardCharsets.UTF_8)

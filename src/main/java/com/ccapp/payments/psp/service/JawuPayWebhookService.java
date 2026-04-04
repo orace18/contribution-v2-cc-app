@@ -156,16 +156,25 @@ public class JawuPayWebhookService {
         JawuPayPaymentResponse payment = pspClient.getPayment(paymentId);
         verifyAmountCurrencyMatch(operation, payment.amount(), payment.currency());
 
-        Operation updatedOperation = operationService.recordPspMetadata(
-                operation.getId(),
-                PspMetadata.payment(
-                        payment.paymentId() == null ? paymentId : payment.paymentId().toString(),
-                        payment.providerReference(),
-                        null,
-                        payment.paymentMethodId(),
-                        payment.status()
-                )
-        );
+        Operation updatedOperation;
+        try {
+            updatedOperation = operationService.recordPspMetadata(
+                    operation.getId(),
+                    PspMetadata.payment(
+                            payment.paymentId() == null ? paymentId : payment.paymentId().toString(),
+                            payment.providerReference(),
+                            null,
+                            payment.paymentMethodId(),
+                            payment.status()
+                    )
+            );
+        } catch (ConflictException ex) {
+            log.warn("Reconciliation providerReference conflict for paymentId={}, applying status-only update", paymentId);
+            updatedOperation = operationService.recordPspMetadata(
+                    operation.getId(),
+                    PspMetadata.statusOnly(payment.status())
+            );
+        }
 
         applyPspStatusToOperation(updatedOperation, payment.status());
     }
@@ -182,15 +191,24 @@ public class JawuPayWebhookService {
         JawuPayPayoutDetailsResponse payout = pspClient.getPayout(payoutId);
         verifyAmountCurrencyMatch(operation, payout.amount(), payout.currency());
 
-        Operation updatedOperation = operationService.recordPspMetadata(
-                operation.getId(),
-                PspMetadata.payout(
-                        payout.payoutId() == null ? payoutId : payout.payoutId().toString(),
-                        payout.providerReference(),
-                        payout.paymentMethodId(),
-                        payout.status()
-                )
-        );
+        Operation updatedOperation;
+        try {
+            updatedOperation = operationService.recordPspMetadata(
+                    operation.getId(),
+                    PspMetadata.payout(
+                            payout.payoutId() == null ? payoutId : payout.payoutId().toString(),
+                            payout.providerReference(),
+                            payout.paymentMethodId(),
+                            payout.status()
+                    )
+            );
+        } catch (ConflictException ex) {
+            log.warn("Reconciliation providerReference conflict for payoutId={}, applying status-only update", payoutId);
+            updatedOperation = operationService.recordPspMetadata(
+                    operation.getId(),
+                    PspMetadata.statusOnly(payout.status())
+            );
+        }
 
         applyPspStatusToOperation(updatedOperation, payout.status());
     }
