@@ -47,60 +47,42 @@ class MediaStorageConfigTest {
     }
 
     @Test
-    void mediaStorageModeResolver_usesLocalFallbackWhenDevProfileIsActiveAndEndpointIsMissing() {
+    void mediaStorageModeResolver_usesLocalFileFallbackWhenEndpointIsMissing() {
         MediaStorageModeDecision decision = MediaStorageModeResolver.resolve(
-                new String[]{"dev"},
                 null,
                 250
         );
 
-        assertThat(decision.mode()).isEqualTo(MediaStorageMode.LOCAL_DEV);
-        assertThat(decision.reason()).contains("profile 'dev'");
+        assertThat(decision.mode()).isEqualTo(MediaStorageMode.LOCAL_FILE);
+        assertThat(decision.reason()).contains("missing");
     }
 
     @Test
-    void mediaStorageModeResolver_usesNoopFallbackWhenDevEndpointIsUnreachable() {
+    void mediaStorageModeResolver_usesLocalFileFallbackWhenEndpointIsUnreachable() {
         MediaStorageModeDecision decision = MediaStorageModeResolver.resolve(
-                new String[]{"dev"},
                 "http://127.0.0.1:6553",
                 250
         );
 
-        assertThat(decision.mode()).isEqualTo(MediaStorageMode.NOOP);
+        assertThat(decision.mode()).isEqualTo(MediaStorageMode.LOCAL_FILE);
         assertThat(decision.reason()).contains("not reachable");
     }
 
     @Test
-    void mediaStorageModeResolver_usesNoopFallbackWhenEndpointIsUnreachable() {
+    void mediaStorageModeResolver_usesLocalFileFallbackWhenEndpointHostIsNotResolvable() {
         MediaStorageModeDecision decision = MediaStorageModeResolver.resolve(
-                new String[]{"prod"},
-                "http://127.0.0.1:6553",
+                "http://minio-host-that-should-not-exist.invalid:9000",
                 250
         );
 
-        assertThat(decision.mode()).isEqualTo(MediaStorageMode.NOOP);
-        assertThat(decision.reason()).contains("not reachable");
+        assertThat(decision.mode()).isEqualTo(MediaStorageMode.LOCAL_FILE);
+        assertThat(decision.reason()).contains("not resolvable");
     }
 
     @Test
-    void mediaStorageModeResolver_usesMinioWhenDevEndpointIsReachable() throws IOException {
+    void mediaStorageModeResolver_usesMinioWhenEndpointIsReachable() throws IOException {
         try (ServerSocket serverSocket = new ServerSocket(0)) {
             MediaStorageModeDecision decision = MediaStorageModeResolver.resolve(
-                    new String[]{"dev"},
-                    "http://127.0.0.1:" + serverSocket.getLocalPort(),
-                    250
-            );
-
-            assertThat(decision.mode()).isEqualTo(MediaStorageMode.MINIO);
-            assertThat(decision.reason()).contains("reachable");
-        }
-    }
-
-    @Test
-    void mediaStorageModeResolver_keepsMinioWhenEndpointIsReachable() throws IOException {
-        try (ServerSocket serverSocket = new ServerSocket(0)) {
-            MediaStorageModeDecision decision = MediaStorageModeResolver.resolve(
-                    new String[]{"prod"},
                     "http://127.0.0.1:" + serverSocket.getLocalPort(),
                     250
             );
@@ -113,7 +95,6 @@ class MediaStorageConfigTest {
     @Test
     void mediaStorageModeResolver_failsFastWhenStrictStartupIsEnabled() {
         assertThatThrownBy(() -> MediaStorageModeResolver.resolve(
-                new String[]{"prod"},
                 "http://127.0.0.1:6553",
                 250,
                 true

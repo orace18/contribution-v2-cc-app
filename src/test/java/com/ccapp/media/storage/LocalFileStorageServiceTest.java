@@ -9,14 +9,14 @@ import java.time.Duration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-class LocalDevStorageServiceTest {
+class LocalFileStorageServiceTest {
 
     @TempDir
     Path tempDir;
 
     @Test
     void createUploadUrlAndPutPublicObject_shareTheSameFileId() throws Exception {
-        LocalDevStorageService service = new LocalDevStorageService(
+        LocalFileStorageService service = new LocalFileStorageService(
                 tempDir.toString(),
                 "http://localhost:8080/cc-backend-monolitic",
                 "http://localhost:8080/cc-backend-monolitic"
@@ -33,14 +33,14 @@ class LocalDevStorageServiceTest {
         assertThat(service.createDownloadUrl(bucket, objectKey, Duration.ofMinutes(15)).url())
                 .isEqualTo(uploadUrl.url());
 
-        LocalDevStorageService.StoredLocalMediaFile storedFile = service.loadPublicObject(fileId);
+        LocalFileStorageService.StoredLocalMediaFile storedFile = service.loadPublicObject(fileId);
         assertThat(storedFile.contentType()).isEqualTo("image/jpeg");
         assertThat(Files.readString(storedFile.path())).isEqualTo("passport");
     }
 
     @Test
     void putObjectStoresBytesUsingObjectKeyDerivedUuid() throws Exception {
-        LocalDevStorageService service = new LocalDevStorageService(
+        LocalFileStorageService service = new LocalFileStorageService(
                 tempDir.toString(),
                 "http://localhost:8080/cc-backend-monolitic",
                 "http://localhost:8080/cc-backend-monolitic"
@@ -54,7 +54,7 @@ class LocalDevStorageServiceTest {
         String downloadUrl = service.createDownloadUrl(bucket, objectKey, Duration.ofMinutes(15)).url();
         String fileId = downloadUrl.substring(downloadUrl.lastIndexOf('/') + 1);
 
-        LocalDevStorageService.StoredLocalMediaFile storedFile = service.loadPublicObject(fileId);
+        LocalFileStorageService.StoredLocalMediaFile storedFile = service.loadPublicObject(fileId);
         assertThat(storedFile.contentType()).isEqualTo("image/jpeg");
         assertThat(Files.readString(storedFile.path())).isEqualTo("selfie");
     }

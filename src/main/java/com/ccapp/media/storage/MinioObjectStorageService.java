@@ -24,11 +24,15 @@ import java.time.ZoneOffset;
 
 @Slf4j
 @RequiredArgsConstructor
-public class MinioObjectStorageService implements ObjectStorageService {
+public class MinioObjectStorageService implements ObjectStorageService, AutoCloseable {
 
     private final S3Client mediaS3Client;
     private final S3Presigner mediaS3Presigner;
     private final MediaStorageSettings mediaStorageSettings;
+
+    S3Client mediaS3Client() {
+        return mediaS3Client;
+    }
 
     @Override
     public PresignedUrl createUploadUrl(String bucket, String objectKey, String contentType, Duration ttl) {
@@ -141,6 +145,15 @@ public class MinioObjectStorageService implements ObjectStorageService {
                 return false;
             }
             throw new BusinessException("Unable to verify uploaded media");
+        }
+    }
+
+    @Override
+    public void close() {
+        try {
+            mediaS3Presigner.close();
+        } finally {
+            mediaS3Client.close();
         }
     }
 }

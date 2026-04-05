@@ -1,6 +1,8 @@
 package com.ccapp.media.controller;
 
-import com.ccapp.media.storage.LocalDevStorageService;
+import com.ccapp.common.exception.NotFoundException;
+import com.ccapp.media.storage.LocalFileStorageService;
+import com.ccapp.media.storage.ObjectStorageService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.core.io.FileSystemResource;
@@ -20,26 +22,34 @@ import java.util.concurrent.TimeUnit;
 
 @RestController
 @RequiredArgsConstructor
-@ConditionalOnBean(LocalDevStorageService.class)
+@ConditionalOnBean(LocalFileStorageService.class)
 public class DevMediaController {
 
-    private final LocalDevStorageService localDevStorageService;
+    private final ObjectStorageService objectStorageService;
+    private final LocalFileStorageService localFileStorageService;
 
     @PutMapping("/dev-media/{fileId}")
     public ResponseEntity<Void> uploadDevMedia(@PathVariable String fileId,
                                                @RequestBody byte[] data,
                                                @RequestHeader(value = HttpHeaders.CONTENT_TYPE, required = false) String contentType) {
-        localDevStorageService.putPublicObject(fileId, data, contentType);
+        activeLocalFileStorageService().putPublicObject(fileId, data, contentType);
         return ResponseEntity.ok().build();
     }
 
     @GetMapping("/dev-media/{fileId}")
     public ResponseEntity<Resource> getDevMedia(@PathVariable String fileId) {
-        LocalDevStorageService.StoredLocalMediaFile storedFile = localDevStorageService.loadPublicObject(fileId);
+        LocalFileStorageService.StoredLocalMediaFile storedFile = activeLocalFileStorageService().loadPublicObject(fileId);
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(storedFile.contentType()))
                 .contentLength(storedFile.contentLength())
                 .cacheControl(CacheControl.maxAge(5, TimeUnit.MINUTES).cachePublic())
                 .body(new FileSystemResource(storedFile.path()));
+    }
+
+    private LocalFileStorageService activeLocalFileStorageService() {
+        if (objectStorageService instanceof LocalFileStorageService) {
+            return localFileStorageService;
+        }
+        throw new NotFoundException("Resource not found");
     }
 }

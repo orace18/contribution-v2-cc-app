@@ -20,7 +20,7 @@ import java.util.Properties;
 import java.util.UUID;
 
 @Slf4j
-public class LocalDevStorageService implements ObjectStorageService {
+public class LocalFileStorageService implements ObjectStorageService, AutoCloseable {
 
     private static final String DEFAULT_CONTENT_TYPE = "application/octet-stream";
 
@@ -28,9 +28,9 @@ public class LocalDevStorageService implements ObjectStorageService {
     private final String configuredPublicBaseUrl;
     private final String fallbackPublicBaseUrl;
 
-    public LocalDevStorageService(String rootPath,
-                                  String configuredPublicBaseUrl,
-                                  String fallbackPublicBaseUrl) {
+    public LocalFileStorageService(String rootPath,
+                                   String configuredPublicBaseUrl,
+                                   String fallbackPublicBaseUrl) {
         this.rootPath = Path.of(rootPath).toAbsolutePath().normalize();
         this.configuredPublicBaseUrl = normalizeBaseUrl(configuredPublicBaseUrl);
         this.fallbackPublicBaseUrl = normalizeBaseUrl(fallbackPublicBaseUrl);
@@ -71,7 +71,7 @@ public class LocalDevStorageService implements ObjectStorageService {
         String normalizedFileId = normalizeFileId(fileId);
         Path dataPath = dataPath(normalizedFileId);
         if (!Files.exists(dataPath)) {
-            throw new NotFoundException("Local dev media file not found");
+            throw new NotFoundException("Local fallback media file not found");
         }
 
         Properties metadata = readMetadata(normalizedFileId);
@@ -80,7 +80,7 @@ public class LocalDevStorageService implements ObjectStorageService {
         try {
             size = Files.size(dataPath);
         } catch (IOException ex) {
-            throw new BusinessException("Unable to read local dev media file");
+            throw new BusinessException("Unable to read local fallback media file");
         }
         return new StoredLocalMediaFile(dataPath, contentType, size);
     }
@@ -100,14 +100,14 @@ public class LocalDevStorageService implements ObjectStorageService {
             metadata.setProperty("contentType", defaultContentType(contentType));
             writeMetadataFile(fileId, metadata);
             log.info(
-                    "Stored local dev media file fileId={} path={} bytes={} contentType={}",
+                    "Stored local fallback media file fileId={} path={} bytes={} contentType={}",
                     fileId,
                     targetPath,
                     data.length,
                     defaultContentType(contentType)
             );
         } catch (IOException ex) {
-            log.error("Unable to store local dev media file fileId={} path={}", fileId, targetPath, ex);
+            log.error("Unable to store local fallback media file fileId={} path={}", fileId, targetPath, ex);
             throw new BusinessException("Unable to store media file");
         }
     }
@@ -129,7 +129,7 @@ public class LocalDevStorageService implements ObjectStorageService {
         try (InputStream inputStream = Files.newInputStream(metadataPath, StandardOpenOption.READ)) {
             metadata.load(inputStream);
         } catch (IOException ex) {
-            throw new BusinessException("Unable to read local dev media metadata");
+            throw new BusinessException("Unable to read local fallback media metadata");
         }
         return metadata;
     }
@@ -142,9 +142,9 @@ public class LocalDevStorageService implements ObjectStorageService {
                 StandardOpenOption.TRUNCATE_EXISTING,
                 StandardOpenOption.WRITE
         )) {
-            metadata.store(outputStream, "ccapp local dev media");
+            metadata.store(outputStream, "ccapp local fallback media");
         } catch (IOException ex) {
-            throw new BusinessException("Unable to write local dev media metadata");
+            throw new BusinessException("Unable to write local fallback media metadata");
         }
     }
 
@@ -197,7 +197,7 @@ public class LocalDevStorageService implements ObjectStorageService {
         try {
             return UUID.fromString(fileId).toString();
         } catch (IllegalArgumentException ex) {
-            throw new NotFoundException("Local dev media file not found");
+            throw new NotFoundException("Local fallback media file not found");
         }
     }
 
@@ -216,7 +216,7 @@ public class LocalDevStorageService implements ObjectStorageService {
         try {
             Files.createDirectories(rootPath);
         } catch (IOException ex) {
-            throw new IllegalStateException("Unable to initialize local dev media directory: " + rootPath, ex);
+            throw new IllegalStateException("Unable to initialize local fallback media directory: " + rootPath, ex);
         }
     }
 
@@ -233,5 +233,10 @@ public class LocalDevStorageService implements ObjectStorageService {
             String contentType,
             long contentLength
     ) {
+    }
+
+    @Override
+    public void close() {
+        // no-op
     }
 }

@@ -8,7 +8,6 @@ import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.URI;
 import java.net.UnknownHostException;
-import java.util.Arrays;
 
 public final class MediaStorageModeResolver {
 
@@ -16,35 +15,29 @@ public final class MediaStorageModeResolver {
     }
 
     public static MediaStorageModeDecision resolve(Environment environment) {
-        int timeoutMs = resolveTimeout(environment.getProperty("media.local-dev.reachability-timeout-ms"));
+        int timeoutMs = resolveTimeout(
+                firstNonBlank(
+                        environment.getProperty("media.storage.reachability-timeout-ms"),
+                        environment.getProperty("media.local-file.reachability-timeout-ms"),
+                        environment.getProperty("media.local-dev.reachability-timeout-ms")
+                )
+        );
         boolean strictStartup = resolveStrictStartup(environment.getProperty("media.storage.startup-strict"));
         return resolve(
-                environment.getActiveProfiles(),
                 environment.getProperty("media.storage.endpoint"),
                 timeoutMs,
                 strictStartup
         );
     }
 
-    static MediaStorageModeDecision resolve(String[] activeProfiles,
-                                            String endpoint,
+    static MediaStorageModeDecision resolve(String endpoint,
                                             int reachabilityTimeoutMs) {
-        return resolve(activeProfiles, endpoint, reachabilityTimeoutMs, false);
+        return resolve(endpoint, reachabilityTimeoutMs, false);
     }
 
-    static MediaStorageModeDecision resolve(String[] activeProfiles,
-                                            String endpoint,
+    static MediaStorageModeDecision resolve(String endpoint,
                                             int reachabilityTimeoutMs,
                                             boolean strictStartup) {
-        boolean devProfileActive = isDevProfile(activeProfiles);
-        if (devProfileActive && MediaStorageConfig.isBlank(endpoint)) {
-            return new MediaStorageModeDecision(
-                    MediaStorageMode.LOCAL_DEV,
-                    "Spring profile 'dev' is active and media.storage.endpoint is missing",
-                    endpoint
-            );
-        }
-
         if (MediaStorageConfig.isBlank(endpoint)) {
             return fallbackDecision(
                     strictStartup,
@@ -105,10 +98,13 @@ public final class MediaStorageModeResolver {
         return Boolean.parseBoolean(rawStrictStartup.trim());
     }
 
-    private static boolean isDevProfile(String[] activeProfiles) {
-        return Arrays.stream(activeProfiles)
-                .filter(profile -> profile != null && !profile.isBlank())
-                .anyMatch(profile -> "dev".equalsIgnoreCase(profile.trim()));
+    private static String firstNonBlank(String... values) {
+        for (String value : values) {
+            if (!MediaStorageConfig.isBlank(value)) {
+                return value.trim();
+            }
+        }
+        return null;
     }
 
     private static MediaStorageModeDecision fallbackDecision(boolean strictStartup,
@@ -120,7 +116,7 @@ public final class MediaStorageModeResolver {
             );
         }
         return new MediaStorageModeDecision(
-                MediaStorageMode.NOOP,
+                MediaStorageMode.LOCAL_FILE,
                 reason,
                 endpoint
         );

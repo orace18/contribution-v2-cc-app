@@ -3,7 +3,6 @@ package com.ccapp.media.storage;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import software.amazon.awssdk.services.s3.S3Client;
@@ -16,11 +15,10 @@ import java.util.List;
 
 @Slf4j
 @Component
-@ConditionalOnBean(S3Client.class)
 @RequiredArgsConstructor
 public class MediaBucketInitializer {
 
-    private final S3Client mediaS3Client;
+    private final ObjectStorageService objectStorageService;
 
     @Value("${media.bucket.public:cc-media-public}")
     private String publicBucket;
@@ -39,13 +37,18 @@ public class MediaBucketInitializer {
 
     @PostConstruct
     public void ensureBuckets() {
+        if (!(objectStorageService instanceof MinioObjectStorageService minioObjectStorageService)) {
+            log.info("Skipping MinIO bucket initialization because local storage fallback is active");
+            return;
+        }
         if (!autoCreateBuckets) {
             log.info("Media bucket auto-creation disabled");
             return;
         }
+        S3Client mediaS3Client = minioObjectStorageService.mediaS3Client();
         for (String bucket : List.of(publicBucket, privateBucket, kycBucket)) {
             try {
-                ensureBucketExists(bucket);
+                ensureBucketExists(mediaS3Client, bucket);
             } catch (RuntimeException ex) {
                 if (strictStartup) {
                     throw ex;
@@ -55,7 +58,7 @@ public class MediaBucketInitializer {
         }
     }
 
-    private void ensureBucketExists(String bucket) {
+    private void ensureBucketExists(S3Client mediaS3Client, String bucket) {
         try {
             mediaS3Client.headBucket(HeadBucketRequest.builder().bucket(bucket).build());
             return;

@@ -10,11 +10,7 @@ public record MediaStorageModeDecision(
         return mode == MediaStorageMode.MINIO;
     }
 
-    public boolean usesLocalDevStorage() {
-        return mode == MediaStorageMode.LOCAL_DEV;
-    }
-
-    public boolean usesNoopStorage() {
-        return mode == MediaStorageMode.NOOP;
+    public boolean usesLocalFileStorage() {
+        return mode == MediaStorageMode.LOCAL_FILE;
     }
 }

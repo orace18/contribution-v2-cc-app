@@ -3,7 +3,6 @@ package com.ccapp.media.storage;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
@@ -11,50 +10,110 @@ import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.S3Configuration;
+import software.amazon.awssdk.services.s3.model.HeadBucketRequest;
+import software.amazon.awssdk.services.s3.model.NoSuchBucketException;
+import software.amazon.awssdk.services.s3.model.S3Exception;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 import java.net.URI;
+import java.nio.file.Path;
 
 @Slf4j
 @Configuration
 public class MediaStorageConfig {
 
     @Bean
-    public MediaStorageModeDecision mediaStorageModeDecision(Environment environment) {
+    public LocalFileStorageService localFileStorageService(
+            @Value("${media.local-file.root-path:./dev-storage/}") String rootPath,
+            @Value("${media.local-file.public-base-url:}") String configuredPublicBaseUrl,
+            @Value("${server.port:8080}") int serverPort,
+            @Value("${server.servlet.context-path:}") String contextPath) {
+        String fallbackBaseUrl = "http://localhost:" + serverPort + normalizeContextPath(contextPath);
+        return new LocalFileStorageService(rootPath, configuredPublicBaseUrl, fallbackBaseUrl);
+    }
+
+    @Bean
+    public MediaStorageModeDecision mediaStorageModeDecision(Environment environment,
+                                                             @Value("${media.storage.endpoint:http://localhost:9000}") String endpoint,
+                                                             @Value("${media.storage.public-endpoint:}") String publicEndpoint,
+                                                             @Value("${media.storage.region:us-east-1}") String region,
+                                                             @Value("${media.storage.access-key:}") String accessKey,
+                                                             @Value("${media.storage.secret-key:}") String secretKey,
+                                                             @Value("${media.storage.path-style:true}") boolean pathStyle,
+                                                             @Value("${media.bucket.public:cc-media-public}") String publicBucket,
+                                                             @Value("${media.storage.startup-strict:false}") boolean strictStartup,
+                                                             @Value("${media.local-file.root-path:./dev-storage/}") String localRootPath) {
         MediaStorageModeDecision decision = MediaStorageModeResolver.resolve(environment);
-        if (decision.usesLocalDevStorage()) {
-            log.warn(
-                    "Local dev media storage fallback enabled mode={} endpoint={} reason={}",
-                    decision.mode(),
-                    defaultIfBlank(decision.endpoint(), "<unset>"),
-                    decision.reason()
+        if (decision.usesLocalFileStorage()) {
+            logLocalFallback(decision, localRootPath);
+            return decision;
+        }
+
+        try {
+            MediaStorageSettings settings = mediaStorageSettings(
+                    endpoint,
+                    publicEndpoint,
+                    region,
+                    accessKey,
+                    secretKey,
+                    pathStyle
             );
-        } else if (decision.usesNoopStorage()) {
-            log.warn(
-                    "Noop media storage fallback enabled mode={} endpoint={} reason={}",
-                    decision.mode(),
-                    defaultIfBlank(decision.endpoint(), "<unset>"),
-                    decision.reason()
-            );
-        } else {
+            probeMinioAvailability(settings, publicBucket);
             log.info(
                     "Media storage configured mode={} endpoint={} reason={}",
                     decision.mode(),
                     defaultIfBlank(decision.endpoint(), "<unset>"),
                     decision.reason()
             );
+            return decision;
+        } catch (RuntimeException ex) {
+            if (strictStartup) {
+                throw ex;
+            }
+            MediaStorageModeDecision fallbackDecision = new MediaStorageModeDecision(
+                    MediaStorageMode.LOCAL_FILE,
+                    "MinIO client initialization failed: " + rootCauseMessage(ex),
+                    endpoint
+            );
+            logLocalFallback(fallbackDecision, localRootPath);
+            return fallbackDecision;
         }
-        return decision;
     }
 
-    @Bean
-    @Conditional(UseMinioStorageCondition.class)
-    public MediaStorageSettings mediaStorageSettings(@Value("${media.storage.endpoint:http://localhost:9000}") String endpoint,
+    @Bean(destroyMethod = "close")
+    public ObjectStorageService objectStorageService(MediaStorageModeDecision decision,
+                                                     LocalFileStorageService localFileStorageService,
+                                                     @Value("${media.storage.endpoint:http://localhost:9000}") String endpoint,
                                                      @Value("${media.storage.public-endpoint:}") String publicEndpoint,
                                                      @Value("${media.storage.region:us-east-1}") String region,
-                                                     @Value("${media.storage.access-key}") String accessKey,
-                                                     @Value("${media.storage.secret-key}") String secretKey,
+                                                     @Value("${media.storage.access-key:}") String accessKey,
+                                                     @Value("${media.storage.secret-key:}") String secretKey,
                                                      @Value("${media.storage.path-style:true}") boolean pathStyle) {
+        if (decision.usesLocalFileStorage()) {
+            return localFileStorageService;
+        }
+
+        MediaStorageSettings settings = mediaStorageSettings(
+                endpoint,
+                publicEndpoint,
+                region,
+                accessKey,
+                secretKey,
+                pathStyle
+        );
+        return new MinioObjectStorageService(
+                createS3Client(settings),
+                createS3Presigner(settings),
+                settings
+        );
+    }
+
+    public MediaStorageSettings mediaStorageSettings(String endpoint,
+                                                     String publicEndpoint,
+                                                     String region,
+                                                     String accessKey,
+                                                     String secretKey,
+                                                     boolean pathStyle) {
         String resolvedEndpoint = requireNonBlank(endpoint, "media.storage.endpoint");
         String resolvedRegion = defaultIfBlank(region, "us-east-1");
         String resolvedAccessKey = requireNonBlank(accessKey, "media.storage.access-key");
@@ -83,9 +142,7 @@ public class MediaStorageConfig {
         );
     }
 
-    @Bean
-    @Conditional(UseMinioStorageCondition.class)
-    public S3Client mediaS3Client(MediaStorageSettings settings) {
+    static S3Client createS3Client(MediaStorageSettings settings) {
         AwsBasicCredentials credentials = AwsBasicCredentials.create(settings.accessKey(), settings.secretKey());
         S3Configuration s3Configuration = S3Configuration.builder()
                 .pathStyleAccessEnabled(settings.pathStyle())
@@ -98,9 +155,7 @@ public class MediaStorageConfig {
                 .build();
     }
 
-    @Bean
-    @Conditional(UseMinioStorageCondition.class)
-    public S3Presigner mediaS3Presigner(MediaStorageSettings settings) {
+    static S3Presigner createS3Presigner(MediaStorageSettings settings) {
         AwsBasicCredentials credentials = AwsBasicCredentials.create(settings.accessKey(), settings.secretKey());
         S3Configuration s3Configuration = S3Configuration.builder()
                 .pathStyleAccessEnabled(settings.pathStyle())
@@ -113,43 +168,47 @@ public class MediaStorageConfig {
                 .build();
     }
 
-    @Bean
-    @Conditional(UseMinioStorageCondition.class)
-    public ObjectStorageService minioObjectStorageService(S3Client mediaS3Client,
-                                                          S3Presigner mediaS3Presigner,
-                                                          MediaStorageSettings settings) {
-        return new MinioObjectStorageService(mediaS3Client, mediaS3Presigner, settings);
+    private void probeMinioAvailability(MediaStorageSettings settings, String publicBucket) {
+        try (S3Client probeClient = createS3Client(settings)) {
+            probeClient.headBucket(HeadBucketRequest.builder().bucket(publicBucket).build());
+        } catch (NoSuchBucketException ex) {
+            log.info(
+                    "MinIO connectivity probe reached endpoint={} bucket={} but bucket does not exist yet",
+                    settings.endpoint(),
+                    publicBucket
+            );
+        } catch (S3Exception ex) {
+            if (ex.statusCode() == 404) {
+                log.info(
+                        "MinIO connectivity probe reached endpoint={} bucket={} and received 404",
+                        settings.endpoint(),
+                        publicBucket
+                );
+                return;
+            }
+            throw ex;
+        }
     }
 
-    @Bean
-    @Conditional(UseLocalDevStorageCondition.class)
-    public LocalDevStorageService localDevStorageService(
-            MediaStorageModeDecision decision,
-            @Value("${media.local-dev.root-path:/tmp/ccapp-media/}") String rootPath,
-            @Value("${media.local-dev.public-base-url:}") String configuredPublicBaseUrl,
-            @Value("${server.port:8080}") int serverPort,
-            @Value("${server.servlet.context-path:}") String contextPath) {
-        String fallbackBaseUrl = "http://localhost:" + serverPort + normalizeContextPath(contextPath);
-        log.info(
-                "Using local dev media storage rootPath={} configuredPublicBaseUrl={} fallbackPublicBaseUrl={} reason={}",
-                rootPath,
-                isBlank(configuredPublicBaseUrl) ? "<request-derived>" : configuredPublicBaseUrl.trim(),
-                fallbackBaseUrl,
-                decision.reason()
+    private void logLocalFallback(MediaStorageModeDecision decision, String localRootPath) {
+        log.warn(
+                "MinIO unavailable, using local storage fallback endpoint={} reason={} rootPath={}",
+                defaultIfBlank(decision.endpoint(), "<unset>"),
+                decision.reason(),
+                rootPathForLogging(localRootPath)
         );
-        return new LocalDevStorageService(rootPath, configuredPublicBaseUrl, fallbackBaseUrl);
     }
 
-    @Bean
-    @Conditional(UseLocalDevStorageCondition.class)
-    public ObjectStorageService localDevObjectStorageService(LocalDevStorageService localDevStorageService) {
-        return localDevStorageService;
+    private String rootPathForLogging(String rootPath) {
+        return Path.of(defaultIfBlank(rootPath, "./dev-storage/")).toAbsolutePath().normalize().toString();
     }
 
-    @Bean
-    @Conditional(UseNoopStorageCondition.class)
-    public ObjectStorageService noopObjectStorageService(MediaStorageModeDecision decision) {
-        return new NoopMediaStorageService(decision);
+    private String rootCauseMessage(Throwable throwable) {
+        Throwable current = throwable;
+        while (current.getCause() != null) {
+            current = current.getCause();
+        }
+        return defaultIfBlank(current.getMessage(), current.getClass().getSimpleName());
     }
 
     static URI resolvePresignerEndpoint(String publicEndpoint, URI internalEndpointUri) {
