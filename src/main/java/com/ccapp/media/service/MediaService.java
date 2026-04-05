@@ -122,6 +122,25 @@ public class MediaService {
         return toResponse(saved);
     }
 
+    @Transactional
+    public MediaFileResponse proxyUpload(UUID actorUserId,
+                                         UUID actorAccountHolderId,
+                                         UUID mediaId,
+                                         byte[] data,
+                                         String contentType) {
+        UUID targetAccountHolderId = resolveTargetAccountHolderId(actorAccountHolderId, null);
+        assertDelegatedAccess(actorUserId, actorAccountHolderId, targetAccountHolderId);
+        MediaFile media = loadOwnedMedia(targetAccountHolderId, mediaId);
+        if (media.getStatus() != MediaStatus.PENDING_UPLOAD) {
+            throw new BusinessException("Media file is not pending upload");
+        }
+        objectStorageService.putObject(media.getBucket(), media.getObjectKey(), data, media.getContentType());
+        media.setStatus(MediaStatus.READY);
+        MediaFile saved = mediaFileRepository.save(media);
+        attachMediaToDomain(saved);
+        return toResponse(saved);
+    }
+
     @Transactional(readOnly = true)
     public MediaFileResponse getMedia(UUID actorUserId,
                                       UUID actorAccountHolderId,

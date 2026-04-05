@@ -9,4 +9,7 @@ public interface ObjectStorageService {
     PresignedUrl createDownloadUrl(String bucket, String objectKey, Duration ttl);
 
     boolean objectExists(String bucket, String objectKey);
+
+    /** Upload raw bytes directly (used as proxy when presigned URL is not reachable by the client). */
+    void putObject(String bucket, String objectKey, byte[] data, String contentType);
 }

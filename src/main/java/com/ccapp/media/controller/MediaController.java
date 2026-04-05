@@ -14,6 +14,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -62,6 +63,21 @@ public class MediaController {
         return ResponseEntity.ok(CommonResponse.success(
                 "Media upload confirmed",
                 mediaService.confirmUpload(actorUserId, actorAccountHolderId, request)
+        ));
+    }
+
+    @PostMapping(value = "/{id}/upload-proxy", consumes = MediaType.APPLICATION_OCTET_STREAM_VALUE)
+    @Operation(summary = "Upload media bytes directly via backend proxy (fallback when presigned URL is unreachable)")
+    public ResponseEntity<CommonResponse<MediaFileResponse>> uploadProxy(
+            @PathVariable UUID id,
+            @RequestBody byte[] data,
+            @RequestHeader("X-Media-Content-Type") String contentType) {
+        UUID actorAccountHolderId = SecurityUtils.currentAccountHolderId();
+        AuthenticatedPrincipal principal = SecurityUtils.currentPrincipal();
+        UUID actorUserId = principal.userId() != null ? principal.userId() : actorAccountHolderId;
+        return ResponseEntity.ok(CommonResponse.success(
+                "Media uploaded",
+                mediaService.proxyUpload(actorUserId, actorAccountHolderId, id, data, contentType)
         ));
     }
 

@@ -14,6 +14,8 @@ import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequ
 import software.amazon.awssdk.services.s3.presigner.model.PresignedPutObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
 
+import software.amazon.awssdk.core.sync.RequestBody;
+
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -61,6 +63,23 @@ public class MinioObjectStorageService implements ObjectStorageService {
             );
         } catch (RuntimeException ex) {
             throw new BusinessException("Unable to generate media download URL");
+        }
+    }
+
+    @Override
+    public void putObject(String bucket, String objectKey, byte[] data, String contentType) {
+        try {
+            mediaS3Client.putObject(
+                    PutObjectRequest.builder()
+                            .bucket(bucket)
+                            .key(objectKey)
+                            .contentType(contentType)
+                            .contentLength((long) data.length)
+                            .build(),
+                    RequestBody.fromBytes(data)
+            );
+        } catch (RuntimeException ex) {
+            throw new BusinessException("Unable to store media file");
         }
     }
 
