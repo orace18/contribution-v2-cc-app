@@ -4,7 +4,6 @@ import com.ccapp.common.exception.NotFoundException;
 import com.ccapp.media.storage.LocalFileStorageService;
 import com.ccapp.media.storage.ObjectStorageService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.CacheControl;
@@ -23,7 +22,6 @@ import java.util.concurrent.TimeUnit;
 
 @RestController
 @RequiredArgsConstructor
-@ConditionalOnBean(LocalFileStorageService.class)
 @RequestMapping("/dev-media")
 public class DevMediaController {
 
