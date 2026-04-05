@@ -38,7 +38,11 @@ services:
       - REDIS_PORT=${REDIS_PORT}
       - REDIS_PASSWORD=${REDIS_PASSWORD}
 
-      - MEDIA_STORAGE_ENDPOINT=${MEDIA_STORAGE_ENDPOINT:-http://minio:9000}
+      # Must be reachable from the backend container. Do not rely on the internal
+      # "minio" hostname unless the backend really runs in the same Docker network.
+      - MEDIA_STORAGE_ENDPOINT=${MEDIA_STORAGE_ENDPOINT:-}
+      # Public URL returned in presigned URLs and used by mobile/browser clients.
+      - MEDIA_STORAGE_PUBLIC_ENDPOINT=${MEDIA_STORAGE_PUBLIC_ENDPOINT:-}
       - MEDIA_STORAGE_REGION=${MEDIA_STORAGE_REGION:-us-east-1}
       - MEDIA_STORAGE_ACCESS_KEY=${MEDIA_STORAGE_ACCESS_KEY:-minio-prod-change-me}
       - MEDIA_STORAGE_SECRET_KEY=${MEDIA_STORAGE_SECRET_KEY:-minio-prod-change-me}

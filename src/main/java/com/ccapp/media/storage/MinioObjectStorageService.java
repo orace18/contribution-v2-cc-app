@@ -30,6 +30,7 @@ public class MinioObjectStorageService implements ObjectStorageService {
 
     private final S3Client mediaS3Client;
     private final S3Presigner mediaS3Presigner;
+    private final MediaStorageSettings mediaStorageSettings;
 
     @Override
     public PresignedUrl createUploadUrl(String bucket, String objectKey, String contentType, Duration ttl) {
@@ -73,19 +74,44 @@ public class MinioObjectStorageService implements ObjectStorageService {
     @Override
     public void putObject(String bucket, String objectKey, byte[] data, String contentType) {
         try {
-            log.debug("putObject bucket={} key={} bytes={} contentType={}", bucket, objectKey, data.length, contentType);
+            log.info(
+                    "Attempting media storage upload endpoint={} bucket={} key={} bytes={} contentType={}",
+                    mediaStorageSettings.endpoint(),
+                    bucket,
+                    objectKey,
+                    data.length,
+                    contentType
+            );
             doPutObject(bucket, objectKey, data, contentType);
         } catch (NoSuchBucketException ex) {
-            log.warn("putObject: bucket {} not found, creating it lazily", bucket);
+            log.warn(
+                    "putObject bucket not found endpoint={} bucket={}, creating it lazily",
+                    mediaStorageSettings.endpoint(),
+                    bucket
+            );
             mediaS3Client.createBucket(CreateBucketRequest.builder().bucket(bucket).build());
             try {
                 doPutObject(bucket, objectKey, data, contentType);
             } catch (RuntimeException retryEx) {
-                log.error("putObject retry failed bucket={} key={}: {}", bucket, objectKey, retryEx.getMessage(), retryEx);
+                log.error(
+                        "putObject retry failed endpoint={} bucket={} key={}: {}",
+                        mediaStorageSettings.endpoint(),
+                        bucket,
+                        objectKey,
+                        retryEx.getMessage(),
+                        retryEx
+                );
                 throw new BusinessException("Unable to store media file");
             }
         } catch (RuntimeException ex) {
-            log.error("putObject failed bucket={} key={}: {}", bucket, objectKey, ex.getMessage(), ex);
+            log.error(
+                    "putObject failed endpoint={} bucket={} key={}: {}",
+                    mediaStorageSettings.endpoint(),
+                    bucket,
+                    objectKey,
+                    ex.getMessage(),
+                    ex
+            );
             throw new BusinessException("Unable to store media file");
         }
     }
