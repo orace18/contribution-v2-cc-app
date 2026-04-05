@@ -4,7 +4,9 @@ import com.ccapp.common.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
+import software.amazon.awssdk.services.s3.model.NoSuchBucketException;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.S3Exception;
@@ -69,18 +71,31 @@ public class MinioObjectStorageService implements ObjectStorageService {
     @Override
     public void putObject(String bucket, String objectKey, byte[] data, String contentType) {
         try {
-            mediaS3Client.putObject(
-                    PutObjectRequest.builder()
-                            .bucket(bucket)
-                            .key(objectKey)
-                            .contentType(contentType)
-                            .contentLength((long) data.length)
-                            .build(),
-                    RequestBody.fromBytes(data)
-            );
+            doPutObject(bucket, objectKey, data, contentType);
+        } catch (NoSuchBucketException ex) {
+            // Bucket may not have been created at startup (MediaBucketInitializer uses
+            // strictStartup=false). Create it lazily and retry once.
+            mediaS3Client.createBucket(CreateBucketRequest.builder().bucket(bucket).build());
+            try {
+                doPutObject(bucket, objectKey, data, contentType);
+            } catch (RuntimeException retryEx) {
+                throw new BusinessException("Unable to store media file");
+            }
         } catch (RuntimeException ex) {
             throw new BusinessException("Unable to store media file");
         }
+    }
+
+    private void doPutObject(String bucket, String objectKey, byte[] data, String contentType) {
+        mediaS3Client.putObject(
+                PutObjectRequest.builder()
+                        .bucket(bucket)
+                        .key(objectKey)
+                        .contentType(contentType)
+                        .contentLength((long) data.length)
+                        .build(),
+                RequestBody.fromBytes(data)
+        );
     }
 
     @Override
