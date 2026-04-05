@@ -48,6 +48,8 @@ class IdentityDeviceSessionServiceTest {
     private RefreshTokenService refreshTokenService;
     @Mock
     private IdentitySecurityService identitySecurityService;
+    @Mock
+    private KycStatusConsistencyService kycStatusConsistencyService;
 
     private IdentityDeviceSessionService identityDeviceSessionService;
 
@@ -61,7 +63,8 @@ class IdentityDeviceSessionServiceTest {
                 accountHolderService,
                 appUserRepository,
                 refreshTokenService,
-                identitySecurityService
+                identitySecurityService,
+                kycStatusConsistencyService
         );
         ReflectionTestUtils.setField(identityDeviceSessionService, "refreshTtlHours", 720L);
         ReflectionTestUtils.setField(identityDeviceSessionService, "maxDevicesPerUser", 5);
@@ -89,6 +92,7 @@ class IdentityDeviceSessionServiceTest {
                 .role(UserRole.USER)
                 .build()));
         when(accountHolderService.exists(userId)).thenReturn(true);
+        when(kycStatusConsistencyService.reconcileAccountHolderStatus(userId)).thenReturn(KycStatus.NOT_STARTED);
         when(userDeviceRepository.findByUserIdAndDeviceIdentifierAndDeletedFalse(userId, "device-over-limit")).thenReturn(Optional.empty());
         when(userDeviceRepository.countByUserIdAndDeletedFalse(userId)).thenReturn(5L);
 

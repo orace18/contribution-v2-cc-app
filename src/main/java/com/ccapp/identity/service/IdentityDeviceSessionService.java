@@ -50,6 +50,7 @@ public class IdentityDeviceSessionService {
     private final AppUserRepository appUserRepository;
     private final RefreshTokenService refreshTokenService;
     private final IdentitySecurityService identitySecurityService;
+    private final KycStatusConsistencyService kycStatusConsistencyService;
 
     @Value("${identity.refresh-token.ttl-hours:720}")
     private long refreshTtlHours;
@@ -72,6 +73,7 @@ public class IdentityDeviceSessionService {
         syncUserClaims(user, claims);
 
         ensureDelegatedIdentityModel(user);
+        user.setKycStatus(kycStatusConsistencyService.reconcileAccountHolderStatus(user.getId()));
         ensureAccountActive(user);
 
         DeviceUpsertResult deviceResult = upsertDevice(

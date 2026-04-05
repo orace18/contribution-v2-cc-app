@@ -7,7 +7,6 @@ import com.ccapp.identity.account_holder.service.AccountHolderService;
 import com.ccapp.identity.domain.entity.User;
 import com.ccapp.identity.domain.entity.UserProfile;
 import com.ccapp.identity.domain.enums.AccountStatus;
-import com.ccapp.identity.domain.enums.KycStatus;
 import com.ccapp.identity.domain.enums.OnboardingStep;
 import com.ccapp.identity.dto.OnboardingStatusResponse;
 import com.ccapp.identity.dto.OnboardingStep1Request;
@@ -85,11 +84,6 @@ public class IdentityOnboardingService {
         updateOnboardingState(profile);
 
         UserProfile saved = userProfileRepository.save(profile);
-        if (user.getKycStatus() == KycStatus.NOT_STARTED) {
-            user.setKycStatus(KycStatus.PENDING);
-            userRepository.save(user);
-        }
-
         return buildOnboardingStatus(user, saved);
     }
 

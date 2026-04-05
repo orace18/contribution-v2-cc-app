@@ -137,9 +137,6 @@ public class AccountHolderService {
         accountHolder.setPhoneNumber(normalizedPhone);
         accountHolder.setCountryCode(selectedCountryCode);
         accountHolder.setServiceCountryCode(serviceCountryCode);
-        if (accountHolder.getKycStatus() == KycStatus.NOT_STARTED) {
-            accountHolder.setKycStatus(KycStatus.PENDING);
-        }
         AccountHolder saved = accountHolderRepository.save(accountHolder);
         log.info("Identity account-holder updateProfile success accountHolderId={} countryCode={} serviceCountryCode={}",
                 saved.getId(), saved.getCountryCode(), saved.getServiceCountryCode());

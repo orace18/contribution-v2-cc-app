@@ -1,6 +1,7 @@
 package com.ccapp.identity.service;
 
 import com.ccapp.common.exception.BusinessException;
+import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
 import com.ccapp.identity.account_holder.service.AccountHolderService;
 import com.ccapp.identity.domain.entity.User;
 import com.ccapp.identity.domain.entity.UserProfile;
@@ -10,6 +11,7 @@ import com.ccapp.identity.domain.enums.KycStatus;
 import com.ccapp.identity.domain.enums.OnboardingStep;
 import com.ccapp.identity.domain.enums.UserRole;
 import com.ccapp.identity.dto.OnboardingStatusResponse;
+import com.ccapp.identity.dto.OnboardingStep1Request;
 import com.ccapp.identity.dto.OnboardingStep2Request;
 import com.ccapp.identity.dto.OnboardingStep3Request;
 import com.ccapp.identity.mapper.IdentityMapper;
@@ -30,6 +32,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -145,6 +148,41 @@ class IdentityOnboardingFlowRegressionTest {
         verify(userProfileRepository, never()).save(any(UserProfile.class));
     }
 
+    @Test
+    void onboardingStep1_shouldKeepKycNotStartedUntilDocumentsAreActuallySubmitted() {
+        UUID userId = UUID.randomUUID();
+        User user = activeUser(userId);
+        AccountHolder accountHolder = AccountHolder.builder()
+                .id(userId)
+                .firstName("John")
+                .lastName("Doe")
+                .phoneNumber("+229000000")
+                .countryCode("BJ")
+                .serviceCountryCode("BJ")
+                .kycStatus(KycStatus.NOT_STARTED)
+                .build();
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(userProfileRepository.findByUserId(userId)).thenReturn(Optional.empty());
+        when(accountHolderService.updateProfile(
+                eq(userId),
+                eq("John"),
+                eq("Doe"),
+                eq("+229000000"),
+                eq("BJ")
+        )).thenReturn(accountHolder);
+        when(userProfileRepository.save(any(UserProfile.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        OnboardingStatusResponse response = identityOnboardingService.onboardingStep1(
+                userId,
+                new OnboardingStep1Request("John", "Doe", "BJ", "+229000000")
+        );
+
+        assertEquals(KycStatus.NOT_STARTED, user.getKycStatus());
+        assertTrue(response.step1Completed());
+        verify(userRepository, never()).save(any(User.class));
+    }
+
     private User activeUser(UUID userId) {
         return User.builder()
                 .id(userId)
@@ -152,7 +190,7 @@ class IdentityOnboardingFlowRegressionTest {
                 .email("user@test.com")
                 .role(UserRole.USER)
                 .accountStatus(AccountStatus.ACTIVE)
-                .kycStatus(KycStatus.PENDING)
+                .kycStatus(KycStatus.NOT_STARTED)
                 .build();
     }
 }
