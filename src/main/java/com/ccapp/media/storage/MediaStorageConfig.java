@@ -28,7 +28,7 @@ public class MediaStorageConfig {
             @Value("${media.local-file.public-base-url:}") String configuredPublicBaseUrl,
             @Value("${server.port:8080}") int serverPort,
             @Value("${server.servlet.context-path:}") String contextPath) {
-        String fallbackBaseUrl = "http://localhost:" + serverPort + normalizeContextPath(contextPath);
+        String fallbackBaseUrl = "https://localhost:" + serverPort + normalizeContextPath(contextPath);
         return new LocalFileStorageService(rootPath, configuredPublicBaseUrl, fallbackBaseUrl);
     }
 

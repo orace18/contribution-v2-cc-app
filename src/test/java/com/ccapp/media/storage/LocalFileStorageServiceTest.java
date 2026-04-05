@@ -2,6 +2,9 @@ package com.ccapp.media.storage;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -57,5 +60,68 @@ class LocalFileStorageServiceTest {
         LocalFileStorageService.StoredLocalMediaFile storedFile = service.loadPublicObject(fileId);
         assertThat(storedFile.contentType()).isEqualTo("image/jpeg");
         assertThat(Files.readString(storedFile.path())).isEqualTo("selfie");
+    }
+
+    @Test
+    void createUploadUrl_usesForwardedProtoWhenPresent() {
+        LocalFileStorageService service = new LocalFileStorageService(
+                tempDir.toString(),
+                "",
+                "https://localhost:8080/cc-backend-monolitic"
+        );
+
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setScheme("http");
+        request.setServerName("api-gateway.clubchretien.org");
+        request.setServerPort(80);
+        request.setContextPath("/cc-backend-monolitic");
+        request.addHeader("Host", "api-gateway.clubchretien.org");
+        request.addHeader("X-Forwarded-Proto", "https");
+
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
+        try {
+            PresignedUrl uploadUrl = service.createUploadUrl(
+                    "cc-media-public",
+                    "account-holders/test/PROFILE_PHOTO/123e4567-e89b-12d3-a456-426614174002-avatar.jpg",
+                    "image/jpeg",
+                    Duration.ofMinutes(15)
+            );
+
+            assertThat(uploadUrl.url())
+                    .startsWith("https://api-gateway.clubchretien.org/cc-backend-monolitic/dev-media/");
+        } finally {
+            RequestContextHolder.resetRequestAttributes();
+        }
+    }
+
+    @Test
+    void createUploadUrl_defaultsToHttpsWhenForwardedProtoIsMissing() {
+        LocalFileStorageService service = new LocalFileStorageService(
+                tempDir.toString(),
+                "",
+                "https://localhost:8080/cc-backend-monolitic"
+        );
+
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setScheme("http");
+        request.setServerName("api-gateway.clubchretien.org");
+        request.setServerPort(80);
+        request.setContextPath("/cc-backend-monolitic");
+        request.addHeader("Host", "api-gateway.clubchretien.org");
+
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
+        try {
+            PresignedUrl uploadUrl = service.createUploadUrl(
+                    "cc-media-public",
+                    "account-holders/test/PROFILE_PHOTO/123e4567-e89b-12d3-a456-426614174003-avatar.jpg",
+                    "image/jpeg",
+                    Duration.ofMinutes(15)
+            );
+
+            assertThat(uploadUrl.url())
+                    .startsWith("https://api-gateway.clubchretien.org/cc-backend-monolitic/dev-media/");
+        } finally {
+            RequestContextHolder.resetRequestAttributes();
+        }
     }
 }

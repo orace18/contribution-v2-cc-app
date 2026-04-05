@@ -2,8 +2,10 @@ package com.ccapp.media.storage;
 
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.common.exception.NotFoundException;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -15,6 +17,7 @@ import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.UUID;
@@ -157,14 +160,11 @@ public class LocalFileStorageService implements ObjectStorageService, AutoClosea
         if (!MediaStorageConfig.isBlank(configuredPublicBaseUrl)) {
             return configuredPublicBaseUrl;
         }
-        try {
-            return ServletUriComponentsBuilder.fromCurrentContextPath()
-                    .build()
-                    .toUriString()
-                    .replaceAll("/+$", "");
-        } catch (IllegalStateException ex) {
+        HttpServletRequest request = currentRequest();
+        if (request == null) {
             return fallbackPublicBaseUrl;
         }
+        return buildRequestBaseUrl(request);
     }
 
     private OffsetDateTime expiresAt(Duration ttl) {
@@ -210,6 +210,101 @@ public class LocalFileStorageService implements ObjectStorageService, AutoClosea
             return "";
         }
         return baseUrl.trim().replaceAll("/+$", "");
+    }
+
+    private HttpServletRequest currentRequest() {
+        var requestAttributes = RequestContextHolder.getRequestAttributes();
+        if (requestAttributes instanceof ServletRequestAttributes servletRequestAttributes) {
+            return servletRequestAttributes.getRequest();
+        }
+        return null;
+    }
+
+    private String buildRequestBaseUrl(HttpServletRequest request) {
+        String scheme = resolveScheme(request);
+        String authority = resolveAuthority(request, scheme);
+        return scheme + "://" + authority + MediaStorageConfig.normalizeContextPath(request.getContextPath());
+    }
+
+    private String resolveScheme(HttpServletRequest request) {
+        String forwardedProto = firstHeaderValue(request, "X-Forwarded-Proto");
+        if (!MediaStorageConfig.isBlank(forwardedProto)) {
+            return forwardedProto.toLowerCase(Locale.ROOT);
+        }
+        return "https";
+    }
+
+    private String resolveAuthority(HttpServletRequest request, String scheme) {
+        String forwardedHost = firstHeaderValue(request, "X-Forwarded-Host");
+        if (!MediaStorageConfig.isBlank(forwardedHost)) {
+            return normalizeAuthority(forwardedHost, scheme);
+        }
+
+        String hostHeader = firstHeaderValue(request, "Host");
+        if (!MediaStorageConfig.isBlank(hostHeader)) {
+            return normalizeAuthority(hostHeader, scheme);
+        }
+
+        int port = resolvePort(request, scheme);
+        if (isDefaultPort(port, scheme)) {
+            return request.getServerName();
+        }
+        return request.getServerName() + ":" + port;
+    }
+
+    private String normalizeAuthority(String authority, String scheme) {
+        String trimmedAuthority = authority.trim();
+        try {
+            java.net.URI parsedAuthority = java.net.URI.create(scheme + "://" + trimmedAuthority);
+            String host = parsedAuthority.getHost();
+            int port = parsedAuthority.getPort();
+            if (host == null) {
+                return trimmedAuthority;
+            }
+            if (port < 0 || isDefaultPort(port, scheme)) {
+                return host;
+            }
+            return host + ":" + port;
+        } catch (IllegalArgumentException ex) {
+            return trimmedAuthority;
+        }
+    }
+
+    private int resolvePort(HttpServletRequest request, String scheme) {
+        String forwardedPort = firstHeaderValue(request, "X-Forwarded-Port");
+        if (!MediaStorageConfig.isBlank(forwardedPort)) {
+            try {
+                return Integer.parseInt(forwardedPort);
+            } catch (NumberFormatException ignored) {
+                // Fall back to the servlet request port.
+            }
+        }
+        return request.getServerPort();
+    }
+
+    private boolean isDefaultPort(int port, String scheme) {
+        if (port <= 0) {
+            return true;
+        }
+        if ("https".equalsIgnoreCase(scheme)) {
+            return port == 443;
+        }
+        if ("http".equalsIgnoreCase(scheme)) {
+            return port == 80;
+        }
+        return false;
+    }
+
+    private String firstHeaderValue(HttpServletRequest request, String headerName) {
+        String value = request.getHeader(headerName);
+        if (MediaStorageConfig.isBlank(value)) {
+            return null;
+        }
+        int commaIndex = value.indexOf(',');
+        if (commaIndex >= 0) {
+            return value.substring(0, commaIndex).trim();
+        }
+        return value.trim();
     }
 
     private void ensureRootDirectory() {
