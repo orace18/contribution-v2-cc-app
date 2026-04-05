@@ -97,4 +97,16 @@ public interface OperationRepository extends JpaRepository<Operation, UUID> {
             order by o.createdAt desc
             """)
     List<Operation> findRecentForAccountHolder(UUID accountHolderId, Pageable pageable);
+
+    @Query("""
+            select o
+            from Operation o
+            where (o.accountHolderId = :accountHolderId
+                or o.destinationAccountHolderId = :accountHolderId)
+              and o.type in :types
+            order by o.createdAt desc
+            """)
+    List<Operation> findRecentWalletOperationsForAccountHolder(@Param("accountHolderId") UUID accountHolderId,
+                                                               @Param("types") Collection<OperationType> types,
+                                                               Pageable pageable);
 }

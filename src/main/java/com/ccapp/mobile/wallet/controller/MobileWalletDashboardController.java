@@ -3,6 +3,7 @@ package com.ccapp.mobile.wallet.controller;
 import com.ccapp.common.api.CommonResponse;
 import com.ccapp.common.security.AuthenticatedPrincipal;
 import com.ccapp.common.security.SecurityUtils;
+import com.ccapp.wallet.dto.WalletDashboardOperationResponse;
 import com.ccapp.wallet.dto.WalletDashboardResponse;
 import com.ccapp.wallet.service.WalletDashboardService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -18,6 +19,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -41,6 +43,21 @@ public class MobileWalletDashboardController {
         return ResponseEntity.ok(CommonResponse.success(
                 "Wallet dashboard",
                 walletDashboardService.getDashboard(resolveActorUserId(), accountHolderId)
+        ));
+    }
+
+    @GetMapping("/operations")
+    @Operation(summary = "Get wallet operations")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Success", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Account holder not found", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
+    })
+    public ResponseEntity<CommonResponse<List<WalletDashboardOperationResponse>>> operations() {
+        UUID accountHolderId = SecurityUtils.currentAccountHolderId();
+        return ResponseEntity.ok(CommonResponse.success(
+                "Wallet operations",
+                walletDashboardService.getRecentOperations(resolveActorUserId(), accountHolderId)
         ));
     }
 

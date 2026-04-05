@@ -5,11 +5,16 @@ import com.ccapp.identity.account_holder.service.AccountHolderService;
 import com.ccapp.identity.delegation.service.AccessControlService;
 import com.ccapp.identity.wallet.domain.entity.Wallet;
 import com.ccapp.identity.wallet.repository.WalletRepository;
+import com.ccapp.payments.operation.domain.entity.Operation;
+import com.ccapp.payments.operation.domain.enums.OperationStatus;
+import com.ccapp.payments.operation.domain.enums.OperationType;
+import com.ccapp.payments.operation.repository.OperationRepository;
 import com.ccapp.wallet.domain.entity.WalletLedgerEntry;
 import com.ccapp.wallet.domain.enums.WalletLedgerCategory;
 import com.ccapp.wallet.domain.enums.WalletLedgerEntryType;
 import com.ccapp.wallet.domain.enums.WalletLedgerStatus;
 import com.ccapp.wallet.domain.enums.WalletType;
+import com.ccapp.wallet.dto.WalletDashboardOperationResponse;
 import com.ccapp.wallet.dto.WalletDashboardResponse;
 import com.ccapp.wallet.repository.WalletLedgerEntryRepository;
 import org.junit.jupiter.api.Test;
@@ -48,6 +53,8 @@ class WalletDashboardServiceTest {
     private WalletRepository walletRepository;
     @Mock
     private WalletLedgerEntryRepository walletLedgerEntryRepository;
+    @Mock
+    private OperationRepository operationRepository;
 
     @InjectMocks
     private WalletDashboardService service;
@@ -60,6 +67,7 @@ class WalletDashboardServiceTest {
                 WalletType.USER,
                 "ACTIVE"
         )).thenReturn(Optional.empty());
+        stubRecentWalletOperations(List.of());
 
         WalletDashboardResponse response = service.getDashboard(ACTOR_USER_ID, ACCOUNT_HOLDER_ID);
 
@@ -71,55 +79,77 @@ class WalletDashboardServiceTest {
     }
 
     @Test
-    void getDashboard_returnsLedgerBasedStatsAndRecentOperations() {
-        Wallet wallet = Wallet.builder()
-                .id(WALLET_ID)
-                .accountHolderId(ACCOUNT_HOLDER_ID)
-                .provider("MTN")
-                .mobileMoneyNumber("22501234567")
-                .status("ACTIVE")
-                .walletType(WalletType.USER)
-                .build();
-        WalletLedgerEntry pendingEntry = WalletLedgerEntry.builder()
+    void getRecentOperations_returnsLedgerHistoryIncludingDeposits() {
+        WalletLedgerEntry confirmedDeposit = WalletLedgerEntry.builder()
                 .walletId(WALLET_ID)
                 .operationId(OPERATION_ID)
                 .entryType(WalletLedgerEntryType.CREDIT)
                 .category(WalletLedgerCategory.DEPOSIT)
-                .status(WalletLedgerStatus.PENDING)
+                .status(WalletLedgerStatus.CONFIRMED)
                 .amount(new BigDecimal("15000.0000"))
                 .currency("XOF")
                 .build();
-        pendingEntry.setCreatedAt(OffsetDateTime.parse("2026-04-04T10:15:30Z"));
-        WalletLedgerEntry failedEntry = WalletLedgerEntry.builder()
-                .walletId(WALLET_ID)
-                .operationId(UUID.fromString("55555555-5555-5555-5555-555555555555"))
-                .entryType(WalletLedgerEntryType.DEBIT)
-                .category(WalletLedgerCategory.WITHDRAWAL)
-                .status(WalletLedgerStatus.FAILED)
-                .amount(new BigDecimal("2000.0000"))
+        confirmedDeposit.setCreatedAt(OffsetDateTime.parse("2026-04-04T10:15:30Z"));
+
+        stubAuthorizedWallet();
+        when(walletLedgerEntryRepository.findByWalletIdOrderByCreatedAtDesc(eq(WALLET_ID), any(Pageable.class)))
+                .thenReturn(List.of(confirmedDeposit));
+        stubRecentWalletOperations(List.of());
+
+        List<WalletDashboardOperationResponse> response = service.getRecentOperations(ACTOR_USER_ID, ACCOUNT_HOLDER_ID);
+
+        assertThat(response).hasSize(1);
+        assertThat(response.get(0).operationId()).isEqualTo(OPERATION_ID);
+        assertThat(response.get(0).type()).isEqualTo(WalletLedgerCategory.DEPOSIT);
+        assertThat(response.get(0).status()).isEqualTo(WalletLedgerStatus.CONFIRMED);
+        assertThat(response.get(0).currency()).isEqualTo("XOF");
+    }
+
+    @Test
+    void getRecentOperations_includesPendingDepositWhenLedgerEntryIsMissing() {
+        Operation pendingDeposit = Operation.builder()
+                .id(OPERATION_ID)
+                .accountHolderId(ACCOUNT_HOLDER_ID)
+                .actorUserId(ACTOR_USER_ID)
+                .type(OperationType.WALLET_DEPOSIT_PSP)
+                .status(OperationStatus.PENDING_PSP)
+                .amount(new BigDecimal("5000.0000"))
                 .currency("XOF")
+                .idempotencyKey("wallet-deposit-pending")
                 .build();
-        failedEntry.setCreatedAt(OffsetDateTime.parse("2026-04-03T09:00:00Z"));
+        pendingDeposit.setCreatedAt(OffsetDateTime.parse("2026-04-04T18:20:00Z"));
 
         when(accountHolderService.getById(ACCOUNT_HOLDER_ID)).thenReturn(accountHolder());
         when(walletRepository.findFirstByAccountHolderIdAndWalletTypeAndStatus(
                 ACCOUNT_HOLDER_ID,
                 WalletType.USER,
                 "ACTIVE"
-        )).thenReturn(Optional.of(wallet));
-        when(walletLedgerEntryRepository.sumAmountByWalletIdAndEntryTypeAndStatusAndCategoryInAndCreatedAtGreaterThanEqual(
+        )).thenReturn(Optional.empty());
+        stubRecentWalletOperations(List.of(pendingDeposit));
+
+        List<WalletDashboardOperationResponse> response = service.getRecentOperations(ACTOR_USER_ID, ACCOUNT_HOLDER_ID);
+
+        assertThat(response).hasSize(1);
+        assertThat(response.get(0).operationId()).isEqualTo(OPERATION_ID);
+        assertThat(response.get(0).type()).isEqualTo(WalletLedgerCategory.DEPOSIT);
+        assertThat(response.get(0).status()).isEqualTo(WalletLedgerStatus.PENDING);
+        assertThat(response.get(0).amount()).isEqualByComparingTo("5000.0000");
+    }
+
+    @Test
+    void getDashboard_computesMonthlyIncomeFromConfirmedCredits() {
+        stubAuthorizedWallet();
+        when(walletLedgerEntryRepository.sumAmountByWalletIdAndEntryTypeAndStatusAndCreatedAtGreaterThanEqual(
                 eq(WALLET_ID),
                 eq(WalletLedgerEntryType.CREDIT),
                 eq(WalletLedgerStatus.CONFIRMED),
-                any(),
                 any(OffsetDateTime.class)
         )).thenReturn(new BigDecimal("80000.0000"));
-        when(walletLedgerEntryRepository.sumAmountByWalletIdAndEntryTypeAndStatusAndCategoryIn(
+        when(walletLedgerEntryRepository.sumAmountByWalletIdAndCategoryAndStatus(
                 WALLET_ID,
-                WalletLedgerEntryType.DEBIT,
-                WalletLedgerStatus.CONFIRMED,
-                List.of(WalletLedgerCategory.WITHDRAWAL, WalletLedgerCategory.TRANSFER_OUT)
-        )).thenReturn(new BigDecimal("30000.0000"));
+                WalletLedgerCategory.WITHDRAWAL,
+                WalletLedgerStatus.CONFIRMED
+        )).thenReturn(BigDecimal.ZERO);
         when(walletLedgerEntryRepository.sumAmountByWalletIdAndEntryTypeAndStatus(
                 WALLET_ID,
                 WalletLedgerEntryType.CREDIT,
@@ -131,18 +161,46 @@ class WalletDashboardServiceTest {
                 WalletLedgerStatus.CONFIRMED
         )).thenReturn(new BigDecimal("70000.0000"));
         when(walletLedgerEntryRepository.findByWalletIdOrderByCreatedAtDesc(eq(WALLET_ID), any(Pageable.class)))
-                .thenReturn(List.of(pendingEntry, failedEntry));
+                .thenReturn(List.of());
+        stubRecentWalletOperations(List.of());
 
         WalletDashboardResponse response = service.getDashboard(ACTOR_USER_ID, ACCOUNT_HOLDER_ID);
 
-        assertThat(response.balance()).isEqualByComparingTo("80000.0000");
         assertThat(response.monthlyIncome()).isEqualByComparingTo("80000.0000");
+        assertThat(response.balance()).isEqualByComparingTo("80000.0000");
+    }
+
+    @Test
+    void getDashboard_countsOnlyConfirmedWithdrawalsInTotalWithdrawn() {
+        stubAuthorizedWallet();
+        when(walletLedgerEntryRepository.sumAmountByWalletIdAndEntryTypeAndStatusAndCreatedAtGreaterThanEqual(
+                eq(WALLET_ID),
+                eq(WalletLedgerEntryType.CREDIT),
+                eq(WalletLedgerStatus.CONFIRMED),
+                any(OffsetDateTime.class)
+        )).thenReturn(BigDecimal.ZERO);
+        when(walletLedgerEntryRepository.sumAmountByWalletIdAndCategoryAndStatus(
+                WALLET_ID,
+                WalletLedgerCategory.WITHDRAWAL,
+                WalletLedgerStatus.CONFIRMED
+        )).thenReturn(new BigDecimal("30000.0000"));
+        when(walletLedgerEntryRepository.sumAmountByWalletIdAndEntryTypeAndStatus(
+                WALLET_ID,
+                WalletLedgerEntryType.CREDIT,
+                WalletLedgerStatus.CONFIRMED
+        )).thenReturn(new BigDecimal("150000.0000"));
+        when(walletLedgerEntryRepository.sumAmountByWalletIdAndEntryTypeAndStatus(
+                WALLET_ID,
+                WalletLedgerEntryType.DEBIT,
+                WalletLedgerStatus.CONFIRMED
+        )).thenReturn(new BigDecimal("30000.0000"));
+        when(walletLedgerEntryRepository.findByWalletIdOrderByCreatedAtDesc(eq(WALLET_ID), any(Pageable.class)))
+                .thenReturn(List.of());
+        stubRecentWalletOperations(List.of());
+
+        WalletDashboardResponse response = service.getDashboard(ACTOR_USER_ID, ACCOUNT_HOLDER_ID);
+
         assertThat(response.totalWithdrawn()).isEqualByComparingTo("30000.0000");
-        assertThat(response.recentOperations()).hasSize(2);
-        assertThat(response.recentOperations().get(0).status()).isEqualTo(WalletLedgerStatus.PENDING);
-        assertThat(response.recentOperations().get(0).category()).isEqualTo(WalletLedgerCategory.DEPOSIT);
-        assertThat(response.recentOperations().get(1).status()).isEqualTo(WalletLedgerStatus.FAILED);
-        assertThat(response.recentOperations().get(1).category()).isEqualTo(WalletLedgerCategory.WITHDRAWAL);
     }
 
     private AccountHolder accountHolder() {
@@ -151,5 +209,29 @@ class WalletDashboardServiceTest {
                 .firstName("John")
                 .lastName("Doe")
                 .build();
+    }
+
+    private void stubAuthorizedWallet() {
+        when(accountHolderService.getById(ACCOUNT_HOLDER_ID)).thenReturn(accountHolder());
+        when(walletRepository.findFirstByAccountHolderIdAndWalletTypeAndStatus(
+                ACCOUNT_HOLDER_ID,
+                WalletType.USER,
+                "ACTIVE"
+        )).thenReturn(Optional.of(Wallet.builder()
+                .id(WALLET_ID)
+                .accountHolderId(ACCOUNT_HOLDER_ID)
+                .provider("MTN")
+                .mobileMoneyNumber("22501234567")
+                .status("ACTIVE")
+                .walletType(WalletType.USER)
+                .build()));
+    }
+
+    private void stubRecentWalletOperations(List<Operation> operations) {
+        when(operationRepository.findRecentWalletOperationsForAccountHolder(
+                eq(ACCOUNT_HOLDER_ID),
+                any(),
+                any(Pageable.class)
+        )).thenReturn(operations);
     }
 }
