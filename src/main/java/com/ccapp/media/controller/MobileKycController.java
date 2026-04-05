@@ -38,7 +38,7 @@ public class MobileKycController {
                     description = "Success",
                     content = @Content(
                             schema = @Schema(implementation = CommonResponse.class),
-                            examples = @ExampleObject(value = "{\"success\":true,\"message\":\"KYC submitted\",\"data\":{\"accountHolderId\":\"8df991be-c9f2-45a5-9a2d-36dd6204aff3\",\"kycStatus\":\"PENDING\",\"submittedAt\":\"2026-03-10T11:22:00Z\"},\"timestamp\":\"2026-03-10T11:22:00Z\"}")
+                            examples = @ExampleObject(value = "{\"success\":true,\"message\":\"KYC submitted\",\"data\":{\"accountHolderId\":\"8df991be-c9f2-45a5-9a2d-36dd6204aff3\",\"kycStatus\":\"VERIFIED\",\"kycLevel\":\"LEVEL_1_BASIC\",\"submittedAt\":\"2026-03-10T11:22:00Z\"},\"timestamp\":\"2026-03-10T11:22:00Z\"}")
                     )
             ),
             @ApiResponse(responseCode = "400", description = "Validation or business rule error", content = @Content(schema = @Schema(implementation = CommonResponse.class))),

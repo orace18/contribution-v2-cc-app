@@ -45,7 +45,7 @@ public class WalletLimitService {
                 .orElseThrow(() -> new BusinessException("Account holder not found"));
 
         String countryCode = resolveCountryCode(holder);
-        String kycLevel = holder.getKycStatus().name();
+        String kycLevel = holder.resolveKycLevel().name();
 
         Optional<WalletLimitConfig> limitOpt = limitConfigRepository
                 .findByCountryCodeAndKycLevelAndCurrency(countryCode, kycLevel, currency);

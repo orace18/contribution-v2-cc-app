@@ -6,6 +6,7 @@ import com.ccapp.country.config.domain.enums.CountryAccountSystemTag;
 import com.ccapp.country.config.service.CountryChartOfAccountsService;
 import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
 import com.ccapp.identity.account_holder.repository.AccountHolderRepository;
+import com.ccapp.identity.domain.enums.KycLevel;
 import com.ccapp.identity.domain.enums.KycStatus;
 import com.ccapp.identity.wallet.domain.entity.Wallet;
 import com.ccapp.identity.wallet.repository.WalletRepository;
@@ -54,10 +55,12 @@ public class WalletWithdrawalService {
     public WalletWithdrawResponse withdraw(UUID accountHolderId, UUID actorUserId,
                                            WalletWithdrawRequest request) {
         AccountHolder holder = resolveHolder(accountHolderId);
-        if (holder.getKycStatus() != KycStatus.VERIFIED) {
+        if (holder.getKycStatus() != KycStatus.VERIFIED
+                || !holder.resolveKycLevel().isAtLeast(KycLevel.LEVEL_1_BASIC)) {
             throw new BusinessException(
                     "KYC verification is required for withdrawal. Current status: "
-                            + holder.getKycStatus().name());
+                            + holder.getKycStatus().name()
+                            + ", level: " + holder.resolveKycLevel().name());
         }
 
         Wallet wallet = walletGuardService.requireActiveWallet(accountHolderId);

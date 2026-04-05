@@ -12,6 +12,7 @@ import com.ccapp.identity.account_holder.domain.enums.AccountType;
 import com.ccapp.identity.account_holder.repository.AccountHolderRepository;
 import com.ccapp.identity.domain.entity.User;
 import com.ccapp.identity.domain.entity.UserProfile;
+import com.ccapp.identity.domain.enums.KycLevel;
 import com.ccapp.identity.domain.enums.KycStatus;
 import com.ccapp.progress.event.AccountHolderCreatedEvent;
 import lombok.RequiredArgsConstructor;
@@ -68,6 +69,7 @@ public class AccountHolderService {
                 .accountType(AccountType.STANDARD)
                 .createdVia(AccountCreatedVia.SELF)
                 .kycStatus(user.getKycStatus() != null ? user.getKycStatus() : KycStatus.NOT_STARTED)
+                .kycLevel(user.getKycStatus() == KycStatus.VERIFIED ? KycLevel.LEVEL_1_BASIC : KycLevel.LEVEL_0_UNVERIFIED)
                 .kycVerifiedAt(user.getKycStatus() == KycStatus.VERIFIED ? OffsetDateTime.now() : null)
                 .createdAt(user.getCreatedAt())
                 .build());

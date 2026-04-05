@@ -2,11 +2,13 @@ package com.ccapp.identity.account_holder.domain.entity;
 
 import com.ccapp.identity.account_holder.domain.enums.AccountCreatedVia;
 import com.ccapp.identity.account_holder.domain.enums.AccountType;
+import com.ccapp.identity.domain.enums.KycLevel;
 import com.ccapp.identity.domain.enums.KycStatus;
 import com.ccapp.identity.verification.domain.enums.PhoneVerificationSource;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
@@ -53,8 +55,19 @@ public class AccountHolder {
     @Column(name = "kyc_status", nullable = false, length = 32)
     private KycStatus kycStatus;
 
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(name = "kyc_level", nullable = false, length = 32)
+    private KycLevel kycLevel = KycLevel.LEVEL_0_UNVERIFIED;
+
     @Column(name = "kyc_verified_at")
     private OffsetDateTime kycVerifiedAt;
+
+    @Column(name = "birth_date")
+    private LocalDate birthDate;
+
+    @Column(name = "document_number", length = 128)
+    private String documentNumber;
 
     @Column(name = "phone_verified_at")
     private OffsetDateTime phoneVerifiedAt;
@@ -80,11 +93,23 @@ public class AccountHolder {
         if (kycStatus == null) {
             kycStatus = KycStatus.NOT_STARTED;
         }
+        if (kycLevel == null) {
+            kycLevel = KycLevel.LEVEL_0_UNVERIFIED;
+        }
         if (accountType == null) {
             accountType = AccountType.STANDARD;
         }
         if (createdVia == null) {
             createdVia = AccountCreatedVia.SELF;
         }
+    }
+
+    public KycLevel resolveKycLevel() {
+        if (kycLevel != null) {
+            return kycLevel;
+        }
+        return kycStatus == KycStatus.VERIFIED
+                ? KycLevel.LEVEL_1_BASIC
+                : KycLevel.LEVEL_0_UNVERIFIED;
     }
 }

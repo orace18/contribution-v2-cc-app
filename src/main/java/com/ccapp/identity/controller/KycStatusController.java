@@ -35,6 +35,7 @@ public class KycStatusController {
     public ResponseEntity<CommonResponse<KycStatusResponse>> getStatus() {
         var accountHolderId = SecurityUtils.currentAccountHolderId();
         var kycStatus = kycStatusConsistencyService.reconcileAccountHolderStatus(accountHolderId);
-        return ResponseEntity.ok(CommonResponse.success("KYC status", new KycStatusResponse(kycStatus)));
+        var kycLevel = kycStatusConsistencyService.resolveAccountHolderLevel(accountHolderId);
+        return ResponseEntity.ok(CommonResponse.success("KYC status", new KycStatusResponse(kycStatus, kycLevel)));
     }
 }

@@ -1,11 +1,13 @@
 package com.ccapp.wallet.service;
 
 import com.ccapp.common.events.DomainEventPublisher;
+import com.ccapp.common.exception.BusinessException;
 import com.ccapp.country.config.domain.entity.CountryChartAccount;
 import com.ccapp.country.config.domain.enums.CountryAccountSystemTag;
 import com.ccapp.country.config.service.CountryChartOfAccountsService;
 import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
 import com.ccapp.identity.account_holder.repository.AccountHolderRepository;
+import com.ccapp.identity.domain.enums.KycLevel;
 import com.ccapp.identity.domain.enums.KycStatus;
 import com.ccapp.identity.wallet.domain.entity.Wallet;
 import com.ccapp.identity.wallet.repository.WalletRepository;
@@ -206,6 +208,28 @@ class WalletWithdrawalServiceTest {
         verify(accountingPostingService, never()).postWalletWithdrawal(any(), any());
     }
 
+    @Test
+    void withdraw_rejectsVerifiedStatusWithoutBasicKycLevel() {
+        AccountHolder holder = AccountHolder.builder()
+                .id(ACCOUNT_HOLDER_ID)
+                .phoneNumber("22501234567")
+                .countryCode("CI")
+                .serviceCountryCode("CI")
+                .kycStatus(KycStatus.VERIFIED)
+                .kycLevel(KycLevel.LEVEL_0_UNVERIFIED)
+                .build();
+        when(accountHolderRepository.findById(ACCOUNT_HOLDER_ID)).thenReturn(Optional.of(holder));
+
+        BusinessException thrown = assertThrows(BusinessException.class, () -> service.withdraw(
+                ACCOUNT_HOLDER_ID,
+                ACTOR_USER_ID,
+                new WalletWithdrawRequest(new BigDecimal("2500.00"), "XOF", "idem-withdraw", "1234", null, null)
+        ));
+
+        assertThat(thrown.getMessage()).contains("level: LEVEL_0_UNVERIFIED");
+        verify(walletGuardService, never()).requireActiveWallet(any());
+    }
+
     private AccountHolder verifiedHolder() {
         return AccountHolder.builder()
                 .id(ACCOUNT_HOLDER_ID)
@@ -213,6 +237,7 @@ class WalletWithdrawalServiceTest {
                 .countryCode("CI")
                 .serviceCountryCode("CI")
                 .kycStatus(KycStatus.VERIFIED)
+                .kycLevel(KycLevel.LEVEL_1_BASIC)
                 .build();
     }
 

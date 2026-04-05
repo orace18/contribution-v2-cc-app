@@ -6,13 +6,17 @@ import com.ccapp.cpass.kyc.CPassKycGateway;
 import com.ccapp.cpass.kyc.CPassKycInitResponse;
 import com.ccapp.country.dto.CountryContext;
 import com.ccapp.country.service.CountryContextService;
+import com.ccapp.financial.audit.service.FinancialAuditService;
 import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
 import com.ccapp.identity.account_holder.repository.AccountHolderRepository;
 import com.ccapp.identity.delegation.domain.enums.DelegatedActionType;
 import com.ccapp.identity.delegation.domain.enums.PermissionLevel;
 import com.ccapp.identity.delegation.service.AccessControlService;
 import com.ccapp.identity.delegation.service.DelegatedActionService;
+import com.ccapp.identity.domain.entity.UserProfile;
+import com.ccapp.identity.domain.enums.KycLevel;
 import com.ccapp.identity.domain.enums.KycStatus;
+import com.ccapp.identity.repository.UserProfileRepository;
 import com.ccapp.media.domain.dto.SubmitKycResponse;
 import com.ccapp.media.domain.entity.KycDocument;
 import com.ccapp.media.domain.entity.MediaFile;
@@ -32,6 +36,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -41,6 +46,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -70,6 +76,10 @@ class KycSubmissionServiceTest {
     @Mock
     private ObjectStorageService objectStorageService;
     @Mock
+    private FinancialAuditService financialAuditService;
+    @Mock
+    private UserProfileRepository userProfileRepository;
+    @Mock
     private CPassKycGateway cPassKycGateway;
 
     private KycSubmissionService kycSubmissionService;
@@ -84,11 +94,14 @@ class KycSubmissionServiceTest {
                 countryContextService,
                 delegatedActionService,
                 kycReviewService,
-                objectStorageService
+                objectStorageService,
+                financialAuditService,
+                userProfileRepository
         );
         ReflectionTestUtils.setField(kycSubmissionService, "cPassKycGateway", cPassKycGateway);
         ReflectionTestUtils.setField(kycSubmissionService, "requestedKycLevel", "LEVEL_1");
         ReflectionTestUtils.setField(kycSubmissionService, "downloadUrlTtlMinutes", 15L);
+        ReflectionTestUtils.setField(kycSubmissionService, "level1FaceMatchThreshold", 0.75d);
     }
 
     @Test
@@ -112,17 +125,19 @@ class KycSubmissionServiceTest {
                     return new PresignedUrl(tempFile.toUri().toString(), OffsetDateTime.now().plusMinutes(15));
                 });
         when(cPassKycGateway.checkOrInitKyc(any()))
-                .thenReturn(new CPassKycInitResponse("PENDING", "LEVEL_1", "case-123", "ref-123"));
+                .thenReturn(new CPassKycInitResponse("PENDING", "LEVEL_1", "case-123", "ref-123", null, null, null, null, null, null, null, null));
         when(cPassKycGateway.submitDocument(any(), any(), any(), any()))
-                .thenReturn(new CPassKycDocumentResponse("doc-123", "SUBMITTED", "object-key", "PENDING"));
+                .thenReturn(new CPassKycDocumentResponse("doc-123", "SUBMITTED", "object-key", "PENDING", null, null, null, null, null, null, null, null));
         doAnswer(invocation -> {
             accountHolder.setKycStatus(KycStatus.PENDING);
             return null;
         }).when(kycReviewService).markPending(ACCOUNT_HOLDER_ID);
+        when(userProfileRepository.findByUserId(ACCOUNT_HOLDER_ID)).thenReturn(Optional.empty());
 
         SubmitKycResponse response = kycSubmissionService.submit(ACTOR_USER_ID, ACTOR_USER_ID, ACCOUNT_HOLDER_ID);
 
         assertEquals(KycStatus.PENDING, response.kycStatus());
+        assertEquals(KycLevel.LEVEL_0_UNVERIFIED, response.kycLevel());
         verify(accessControlService).assertCanActOnAccountHolder(ACTOR_USER_ID, ACCOUNT_HOLDER_ID, PermissionLevel.FULL);
         verify(cPassKycGateway).checkOrInitKyc(any());
         verify(cPassKycGateway, times(3)).submitDocument(eq("case-123"), any(), any(), any());
@@ -144,6 +159,7 @@ class KycSubmissionServiceTest {
         when(kycDocumentRepository.findByAccountHolderId(ACCOUNT_HOLDER_ID)).thenReturn(incompleteDocuments);
         when(countryContextService.resolve(ACTOR_USER_ID)).thenReturn(new CountryContext("BJ", "BJ", "XOF"));
         when(countryContextService.resolve(ACCOUNT_HOLDER_ID)).thenReturn(new CountryContext("BJ", "BJ", "XOF"));
+        when(userProfileRepository.findByUserId(ACCOUNT_HOLDER_ID)).thenReturn(Optional.empty());
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
@@ -166,6 +182,7 @@ class KycSubmissionServiceTest {
         when(kycDocumentRepository.findByAccountHolderId(ACCOUNT_HOLDER_ID)).thenReturn(documents);
         when(countryContextService.resolve(ACTOR_USER_ID)).thenReturn(new CountryContext("BJ", "BJ", "XOF"));
         when(countryContextService.resolve(ACCOUNT_HOLDER_ID)).thenReturn(new CountryContext("BJ", "BJ", "XOF"));
+        when(userProfileRepository.findByUserId(ACCOUNT_HOLDER_ID)).thenReturn(Optional.empty());
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
@@ -178,6 +195,101 @@ class KycSubmissionServiceTest {
         verify(delegatedActionService, never()).logIfDelegatedActor(any(), any(), any(), any());
     }
 
+    @Test
+    void submit_shouldAutoApproveLevel1WhenProviderSignalsAreVerifiedAndLowRisk() {
+        AccountHolder accountHolder = buildAccountHolder(KycStatus.NOT_STARTED);
+        UserProfile profile = UserProfile.builder().build();
+        List<KycDocument> documents = buildMinimalKycDocuments();
+
+        when(accountHolderRepository.findById(ACCOUNT_HOLDER_ID)).thenReturn(Optional.of(accountHolder));
+        when(kycDocumentRepository.findByAccountHolderId(ACCOUNT_HOLDER_ID)).thenReturn(documents);
+        when(countryContextService.resolve(ACTOR_USER_ID)).thenReturn(new CountryContext("BJ", "BJ", "XOF"));
+        when(countryContextService.resolve(ACCOUNT_HOLDER_ID)).thenReturn(new CountryContext("BJ", "BJ", "XOF"));
+        when(mediaFileRepository.findByIdAndAccountHolderId(any(UUID.class), eq(ACCOUNT_HOLDER_ID)))
+                .thenAnswer(invocation -> Optional.of(buildReadyMediaFile(
+                        invocation.getArgument(0, UUID.class),
+                        ACCOUNT_HOLDER_ID
+                )));
+        when(objectStorageService.createDownloadUrl(any(), any(), any()))
+                .thenAnswer(invocation -> {
+                    Path tempFile = Files.createTempFile("kyc-upload-", ".jpg");
+                    Files.writeString(tempFile, "fake-image-content");
+                    return new PresignedUrl(tempFile.toUri().toString(), OffsetDateTime.now().plusMinutes(15));
+                });
+        when(cPassKycGateway.checkOrInitKyc(any()))
+                .thenReturn(new CPassKycInitResponse("PENDING", "LEVEL_1", "case-123", "ref-123", null, null, null, null, null, null, null, null));
+        when(cPassKycGateway.submitDocument(any(), eq("IDENTITY_FRONT"), any(), any()))
+                .thenReturn(new CPassKycDocumentResponse(
+                        "doc-front",
+                        "SUBMITTED",
+                        "object-key-front",
+                        "VALID",
+                        true,
+                        null,
+                        "VERIFIED",
+                        "LOW",
+                        "Jane",
+                        "Doe",
+                        LocalDate.of(1990, 1, 2),
+                        "DOC-12345"
+                ));
+        when(cPassKycGateway.submitDocument(any(), eq("IDENTITY_BACK"), any(), any()))
+                .thenReturn(new CPassKycDocumentResponse(
+                        "doc-back",
+                        "SUBMITTED",
+                        "object-key-back",
+                        "VALID",
+                        true,
+                        null,
+                        "VERIFIED",
+                        "LOW",
+                        "Jane",
+                        "Doe",
+                        LocalDate.of(1990, 1, 2),
+                        "DOC-12345"
+                ));
+        when(cPassKycGateway.submitDocument(any(), eq("SELFIE"), any(), any()))
+                .thenReturn(new CPassKycDocumentResponse(
+                        "doc-selfie",
+                        "SUBMITTED",
+                        "object-key-selfie",
+                        "VALID",
+                        true,
+                        0.93d,
+                        "VERIFIED",
+                        "LOW",
+                        "Jane",
+                        "Doe",
+                        LocalDate.of(1990, 1, 2),
+                        "DOC-12345"
+                ));
+        when(userProfileRepository.findByUserId(ACCOUNT_HOLDER_ID)).thenReturn(Optional.of(profile));
+        doAnswer(invocation -> {
+            accountHolder.setKycStatus(KycStatus.VERIFIED);
+            accountHolder.setKycLevel(KycLevel.LEVEL_1_BASIC);
+            return null;
+        }).when(kycReviewService).approveKyc(ACCOUNT_HOLDER_ID, KycLevel.LEVEL_1_BASIC);
+
+        SubmitKycResponse response = kycSubmissionService.submit(ACTOR_USER_ID, ACTOR_USER_ID, ACCOUNT_HOLDER_ID);
+
+        assertEquals(KycStatus.VERIFIED, response.kycStatus());
+        assertEquals(KycLevel.LEVEL_1_BASIC, response.kycLevel());
+        assertEquals("Jane", accountHolder.getFirstName());
+        assertEquals("Doe", accountHolder.getLastName());
+        assertEquals(LocalDate.of(1990, 1, 2), accountHolder.getBirthDate());
+        assertEquals("DOC-12345", accountHolder.getDocumentNumber());
+        verify(kycReviewService).approveKyc(ACCOUNT_HOLDER_ID, KycLevel.LEVEL_1_BASIC);
+        verify(kycReviewService, never()).markPending(ACCOUNT_HOLDER_ID);
+        verify(userProfileRepository).save(profile);
+        verify(financialAuditService).record(
+                eq("KYC_LEVEL_1_AUTO_APPROVED"),
+                eq("ref-123"),
+                eq(ACCOUNT_HOLDER_ID),
+                isNull(),
+                any()
+        );
+    }
+
     private AccountHolder buildAccountHolder(KycStatus kycStatus) {
         return AccountHolder.builder()
                 .id(ACCOUNT_HOLDER_ID)
@@ -187,6 +299,7 @@ class KycSubmissionServiceTest {
                 .countryCode("BJ")
                 .serviceCountryCode("BJ")
                 .kycStatus(kycStatus)
+                .kycLevel(KycLevel.LEVEL_0_UNVERIFIED)
                 .createdAt(OffsetDateTime.now())
                 .build();
     }

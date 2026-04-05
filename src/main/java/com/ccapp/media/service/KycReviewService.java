@@ -5,6 +5,7 @@ import com.ccapp.common.exception.NotFoundException;
 import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
 import com.ccapp.identity.account_holder.repository.AccountHolderRepository;
 import com.ccapp.identity.domain.entity.User;
+import com.ccapp.identity.domain.enums.KycLevel;
 import com.ccapp.identity.domain.enums.KycStatus;
 import com.ccapp.identity.repository.UserRepository;
 import com.ccapp.media.domain.entity.KycDocument;
@@ -30,8 +31,14 @@ public class KycReviewService {
 
     @Transactional
     public void approveKyc(UUID accountHolderId) {
+        approveKyc(accountHolderId, KycLevel.LEVEL_1_BASIC);
+    }
+
+    @Transactional
+    public void approveKyc(UUID accountHolderId, KycLevel kycLevel) {
         AccountHolder accountHolder = loadAccountHolder(accountHolderId);
         accountHolder.setKycStatus(KycStatus.VERIFIED);
+        accountHolder.setKycLevel(kycLevel);
         accountHolder.setKycVerifiedAt(OffsetDateTime.now());
         accountHolderRepository.save(accountHolder);
 
@@ -44,6 +51,9 @@ public class KycReviewService {
     public void rejectKyc(UUID accountHolderId) {
         AccountHolder accountHolder = loadAccountHolder(accountHolderId);
         accountHolder.setKycStatus(KycStatus.REJECTED);
+        if (accountHolder.getKycLevel() == null) {
+            accountHolder.setKycLevel(KycLevel.LEVEL_0_UNVERIFIED);
+        }
         accountHolder.setKycVerifiedAt(null);
         accountHolderRepository.save(accountHolder);
 
@@ -55,6 +65,9 @@ public class KycReviewService {
     public void requestResubmission(UUID accountHolderId) {
         AccountHolder accountHolder = loadAccountHolder(accountHolderId);
         accountHolder.setKycStatus(KycStatus.RESUBMIT_REQUIRED);
+        if (accountHolder.getKycLevel() == null) {
+            accountHolder.setKycLevel(KycLevel.LEVEL_0_UNVERIFIED);
+        }
         accountHolder.setKycVerifiedAt(null);
         accountHolderRepository.save(accountHolder);
 
@@ -66,6 +79,9 @@ public class KycReviewService {
     public void markPending(UUID accountHolderId) {
         AccountHolder accountHolder = loadAccountHolder(accountHolderId);
         accountHolder.setKycStatus(KycStatus.PENDING);
+        if (accountHolder.getKycLevel() == null) {
+            accountHolder.setKycLevel(KycLevel.LEVEL_0_UNVERIFIED);
+        }
         accountHolder.setKycVerifiedAt(null);
         accountHolderRepository.save(accountHolder);
         syncUserKycStatus(accountHolderId, KycStatus.PENDING);

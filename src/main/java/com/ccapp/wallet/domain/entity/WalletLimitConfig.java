@@ -34,8 +34,8 @@ public class WalletLimitConfig {
     @Column(name = "country_code", nullable = false, length = 3)
     private String countryCode;
 
-    /** Must match a KycStatus enum name (NOT_STARTED, PENDING, VERIFIED, REJECTED). */
-    @Column(name = "kyc_level", nullable = false, length = 16)
+    /** Must match a KycLevel enum name (LEVEL_0_UNVERIFIED, LEVEL_1_BASIC, LEVEL_2_ENHANCED, LEVEL_3_FULL). */
+    @Column(name = "kyc_level", nullable = false, length = 32)
     private String kycLevel;
 
     @Column(name = "max_balance", nullable = false, precision = 19, scale = 4)
