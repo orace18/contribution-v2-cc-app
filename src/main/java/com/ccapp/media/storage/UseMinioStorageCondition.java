@@ -8,6 +8,6 @@ public class UseMinioStorageCondition implements Condition {
 
     @Override
     public boolean matches(ConditionContext context, AnnotatedTypeMetadata metadata) {
-        return !MediaStorageModeResolver.resolve(context.getEnvironment()).usesLocalDevStorage();
+        return MediaStorageModeResolver.resolve(context.getEnvironment()).usesMinioStorage();
     }
 }

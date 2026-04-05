@@ -17,27 +17,37 @@ public final class MediaStorageModeResolver {
 
     public static MediaStorageModeDecision resolve(Environment environment) {
         int timeoutMs = resolveTimeout(environment.getProperty("media.local-dev.reachability-timeout-ms"));
+        boolean strictStartup = resolveStrictStartup(environment.getProperty("media.storage.startup-strict"));
         return resolve(
                 environment.getActiveProfiles(),
                 environment.getProperty("media.storage.endpoint"),
-                timeoutMs
+                timeoutMs,
+                strictStartup
         );
     }
 
     static MediaStorageModeDecision resolve(String[] activeProfiles,
                                             String endpoint,
                                             int reachabilityTimeoutMs) {
-        if (isDevProfile(activeProfiles)) {
+        return resolve(activeProfiles, endpoint, reachabilityTimeoutMs, false);
+    }
+
+    static MediaStorageModeDecision resolve(String[] activeProfiles,
+                                            String endpoint,
+                                            int reachabilityTimeoutMs,
+                                            boolean strictStartup) {
+        boolean devProfileActive = isDevProfile(activeProfiles);
+        if (devProfileActive && MediaStorageConfig.isBlank(endpoint)) {
             return new MediaStorageModeDecision(
                     MediaStorageMode.LOCAL_DEV,
-                    "Spring profile 'dev' is active",
+                    "Spring profile 'dev' is active and media.storage.endpoint is missing",
                     endpoint
             );
         }
 
         if (MediaStorageConfig.isBlank(endpoint)) {
-            return new MediaStorageModeDecision(
-                    MediaStorageMode.LOCAL_DEV,
+            return fallbackDecision(
+                    strictStartup,
                     "media.storage.endpoint is missing",
                     endpoint
             );
@@ -47,24 +57,24 @@ public final class MediaStorageModeResolver {
         try {
             endpointUri = MediaStorageConfig.parseEndpoint(endpoint, "media.storage.endpoint");
         } catch (IllegalStateException ex) {
-            return new MediaStorageModeDecision(
-                    MediaStorageMode.LOCAL_DEV,
+            return fallbackDecision(
+                    strictStartup,
                     "media.storage.endpoint is invalid: " + ex.getMessage(),
                     endpoint
             );
         }
 
         if (!isHostResolvable(endpointUri.getHost())) {
-            return new MediaStorageModeDecision(
-                    MediaStorageMode.LOCAL_DEV,
+            return fallbackDecision(
+                    strictStartup,
                     "media.storage.endpoint host '" + endpointUri.getHost() + "' is not resolvable",
                     endpointUri.toString()
             );
         }
 
         if (!isEndpointReachable(endpointUri, reachabilityTimeoutMs)) {
-            return new MediaStorageModeDecision(
-                    MediaStorageMode.LOCAL_DEV,
+            return fallbackDecision(
+                    strictStartup,
                     "media.storage.endpoint '" + endpointUri + "' is not reachable from the backend runtime",
                     endpointUri.toString()
             );
@@ -88,10 +98,32 @@ public final class MediaStorageModeResolver {
         }
     }
 
+    private static boolean resolveStrictStartup(String rawStrictStartup) {
+        if (MediaStorageConfig.isBlank(rawStrictStartup)) {
+            return false;
+        }
+        return Boolean.parseBoolean(rawStrictStartup.trim());
+    }
+
     private static boolean isDevProfile(String[] activeProfiles) {
         return Arrays.stream(activeProfiles)
                 .filter(profile -> profile != null && !profile.isBlank())
                 .anyMatch(profile -> "dev".equalsIgnoreCase(profile.trim()));
+    }
+
+    private static MediaStorageModeDecision fallbackDecision(boolean strictStartup,
+                                                             String reason,
+                                                             String endpoint) {
+        if (strictStartup) {
+            throw new IllegalStateException(
+                    "Media storage strict startup is enabled and fallback is disabled: " + reason
+            );
+        }
+        return new MediaStorageModeDecision(
+                MediaStorageMode.NOOP,
+                reason,
+                endpoint
+        );
     }
 
     private static boolean isHostResolvable(String host) {

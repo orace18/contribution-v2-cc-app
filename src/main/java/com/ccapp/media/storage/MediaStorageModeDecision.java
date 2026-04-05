@@ -6,7 +6,15 @@ public record MediaStorageModeDecision(
         String endpoint
 ) {
 
+    public boolean usesMinioStorage() {
+        return mode == MediaStorageMode.MINIO;
+    }
+
     public boolean usesLocalDevStorage() {
         return mode == MediaStorageMode.LOCAL_DEV;
+    }
+
+    public boolean usesNoopStorage() {
+        return mode == MediaStorageMode.NOOP;
     }
 }

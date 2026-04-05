@@ -29,6 +29,13 @@ public class MediaStorageConfig {
                     defaultIfBlank(decision.endpoint(), "<unset>"),
                     decision.reason()
             );
+        } else if (decision.usesNoopStorage()) {
+            log.warn(
+                    "Noop media storage fallback enabled mode={} endpoint={} reason={}",
+                    decision.mode(),
+                    defaultIfBlank(decision.endpoint(), "<unset>"),
+                    decision.reason()
+            );
         } else {
             log.info(
                     "Media storage configured mode={} endpoint={} reason={}",
@@ -137,6 +144,12 @@ public class MediaStorageConfig {
     @Conditional(UseLocalDevStorageCondition.class)
     public ObjectStorageService localDevObjectStorageService(LocalDevStorageService localDevStorageService) {
         return localDevStorageService;
+    }
+
+    @Bean
+    @Conditional(UseNoopStorageCondition.class)
+    public ObjectStorageService noopObjectStorageService(MediaStorageModeDecision decision) {
+        return new NoopMediaStorageService(decision);
     }
 
     static URI resolvePresignerEndpoint(String publicEndpoint, URI internalEndpointUri) {
