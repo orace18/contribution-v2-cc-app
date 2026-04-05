@@ -2,6 +2,7 @@ package com.ccapp.media.storage;
 
 import com.ccapp.common.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
@@ -22,6 +23,7 @@ import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class MinioObjectStorageService implements ObjectStorageService {
@@ -71,17 +73,19 @@ public class MinioObjectStorageService implements ObjectStorageService {
     @Override
     public void putObject(String bucket, String objectKey, byte[] data, String contentType) {
         try {
+            log.debug("putObject bucket={} key={} bytes={} contentType={}", bucket, objectKey, data.length, contentType);
             doPutObject(bucket, objectKey, data, contentType);
         } catch (NoSuchBucketException ex) {
-            // Bucket may not have been created at startup (MediaBucketInitializer uses
-            // strictStartup=false). Create it lazily and retry once.
+            log.warn("putObject: bucket {} not found, creating it lazily", bucket);
             mediaS3Client.createBucket(CreateBucketRequest.builder().bucket(bucket).build());
             try {
                 doPutObject(bucket, objectKey, data, contentType);
             } catch (RuntimeException retryEx) {
+                log.error("putObject retry failed bucket={} key={}: {}", bucket, objectKey, retryEx.getMessage(), retryEx);
                 throw new BusinessException("Unable to store media file");
             }
         } catch (RuntimeException ex) {
+            log.error("putObject failed bucket={} key={}: {}", bucket, objectKey, ex.getMessage(), ex);
             throw new BusinessException("Unable to store media file");
         }
     }
