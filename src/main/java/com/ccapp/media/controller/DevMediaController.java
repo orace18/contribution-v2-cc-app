@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.concurrent.TimeUnit;
@@ -23,22 +24,23 @@ import java.util.concurrent.TimeUnit;
 @RestController
 @RequiredArgsConstructor
 @ConditionalOnBean(LocalFileStorageService.class)
+@RequestMapping("/dev-media")
 public class DevMediaController {
 
     private final ObjectStorageService objectStorageService;
     private final LocalFileStorageService localFileStorageService;
 
-    @PutMapping("/dev-media/{fileId}")
-    public ResponseEntity<Void> uploadDevMedia(@PathVariable String fileId,
+    @PutMapping(value = "/{uploadId}", consumes = MediaType.ALL_VALUE)
+    public ResponseEntity<Void> uploadDevMedia(@PathVariable String uploadId,
                                                @RequestBody byte[] data,
                                                @RequestHeader(value = HttpHeaders.CONTENT_TYPE, required = false) String contentType) {
-        activeLocalFileStorageService().putPublicObject(fileId, data, contentType);
+        activeLocalFileStorageService().putPublicObject(uploadId, data, contentType);
         return ResponseEntity.ok().build();
     }
 
-    @GetMapping("/dev-media/{fileId}")
-    public ResponseEntity<Resource> getDevMedia(@PathVariable String fileId) {
-        LocalFileStorageService.StoredLocalMediaFile storedFile = activeLocalFileStorageService().loadPublicObject(fileId);
+    @GetMapping("/{uploadId}")
+    public ResponseEntity<Resource> getDevMedia(@PathVariable String uploadId) {
+        LocalFileStorageService.StoredLocalMediaFile storedFile = activeLocalFileStorageService().loadPublicObject(uploadId);
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(storedFile.contentType()))
                 .contentLength(storedFile.contentLength())
