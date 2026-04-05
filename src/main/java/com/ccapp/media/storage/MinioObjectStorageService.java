@@ -3,7 +3,6 @@ package com.ccapp.media.storage;
 import com.ccapp.common.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
@@ -24,7 +23,6 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 
 @Slf4j
-@Service
 @RequiredArgsConstructor
 public class MinioObjectStorageService implements ObjectStorageService {
 

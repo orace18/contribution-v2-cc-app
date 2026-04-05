@@ -52,6 +52,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/circles/join").permitAll()
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         .requestMatchers("/ws/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/dev-media/**").permitAll()
+                        .requestMatchers(HttpMethod.PUT, "/dev-media/**").permitAll()
                         .requestMatchers("/api/admin/auth/**").permitAll()
                         .requestMatchers("/admin/auth/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/public/countries").permitAll()
@@ -91,7 +93,15 @@ public class SecurityConfig {
                 .filter(origin -> !origin.isEmpty())
                 .toList());
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"));
+        configuration.setAllowedHeaders(List.of(
+                "Authorization",
+                "Content-Type",
+                "Accept",
+                "Origin",
+                "X-Requested-With",
+                "Content-Length",
+                "X-Media-Content-Type"
+        ));
         configuration.setExposedHeaders(List.of("Authorization"));
         configuration.setMaxAge(3600L);
 

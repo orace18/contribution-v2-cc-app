@@ -3,6 +3,7 @@ package com.ccapp.media.storage;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import software.amazon.awssdk.services.s3.S3Client;
@@ -15,6 +16,7 @@ import java.util.List;
 
 @Slf4j
 @Component
+@ConditionalOnBean(S3Client.class)
 @RequiredArgsConstructor
 public class MediaBucketInitializer {
 

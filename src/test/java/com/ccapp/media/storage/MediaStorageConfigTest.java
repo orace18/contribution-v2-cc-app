@@ -2,8 +2,10 @@ package com.ccapp.media.storage;
 
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
+import java.net.ServerSocket;
+
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class MediaStorageConfigTest {
 
@@ -44,18 +46,40 @@ class MediaStorageConfigTest {
     }
 
     @Test
-    void mediaStorageSettings_failsFastWhenEndpointHostCannotBeResolved() {
-        assertThatThrownBy(() -> config.mediaStorageSettings(
-                "http://media-storage.invalid:9000",
-                "",
-                "us-east-1",
-                "minio",
-                "secret",
-                true
-        ))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("media.storage.endpoint")
-                .hasMessageContaining("cannot be resolved")
-                .hasMessageContaining("MEDIA_STORAGE_ENDPOINT");
+    void mediaStorageModeResolver_usesLocalFallbackWhenDevProfileIsActive() {
+        MediaStorageModeDecision decision = MediaStorageModeResolver.resolve(
+                new String[]{"dev"},
+                "http://127.0.0.1:9000",
+                250
+        );
+
+        assertThat(decision.mode()).isEqualTo(MediaStorageMode.LOCAL_DEV);
+        assertThat(decision.reason()).contains("profile 'dev'");
+    }
+
+    @Test
+    void mediaStorageModeResolver_usesLocalFallbackWhenEndpointIsUnreachable() {
+        MediaStorageModeDecision decision = MediaStorageModeResolver.resolve(
+                new String[]{"prod"},
+                "http://127.0.0.1:6553",
+                250
+        );
+
+        assertThat(decision.mode()).isEqualTo(MediaStorageMode.LOCAL_DEV);
+        assertThat(decision.reason()).contains("not reachable");
+    }
+
+    @Test
+    void mediaStorageModeResolver_keepsMinioWhenEndpointIsReachable() throws IOException {
+        try (ServerSocket serverSocket = new ServerSocket(0)) {
+            MediaStorageModeDecision decision = MediaStorageModeResolver.resolve(
+                    new String[]{"prod"},
+                    "http://127.0.0.1:" + serverSocket.getLocalPort(),
+                    250
+            );
+
+            assertThat(decision.mode()).isEqualTo(MediaStorageMode.MINIO);
+            assertThat(decision.reason()).contains("reachable");
+        }
     }
 }
