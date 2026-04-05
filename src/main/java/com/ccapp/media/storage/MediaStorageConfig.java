@@ -40,11 +40,16 @@ public class MediaStorageConfig {
 
     @Bean
     public S3Presigner mediaS3Presigner(@Value("${media.storage.endpoint:http://localhost:9000}") String endpoint,
+                                        @Value("${media.storage.public-endpoint:}") String publicEndpoint,
                                         @Value("${media.storage.region:us-east-1}") String region,
                                         @Value("${media.storage.access-key}") String accessKey,
                                         @Value("${media.storage.secret-key}") String secretKey,
                                         @Value("${media.storage.path-style:true}") boolean pathStyle) {
-        String resolvedEndpoint = defaultIfBlank(endpoint, "http://localhost:9000");
+        // Use publicEndpoint for presigned URLs if set; otherwise fall back to endpoint.
+        // This allows the S3Client (internal) and S3Presigner (public) to use different hostnames.
+        String presignerEndpoint = (publicEndpoint != null && !publicEndpoint.trim().isEmpty())
+                ? publicEndpoint.trim() : endpoint;
+        String resolvedEndpoint = defaultIfBlank(presignerEndpoint, "http://localhost:9000");
         String resolvedRegion = defaultIfBlank(region, "us-east-1");
         String resolvedAccessKey = requireNonBlank(accessKey, "media.storage.access-key");
         String resolvedSecretKey = requireNonBlank(secretKey, "media.storage.secret-key");
