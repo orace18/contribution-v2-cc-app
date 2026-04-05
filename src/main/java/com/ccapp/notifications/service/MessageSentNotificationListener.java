@@ -31,6 +31,7 @@ public class MessageSentNotificationListener implements DomainEventListener<Mess
                     NotificationType.CHAT_MESSAGE,
                     NotificationChannel.IN_APP,
                     "CHAT_MESSAGE_RECEIVED",
+                    null,
                     "You received a new chat message.",
                     null,
                     true

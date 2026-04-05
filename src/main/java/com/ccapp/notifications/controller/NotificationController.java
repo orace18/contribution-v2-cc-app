@@ -47,6 +47,7 @@ public class NotificationController {
                 request.type(),
                 request.channel(),
                 request.templateCode(),
+                request.title(),
                 request.message(),
                 request.variables(),
                 request.sendNow()
@@ -85,6 +86,7 @@ public class NotificationController {
                 request.type(),
                 request.channels(),
                 request.templateCode(),
+                request.title(),
                 request.message(),
                 request.variables(),
                 request.sendNow()

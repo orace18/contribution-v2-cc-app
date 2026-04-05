@@ -28,6 +28,7 @@ public class KycReviewService {
     private final UserRepository userRepository;
     private final KycDocumentRepository kycDocumentRepository;
     private final DomainEventPublisher domainEventPublisher;
+    private final KycNotificationService kycNotificationService;
 
     @Transactional
     public void approveKyc(UUID accountHolderId) {
@@ -45,6 +46,7 @@ public class KycReviewService {
         syncUserKycStatus(accountHolderId, KycStatus.VERIFIED);
         updateDocumentStatuses(accountHolderId, KycDocumentStatus.VERIFIED);
         domainEventPublisher.publish(KycVerifiedEvent.create(accountHolderId));
+        kycNotificationService.notifyVerified(accountHolderId);
     }
 
     @Transactional
@@ -59,6 +61,7 @@ public class KycReviewService {
 
         syncUserKycStatus(accountHolderId, KycStatus.REJECTED);
         updateDocumentStatuses(accountHolderId, KycDocumentStatus.REJECTED);
+        kycNotificationService.notifyRejected(accountHolderId);
     }
 
     @Transactional
@@ -73,6 +76,7 @@ public class KycReviewService {
 
         syncUserKycStatus(accountHolderId, KycStatus.RESUBMIT_REQUIRED);
         updateDocumentStatuses(accountHolderId, KycDocumentStatus.REJECTED);
+        kycNotificationService.notifyResubmissionRequired(accountHolderId);
     }
 
     @Transactional

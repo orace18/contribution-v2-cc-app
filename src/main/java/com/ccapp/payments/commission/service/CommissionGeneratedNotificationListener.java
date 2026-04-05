@@ -32,6 +32,7 @@ public class CommissionGeneratedNotificationListener implements DomainEventListe
                     NotificationType.AGENT_ACTION,
                     NotificationChannel.IN_APP,
                     "MLM_COMMISSION_GENERATED",
+                    null,
                     "Commission generated: " + event.amount() + " " + event.currency(),
                     null,
                     true

@@ -19,13 +19,15 @@ public class NotificationTemplateService {
     private final NotificationTemplateRenderer renderer;
 
     @Transactional(readOnly = true)
-    public ResolvedMessage resolve(NotificationChannel channel,
+    public ResolvedContent resolve(NotificationChannel channel,
                                    String templateCode,
+                                   String rawTitle,
                                    String rawMessage,
                                    Map<String, String> variables) {
+        String title = renderNullable(rawTitle, variables);
         String message = rawMessage == null ? null : rawMessage.trim();
         if (message != null && !message.isBlank()) {
-            return new ResolvedMessage(templateCode, renderer.render(message, variables));
+            return new ResolvedContent(templateCode, normalize(title), renderer.render(message, variables));
         }
 
         if (templateCode == null || templateCode.isBlank()) {
@@ -36,9 +38,32 @@ public class NotificationTemplateService {
                 .findByCodeAndChannelAndActiveTrue(templateCode, channel)
                 .orElseThrow(() -> new NotFoundException("Notification template not found"));
 
-        return new ResolvedMessage(template.getCode(), renderer.render(template.getBodyTemplate(), variables));
+        String resolvedTitle = normalize(title);
+        if (resolvedTitle == null && template.getSubject() != null && !template.getSubject().isBlank()) {
+            resolvedTitle = renderer.render(template.getSubject(), variables);
+        }
+        return new ResolvedContent(
+                template.getCode(),
+                normalize(resolvedTitle),
+                renderer.render(template.getBodyTemplate(), variables)
+        );
     }
 
-    public record ResolvedMessage(String templateCode, String message) {
+    private String normalize(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
+    }
+
+    private String renderNullable(String value, Map<String, String> variables) {
+        String normalized = normalize(value);
+        if (normalized == null) {
+            return null;
+        }
+        return renderer.render(normalized, variables);
+    }
+
+    public record ResolvedContent(String templateCode, String title, String message) {
     }
 }

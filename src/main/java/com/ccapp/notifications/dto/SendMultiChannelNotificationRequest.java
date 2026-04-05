@@ -25,6 +25,9 @@ public record SendMultiChannelNotificationRequest(
         @Size(max = 64, message = "templateCode max size is 64")
         String templateCode,
 
+        @Size(max = 255, message = "title max size is 255")
+        String title,
+
         @Size(max = 2000, message = "message max size is 2000")
         String message,
 

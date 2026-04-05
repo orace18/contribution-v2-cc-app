@@ -74,6 +74,8 @@ class KycSubmissionServiceTest {
     @Mock
     private KycReviewService kycReviewService;
     @Mock
+    private KycNotificationService kycNotificationService;
+    @Mock
     private ObjectStorageService objectStorageService;
     @Mock
     private FinancialAuditService financialAuditService;
@@ -94,6 +96,7 @@ class KycSubmissionServiceTest {
                 countryContextService,
                 delegatedActionService,
                 kycReviewService,
+                kycNotificationService,
                 objectStorageService,
                 financialAuditService,
                 userProfileRepository
@@ -141,6 +144,7 @@ class KycSubmissionServiceTest {
         verify(accessControlService).assertCanActOnAccountHolder(ACTOR_USER_ID, ACCOUNT_HOLDER_ID, PermissionLevel.FULL);
         verify(cPassKycGateway).checkOrInitKyc(any());
         verify(cPassKycGateway, times(3)).submitDocument(eq("case-123"), any(), any(), any());
+        verify(kycNotificationService).notifySubmitted(ACCOUNT_HOLDER_ID);
         verify(kycReviewService).markPending(ACCOUNT_HOLDER_ID);
         verify(delegatedActionService).logIfDelegatedActor(
                 eq(ACCOUNT_HOLDER_ID),
@@ -168,6 +172,7 @@ class KycSubmissionServiceTest {
 
         assertEquals("MINIMAL_KYC_INCOMPLETE", exception.getMessage());
         verify(cPassKycGateway, never()).checkOrInitKyc(any());
+        verify(kycNotificationService, never()).notifySubmitted(any());
         verify(kycReviewService, never()).markPending(any());
         verify(delegatedActionService, never()).logIfDelegatedActor(any(), any(), any(), any());
     }
@@ -191,6 +196,7 @@ class KycSubmissionServiceTest {
 
         assertEquals("CPASS_KYC_UNAVAILABLE", exception.getMessage());
         assertEquals(KycStatus.NOT_STARTED, accountHolder.getKycStatus());
+        verify(kycNotificationService, never()).notifySubmitted(any());
         verify(kycReviewService, never()).markPending(any());
         verify(delegatedActionService, never()).logIfDelegatedActor(any(), any(), any(), any());
     }
@@ -278,6 +284,7 @@ class KycSubmissionServiceTest {
         assertEquals("Doe", accountHolder.getLastName());
         assertEquals(LocalDate.of(1990, 1, 2), accountHolder.getBirthDate());
         assertEquals("DOC-12345", accountHolder.getDocumentNumber());
+        verify(kycNotificationService).notifySubmitted(ACCOUNT_HOLDER_ID);
         verify(kycReviewService).approveKyc(ACCOUNT_HOLDER_ID, KycLevel.LEVEL_1_BASIC);
         verify(kycReviewService, never()).markPending(ACCOUNT_HOLDER_ID);
         verify(userProfileRepository).save(profile);

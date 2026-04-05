@@ -72,6 +72,7 @@ public class KycSubmissionService {
     private final CountryContextService countryContextService;
     private final DelegatedActionService delegatedActionService;
     private final KycReviewService kycReviewService;
+    private final KycNotificationService kycNotificationService;
     private final ObjectStorageService objectStorageService;
     private final FinancialAuditService financialAuditService;
     private final UserProfileRepository userProfileRepository;
@@ -113,6 +114,7 @@ public class KycSubmissionService {
         Map<KycDocumentType, KycDocument> submissionDocuments = resolveMinimalKycDocuments(targetAccountHolderId);
         if (accountHolder.getKycStatus() != KycStatus.PENDING) {
             CpassSubmissionResult submissionResult = submitToCpass(accountHolder, submissionDocuments);
+            kycNotificationService.notifySubmitted(targetAccountHolderId);
             applyCpassStatus(accountHolder, submissionResult);
         }
 

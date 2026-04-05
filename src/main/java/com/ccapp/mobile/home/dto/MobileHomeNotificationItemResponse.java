@@ -9,6 +9,7 @@ import java.util.UUID;
 public record MobileHomeNotificationItemResponse(
         UUID id,
         NotificationType type,
+        String title,
         String message,
         NotificationStatus status,
         OffsetDateTime createdAt

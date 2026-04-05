@@ -36,6 +36,7 @@ public class PostCreatedNotificationListener implements DomainEventListener<Post
                         NotificationType.AGENT_ACTION,
                         NotificationChannel.IN_APP,
                         "COMMUNITY_POST_CREATED",
+                        null,
                         "Your community post has been published.",
                         null,
                         true

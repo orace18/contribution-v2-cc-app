@@ -112,6 +112,7 @@ public class MobileHomeService {
                 .map(notification -> new MobileHomeNotificationItemResponse(
                         notification.getId(),
                         notification.getType(),
+                        notification.getTitle(),
                         notification.getMessage(),
                         notification.getStatus(),
                         notification.getCreatedAt()

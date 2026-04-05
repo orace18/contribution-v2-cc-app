@@ -42,6 +42,9 @@ public class Notification {
     @Column(name = "template_code", length = 64)
     private String templateCode;
 
+    @Column(name = "title", length = 255)
+    private String title;
+
     @Column(name = "message", nullable = false, length = 2000)
     private String message;
 

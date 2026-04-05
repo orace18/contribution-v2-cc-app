@@ -15,6 +15,7 @@ public record NotificationResponse(
         NotificationType type,
         NotificationChannel channel,
         String templateCode,
+        String title,
         String message,
         NotificationStatus status,
         OffsetDateTime createdAt,

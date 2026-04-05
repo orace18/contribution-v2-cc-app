@@ -29,6 +29,7 @@ public class NotificationRequestedListener implements DomainEventListener<Notifi
                     event.type(),
                     event.channel(),
                     event.templateCode(),
+                    null,
                     event.message(),
                     event.variables(),
                     event.sendNow()

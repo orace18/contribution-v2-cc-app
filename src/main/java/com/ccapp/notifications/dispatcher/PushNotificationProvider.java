@@ -23,13 +23,19 @@ public class PushNotificationProvider implements NotificationChannelProvider {
         if (notification.getMessage() == null || notification.getMessage().isBlank()) {
             throw new BusinessException("Push payload cannot be empty");
         }
+        String title = notification.getTitle() == null || notification.getTitle().isBlank()
+                ? notification.getType().name()
+                : notification.getTitle().trim();
+        String body = notification.getMessage().trim();
         String providerResponse = pushService.sendToAccountHolder(
                 notification.getAccountHolderId(),
-                notification.getType().name(),
-                notification.getMessage().trim(),
+                title,
+                body,
                 java.util.Map.of(
                         "notificationId", notification.getId() == null ? "" : notification.getId().toString(),
                         "notificationType", notification.getType().name(),
+                        "notificationTitle", title,
+                        "notificationBody", body,
                         "accountHolderId", notification.getAccountHolderId().toString()
                 )
         );

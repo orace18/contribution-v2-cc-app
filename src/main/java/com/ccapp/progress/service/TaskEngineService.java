@@ -425,6 +425,7 @@ public class TaskEngineService {
                     NotificationType.TASK_AVAILABLE,
                     List.of(NotificationChannel.IN_APP, NotificationChannel.PUSH),
                     null,
+                    null,
                     task.getTitle(),
                     Map.of(
                             "taskType", task.getTaskType().name(),
@@ -446,6 +447,7 @@ public class TaskEngineService {
                     null,
                     NotificationType.TASK_COMPLETED,
                     NotificationChannel.IN_APP,
+                    null,
                     null,
                     "Tache accomplie: " + task.getTitle(),
                     Map.of("taskType", task.getTaskType().name()),

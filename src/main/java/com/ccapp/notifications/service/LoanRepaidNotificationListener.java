@@ -31,6 +31,7 @@ public class LoanRepaidNotificationListener implements DomainEventListener<LoanR
                     NotificationType.LOAN_REPAID,
                     NotificationChannel.IN_APP,
                     "LOAN_REPAID",
+                    null,
                     "Your loan " + event.loanId() + " has been fully repaid.",
                     null,
                     true

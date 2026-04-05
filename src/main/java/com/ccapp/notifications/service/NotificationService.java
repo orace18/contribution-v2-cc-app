@@ -48,9 +48,10 @@ public class NotificationService {
         accountHolderService.getById(request.accountHolderId());
         validateActor(request.actorUserId(), request.accountHolderId());
 
-        NotificationTemplateService.ResolvedMessage resolved = notificationTemplateService.resolve(
+        NotificationTemplateService.ResolvedContent resolved = notificationTemplateService.resolve(
                 request.channel(),
                 request.templateCode(),
+                request.title(),
                 request.message(),
                 request.variables()
         );
@@ -61,6 +62,7 @@ public class NotificationService {
                 .type(request.type())
                 .channel(request.channel())
                 .templateCode(resolved.templateCode())
+                .title(resolveTitle(request.type(), resolved.title()))
                 .message(resolved.message())
                 .status(NotificationStatus.PENDING)
                 .build());
@@ -142,6 +144,7 @@ public class NotificationService {
                     request.type(),
                     channel,
                     request.templateCode(),
+                    request.title(),
                     request.message(),
                     request.variables(),
                     sendNow
@@ -215,11 +218,19 @@ public class NotificationService {
                 notification.getType(),
                 notification.getChannel(),
                 notification.getTemplateCode(),
+                notification.getTitle(),
                 notification.getMessage(),
                 notification.getStatus(),
                 notification.getCreatedAt(),
                 notification.getSentAt(),
                 attemptResponses
         );
+    }
+
+    private String resolveTitle(NotificationType type, String rawTitle) {
+        if (rawTitle != null && !rawTitle.isBlank()) {
+            return rawTitle.trim();
+        }
+        return type == null ? "Notification" : type.name();
     }
 }

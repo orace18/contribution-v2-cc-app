@@ -65,6 +65,7 @@ public class SubscriptionExpirationJob {
                         window.type(),
                         List.of(NotificationChannel.IN_APP, NotificationChannel.PUSH, NotificationChannel.SMS, NotificationChannel.EMAIL),
                         window.templateCode(),
+                        null,
                         window.message(),
                         null,
                         true
