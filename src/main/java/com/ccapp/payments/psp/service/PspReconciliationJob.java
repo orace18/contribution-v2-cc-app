@@ -51,7 +51,15 @@ public class PspReconciliationJob {
 
         for (Operation operation : stalePending) {
             try {
-                log.info("Checking operation {}", operation.getId());
+                log.info("PSP reconciliation checking operationId={} operationStatus={} pspStatus={} paymentId={} providerReference={} pspReference={} createdAt={} updatedAt={}",
+                        operation.getId(),
+                        operation.getStatus(),
+                        operation.getPspStatus(),
+                        operation.getPaymentId(),
+                        operation.getProviderReference(),
+                        operation.getPspReference(),
+                        operation.getCreatedAt(),
+                        operation.getUpdatedAt());
                 if (isOlderThan(operation, maxAgeCutoff)) {
                     log.warn("PSP reconciliation timeout reached for operationId={} createdAt={}",
                             operation.getId(), operation.getCreatedAt());

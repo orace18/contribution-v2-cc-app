@@ -15,6 +15,7 @@ import com.ccapp.payments.psp.client.JawuPayPspException;
 import com.ccapp.payments.psp.client.JawuPayPspClient;
 import com.ccapp.payments.psp.dto.JawuPayPaymentMethod;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,6 +25,7 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class MobilePaymentService {
 
     private final MobileOnboardingJourneyService mobileOnboardingJourneyService;
@@ -51,6 +53,15 @@ public class MobilePaymentService {
                 .orElseThrow(() -> new NotFoundException("Payment operation not found"));
 
         String mobileStatus = toMobileStatus(operation.getStatus());
+        log.info("Mobile payment status response operationId={} accountHolderId={} operationStatus={} pspStatus={} mobileStatus={} paymentId={} providerReference={} pspReference={}",
+                operation.getId(),
+                accountHolderId,
+                operation.getStatus(),
+                operation.getPspStatus(),
+                mobileStatus,
+                operation.getPaymentId(),
+                operation.getProviderReference(),
+                operation.getPspReference());
         return new MobilePaymentStatusResponse(
                 operation.getId(),
                 mobileStatus,

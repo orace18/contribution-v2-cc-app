@@ -61,10 +61,15 @@ public class PspController {
             @RequestBody byte[] rawRequestBody,
             @RequestHeader(value = "X-Jawupay-Signature", required = false) String signatureHeader,
             HttpServletRequest httpRequest) {
+        String remoteIp = extractRemoteIp(httpRequest);
+        log.info("JawuPay webhook HTTP hit remoteIp={} signaturePresent={} bodyBytes={}",
+                remoteIp,
+                signatureHeader != null && !signatureHeader.isBlank(),
+                rawRequestBody == null ? 0 : rawRequestBody.length);
         JawuPayWebhookRequest request = null;
         try {
             request = parseRequest(rawRequestBody);
-            jawuPayWebhookService.processWebhook(request, rawRequestBody, signatureHeader, extractRemoteIp(httpRequest));
+            jawuPayWebhookService.processWebhook(request, rawRequestBody, signatureHeader, remoteIp);
             return ResponseEntity.ok(CommonResponse.success("Webhook processed"));
         } catch (AccessDeniedException ex) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)

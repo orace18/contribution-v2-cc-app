@@ -102,6 +102,14 @@ public class JawuPayWebhookService {
                                byte[] rawRequestBody,
                                String signatureHeader,
                                String remoteIp) {
+        log.info("JawuPay webhook received provider={} rawStatus={} paymentId={} payoutId={} providerReference={} operationId={} remoteIp={}",
+                request == null ? null : request.provider(),
+                request == null ? null : request.status(),
+                request == null ? null : request.paymentId(),
+                request == null ? null : request.payoutId(),
+                request == null ? null : request.resolvedProviderReference(),
+                request == null || request.operationId() == null ? null : request.operationId(),
+                remoteIp);
         validateIp(remoteIp);
         validateSignature(rawRequestBody, signatureHeader, remoteIp);
         validateProvider(request.provider());
@@ -120,6 +128,13 @@ public class JawuPayWebhookService {
 
         String auditPayload = buildAuditPayload(request, remoteIp, "RECEIVED", null);
         try {
+            log.info("JawuPay webhook matched operation operationId={} currentStatus={} currentPspStatus={} paymentId={} payoutId={} providerReference={}",
+                    operation.getId(),
+                    operation.getStatus(),
+                    operation.getPspStatus(),
+                    paymentId,
+                    payoutId,
+                    providerReference);
             Operation updatedOperation = operationService.recordPspMetadata(
                     operation.getId(),
                     new PspMetadata(
@@ -135,6 +150,9 @@ public class JawuPayWebhookService {
             );
 
             applyPspStatusToOperation(updatedOperation, request.status());
+            log.info("JawuPay webhook processing completed operationId={} rawStatus={}",
+                    updatedOperation.getId(),
+                    request.status());
         } catch (BusinessException | ConflictException | AccessDeniedException ex) {
             throw ex;
         } catch (Exception ex) {
@@ -176,6 +194,11 @@ public class JawuPayWebhookService {
             log.warn("PSP reconciliation skipped: missing payment lookup reference operationId={}", operation.getId());
             return;
         }
+        log.info("PSP reconciliation polling operationId={} operationStatus={} pspStatus={} lookupReference={}",
+                operation.getId(),
+                operation.getStatus(),
+                operation.getPspStatus(),
+                paymentLookupReference);
 
         JawuPayPaymentResponse payment = pspClient.getPayment(paymentLookupReference);
         log.info("PSP status returned: {} for operationId={} lookupReference={}",
@@ -225,8 +248,8 @@ public class JawuPayWebhookService {
     @Transactional
     public void applyPspStatusToOperation(Operation operation, String rawPspStatus) {
         InternalStatus mapped = mapStatus(rawPspStatus);
-        log.info("Applying PSP status: operationId={} rawStatus={} mappedStatus={}",
-                operation.getId(), rawPspStatus, mapped);
+        log.info("Applying PSP status: operationId={} currentStatus={} currentPspStatus={} rawStatus={} mappedStatus={}",
+                operation.getId(), operation.getStatus(), operation.getPspStatus(), rawPspStatus, mapped);
 
         if (isTerminal(operation.getStatus())) {
             log.info("Idempotent: operationId={} already in status={}, ignoring rawStatus={}",
@@ -238,13 +261,23 @@ public class JawuPayWebhookService {
             case SUCCESS -> {
                 if (operation.getType() == OperationType.WALLET_WITHDRAWAL) {
                     walletWithdrawalService.confirmWithdrawal(operation.getId());
+                    log.info("PSP status transition applied operationId={} targetStatus={} operationType={}",
+                            operation.getId(), OperationStatus.CONFIRMED, operation.getType());
                     return;
                 }
                 Operation confirmed = operationService.confirmOperation(operation.getId());
+                log.info("PSP status transition applied operationId={} targetStatus={} operationType={}",
+                        confirmed == null ? operation.getId() : confirmed.getId(),
+                        confirmed == null ? OperationStatus.CONFIRMED : confirmed.getStatus(),
+                        confirmed == null ? operation.getType() : confirmed.getType());
                 dispatchConfirmedSideEffects(confirmed);
             }
             case FAILED -> {
                 Operation failed = operationService.markFailed(operation.getId());
+                log.info("PSP status transition applied operationId={} targetStatus={} operationType={}",
+                        failed == null ? operation.getId() : failed.getId(),
+                        failed == null ? OperationStatus.FAILED : failed.getStatus(),
+                        failed == null ? operation.getType() : failed.getType());
                 dispatchFailedSideEffects(failed);
             }
             case PENDING -> log.info("Operation still pending per PSP: operationId={}", operation.getId());
