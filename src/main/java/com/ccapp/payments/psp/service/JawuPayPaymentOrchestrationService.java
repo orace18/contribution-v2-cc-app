@@ -5,6 +5,7 @@ import com.ccapp.payments.operation.domain.enums.OperationStatus;
 import com.ccapp.payments.operation.domain.enums.OperationType;
 import com.ccapp.payments.operation.service.OperationService;
 import com.ccapp.payments.operation.service.OperationService.PspMetadata;
+import com.ccapp.payments.psp.client.JawuPayPspException;
 import com.ccapp.payments.psp.client.JawuPayPspClient;
 import com.ccapp.payments.psp.dto.JawuPayConfirmRequest;
 import com.ccapp.payments.psp.dto.JawuPayConfirmResponse;
@@ -92,6 +93,35 @@ public class JawuPayPaymentOrchestrationService {
                                                  String idempotencyKey,
                                                  String description,
                                                  OperationType operationType) {
+        return initiatePayment(
+                accountHolderId,
+                actorUserId,
+                amount,
+                currency,
+                country,
+                paymentMethodId,
+                msisdn,
+                operatorHint,
+                idempotencyKey,
+                description,
+                operationType,
+                null
+        );
+    }
+
+    @Transactional(noRollbackFor = JawuPayPspException.class)
+    public InitiatePaymentResult initiatePayment(UUID accountHolderId,
+                                                 UUID actorUserId,
+                                                 BigDecimal amount,
+                                                 String currency,
+                                                 String country,
+                                                 String paymentMethodId,
+                                                 String msisdn,
+                                                 String operatorHint,
+                                                 String idempotencyKey,
+                                                 String description,
+                                                 OperationType operationType,
+                                                 UUID planId) {
         if (operationType == null) {
             throw new IllegalArgumentException("Operation type is required");
         }
@@ -125,6 +155,17 @@ public class JawuPayPaymentOrchestrationService {
                 operation.getId(), quote.quoteId(), quote.fees());
 
         // Step 3 — confirm the payment using the quote, send idempotency key as header
+        if (operationType == OperationType.SUBSCRIPTION) {
+            log.warn("PSP confirm preflight provider=jawupay operationId={} planId={} paymentMethodId={} operatorHint={} msisdn={} quoteId={} currency={} idempotencyKey={}",
+                    operation.getId(),
+                    safeUuid(planId),
+                    paymentMethodId,
+                    operatorHint,
+                    msisdn,
+                    safeUuid(quote.quoteId()),
+                    currency,
+                    idempotencyKey);
+        }
         JawuPayConfirmResponse confirm = pspClient.confirmPayment(
                 new JawuPayConfirmRequest(
                         quote.quoteId(),
@@ -155,5 +196,9 @@ public class JawuPayPaymentOrchestrationService {
      */
     static long toMinorUnits(BigDecimal amount) {
         return amount.movePointRight(2).longValueExact();
+    }
+
+    private String safeUuid(UUID value) {
+        return value == null ? "n/a" : value.toString();
     }
 }

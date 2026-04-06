@@ -39,6 +39,7 @@ import com.ccapp.payments.operation.domain.enums.OperationStatus;
 import com.ccapp.payments.operation.domain.enums.OperationType;
 import com.ccapp.payments.operation.repository.OperationRepository;
 import com.ccapp.payments.operation.service.OperationService;
+import com.ccapp.payments.psp.client.JawuPayPspException;
 import com.ccapp.payments.psp.service.JawuPayPaymentOrchestrationService;
 import com.ccapp.payments.subscription.domain.entity.Membership;
 import com.ccapp.payments.subscription.domain.entity.SubscriptionPlan;
@@ -238,7 +239,7 @@ public class MobileOnboardingJourneyService {
         );
     }
 
-    @Transactional
+    @Transactional(noRollbackFor = JawuPayPspException.class)
     public MobilePaymentInitiateResponse initiatePaidPlanPayment(UUID actorUserId,
                                                                  UUID accountHolderId,
                                                                  String requestedIdempotencyKey,
@@ -278,7 +279,11 @@ public class MobileOnboardingJourneyService {
             );
         }
 
-        String idempotencyKey = generateMobilePaymentIdempotencyKey(accountHolderId, plan.getId());
+        String idempotencyKey = resolveMobilePaymentIdempotencyKey(
+                requestedIdempotencyKey,
+                accountHolderId,
+                plan.getId()
+        );
         String description = "Mobile paid onboarding subscription " + plan.getCode();
         JawuPayPaymentOrchestrationService.InitiatePaymentResult orchestrationResult =
                 jawuPayPaymentOrchestrationService.initiatePayment(
@@ -292,7 +297,8 @@ public class MobileOnboardingJourneyService {
                         normalizedOperatorHint,
                         idempotencyKey,
                         description,
-                        OperationType.SUBSCRIPTION
+                        OperationType.SUBSCRIPTION,
+                        plan.getId()
                 );
         Operation paymentOperation = operationService.getById(orchestrationResult.operationId());
         paymentOperation.setPlanId(plan.getId());
@@ -647,6 +653,15 @@ public class MobileOnboardingJourneyService {
 
     private String generateMobilePaymentIdempotencyKey(UUID accountHolderId, UUID planId) {
         return "mobile-paid-sub:" + accountHolderId + ":" + planId + ":" + UUID.randomUUID();
+    }
+
+    private String resolveMobilePaymentIdempotencyKey(String requestedIdempotencyKey,
+                                                      UUID accountHolderId,
+                                                      UUID planId) {
+        String normalizedRequestedKey = normalizeOptional(requestedIdempotencyKey);
+        return normalizedRequestedKey != null
+                ? normalizedRequestedKey
+                : generateMobilePaymentIdempotencyKey(accountHolderId, planId);
     }
 
     private boolean isFreePlan(SubscriptionPlan plan) {

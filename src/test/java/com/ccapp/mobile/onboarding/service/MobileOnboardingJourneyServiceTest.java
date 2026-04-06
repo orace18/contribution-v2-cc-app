@@ -242,7 +242,7 @@ class MobileOnboardingJourneyServiceTest {
                 eq(ACCOUNT_ID), eq(ACTOR_ID),
                 eq(new BigDecimal("15000.0000")), eq("XOF"), eq("BJ"),
                 eq("MOBILE_MONEY_MTN"), eq("22961000000"), eq("MTN"),
-                any(), any(), eq(OperationType.SUBSCRIPTION)
+                eq("idem-001"), any(), eq(OperationType.SUBSCRIPTION), eq(PLAN_ID)
         )).thenReturn(new JawuPayPaymentOrchestrationService.InitiatePaymentResult(OPERATION_ID, "https://checkout"));
         when(operationService.getById(OPERATION_ID)).thenReturn(pending);
         when(membershipService.createPendingMembership(OPERATION_ID, ACCOUNT_ID, paidPlan))
@@ -341,7 +341,7 @@ class MobileOnboardingJourneyServiceTest {
         assertEquals("PSP-REF-REENTRY", response.pspReference());
         assertEquals("https://checkout/reentry", response.checkoutUrl());
         verify(jawuPayPaymentOrchestrationService, never())
-                .initiatePayment(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
+                .initiatePayment(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test

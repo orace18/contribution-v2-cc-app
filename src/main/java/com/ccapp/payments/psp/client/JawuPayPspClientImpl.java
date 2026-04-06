@@ -1,6 +1,5 @@
 package com.ccapp.payments.psp.client;
 
-import com.ccapp.common.exception.BusinessException;
 import com.ccapp.payments.psp.dto.JawuPayApiResponse;
 import com.ccapp.payments.psp.dto.JawuPayConfirmRequest;
 import com.ccapp.payments.psp.dto.JawuPayConfirmResponse;
@@ -106,9 +105,9 @@ public class JawuPayPspClientImpl implements JawuPayPspClient {
                         status -> status.is4xxClientError() || status.is5xxServerError(),
                         (req, resp) -> {
                             String responseBody = new String(resp.getBody().readAllBytes(), StandardCharsets.UTF_8);
-                            log.error("JawuPay error response method={} uri={} status={} body={}",
+                            log.error("PSP error provider=jawupay method={} uri={} status={} responseBody={}",
                                     req.getMethod(), req.getURI(), resp.getStatusCode(), responseBody);
-                            throw new BusinessException(
+                            throw new JawuPayPspException(
                                     "JawuPay PSP error: HTTP " + resp.getStatusCode()
                                             + " for " + req.getMethod() + " " + req.getURI());
                         })

@@ -11,6 +11,7 @@ import com.ccapp.mobile.payments.dto.MobilePaymentStatusResponse;
 import com.ccapp.payments.operation.domain.entity.Operation;
 import com.ccapp.payments.operation.domain.enums.OperationStatus;
 import com.ccapp.payments.operation.repository.OperationRepository;
+import com.ccapp.payments.psp.client.JawuPayPspException;
 import com.ccapp.payments.psp.client.JawuPayPspClient;
 import com.ccapp.payments.psp.dto.JawuPayPaymentMethod;
 import lombok.RequiredArgsConstructor;
@@ -29,14 +30,14 @@ public class MobilePaymentService {
     private final OperationRepository operationRepository;
     private final JawuPayPspClient jawuPayPspClient;
 
-    @Transactional
+    @Transactional(noRollbackFor = JawuPayPspException.class)
     public MobilePaymentInitiateResponse initiate(UUID actorUserId,
                                                   UUID accountHolderId,
                                                   MobilePaymentInitiateRequest request) {
         return mobileOnboardingJourneyService.initiatePaidPlanPayment(
                 actorUserId,
                 accountHolderId,
-                null,
+                request == null ? null : request.idempotencyKey(),
                 request == null ? null : request.country(),
                 request == null ? null : request.paymentMethodId(),
                 request == null ? null : request.msisdn(),
