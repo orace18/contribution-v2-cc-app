@@ -110,6 +110,41 @@ public class NotificationController {
         ));
     }
 
+    @GetMapping("/me/unread-count")
+    @Operation(summary = "Get unread notification count for current account holder")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Success", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
+    })
+    public ResponseEntity<CommonResponse<Long>> unreadCount() {
+        UUID accountHolderId = SecurityUtils.currentAccountHolderId();
+        return ResponseEntity.ok(CommonResponse.success("Unread count", notificationService.getUnreadCount(accountHolderId)));
+    }
+
+    @PatchMapping("/me/{notificationId}/read")
+    @Operation(summary = "Mark a notification as read")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Success", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
+    })
+    public ResponseEntity<CommonResponse<Void>> markRead(@PathVariable UUID notificationId) {
+        UUID accountHolderId = SecurityUtils.currentAccountHolderId();
+        notificationService.markRead(notificationId, accountHolderId);
+        return ResponseEntity.ok(CommonResponse.success("Marked as read", null));
+    }
+
+    @PatchMapping("/me/read-all")
+    @Operation(summary = "Mark all notifications as read")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Success", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
+    })
+    public ResponseEntity<CommonResponse<Void>> markAllRead() {
+        UUID accountHolderId = SecurityUtils.currentAccountHolderId();
+        notificationService.markAllRead(accountHolderId);
+        return ResponseEntity.ok(CommonResponse.success("All marked as read", null));
+    }
+
     @GetMapping("/account-holders/{accountHolderId}")
     @Operation(summary = "Get notifications for an account holder")
     @ApiResponses(value = {

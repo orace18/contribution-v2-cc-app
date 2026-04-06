@@ -58,6 +58,9 @@ public class Notification {
     @Column(name = "sent_at")
     private OffsetDateTime sentAt;
 
+    @Column(name = "read_at")
+    private OffsetDateTime readAt;
+
     @PrePersist
     protected void onCreate() {
         if (createdAt == null) {

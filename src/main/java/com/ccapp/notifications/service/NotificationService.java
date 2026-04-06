@@ -167,6 +167,21 @@ public class NotificationService {
                 .toList();
     }
 
+    @Transactional
+    public void markRead(UUID notificationId, UUID accountHolderId) {
+        notificationRepository.markOneRead(notificationId, accountHolderId, OffsetDateTime.now());
+    }
+
+    @Transactional
+    public void markAllRead(UUID accountHolderId) {
+        notificationRepository.markAllRead(accountHolderId, OffsetDateTime.now());
+    }
+
+    @Transactional(readOnly = true)
+    public long getUnreadCount(UUID accountHolderId) {
+        return notificationRepository.countByAccountHolderIdAndReadAtIsNull(accountHolderId);
+    }
+
     @Transactional(readOnly = true)
     public boolean existsNotificationForToday(UUID accountHolderId, NotificationType type, String templateCode, LocalDate day) {
         if (templateCode == null || templateCode.isBlank()) {
@@ -223,6 +238,7 @@ public class NotificationService {
                 notification.getStatus(),
                 notification.getCreatedAt(),
                 notification.getSentAt(),
+                notification.getReadAt(),
                 attemptResponses
         );
     }

@@ -20,6 +20,7 @@ public record NotificationResponse(
         NotificationStatus status,
         OffsetDateTime createdAt,
         OffsetDateTime sentAt,
+        OffsetDateTime readAt,
         List<NotificationAttemptResponse> attempts
 ) {
 }
