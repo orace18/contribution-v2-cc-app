@@ -220,6 +220,67 @@ class AccountingPostingServiceTest {
     }
 
     @Test
+    void postConfirmedOperation_shouldExposeCountryContext_whenCommissionPoolMissing() {
+        UUID operationId = UUID.randomUUID();
+        Operation operation = Operation.builder()
+                .id(operationId)
+                .accountHolderId(UUID.randomUUID())
+                .type(OperationType.SUBSCRIPTION)
+                .status(OperationStatus.CONFIRMED)
+                .amount(new BigDecimal("100.00"))
+                .currency("USD")
+                .build();
+
+        AccountHolder accountHolder = AccountHolder.builder()
+                .id(operation.getAccountHolderId())
+                .firstName("Test")
+                .lastName("User")
+                .serviceCountryCode("INT")
+                .build();
+
+        when(accountingEventRepository.findByOperationId(operationId)).thenReturn(Optional.empty());
+        when(operationService.getById(operationId)).thenReturn(operation);
+        when(accountHolderRepository.findById(operation.getAccountHolderId())).thenReturn(Optional.of(accountHolder));
+
+        CountryConfigResolver.ResolvedConfig generalConfig = new CountryConfigResolver.ResolvedConfig(
+                "INT",
+                CountryConfigType.GENERAL,
+                null,
+                "{}",
+                CountryConfigResolver.ConfigSource.EMPTY
+        );
+        CountryConfigResolver.ResolvedConfig accountingConfig = new CountryConfigResolver.ResolvedConfig(
+                "INT",
+                CountryConfigType.ACCOUNTING,
+                1,
+                "{}",
+                CountryConfigResolver.ConfigSource.COUNTRY
+        );
+        when(countryConfigResolver.resolveActiveConfig("INT", CountryConfigType.GENERAL)).thenReturn(generalConfig);
+        when(countryConfigResolver.resolveActiveConfig("INT", CountryConfigType.ACCOUNTING)).thenReturn(accountingConfig);
+        when(countryConfigResolver.payloadAsObjectNode(generalConfig)).thenReturn(objectMapper.createObjectNode());
+        when(countryConfigResolver.payloadAsObjectNode(accountingConfig)).thenReturn(objectMapper.createObjectNode());
+        when(countryChartOfAccountsService.findOrCreateWallet(any(AccountHolder.class)))
+                .thenReturn(CountryChartAccount.builder()
+                        .id(UUID.randomUUID())
+                        .countryCode("INT")
+                        .accountCode("250000001")
+                        .accountNumber("250000001")
+                        .accountName("Wallet Test User")
+                        .accountGroup(CountryAccountGroup.USER_WALLET)
+                        .currency("USD")
+                        .accountHolderId(accountHolder.getId())
+                        .build());
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> accountingPostingService.postConfirmedOperation(operationId));
+
+        assertTrue(exception.getMessage().contains("Subscription posting profile invalid for country INT"));
+        assertTrue(exception.getMessage().contains("commissionPool"));
+        assertTrue(exception.getMessage().contains("generalSource=EMPTY"));
+    }
+
+    @Test
     void postMarketplacePayment_shouldDebitSourceAndCreditMarketplacePool() {
         UUID buyerId = UUID.randomUUID();
         Operation operation = Operation.builder()

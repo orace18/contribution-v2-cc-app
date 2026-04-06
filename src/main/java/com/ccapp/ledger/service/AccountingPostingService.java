@@ -581,6 +581,22 @@ public class AccountingPostingService {
                                                             String countryCode,
                                                             String walletCode) {
         SubscriptionPostingProfile profile = resolveSubscriptionPostingProfile(countryCode);
+        log.info("subscription_posting_profile_resolved operationId={} accountHolderId={} planId={} countryCode={} membershipRevenueAccount={} commissionPoolAccount={} guaranteeFundAccount={} platformFeeAccount={} administrationAccount={} socialFundAccount={} commissionPoolPercent={} guaranteeFundPercent={} platformFeePercent={} administrationPercent={} socialFundPercent={}",
+                operation.getId(),
+                operation.getAccountHolderId(),
+                operation.getPlanId(),
+                countryCode,
+                profile.membershipRevenueAccountCode(),
+                profile.commissionPoolAccountCode(),
+                profile.guaranteeFundAccountCode(),
+                profile.platformFeeAccountCode(),
+                profile.administrationAccountCode(),
+                profile.socialFundAccountCode(),
+                profile.commissionPoolPercent(),
+                profile.guaranteeFundPercent(),
+                profile.platformFeePercent(),
+                profile.administrationPercent(),
+                profile.socialFundPercent());
         String paymentSourceAccountCode = operation.getPspReference() == null || operation.getPspReference().isBlank()
                 ? walletCode
                 : resolveAccountCode(countryCode, CountryAccountSystemTag.PSP_CLEARING);
@@ -626,57 +642,78 @@ public class AccountingPostingService {
                 : accountingPayload.has("preallocationAccounts") && accountingPayload.get("preallocationAccounts").isObject()
                 ? (com.fasterxml.jackson.databind.node.ObjectNode) accountingPayload.get("preallocationAccounts")
                 : accountingPayload;
+        try {
+            BigDecimal commissionPoolPercent = requiredPercentage(generalPayload, "commissionPool", "commission_pool");
+            BigDecimal guaranteeFundPercent = requiredPercentage(generalPayload, "guaranteeFund", "guarantee_fund");
+            BigDecimal platformFeePercent = requiredPercentage(generalPayload, "platformFee", "platform_fee");
+            BigDecimal administrationPercent = requiredPercentage(generalPayload, "administration", "administrationFee");
+            BigDecimal socialFundPercent = requiredPercentage(generalPayload, "socialFund", "social_fund");
+            BigDecimal totalPercent = commissionPoolPercent
+                    .add(guaranteeFundPercent)
+                    .add(platformFeePercent)
+                    .add(administrationPercent)
+                    .add(socialFundPercent)
+                    .setScale(4, RoundingMode.HALF_UP);
+            if (totalPercent.compareTo(ONE_HUNDRED.setScale(4, RoundingMode.HALF_UP)) != 0) {
+                throw new BusinessException("Subscription allocation percentages must sum to 100");
+            }
 
-        BigDecimal commissionPoolPercent = requiredPercentage(generalPayload, "commissionPool", "commission_pool");
-        BigDecimal guaranteeFundPercent = requiredPercentage(generalPayload, "guaranteeFund", "guarantee_fund");
-        BigDecimal platformFeePercent = requiredPercentage(generalPayload, "platformFee", "platform_fee");
-        BigDecimal administrationPercent = requiredPercentage(generalPayload, "administration", "administrationFee");
-        BigDecimal socialFundPercent = requiredPercentage(generalPayload, "socialFund", "social_fund");
-        BigDecimal totalPercent = commissionPoolPercent
-                .add(guaranteeFundPercent)
-                .add(platformFeePercent)
-                .add(administrationPercent)
-                .add(socialFundPercent)
-                .setScale(4, RoundingMode.HALF_UP);
-        if (totalPercent.compareTo(ONE_HUNDRED.setScale(4, RoundingMode.HALF_UP)) != 0) {
-            throw new BusinessException("Subscription allocation percentages must sum to 100");
+            return new SubscriptionPostingProfile(
+                    resolveExplicitOrDefaultAccountCode(countryCode, accountsNode, "membershipRevenue", "cotisations",
+                            () -> countryChartOfAccountsService.findOrCreate(
+                                    countryCode,
+                                    CountryAccountGroup.MEMBERSHIP_FEES,
+                                    "750001 Cotisations des membres"
+                            ).getAccountCode()),
+                    resolveExplicitOrDefaultAccountCode(countryCode, accountsNode, "commissionPool", "mlmPool",
+                            () -> resolveAccountCode(countryCode, CountryAccountSystemTag.MLM_POOL)),
+                    resolveExplicitOrDefaultAccountCode(countryCode, accountsNode, "guaranteeFund", "guarantee",
+                            () -> countryChartOfAccountsService.findOrCreate(
+                                    countryCode,
+                                    CountryAccountGroup.GUARANTEE_FUND,
+                                    "Guarantee Fund"
+                            ).getAccountCode()),
+                    resolveExplicitOrDefaultAccountCode(countryCode, accountsNode, "platformFee", "platformRevenue",
+                            () -> resolveAccountCode(countryCode, CountryAccountSystemTag.PLATFORM_REVENUE)),
+                    resolveExplicitOrDefaultAccountCode(countryCode, accountsNode, "administration", "administrationFee",
+                            () -> countryChartOfAccountsService.findOrCreate(
+                                    countryCode,
+                                    CountryAccountGroup.ADMINISTRATION,
+                                    "Administration"
+                            ).getAccountCode()),
+                    resolveExplicitOrDefaultAccountCode(countryCode, accountsNode, "socialFund", "social",
+                            () -> countryChartOfAccountsService.findOrCreate(
+                                    countryCode,
+                                    CountryAccountGroup.SOCIAL_FUND,
+                                    "Social Fund"
+                            ).getAccountCode()),
+                    commissionPoolPercent,
+                    guaranteeFundPercent,
+                    platformFeePercent,
+                    administrationPercent,
+                    socialFundPercent
+            );
+        } catch (BusinessException ex) {
+            log.error("subscription_posting_profile_resolution_failed countryCode={} generalConfigSource={} generalConfigVersion={} accountingConfigSource={} accountingConfigVersion={} message={}",
+                    countryCode,
+                    generalConfig.source(),
+                    generalConfig.version(),
+                    accountingConfig.source(),
+                    accountingConfig.version(),
+                    ex.getMessage());
+            throw new BusinessException("Subscription posting profile invalid for country "
+                    + countryCode
+                    + " (generalSource="
+                    + generalConfig.source()
+                    + ", generalVersion="
+                    + generalConfig.version()
+                    + ", accountingSource="
+                    + accountingConfig.source()
+                    + ", accountingVersion="
+                    + accountingConfig.version()
+                    + "): "
+                    + ex.getMessage());
         }
-
-        return new SubscriptionPostingProfile(
-                resolveExplicitOrDefaultAccountCode(countryCode, accountsNode, "membershipRevenue", "cotisations",
-                        () -> countryChartOfAccountsService.findOrCreate(
-                                countryCode,
-                                CountryAccountGroup.MEMBERSHIP_FEES,
-                                "750001 Cotisations des membres"
-                        ).getAccountCode()),
-                resolveExplicitOrDefaultAccountCode(countryCode, accountsNode, "commissionPool", "mlmPool",
-                        () -> resolveAccountCode(countryCode, CountryAccountSystemTag.MLM_POOL)),
-                resolveExplicitOrDefaultAccountCode(countryCode, accountsNode, "guaranteeFund", "guarantee",
-                        () -> countryChartOfAccountsService.findOrCreate(
-                                countryCode,
-                                CountryAccountGroup.GUARANTEE_FUND,
-                                "Guarantee Fund"
-                        ).getAccountCode()),
-                resolveExplicitOrDefaultAccountCode(countryCode, accountsNode, "platformFee", "platformRevenue",
-                        () -> resolveAccountCode(countryCode, CountryAccountSystemTag.PLATFORM_REVENUE)),
-                resolveExplicitOrDefaultAccountCode(countryCode, accountsNode, "administration", "administrationFee",
-                        () -> countryChartOfAccountsService.findOrCreate(
-                                countryCode,
-                                CountryAccountGroup.ADMINISTRATION,
-                                "Administration"
-                        ).getAccountCode()),
-                resolveExplicitOrDefaultAccountCode(countryCode, accountsNode, "socialFund", "social",
-                        () -> countryChartOfAccountsService.findOrCreate(
-                                countryCode,
-                                CountryAccountGroup.SOCIAL_FUND,
-                                "Social Fund"
-                        ).getAccountCode()),
-                commissionPoolPercent,
-                guaranteeFundPercent,
-                platformFeePercent,
-                administrationPercent,
-                socialFundPercent
-        );
     }
 
     private String resolveExplicitOrDefaultAccountCode(String countryCode,

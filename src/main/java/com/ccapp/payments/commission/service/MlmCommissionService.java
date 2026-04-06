@@ -21,6 +21,7 @@ import com.ccapp.payments.subscription.domain.enums.MembershipStatus;
 import com.ccapp.payments.subscription.domain.enums.SubscriptionGrade;
 import com.ccapp.payments.subscription.repository.MembershipRepository;
 import com.ccapp.payments.subscription.repository.SubscriptionPlanRepository;
+import com.ccapp.platform.config.domain.enums.PlatformConfigType;
 import com.ccapp.platform.config.service.GlobalMlmConfigService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -76,6 +77,13 @@ public class MlmCommissionService {
         }
 
         UnilevelProfile profile = resolveUnilevelProfile(operation);
+        log.info("subscription_commission_profile_resolved operationId={} accountHolderId={} planId={} countryCode={} commissionPoolPercent={} generationRates={}",
+                operation.getId(),
+                operation.getAccountHolderId(),
+                operation.getPlanId(),
+                profile.countryCode(),
+                profile.commissionPoolPercent(),
+                profile.ratesByGeneration());
         List<MlmRelationship> ancestors = mlmRelationshipRepository.findAncestors(operation.getAccountHolderId()).stream()
                 .filter(relationship -> relationship.getLevel() != null
                         && relationship.getLevel() > 0
@@ -197,9 +205,24 @@ public class MlmCommissionService {
         var generalPayload = countryConfigResolver.payloadAsObjectNode(generalConfig);
         BigDecimal commissionPoolPercent = readDecimalFromPercentages(generalPayload, "commissionPool", "commission_pool");
         if (commissionPoolPercent == null || commissionPoolPercent.signum() <= 0) {
-            throw new BusinessException("commissionPool allocation percentage is required");
+            log.error("subscription_commission_profile_resolution_failed operationId={} accountHolderId={} planId={} countryCode={} generalConfigSource={} generalConfigVersion={} message={}",
+                    operation.getId(),
+                    operation.getAccountHolderId(),
+                    operation.getPlanId(),
+                    countryCode,
+                    generalConfig.source(),
+                    generalConfig.version(),
+                    "commissionPool allocation percentage is required");
+            throw new BusinessException("commissionPool allocation percentage is required in GENERAL config for country "
+                    + countryCode
+                    + " (source="
+                    + generalConfig.source()
+                    + ", version="
+                    + generalConfig.version()
+                    + ")");
         }
 
+        var globalRatesConfig = countryConfigResolver.resolveActivePlatformConfig(PlatformConfigType.GLOBAL_MLM_BASE_RATES);
         var globalMlmConfig = globalMlmConfigService.resolveActiveConfig();
         Map<Integer, BigDecimal> ratesByGeneration = new HashMap<>();
         for (int generation = 1; generation <= MAX_GENERATIONS; generation++) {
@@ -209,6 +232,13 @@ public class MlmCommissionService {
             }
             ratesByGeneration.put(generation, rate);
         }
+        log.info("subscription_commission_rates_loaded operationId={} accountHolderId={} planId={} countryCode={} globalMlmConfigVersion={} generationCount={}",
+                operation.getId(),
+                operation.getAccountHolderId(),
+                operation.getPlanId(),
+                countryCode,
+                globalRatesConfig.version(),
+                ratesByGeneration.size());
         return new UnilevelProfile(countryCode, commissionPoolPercent, ratesByGeneration);
     }
 

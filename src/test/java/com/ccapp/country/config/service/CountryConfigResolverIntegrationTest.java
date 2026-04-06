@@ -6,9 +6,11 @@ import com.ccapp.country.config.domain.enums.CountryConfigType;
 import com.ccapp.country.config.dto.UpsertCountryConfigRequest;
 import com.ccapp.country.domain.entity.Country;
 import com.ccapp.country.repository.CountryRepository;
+import com.ccapp.payments.subscription.service.SubscriptionPlanCatalogService;
 import com.ccapp.payments.subscription.service.SubscriptionService;
 import com.ccapp.platform.config.domain.enums.PlatformConfigType;
 import com.ccapp.platform.config.dto.UpsertPlatformConfigRequest;
+import com.ccapp.platform.config.service.GlobalMlmConfigService;
 import com.ccapp.platform.config.service.PlatformConfigurationService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -23,6 +25,9 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.when;
 
 @DataJpaTest(properties = {
         "spring.profiles.active=test",
@@ -50,11 +55,18 @@ class CountryConfigResolverIntegrationTest {
     private CountryConfigResolver countryConfigResolver;
     @MockBean
     private SubscriptionService subscriptionService;
+    @MockBean
+    private SubscriptionPlanCatalogService subscriptionPlanCatalogService;
+    @MockBean
+    private GlobalMlmConfigService globalMlmConfigService;
+    @MockBean
+    private CountryChartOfAccountsService countryChartOfAccountsService;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @BeforeEach
     void setUp() {
+        when(countryChartOfAccountsService.hasRequiredSystemMappings(anyString())).thenReturn(true);
         countryRepository.save(Country.builder()
                 .id(UUID.randomUUID())
                 .code("BJ")
@@ -129,9 +141,9 @@ class CountryConfigResolverIntegrationTest {
         CountryConfigResolver.ResolvedConfig resolved = countryConfigResolver.resolveActiveConfig("BJ", CountryConfigType.MLM_LIMITS);
         ObjectNode payload = countryConfigResolver.payloadAsObjectNode(resolved);
 
-        assertEquals(CountryConfigResolver.ConfigSource.MERGED, resolved.source());
-        assertEquals(12, payload.get("unilevel").asInt());
-        assertEquals(8, payload.get("binary").asInt());
+        assertEquals(CountryConfigResolver.ConfigSource.COUNTRY, resolved.source());
+        assertNull(payload.get("unilevel"));
+        assertNull(payload.get("binary"));
         assertEquals(1000, payload.get("weeklyCap").asInt());
     }
 
@@ -161,5 +173,31 @@ class CountryConfigResolverIntegrationTest {
         assertEquals(CountryConfigResolver.ConfigSource.MERGED, resolved.source());
         assertEquals(20, payload.get("taxRate").asInt());
         assertEquals(5, payload.get("marketplaceDefaultCommission").asInt());
+    }
+
+    @Test
+    void resolveActiveConfig_shouldExposeGlobalAllocationInsideGeneralPayload() {
+        ObjectNode allocation = objectMapper.createObjectNode();
+        ObjectNode percentages = allocation.putObject("percentages");
+        percentages.put("commissionPool", 60);
+        percentages.put("guaranteeFund", 15);
+        percentages.put("platformFee", 10);
+        percentages.put("administration", 10);
+        percentages.put("socialFund", 5);
+        platformConfigurationService.upsertPlatformConfiguration(
+                PlatformConfigType.GLOBAL_ALLOCATION,
+                new UpsertPlatformConfigRequest(allocation, OffsetDateTime.now()),
+                UUID.randomUUID()
+        );
+
+        CountryConfigResolver.ResolvedConfig resolved = countryConfigResolver.resolveActiveConfig("BJ", CountryConfigType.GENERAL);
+        ObjectNode payload = countryConfigResolver.payloadAsObjectNode(resolved);
+
+        assertEquals(CountryConfigResolver.ConfigSource.PLATFORM, resolved.source());
+        assertEquals(60, payload.path("percentages").path("commissionPool").asInt());
+        assertEquals(15, payload.path("percentages").path("guaranteeFund").asInt());
+        assertEquals(10, payload.path("percentages").path("platformFee").asInt());
+        assertEquals(10, payload.path("percentages").path("administration").asInt());
+        assertEquals(5, payload.path("percentages").path("socialFund").asInt());
     }
 }

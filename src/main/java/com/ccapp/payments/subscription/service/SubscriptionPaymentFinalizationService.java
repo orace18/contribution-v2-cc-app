@@ -38,10 +38,20 @@ public class SubscriptionPaymentFinalizationService {
             return;
         }
 
+        log.info("subscription_finalization_started operationId={} accountHolderId={} planId={} currency={} amount={}",
+                operation.getId(),
+                operation.getAccountHolderId(),
+                operation.getPlanId(),
+                operation.getCurrency(),
+                operation.getAmount());
         membershipService.activateForConfirmedOperation(operation);
         postAccountingSafely(operation);
         calculateCommissionSafely(operation);
         mobileOnboardingJourneyService.onPaidPaymentConfirmed(operation);
+        log.info("subscription_finalization_completed operationId={} accountHolderId={} planId={}",
+                operation.getId(),
+                operation.getAccountHolderId(),
+                operation.getPlanId());
     }
 
     private void postAccountingSafely(Operation operation) {

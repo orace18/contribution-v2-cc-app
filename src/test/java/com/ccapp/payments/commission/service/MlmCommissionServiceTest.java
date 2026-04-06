@@ -1,6 +1,7 @@
 package com.ccapp.payments.commission.service;
 
 import com.ccapp.common.events.DomainEventPublisher;
+import com.ccapp.common.exception.BusinessException;
 import com.ccapp.country.config.domain.enums.CountryConfigType;
 import com.ccapp.country.config.service.CountryConfigResolver;
 import com.ccapp.financial.audit.service.FinancialAuditService;
@@ -18,7 +19,7 @@ import com.ccapp.payments.subscription.domain.enums.MembershipStatus;
 import com.ccapp.payments.subscription.domain.enums.SubscriptionGrade;
 import com.ccapp.payments.subscription.repository.MembershipRepository;
 import com.ccapp.payments.subscription.repository.SubscriptionPlanRepository;
-import com.ccapp.platform.config.domain.enums.PlatformConfigType;
+import com.ccapp.platform.config.service.GlobalMlmConfigService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -38,6 +39,8 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
@@ -65,6 +68,8 @@ class MlmCommissionServiceTest {
     private SubscriptionPlanRepository subscriptionPlanRepository;
     @Mock
     private CountryConfigResolver countryConfigResolver;
+    @Mock
+    private GlobalMlmConfigService globalMlmConfigService;
 
     @InjectMocks
     private MlmCommissionService mlmCommissionService;
@@ -115,17 +120,16 @@ class MlmCommissionServiceTest {
                 "BJ", CountryConfigType.MLM_LIMITS, 1, "{\"weeklyCapsByTier\":[{\"tier\":\"CLASSIC\",\"cap\":5000},{\"tier\":\"GOLD\",\"cap\":5000}]}",
                 CountryConfigResolver.ConfigSource.COUNTRY
         );
-        CountryConfigResolver.ResolvedPlatformConfig ratesConfig = new CountryConfigResolver.ResolvedPlatformConfig(
-                PlatformConfigType.GLOBAL_MLM_BASE_RATES,
-                1,
-                "{\"generations\":{\"g1\":30,\"g2\":10,\"g3\":39,\"g4\":5,\"g5\":5,\"g6\":4,\"g7\":3,\"g8\":2.5,\"g9\":1,\"g10\":0.5}}"
-        );
         when(countryConfigResolver.resolveActiveConfig("BJ", CountryConfigType.GENERAL)).thenReturn(generalConfig);
         when(countryConfigResolver.resolveActiveConfig("BJ", CountryConfigType.MLM_LIMITS)).thenReturn(mlmLimitsConfig);
-        when(countryConfigResolver.resolveActivePlatformConfig(PlatformConfigType.GLOBAL_MLM_BASE_RATES)).thenReturn(ratesConfig);
         when(countryConfigResolver.payloadAsObjectNode(generalConfig)).thenReturn(generalPayload());
         when(countryConfigResolver.payloadAsObjectNode(mlmLimitsConfig)).thenReturn(mlmLimitsPayload("CLASSIC", "GOLD"));
-        when(countryConfigResolver.payloadAsObjectNode(ratesConfig)).thenReturn(ratesPayload());
+        when(countryConfigResolver.resolveActivePlatformConfig(any())).thenReturn(new CountryConfigResolver.ResolvedPlatformConfig(
+                null,
+                1,
+                "{}"
+        ));
+        when(globalMlmConfigService.resolveActiveConfig()).thenReturn(globalMlmConfig());
 
         when(mlmRelationshipRepository.findAncestors(purchaserId)).thenReturn(List.of(
                 MlmRelationship.builder().ancestorId(generation1Id).descendantId(purchaserId).level(1).build(),
@@ -205,17 +209,16 @@ class MlmCommissionServiceTest {
                 "BJ", CountryConfigType.MLM_LIMITS, 1, "{\"weeklyCapsByTier\":[{\"tier\":\"CLASSIC\",\"cap\":1000}]}",
                 CountryConfigResolver.ConfigSource.COUNTRY
         );
-        CountryConfigResolver.ResolvedPlatformConfig ratesConfig = new CountryConfigResolver.ResolvedPlatformConfig(
-                PlatformConfigType.GLOBAL_MLM_BASE_RATES,
-                1,
-                "{\"generations\":{\"g1\":30,\"g2\":10,\"g3\":39,\"g4\":5,\"g5\":5,\"g6\":4,\"g7\":3,\"g8\":2.5,\"g9\":1,\"g10\":0.5}}"
-        );
         when(countryConfigResolver.resolveActiveConfig("BJ", CountryConfigType.GENERAL)).thenReturn(generalConfig);
         when(countryConfigResolver.resolveActiveConfig("BJ", CountryConfigType.MLM_LIMITS)).thenReturn(mlmLimitsConfig);
-        when(countryConfigResolver.resolveActivePlatformConfig(PlatformConfigType.GLOBAL_MLM_BASE_RATES)).thenReturn(ratesConfig);
         when(countryConfigResolver.payloadAsObjectNode(generalConfig)).thenReturn(generalPayload());
         when(countryConfigResolver.payloadAsObjectNode(mlmLimitsConfig)).thenReturn(mlmLimitsPayload("CLASSIC"));
-        when(countryConfigResolver.payloadAsObjectNode(ratesConfig)).thenReturn(ratesPayload());
+        when(countryConfigResolver.resolveActivePlatformConfig(any())).thenReturn(new CountryConfigResolver.ResolvedPlatformConfig(
+                null,
+                1,
+                "{}"
+        ));
+        when(globalMlmConfigService.resolveActiveConfig()).thenReturn(globalMlmConfig());
         when(mlmRelationshipRepository.findAncestors(purchaserId)).thenReturn(List.of(
                 MlmRelationship.builder().ancestorId(generation1Id).descendantId(purchaserId).level(1).build()
         ));
@@ -230,6 +233,46 @@ class MlmCommissionServiceTest {
 
         verify(mlmCommissionRepository, never()).save(any());
         verify(domainEventPublisher, never()).publish(any());
+    }
+
+    @Test
+    void calculateForOperation_shouldExposeCountryContext_whenCommissionPoolMissing() {
+        UUID operationId = UUID.randomUUID();
+        UUID purchaserId = UUID.randomUUID();
+        UUID planId = UUID.randomUUID();
+        Operation operation = Operation.builder()
+                .id(operationId)
+                .accountHolderId(purchaserId)
+                .planId(planId)
+                .type(OperationType.SUBSCRIPTION)
+                .amount(new BigDecimal("10000.00"))
+                .currency("XOF")
+                .build();
+
+        when(subscriptionPlanRepository.findById(planId))
+                .thenReturn(Optional.of(SubscriptionPlan.builder()
+                        .id(planId)
+                        .country("BJ")
+                        .currency("XOF")
+                        .grade(SubscriptionGrade.CLASSIC)
+                        .durationMonths(1)
+                        .price(new BigDecimal("10000.00"))
+                        .active(true)
+                        .code("CLASSIC_1M")
+                        .name("Classic 1 month")
+                        .build()));
+
+        CountryConfigResolver.ResolvedConfig generalConfig = new CountryConfigResolver.ResolvedConfig(
+                "BJ", CountryConfigType.GENERAL, null, "{}",
+                CountryConfigResolver.ConfigSource.EMPTY
+        );
+        when(countryConfigResolver.resolveActiveConfig("BJ", CountryConfigType.GENERAL)).thenReturn(generalConfig);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> mlmCommissionService.calculateForOperation(operation));
+
+        assertTrue(exception.getMessage().contains("commissionPool allocation percentage is required in GENERAL config for country BJ"));
+        assertTrue(exception.getMessage().contains("source=EMPTY"));
     }
 
     private Membership activeMembership(UUID accountHolderId, SubscriptionGrade grade) {
@@ -248,20 +291,22 @@ class MlmCommissionServiceTest {
         return payload;
     }
 
-    private ObjectNode ratesPayload() {
-        ObjectNode payload = objectMapper.createObjectNode();
-        ObjectNode generations = payload.putObject("generations");
-        generations.put("g1", 30);
-        generations.put("g2", 10);
-        generations.put("g3", 39);
-        generations.put("g4", 5);
-        generations.put("g5", 5);
-        generations.put("g6", 4);
-        generations.put("g7", 3);
-        generations.put("g8", 2.5);
-        generations.put("g9", 1);
-        generations.put("g10", 0.5);
-        return payload;
+    private GlobalMlmConfigService.GlobalMlmConfig globalMlmConfig() {
+        return new GlobalMlmConfigService.GlobalMlmConfig(
+                java.util.Map.of(
+                        1, new BigDecimal("30"),
+                        2, new BigDecimal("10"),
+                        3, new BigDecimal("39"),
+                        4, new BigDecimal("5"),
+                        5, new BigDecimal("5"),
+                        6, new BigDecimal("4"),
+                        7, new BigDecimal("3"),
+                        8, new BigDecimal("2.5"),
+                        9, new BigDecimal("1"),
+                        10, new BigDecimal("0.5")
+                ),
+                new GlobalMlmConfigService.GlobalBinaryConfig("WEAKER_LEG")
+        );
     }
 
     private ObjectNode mlmLimitsPayload(String... tiers) {
