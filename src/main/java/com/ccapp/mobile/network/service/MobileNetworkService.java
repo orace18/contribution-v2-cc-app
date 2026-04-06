@@ -10,7 +10,12 @@ import com.ccapp.identity.delegation.service.AccessControlService;
 import com.ccapp.identity.domain.entity.UserProfile;
 import com.ccapp.identity.repository.UserProfileRepository;
 import com.ccapp.mlm.repository.MlmMemberLinkRepository;
+import com.ccapp.mlm.repository.MlmRelationshipRepository;
 import com.ccapp.mlm.repository.projection.MlmTreeMemberProjection;
+import com.ccapp.mobile.network.dto.MobileNetworkEligibilityResponse;
+import com.ccapp.mobile.onboarding.domain.entity.MobileOnboardingJourney;
+import com.ccapp.mobile.onboarding.repository.MobileOnboardingJourneyRepository;
+import com.ccapp.payments.subscription.domain.enums.SubscriptionGrade;
 import com.ccapp.mobile.network.dto.MobileNetworkFollowUpResponse;
 import com.ccapp.mobile.network.dto.MobileNetworkMemberSummaryResponse;
 import com.ccapp.mobile.network.dto.MobileNetworkMembershipStatus;
@@ -52,7 +57,9 @@ public class MobileNetworkService {
     private final AccountHolderService accountHolderService;
     private final AccountHolderRepository accountHolderRepository;
     private final MlmMemberLinkRepository mlmMemberLinkRepository;
+    private final MlmRelationshipRepository mlmRelationshipRepository;
     private final MembershipRepository membershipRepository;
+    private final MobileOnboardingJourneyRepository onboardingJourneyRepository;
     private final AppUserRepository appUserRepository;
     private final UserProfileRepository userProfileRepository;
 
@@ -279,6 +286,46 @@ public class MobileNetworkService {
                 .toList();
 
         return new MobileNetworkMembersResponse(members);
+    }
+
+    @Transactional(readOnly = true)
+    public MobileNetworkEligibilityResponse getEligibility(UUID actorUserId, UUID accountHolderId) {
+        assertViewAccess(actorUserId, accountHolderId);
+        AccountHolder accountHolder = accountHolderService.getById(accountHolderId);
+
+        // 1. Sponsor
+        boolean hasSponsor = onboardingJourneyRepository.findByAccountHolderId(accountHolderId)
+                .map(MobileOnboardingJourney::isSponsorSet)
+                .orElse(false);
+
+        // 2. Phone verified
+        boolean phoneVerified = accountHolder.getPhoneVerifiedAt() != null;
+
+        // 3. Paid membership (FREE or absent = not paid)
+        Membership membership = membershipRepository
+                .findFirstByAccountHolderIdAndStatusAndExpiresAtAfterOrderByExpiresAtDesc(
+                        accountHolderId, MembershipStatus.ACTIVE, OffsetDateTime.now())
+                .orElse(null);
+        boolean hasPaidMembership = membership != null
+                && membership.getPlanGrade() != SubscriptionGrade.FREE;
+        String membershipGrade = membership != null
+                ? membership.getPlanGrade().name()
+                : "NONE";
+
+        // 4. MLM position in tree
+        boolean hasNetworkPosition = mlmRelationshipRepository
+                .countByDescendantIdAndLevelGreaterThan(accountHolderId, 0) > 0;
+
+        boolean isEligible = hasSponsor && phoneVerified && hasPaidMembership && hasNetworkPosition;
+
+        return new MobileNetworkEligibilityResponse(
+                hasSponsor,
+                phoneVerified,
+                hasPaidMembership,
+                membershipGrade,
+                hasNetworkPosition,
+                isEligible
+        );
     }
 
     private void assertViewAccess(UUID actorUserId, UUID accountHolderId) {

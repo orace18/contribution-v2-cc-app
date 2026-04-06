@@ -3,6 +3,7 @@ package com.ccapp.mobile.network.controller;
 import com.ccapp.common.api.ApiEnvelope;
 import com.ccapp.common.security.AuthenticatedPrincipal;
 import com.ccapp.common.security.SecurityUtils;
+import com.ccapp.mobile.network.dto.MobileNetworkEligibilityResponse;
 import com.ccapp.mobile.network.dto.MobileNetworkFollowUpResponse;
 import com.ccapp.mobile.network.dto.MobileNetworkMembersResponse;
 import com.ccapp.mobile.network.dto.MobileNetworkTeamStatsResponse;
@@ -36,6 +37,16 @@ import java.util.UUID;
 public class MobileNetworkController {
 
     private final MobileNetworkService mobileNetworkService;
+
+    @GetMapping("/eligibility")
+    @Operation(summary = "Check if the current user is eligible to access the MLM network dashboard")
+    public ResponseEntity<ApiEnvelope<MobileNetworkEligibilityResponse>> eligibility() {
+        UUID accountHolderId = SecurityUtils.currentAccountHolderId();
+        return ResponseEntity.ok(ApiEnvelope.success(
+                "Network eligibility",
+                mobileNetworkService.getEligibility(resolveActorUserId(), accountHolderId)
+        ));
+    }
 
     @GetMapping("/team/stats")
     @Operation(summary = "Get sponsor-network team stats")
