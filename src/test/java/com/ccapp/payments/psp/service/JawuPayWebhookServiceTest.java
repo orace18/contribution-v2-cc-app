@@ -16,6 +16,7 @@ import com.ccapp.payments.psp.dto.JawuPayPayoutDetailsResponse;
 import com.ccapp.payments.psp.dto.JawuPayWebhookRequest;
 import com.ccapp.payments.psp.repository.JawuPayWebhookEventRepository;
 import com.ccapp.payments.subscription.service.MembershipService;
+import com.ccapp.payments.subscription.service.SubscriptionPaymentFinalizationService;
 import com.ccapp.wallet.service.WalletDepositService;
 import com.ccapp.wallet.service.WalletWithdrawalService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -66,6 +67,7 @@ class JawuPayWebhookServiceTest {
     @Mock MlmCommissionService mlmCommissionService;
     @Mock MembershipService membershipService;
     @Mock MobileOnboardingJourneyService mobileOnboardingJourneyService;
+    @Mock SubscriptionPaymentFinalizationService subscriptionPaymentFinalizationService;
     @Mock WalletDepositService walletDepositService;
     @Mock WalletWithdrawalService walletWithdrawalService;
     @Mock JawuPayWebhookEventRepository webhookEventRepository;
@@ -389,10 +391,7 @@ class JawuPayWebhookServiceTest {
         processWebhook(request("JAWUPAY", "SUCCESS", PAYMENT_ID, null, PROVIDER_REFERENCE), "127.0.0.1");
 
         verify(operationService).confirmOperation(OPERATION_ID);
-        verify(membershipService).activateForConfirmedOperation(confirmed);
-        verify(accountingPostingService).postConfirmedOperation(OPERATION_ID);
-        verify(mlmCommissionService).calculateForOperation(confirmed);
-        verify(mobileOnboardingJourneyService).onPaidPaymentConfirmed(confirmed);
+        verify(subscriptionPaymentFinalizationService).finalizeConfirmedOperation(OPERATION_ID);
         verifyNoInteractions(walletDepositService, walletWithdrawalService);
     }
 

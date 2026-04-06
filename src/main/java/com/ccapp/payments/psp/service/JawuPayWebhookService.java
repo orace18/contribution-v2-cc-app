@@ -4,7 +4,6 @@ import com.ccapp.common.exception.BusinessException;
 import com.ccapp.common.exception.ConflictException;
 import com.ccapp.ledger.service.AccountingPostingService;
 import com.ccapp.mobile.onboarding.service.MobileOnboardingJourneyService;
-import com.ccapp.payments.commission.service.MlmCommissionService;
 import com.ccapp.payments.operation.domain.entity.Operation;
 import com.ccapp.payments.operation.domain.enums.OperationStatus;
 import com.ccapp.payments.operation.domain.enums.OperationType;
@@ -17,6 +16,7 @@ import com.ccapp.payments.psp.dto.JawuPayPayoutDetailsResponse;
 import com.ccapp.payments.psp.dto.JawuPayWebhookRequest;
 import com.ccapp.payments.psp.repository.JawuPayWebhookEventRepository;
 import com.ccapp.payments.subscription.service.MembershipService;
+import com.ccapp.payments.subscription.service.SubscriptionPaymentFinalizationService;
 import com.ccapp.wallet.service.WalletDepositService;
 import com.ccapp.wallet.service.WalletWithdrawalService;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -29,6 +29,8 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -60,9 +62,9 @@ public class JawuPayWebhookService {
     private final OperationService operationService;
     private final JawuPayPspClient pspClient;
     private final AccountingPostingService accountingPostingService;
-    private final MlmCommissionService mlmCommissionService;
     private final MembershipService membershipService;
     private final MobileOnboardingJourneyService mobileOnboardingJourneyService;
+    private final SubscriptionPaymentFinalizationService subscriptionPaymentFinalizationService;
     private final WalletDepositService walletDepositService;
     private final WalletWithdrawalService walletWithdrawalService;
     private final JawuPayWebhookEventRepository webhookEventRepository;
@@ -292,12 +294,7 @@ public class JawuPayWebhookService {
         switch (operation.getType()) {
             case WALLET_DEPOSIT_PSP -> walletDepositService.confirmPspDeposit(operation.getId());
             case WALLET_WITHDRAWAL -> walletWithdrawalService.confirmWithdrawal(operation.getId());
-            case SUBSCRIPTION -> {
-                membershipService.activateForConfirmedOperation(operation);
-                accountingPostingService.postConfirmedOperation(operation.getId());
-                mlmCommissionService.calculateForOperation(operation);
-                mobileOnboardingJourneyService.onPaidPaymentConfirmed(operation);
-            }
+            case SUBSCRIPTION -> dispatchSubscriptionConfirmedSideEffectsAfterCommit(operation);
             default -> accountingPostingService.postConfirmedOperation(operation.getId());
         }
     }
@@ -346,6 +343,36 @@ public class JawuPayWebhookService {
             );
         } catch (Exception reconciliationEx) {
             log.error("Failed to persist reconciliation marker for operationId={}", operationId, reconciliationEx);
+        }
+    }
+
+    private void dispatchSubscriptionConfirmedSideEffectsAfterCommit(Operation operation) {
+        if (operation == null || operation.getId() == null) {
+            return;
+        }
+        UUID operationId = operation.getId();
+        if (TransactionSynchronizationManager.isSynchronizationActive()
+                && TransactionSynchronizationManager.isActualTransactionActive()) {
+            log.info("Scheduling subscription finalization after commit operationId={}", operationId);
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    runSubscriptionConfirmedSideEffects(operationId);
+                }
+            });
+            return;
+        }
+        runSubscriptionConfirmedSideEffects(operationId);
+    }
+
+    private void runSubscriptionConfirmedSideEffects(UUID operationId) {
+        try {
+            subscriptionPaymentFinalizationService.finalizeConfirmedOperation(operationId);
+        } catch (Exception ex) {
+            log.error("subscription_confirmed_side_effects_failed operationId={} retryable=true message={}",
+                    operationId,
+                    normalizeErrorMessage(ex.getMessage()),
+                    ex);
         }
     }
 

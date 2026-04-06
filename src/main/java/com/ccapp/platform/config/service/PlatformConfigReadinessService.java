@@ -22,6 +22,13 @@ import java.util.List;
 public class PlatformConfigReadinessService {
 
     private static final BigDecimal ONE_HUNDRED = new BigDecimal("100");
+    private static final List<AllocationField> REQUIRED_SUBSCRIPTION_ALLOCATION_FIELDS = List.of(
+            new AllocationField("commissionPool", new String[]{"commissionPool", "commission_pool"}),
+            new AllocationField("guaranteeFund", new String[]{"guaranteeFund", "guarantee_fund"}),
+            new AllocationField("platformFee", new String[]{"platformFee", "platform_fee"}),
+            new AllocationField("administration", new String[]{"administration", "administrationFee"}),
+            new AllocationField("socialFund", new String[]{"socialFund", "social_fund"})
+    );
 
     private final PlatformConfigurationService platformConfigurationService;
     private final GlobalMlmConfigService globalMlmConfigService;
@@ -80,19 +87,31 @@ public class PlatformConfigReadinessService {
             return false;
         }
         BigDecimal total = BigDecimal.ZERO;
-        for (var fields = percentages.fields(); fields.hasNext(); ) {
-            var field = fields.next();
-            JsonNode value = field.getValue();
-            if (!value.isNumber()) {
+        for (AllocationField field : REQUIRED_SUBSCRIPTION_ALLOCATION_FIELDS) {
+            BigDecimal value = readPercentage(percentages, field);
+            if (value == null) {
                 return false;
             }
-            BigDecimal decimal = value.decimalValue();
-            if (!isPercentage(decimal)) {
+            if (!isPercentage(value)) {
                 return false;
             }
-            total = total.add(decimal);
+            total = total.add(value);
         }
         return total.setScale(4, RoundingMode.HALF_UP).compareTo(ONE_HUNDRED.setScale(4, RoundingMode.HALF_UP)) == 0;
+    }
+
+    private BigDecimal readPercentage(ObjectNode percentages, AllocationField field) {
+        for (String alias : field.aliases()) {
+            JsonNode value = percentages.get(alias);
+            if (value == null || value.isNull()) {
+                continue;
+            }
+            if (!value.isNumber()) {
+                return null;
+            }
+            return value.decimalValue();
+        }
+        return null;
     }
 
     private boolean hasSystemLimits(ObjectNode general) {
@@ -139,5 +158,8 @@ public class PlatformConfigReadinessService {
             return false;
         }
         return value.compareTo(BigDecimal.ZERO) >= 0 && value.compareTo(ONE_HUNDRED) <= 0;
+    }
+
+    private record AllocationField(String label, String[] aliases) {
     }
 }

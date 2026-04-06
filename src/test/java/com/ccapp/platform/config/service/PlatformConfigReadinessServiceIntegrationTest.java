@@ -2,6 +2,7 @@ package com.ccapp.platform.config.service;
 
 import com.ccapp.admin.service.ConfigAuditMetadataService;
 import com.ccapp.config.TestJacksonAndCachingConfig;
+import com.ccapp.country.config.service.CountryConfigResolver;
 import com.ccapp.platform.config.domain.enums.PlatformConfigType;
 import com.ccapp.platform.config.dto.PlatformConfigReadinessResponse;
 import com.ccapp.platform.config.dto.UpsertPlatformConfigRequest;
@@ -26,7 +27,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 })
 @Import({
         PlatformConfigurationService.class,
+        GlobalMlmConfigService.class,
         PlatformConfigReadinessService.class,
+        CountryConfigResolver.class,
         ConfigAuditMetadataService.class,
         TestJacksonAndCachingConfig.class
 })
@@ -52,16 +55,21 @@ class PlatformConfigReadinessServiceIntegrationTest {
         general.set("featureFlags", featureFlags);
         general.set("systemLimits", systemLimits);
 
-        ObjectNode mlm = objectMapper.createObjectNode()
-                .put("unilevel", 12)
-                .put("binary", 8);
+        ObjectNode mlm = objectMapper.createObjectNode();
+        ObjectNode unilevelRates = mlm.putObject("unilevelRates");
+        for (int generation = 1; generation <= 10; generation++) {
+            unilevelRates.put("g" + generation, 1);
+        }
+        mlm.putObject("binaryConfig")
+                .put("matchingRule", "WEAKER_LEG");
 
         ObjectNode allocation = objectMapper.createObjectNode();
         ObjectNode percentages = objectMapper.createObjectNode()
-                .put("operations", 30)
-                .put("reserves", 25)
-                .put("mlm", 25)
-                .put("treasury", 20);
+                .put("commissionPool", 60)
+                .put("guaranteeFund", 15)
+                .put("platformFee", 10)
+                .put("administration", 10)
+                .put("socialFund", 5);
         allocation.set("percentages", percentages);
 
         platformConfigurationService.upsertPlatformConfiguration(

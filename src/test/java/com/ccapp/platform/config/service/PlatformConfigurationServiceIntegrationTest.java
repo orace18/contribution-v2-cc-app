@@ -5,6 +5,7 @@ import com.ccapp.admin.repository.AdminAuditLogRepository;
 import com.ccapp.admin.service.ConfigAuditMetadataService;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.config.TestJacksonAndCachingConfig;
+import com.ccapp.country.config.service.CountryConfigResolver;
 import com.ccapp.platform.config.domain.enums.PlatformConfigType;
 import com.ccapp.platform.config.dto.PlatformConfigSnapshotResponse;
 import com.ccapp.platform.config.dto.PlatformConfigVersionResponse;
@@ -29,7 +30,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
         "spring.flyway.enabled=false",
         "spring.jpa.hibernate.ddl-auto=create-drop"
 })
-@Import({PlatformConfigurationService.class, ConfigAuditMetadataService.class, TestJacksonAndCachingConfig.class})
+@Import({
+        PlatformConfigurationService.class,
+        GlobalMlmConfigService.class,
+        CountryConfigResolver.class,
+        ConfigAuditMetadataService.class,
+        TestJacksonAndCachingConfig.class
+})
 class PlatformConfigurationServiceIntegrationTest {
 
     @Autowired
@@ -117,9 +124,14 @@ class PlatformConfigurationServiceIntegrationTest {
 
     @Test
     void upsertGlobalMlmBaseRates_shouldRejectRateAbove100() {
-        ObjectNode invalidRates = objectMapper.createObjectNode()
-                .put("unilevel", 120)
-                .put("binary", 15);
+        ObjectNode invalidRates = objectMapper.createObjectNode();
+        ObjectNode unilevelRates = invalidRates.putObject("unilevelRates");
+        unilevelRates.put("g1", 120);
+        for (int generation = 2; generation <= 10; generation++) {
+            unilevelRates.put("g" + generation, 1);
+        }
+        invalidRates.putObject("binaryConfig")
+                .put("matchingRule", "WEAKER_LEG");
 
         assertThrows(BusinessException.class, () -> platformConfigurationService.upsertPlatformConfiguration(
                 PlatformConfigType.GLOBAL_MLM_BASE_RATES,
@@ -132,9 +144,11 @@ class PlatformConfigurationServiceIntegrationTest {
     void upsertGlobalAllocation_shouldRejectWhenPercentagesDoNotSumTo100() {
         ObjectNode invalidAllocation = objectMapper.createObjectNode();
         ObjectNode percentages = objectMapper.createObjectNode();
-        percentages.put("operations", 30);
-        percentages.put("reserves", 30);
-        percentages.put("mlm", 30);
+        percentages.put("commissionPool", 60);
+        percentages.put("guaranteeFund", 15);
+        percentages.put("platformFee", 10);
+        percentages.put("administration", 10);
+        percentages.put("socialFund", 4);
         invalidAllocation.set("percentages", percentages);
 
         BusinessException exception = assertThrows(BusinessException.class, () -> platformConfigurationService.upsertPlatformConfiguration(
@@ -143,5 +157,24 @@ class PlatformConfigurationServiceIntegrationTest {
                 UUID.randomUUID()
         ));
         assertTrue(exception.getMessage().contains("sum to 100"));
+    }
+
+    @Test
+    void upsertGlobalAllocation_shouldRejectWhenCommissionPoolMissing() {
+        ObjectNode invalidAllocation = objectMapper.createObjectNode();
+        ObjectNode percentages = objectMapper.createObjectNode();
+        percentages.put("guaranteeFund", 15);
+        percentages.put("platformFee", 10);
+        percentages.put("administration", 10);
+        percentages.put("socialFund", 5);
+        percentages.put("treasury", 60);
+        invalidAllocation.set("percentages", percentages);
+
+        BusinessException exception = assertThrows(BusinessException.class, () -> platformConfigurationService.upsertPlatformConfiguration(
+                PlatformConfigType.GLOBAL_ALLOCATION,
+                new UpsertPlatformConfigRequest(invalidAllocation, OffsetDateTime.now()),
+                UUID.randomUUID()
+        ));
+        assertTrue(exception.getMessage().contains("commissionPool"));
     }
 }

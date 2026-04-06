@@ -25,6 +25,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.OffsetDateTime;
 import java.util.Arrays;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -34,6 +35,13 @@ public class PlatformConfigurationService {
     private static final int MAX_PAYLOAD_CHARS = 50_000;
     private static final BigDecimal ONE_HUNDRED = new BigDecimal("100");
     private static final String PLATFORM_CONFIG_ENTITY_TYPE = "PLATFORM_CONFIG";
+    private static final List<AllocationField> REQUIRED_SUBSCRIPTION_ALLOCATION_FIELDS = List.of(
+            new AllocationField("commissionPool", new String[]{"commissionPool", "commission_pool"}),
+            new AllocationField("guaranteeFund", new String[]{"guaranteeFund", "guarantee_fund"}),
+            new AllocationField("platformFee", new String[]{"platformFee", "platform_fee"}),
+            new AllocationField("administration", new String[]{"administration", "administrationFee"}),
+            new AllocationField("socialFund", new String[]{"socialFund", "social_fund"})
+    );
 
     private final PlatformConfigVersionRepository platformConfigVersionRepository;
     private final ConfigAuditMetadataService configAuditMetadataService;
@@ -220,22 +228,31 @@ public class PlatformConfigurationService {
         }
 
         BigDecimal total = BigDecimal.ZERO;
-        for (var fields = percentages.fields(); fields.hasNext(); ) {
-            var field = fields.next();
-            JsonNode value = field.getValue();
-            if (!value.isNumber()) {
-                throw new BusinessException("global_allocation percentages must be numeric");
-            }
-            BigDecimal decimal = value.decimalValue();
-            if (decimal.compareTo(BigDecimal.ZERO) < 0 || decimal.compareTo(ONE_HUNDRED) > 0) {
-                throw new BusinessException("global_allocation percentages must be between 0 and 100");
-            }
-            total = total.add(decimal);
+        for (AllocationField field : REQUIRED_SUBSCRIPTION_ALLOCATION_FIELDS) {
+            total = total.add(requiredAllocationPercentage(percentages, field));
         }
 
         if (total.setScale(4, RoundingMode.HALF_UP).compareTo(ONE_HUNDRED.setScale(4, RoundingMode.HALF_UP)) != 0) {
-            throw new BusinessException("allocation percentages must sum to 100%");
+            throw new BusinessException("global_allocation subscription percentages must sum to 100%");
         }
+    }
+
+    private BigDecimal requiredAllocationPercentage(ObjectNode percentages, AllocationField field) {
+        for (String alias : field.aliases()) {
+            JsonNode value = percentages.get(alias);
+            if (value == null || value.isNull()) {
+                continue;
+            }
+            if (!value.isNumber()) {
+                throw new BusinessException("global_allocation.percentages." + field.label() + " must be numeric");
+            }
+            BigDecimal decimal = value.decimalValue();
+            if (decimal.compareTo(BigDecimal.ZERO) < 0 || decimal.compareTo(ONE_HUNDRED) > 0) {
+                throw new BusinessException("global_allocation.percentages." + field.label() + " must be between 0 and 100");
+            }
+            return decimal;
+        }
+        throw new BusinessException("global_allocation.percentages." + field.label() + " is required");
     }
 
     private BigDecimal optionalPercentageField(ObjectNode payload, String fieldName, String errorPrefix) {
@@ -299,5 +316,8 @@ public class PlatformConfigurationService {
             fallback.put("legacyRaw", rawPayload);
             return fallback;
         }
+    }
+
+    private record AllocationField(String label, String[] aliases) {
     }
 }
