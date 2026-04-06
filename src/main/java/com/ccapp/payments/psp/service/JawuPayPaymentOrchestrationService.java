@@ -127,11 +127,17 @@ public class JawuPayPaymentOrchestrationService {
             throw new IllegalArgumentException("Operation type is required");
         }
         // Step 1 — create or retrieve idempotent operation
-        Operation operation = operationService.createInitiatedOperation(
-                accountHolderId, actorUserId,
-                operationType,
-                amount, currency, idempotencyKey, description
-        );
+        Operation operation = planId == null
+                ? operationService.createInitiatedOperation(
+                        accountHolderId, actorUserId,
+                        operationType,
+                        amount, currency, idempotencyKey, description
+                )
+                : operationService.createInitiatedOperation(
+                        accountHolderId, actorUserId,
+                        operationType,
+                        amount, currency, idempotencyKey, description, planId
+                );
 
         // Idempotency guard: PSP calls already done for this operation
         if (operation.getStatus() != OperationStatus.INITIATED) {

@@ -41,6 +41,7 @@ import com.ccapp.payments.operation.repository.OperationRepository;
 import com.ccapp.payments.operation.service.OperationService;
 import com.ccapp.payments.psp.client.JawuPayPspException;
 import com.ccapp.payments.psp.service.JawuPayPaymentOrchestrationService;
+import com.ccapp.payments.psp.service.JawuPayWebhookService;
 import com.ccapp.payments.subscription.domain.entity.Membership;
 import com.ccapp.payments.subscription.domain.entity.SubscriptionPlan;
 import com.ccapp.payments.subscription.domain.enums.MembershipStatus;
@@ -49,6 +50,7 @@ import com.ccapp.payments.subscription.repository.SubscriptionPlanRepository;
 import com.ccapp.payments.subscription.service.MembershipService;
 import com.ccapp.payments.subscription.service.SubscriptionService;
 import com.ccapp.wallet.domain.enums.WalletType;
+import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -60,11 +62,20 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class MobileOnboardingJourneyService {
+
+    private static final String DUPLICATE_IN_PROGRESS_MESSAGE =
+            "A payment operation for this subscription is already in progress.";
+    private static final String IDEMPOTENT_REUSE_MESSAGE =
+            "This payment request was already processed.";
+    private static final String ALREADY_CONFIRMED_MESSAGE =
+            "This subscription payment is already confirmed.";
 
     private final MobileOnboardingJourneyRepository journeyRepository;
     private final MobilePlanSelectionRepository mobilePlanSelectionRepository;
@@ -76,6 +87,7 @@ public class MobileOnboardingJourneyService {
     private final OperationRepository operationRepository;
     private final MembershipService membershipService;
     private final JawuPayPaymentOrchestrationService jawuPayPaymentOrchestrationService;
+    private final JawuPayWebhookService jawuPayWebhookService;
     private final MLMPlacementService mlmPlacementService;
     private final MlmRelationshipRepository mlmRelationshipRepository;
     private final MlmMemberLinkRepository mlmMemberLinkRepository;
@@ -266,17 +278,47 @@ public class MobileOnboardingJourneyService {
             throw new BusinessException("Selected plan is not available for requested payment country");
         }
 
+        Operation existingIdempotentOperation = findExistingSubscriptionOperationByIdempotencyKey(
+                requestedIdempotencyKey,
+                accountHolderId,
+                actorUserId,
+                plan
+        ).orElse(null);
+        if (existingIdempotentOperation != null) {
+            log.info("payment_duplicate_detected operationId={} accountHolderId={} operationType={} planId={} status={}",
+                    existingIdempotentOperation.getId(),
+                    accountHolderId,
+                    OperationType.SUBSCRIPTION,
+                    plan.getId(),
+                    existingIdempotentOperation.getStatus());
+            Operation resolvedOperation = recoverExistingSubscriptionOperation(existingIdempotentOperation, accountHolderId, plan.getId());
+            return buildDuplicatePaymentResponse(
+                    journey,
+                    accountHolderId,
+                    plan,
+                    resolvedOperation,
+                    IDEMPOTENT_REUSE_MESSAGE
+            );
+        }
+
         Operation reusableOperation = findReusablePendingSubscriptionOperation(accountHolderId, plan.getId()).orElse(null);
         if (reusableOperation != null) {
-            membershipService.createPendingMembership(reusableOperation.getId(), accountHolderId, plan);
-            updatePaymentPending(journey, reusableOperation.getId(), reusableOperation.getPspReference(), true);
-            journeyRepository.save(journey);
-            return new MobilePaymentInitiateResponse(
+            log.info("payment_duplicate_detected operationId={} accountHolderId={} operationType={} planId={} status={}",
                     reusableOperation.getId(),
-                    reusableOperation.getStatus().name(),
-                    reusableOperation.getPspReference(),
-                    reusableOperation.getRedirectUrl()
-            );
+                    accountHolderId,
+                    OperationType.SUBSCRIPTION,
+                    plan.getId(),
+                    reusableOperation.getStatus());
+            Operation resolvedOperation = recoverExistingSubscriptionOperation(reusableOperation, accountHolderId, plan.getId());
+            if (isSubscriptionOperationInFlight(resolvedOperation.getStatus()) || resolvedOperation.getStatus() == OperationStatus.CONFIRMED) {
+                return buildDuplicatePaymentResponse(
+                        journey,
+                        accountHolderId,
+                        plan,
+                        resolvedOperation,
+                        DUPLICATE_IN_PROGRESS_MESSAGE
+                );
+            }
         }
 
         String idempotencyKey = resolveMobilePaymentIdempotencyKey(
@@ -647,8 +689,171 @@ public class MobileOnboardingJourneyService {
                 accountHolderId,
                 OperationType.SUBSCRIPTION,
                 planId,
-                EnumSet.of(OperationStatus.INITIATED, OperationStatus.PENDING_PSP)
+                subscriptionInFlightStatuses()
         );
+    }
+
+    private Optional<Operation> findExistingSubscriptionOperationByIdempotencyKey(String requestedIdempotencyKey,
+                                                                                   UUID accountHolderId,
+                                                                                   UUID actorUserId,
+                                                                                   SubscriptionPlan plan) {
+        String normalizedRequestedKey = normalizeOptional(requestedIdempotencyKey);
+        if (normalizedRequestedKey == null) {
+            return Optional.empty();
+        }
+        return operationService.findByIdempotencyKey(normalizedRequestedKey)
+                .map(existing -> validateExistingSubscriptionOperation(existing, accountHolderId, actorUserId, plan));
+    }
+
+    private Operation validateExistingSubscriptionOperation(Operation operation,
+                                                            UUID accountHolderId,
+                                                            UUID actorUserId,
+                                                            SubscriptionPlan plan) {
+        if (operation.getType() != OperationType.SUBSCRIPTION) {
+            throw new ConflictException("Idempotency key already used by another operation type");
+        }
+        if (!accountHolderId.equals(operation.getAccountHolderId())) {
+            throw new ConflictException("Idempotency key already used by another account holder");
+        }
+        if (operation.getActorUserId() != null && !actorUserId.equals(operation.getActorUserId())) {
+            throw new ConflictException("Idempotency key already used by another actor");
+        }
+        if (operation.getAmount() == null || operation.getAmount().compareTo(plan.getPrice()) != 0) {
+            throw new ConflictException("Idempotency key already used by another payment amount");
+        }
+        if (operation.getCurrency() == null || !operation.getCurrency().equalsIgnoreCase(plan.getCurrency())) {
+            throw new ConflictException("Idempotency key already used by another payment currency");
+        }
+        if (operation.getPlanId() == null) {
+            operation.setPlanId(plan.getId());
+            return operationRepository.save(operation);
+        }
+        if (!plan.getId().equals(operation.getPlanId())) {
+            throw new ConflictException("Idempotency key already used by another subscription target");
+        }
+        return operation;
+    }
+
+    private Operation recoverExistingSubscriptionOperation(Operation operation, UUID accountHolderId, UUID planId) {
+        Operation currentOperation = stampPlanIdIfMissing(operation, planId);
+        log.info("payment_recovery_attempt operationId={} accountHolderId={} operationType={} planId={} status={}",
+                currentOperation.getId(),
+                accountHolderId,
+                OperationType.SUBSCRIPTION,
+                planId,
+                currentOperation.getStatus());
+
+        if (!isSubscriptionOperationInFlight(currentOperation.getStatus())) {
+            log.info("payment_recovery_result operationId={} accountHolderId={} operationType={} planId={} status={} action=already_terminal",
+                    currentOperation.getId(),
+                    accountHolderId,
+                    OperationType.SUBSCRIPTION,
+                    planId,
+                    currentOperation.getStatus());
+            return currentOperation;
+        }
+
+        String paymentLookupReference = resolvePaymentLookupReference(currentOperation);
+        if (paymentLookupReference == null) {
+            log.info("payment_recovery_result operationId={} accountHolderId={} operationType={} planId={} status={} action=skipped_no_lookup_reference",
+                    currentOperation.getId(),
+                    accountHolderId,
+                    OperationType.SUBSCRIPTION,
+                    planId,
+                    currentOperation.getStatus());
+            return currentOperation;
+        }
+
+        try {
+            jawuPayWebhookService.checkAndApplyPaymentStatus(paymentLookupReference);
+        } catch (Exception ex) {
+            log.warn("payment_recovery_result operationId={} accountHolderId={} operationType={} planId={} status={} action=recovery_failed message={}",
+                    currentOperation.getId(),
+                    accountHolderId,
+                    OperationType.SUBSCRIPTION,
+                    planId,
+                    currentOperation.getStatus(),
+                    normalizeOptional(ex.getMessage()),
+                    ex);
+            return currentOperation;
+        }
+
+        Operation refreshedOperation = stampPlanIdIfMissing(operationService.getById(currentOperation.getId()), planId);
+        log.info("payment_recovery_result operationId={} accountHolderId={} operationType={} planId={} status={} action=reconciled",
+                refreshedOperation.getId(),
+                accountHolderId,
+                OperationType.SUBSCRIPTION,
+                planId,
+                refreshedOperation.getStatus());
+        return refreshedOperation;
+    }
+
+    private Operation stampPlanIdIfMissing(Operation operation, UUID planId) {
+        if (operation == null || planId == null || operation.getPlanId() != null) {
+            return operation;
+        }
+        operation.setPlanId(planId);
+        return operationRepository.save(operation);
+    }
+
+    private MobilePaymentInitiateResponse buildDuplicatePaymentResponse(MobileOnboardingJourney journey,
+                                                                        UUID accountHolderId,
+                                                                        SubscriptionPlan plan,
+                                                                        Operation operation,
+                                                                        String message) {
+        if (operation != null && isSubscriptionOperationInFlight(operation.getStatus())) {
+            membershipService.createPendingMembership(operation.getId(), accountHolderId, plan);
+            updatePaymentPending(journey, operation.getId(), operation.getPspReference(), true);
+            journeyRepository.save(journey);
+        }
+        log.info("existing_operation_reused operationId={} accountHolderId={} operationType={} planId={} status={}",
+                operation == null ? null : operation.getId(),
+                accountHolderId,
+                OperationType.SUBSCRIPTION,
+                plan.getId(),
+                operation == null ? null : operation.getStatus());
+        String responseMessage = operation != null && operation.getStatus() == OperationStatus.CONFIRMED
+                ? ALREADY_CONFIRMED_MESSAGE
+                : message;
+        return new MobilePaymentInitiateResponse(
+                operation == null ? null : operation.getId(),
+                operation == null || operation.getStatus() == null ? null : operation.getStatus().name(),
+                operation == null ? null : operation.getPspReference(),
+                operation == null ? null : operation.getRedirectUrl(),
+                operation == null ? null : operation.getId(),
+                operation == null || operation.getStatus() == null ? null : operation.getStatus().name(),
+                true,
+                responseMessage
+        );
+    }
+
+    private EnumSet<OperationStatus> subscriptionInFlightStatuses() {
+        return EnumSet.complementOf(EnumSet.of(
+                OperationStatus.CONFIRMED,
+                OperationStatus.FAILED,
+                OperationStatus.EXPIRED,
+                OperationStatus.CANCELED,
+                OperationStatus.PAYOUT_INITIATED
+        ));
+    }
+
+    private boolean isSubscriptionOperationInFlight(OperationStatus status) {
+        return status != null && subscriptionInFlightStatuses().contains(status);
+    }
+
+    private String resolvePaymentLookupReference(Operation operation) {
+        if (operation == null) {
+            return null;
+        }
+        String paymentId = normalizeOptional(operation.getPaymentId());
+        if (paymentId != null) {
+            return paymentId;
+        }
+        String providerReference = normalizeOptional(operation.getProviderReference());
+        if (providerReference != null) {
+            return providerReference;
+        }
+        return normalizeOptional(operation.getPspReference());
     }
 
     private String generateMobilePaymentIdempotencyKey(UUID accountHolderId, UUID planId) {

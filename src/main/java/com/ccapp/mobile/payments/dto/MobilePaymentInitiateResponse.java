@@ -6,6 +6,16 @@ public record MobilePaymentInitiateResponse(
         UUID operationId,
         String status,
         String pspReference,
-        String checkoutUrl
+        String checkoutUrl,
+        UUID existingOperationId,
+        String existingStatus,
+        boolean duplicateRequest,
+        String message
 ) {
+    public MobilePaymentInitiateResponse(UUID operationId,
+                                         String status,
+                                         String pspReference,
+                                         String checkoutUrl) {
+        this(operationId, status, pspReference, checkoutUrl, null, null, false, null);
+    }
 }

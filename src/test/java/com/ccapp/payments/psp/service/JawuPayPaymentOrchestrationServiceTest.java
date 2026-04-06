@@ -135,6 +135,39 @@ class JawuPayPaymentOrchestrationServiceTest {
     }
 
     @Test
+    void initiatePayment_withPlanId_persistsPlanOnOperationCreation() {
+        BigDecimal amount = new BigDecimal("1500.00");
+        UUID planId = UUID.randomUUID();
+        Operation initiated = operationWithStatus(OperationStatus.INITIATED);
+        when(operationService.createInitiatedOperation(
+                eq(ACCOUNT_HOLDER_ID), eq(ACTOR_USER_ID),
+                eq(OperationType.SUBSCRIPTION),
+                eq(amount), eq("XOF"), eq("idem-plan"), eq("desc-plan"), eq(planId)))
+                .thenReturn(initiated);
+
+        JawuPayQuoteResponse quote = new JawuPayQuoteResponse(
+                QUOTE_ID, 150000L, 0L, 150000L, OffsetDateTime.now().plusMinutes(5));
+        when(pspClient.createQuote(any())).thenReturn(quote);
+
+        JawuPayConfirmResponse confirm = new JawuPayConfirmResponse(
+                PAYMENT_ID, "PENDING", "MOCK_PSP",
+                "https://checkout.example/pay/" + PAYMENT_ID, null, "REF-SUB-PLAN");
+        when(pspClient.confirmPayment(any(), eq("idem-plan"))).thenReturn(confirm);
+
+        service.initiatePayment(
+                ACCOUNT_HOLDER_ID, ACTOR_USER_ID,
+                amount, "XOF", "BJ",
+                "MOBILE_MONEY_MTN", "22961000000", "MTN",
+                "idem-plan", "desc-plan", OperationType.SUBSCRIPTION, planId
+        );
+
+        verify(operationService).createInitiatedOperation(
+                ACCOUNT_HOLDER_ID, ACTOR_USER_ID, OperationType.SUBSCRIPTION,
+                amount, "XOF", "idem-plan", "desc-plan", planId
+        );
+    }
+
+    @Test
     void initiatePayment_withE164Msisdn_keepsExistingPlusPrefix() {
         BigDecimal amount = new BigDecimal("1500.00");
 
