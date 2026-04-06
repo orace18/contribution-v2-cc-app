@@ -84,7 +84,7 @@ class JawuPayPaymentOrchestrationServiceTest {
         ArgumentCaptor<JawuPayConfirmRequest> confirmCaptor = ArgumentCaptor.forClass(JawuPayConfirmRequest.class);
         verify(pspClient).confirmPayment(confirmCaptor.capture(), eq("idem-1"));
         assertThat(confirmCaptor.getValue().quoteId()).isEqualTo(QUOTE_ID);
-        assertThat(confirmCaptor.getValue().payerInfo().msisdn()).isEqualTo("22501234567");
+        assertThat(confirmCaptor.getValue().payerInfo().msisdn()).isEqualTo("+22501234567");
         assertThat(confirmCaptor.getValue().payerInfo().operatorHint()).isEqualTo("MTN");
 
         ArgumentCaptor<OperationService.PspMetadata> metadataCaptor =
@@ -132,6 +132,38 @@ class JawuPayPaymentOrchestrationServiceTest {
                 ACCOUNT_HOLDER_ID, ACTOR_USER_ID, OperationType.SUBSCRIPTION,
                 amount, "XOF", "idem-sub", "desc-sub"
         );
+    }
+
+    @Test
+    void initiatePayment_withE164Msisdn_keepsExistingPlusPrefix() {
+        BigDecimal amount = new BigDecimal("1500.00");
+
+        Operation initiated = operationWithStatus(OperationStatus.INITIATED);
+        when(operationService.createInitiatedOperation(
+                eq(ACCOUNT_HOLDER_ID), eq(ACTOR_USER_ID),
+                eq(OperationType.WALLET_DEPOSIT_PSP),
+                eq(amount), eq("XOF"), eq("idem-e164"), eq("desc-e164")))
+                .thenReturn(initiated);
+
+        JawuPayQuoteResponse quote = new JawuPayQuoteResponse(
+                QUOTE_ID, 150000L, 0L, 150000L, OffsetDateTime.now().plusMinutes(5));
+        when(pspClient.createQuote(any())).thenReturn(quote);
+
+        JawuPayConfirmResponse confirm = new JawuPayConfirmResponse(
+                PAYMENT_ID, "PENDING", "MOCK_PSP",
+                "https://checkout.example/pay/" + PAYMENT_ID, null, "REF-E164");
+        when(pspClient.confirmPayment(any(), eq("idem-e164"))).thenReturn(confirm);
+
+        service.initiatePayment(
+                ACCOUNT_HOLDER_ID, ACTOR_USER_ID,
+                amount, "XOF", "BJ",
+                "MOBILE_MONEY_MTN", "+22966000001", "MTN",
+                "idem-e164", "desc-e164"
+        );
+
+        ArgumentCaptor<JawuPayConfirmRequest> confirmCaptor = ArgumentCaptor.forClass(JawuPayConfirmRequest.class);
+        verify(pspClient).confirmPayment(confirmCaptor.capture(), eq("idem-e164"));
+        assertThat(confirmCaptor.getValue().payerInfo().msisdn()).isEqualTo("+22966000001");
     }
 
     @Test

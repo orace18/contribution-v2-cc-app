@@ -3,6 +3,7 @@ package com.ccapp.mobile.sponsor.service;
 import com.ccapp.common.exception.BusinessException;
 import org.springframework.stereotype.Component;
 
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -55,6 +56,50 @@ public class PhoneValidator {
         if (!subscriber.matches("\\d+") || subscriber.length() != rule.subscriberLength()) {
             throw new BusinessException("INVALID_PHONE_FORMAT");
         }
+    }
+
+    /**
+     * Normalizes a raw phone number into E.164 format for the provided country when possible.
+     * <p>
+     * Rules:
+     * <ul>
+     *     <li>If the value already starts with {@code +}, it is returned unchanged.</li>
+     *     <li>If the value starts with {@code 00}, the prefix is converted to {@code +}.</li>
+     *     <li>Otherwise, known country calling codes are applied when missing.</li>
+     *     <li>If the country is unknown, a simple {@code +} prefix is used as a safe fallback.</li>
+     * </ul>
+     */
+    public static String normalizeToE164(String rawPhone, String countryCode) {
+        if (rawPhone == null) {
+            return null;
+        }
+
+        String trimmedPhone = rawPhone.trim();
+        if (trimmedPhone.isEmpty()) {
+            return trimmedPhone;
+        }
+        if (trimmedPhone.startsWith("+")) {
+            return trimmedPhone;
+        }
+
+        String digitsOnly = trimmedPhone.replaceAll("\\D", "");
+        if (digitsOnly.isEmpty()) {
+            return trimmedPhone;
+        }
+        if (digitsOnly.startsWith("00") && digitsOnly.length() > 2) {
+            return "+" + digitsOnly.substring(2);
+        }
+
+        CountryPhoneRule rule = countryCode == null || countryCode.isBlank()
+                ? null
+                : RULES.get(countryCode.trim().toUpperCase(Locale.ROOT));
+        if (rule == null) {
+            return "+" + digitsOnly;
+        }
+        if (digitsOnly.startsWith(rule.callingCode())) {
+            return "+" + digitsOnly;
+        }
+        return "+" + rule.callingCode() + digitsOnly;
     }
 
     record CountryPhoneRule(String callingCode, int subscriberLength) {}

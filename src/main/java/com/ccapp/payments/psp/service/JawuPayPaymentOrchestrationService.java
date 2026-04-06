@@ -1,5 +1,6 @@
 package com.ccapp.payments.psp.service;
 
+import com.ccapp.mobile.sponsor.service.PhoneValidator;
 import com.ccapp.payments.operation.domain.entity.Operation;
 import com.ccapp.payments.operation.domain.enums.OperationStatus;
 import com.ccapp.payments.operation.domain.enums.OperationType;
@@ -155,13 +156,22 @@ public class JawuPayPaymentOrchestrationService {
                 operation.getId(), quote.quoteId(), quote.fees());
 
         // Step 3 — confirm the payment using the quote, send idempotency key as header
+        String normalizedMsisdn = PhoneValidator.normalizeToE164(msisdn, country);
+        if (normalizedMsisdn != null) {
+            log.warn("PSP confirm msisdn normalization provider=jawupay operationId={} planId={} country={} rawMsisdn={} normalizedMsisdn={}",
+                    operation.getId(),
+                    safeUuid(planId),
+                    country,
+                    msisdn,
+                    normalizedMsisdn);
+        }
         if (operationType == OperationType.SUBSCRIPTION) {
             log.warn("PSP confirm preflight provider=jawupay operationId={} planId={} paymentMethodId={} operatorHint={} msisdn={} quoteId={} currency={} idempotencyKey={}",
                     operation.getId(),
                     safeUuid(planId),
                     paymentMethodId,
                     operatorHint,
-                    msisdn,
+                    normalizedMsisdn,
                     safeUuid(quote.quoteId()),
                     currency,
                     idempotencyKey);
@@ -170,7 +180,7 @@ public class JawuPayPaymentOrchestrationService {
                 new JawuPayConfirmRequest(
                         quote.quoteId(),
                         currency,
-                        JawuPayConfirmRequest.PayerInfo.forMobileMoney(msisdn, operatorHint)
+                        JawuPayConfirmRequest.PayerInfo.forMobileMoney(normalizedMsisdn, operatorHint)
                 ),
                 idempotencyKey
         );
