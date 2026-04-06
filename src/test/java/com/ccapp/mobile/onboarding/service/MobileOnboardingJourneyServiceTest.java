@@ -57,6 +57,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.beans.factory.ObjectProvider;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -109,6 +110,8 @@ class MobileOnboardingJourneyServiceTest {
     @Mock
     private JawuPayPaymentOrchestrationService jawuPayPaymentOrchestrationService;
     @Mock
+    private ObjectProvider<JawuPayWebhookService> jawuPayWebhookServiceProvider;
+    @Mock
     private JawuPayWebhookService jawuPayWebhookService;
     @Mock
     private MLMPlacementService mlmPlacementService;
@@ -136,6 +139,7 @@ class MobileOnboardingJourneyServiceTest {
 
     @BeforeEach
     void setUp() {
+        when(jawuPayWebhookServiceProvider.getObject()).thenReturn(jawuPayWebhookService);
         doNothing().when(accessControlService).assertCanActOnAccountHolder(any(), any(), any());
         when(journeyRepository.save(any(MobileOnboardingJourney.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));

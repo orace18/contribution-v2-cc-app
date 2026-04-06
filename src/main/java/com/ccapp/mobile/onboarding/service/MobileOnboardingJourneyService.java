@@ -51,6 +51,7 @@ import com.ccapp.payments.subscription.service.MembershipService;
 import com.ccapp.payments.subscription.service.SubscriptionService;
 import com.ccapp.wallet.domain.enums.WalletType;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -87,7 +88,7 @@ public class MobileOnboardingJourneyService {
     private final OperationRepository operationRepository;
     private final MembershipService membershipService;
     private final JawuPayPaymentOrchestrationService jawuPayPaymentOrchestrationService;
-    private final JawuPayWebhookService jawuPayWebhookService;
+    private final ObjectProvider<JawuPayWebhookService> jawuPayWebhookServiceProvider;
     private final MLMPlacementService mlmPlacementService;
     private final MlmRelationshipRepository mlmRelationshipRepository;
     private final MlmMemberLinkRepository mlmMemberLinkRepository;
@@ -765,7 +766,7 @@ public class MobileOnboardingJourneyService {
         }
 
         try {
-            jawuPayWebhookService.checkAndApplyPaymentStatus(paymentLookupReference);
+            jawuPayWebhookServiceProvider.getObject().checkAndApplyPaymentStatus(paymentLookupReference);
         } catch (Exception ex) {
             log.warn("payment_recovery_result operationId={} accountHolderId={} operationType={} planId={} status={} action=recovery_failed message={}",
                     currentOperation.getId(),
