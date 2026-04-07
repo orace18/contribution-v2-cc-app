@@ -1,16 +1,24 @@
 package com.ccapp.admin.security;
 
+import com.google.zxing.BarcodeFormat;
+import com.google.zxing.EncodeHintType;
+import com.google.zxing.client.j2se.MatrixToImageWriter;
+import com.google.zxing.common.BitMatrix;
+import com.google.zxing.qrcode.QRCodeWriter;
 import com.ccapp.common.exception.BusinessException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+import java.io.ByteArrayOutputStream;
 import java.net.URLEncoder;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.time.Instant;
+import java.util.Base64;
+import java.util.Map;
 
 @Service
 public class TotpService {
@@ -39,6 +47,30 @@ public class TotpService {
                 + "&issuer=" + encodedIssuer
                 + "&algorithm=SHA1&digits=" + DIGITS
                 + "&period=" + PERIOD_SECONDS;
+    }
+
+    public String buildQrCodeDataUrl(String otpAuthUri) {
+        if (otpAuthUri == null || otpAuthUri.isBlank()) {
+            return null;
+        }
+
+        try {
+            QRCodeWriter qrCodeWriter = new QRCodeWriter();
+            BitMatrix bitMatrix = qrCodeWriter.encode(
+                    otpAuthUri,
+                    BarcodeFormat.QR_CODE,
+                    240,
+                    240,
+                    Map.of(EncodeHintType.CHARACTER_SET, StandardCharsets.UTF_8.name())
+            );
+
+            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+            MatrixToImageWriter.writeToStream(bitMatrix, "PNG", outputStream);
+            String base64 = Base64.getEncoder().encodeToString(outputStream.toByteArray());
+            return "data:image/png;base64," + base64;
+        } catch (Exception ex) {
+            throw new IllegalStateException("Cannot generate 2FA QR code", ex);
+        }
     }
 
     public boolean verifyCode(String secret, String code) {
