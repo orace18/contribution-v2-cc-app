@@ -5,9 +5,11 @@ import com.ccapp.admin.domain.enums.AdminRole;
 import com.ccapp.admin.security.AdminPrincipal;
 import com.ccapp.common.api.CommonResponse;
 import com.ccapp.common.api.PageResponse;
+import com.ccapp.common.exception.BusinessException;
 import com.ccapp.common.security.AuthenticatedPrincipal;
 import com.ccapp.community.dto.CommunityFeedResponse;
 import com.ccapp.community.dto.CommunityPostResponse;
+import com.ccapp.community.dto.CreateCommunityPostRequest;
 import com.ccapp.community.dto.FeatureCommunityPostRequest;
 import com.ccapp.community.dto.PostCommentRequest;
 import com.ccapp.community.dto.PostCommentResponse;
@@ -19,6 +21,7 @@ import com.ccapp.prayer.dto.CreatePrayerCommentRequest;
 import com.ccapp.prayer.dto.PrayerAuthorResponse;
 import com.ccapp.prayer.dto.PrayerCommentResponse;
 import com.ccapp.prayer.dto.PrayerInteractionResponse;
+import com.ccapp.prayer.dto.PrayerMediaRefResponse;
 import com.ccapp.prayer.dto.PrayerPostResponse;
 import com.ccapp.prayer.dto.PrayerScopeContextResponse;
 import com.ccapp.prayer.dto.PrayerStatsResponse;
@@ -40,6 +43,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -81,7 +85,7 @@ class LegacyCommunityRouteCompatibilityTest {
                 PrayerVisibilityScope.GLOBAL,
                 new PrayerAuthorResponse(null, "Club Chretien", null, null),
                 new PrayerScopeContextResponse(null, null, null),
-                List.of(),
+                List.of(new PrayerMediaRefResponse(UUID.randomUUID(), com.ccapp.prayer.domain.enums.PrayerMediaUsageType.COVER, 0, "image/jpeg", "https://media.test/official.jpg")),
                 null,
                 new PrayerStatsResponse(0, 0, 0),
                 new PrayerViewerStateResponse(false, false, true, false, true),
@@ -97,7 +101,7 @@ class LegacyCommunityRouteCompatibilityTest {
                 PrayerVisibilityScope.GLOBAL,
                 new PrayerAuthorResponse(viewerId, "Viewer", null, null),
                 new PrayerScopeContextResponse(null, null, null),
-                List.of(),
+                List.of(new PrayerMediaRefResponse(UUID.randomUUID(), com.ccapp.prayer.domain.enums.PrayerMediaUsageType.INLINE, 0, "image/jpeg", "https://media.test/request.jpg")),
                 null,
                 new PrayerStatsResponse(2, 0, 1),
                 new PrayerViewerStateResponse(true, false, true, false, true),
@@ -115,6 +119,8 @@ class LegacyCommunityRouteCompatibilityTest {
         assertEquals("/api/mobile/prayers/feed", response.getHeaders().getFirst("X-Replacement-Route"));
         assertEquals(1, response.getBody().data().featuredPosts().size());
         assertEquals(1, response.getBody().data().posts().size());
+        assertEquals("https://media.test/official.jpg", response.getBody().data().featuredPosts().getFirst().mediaUrl());
+        assertEquals("https://media.test/request.jpg", response.getBody().data().posts().getFirst().mediaUrl());
     }
 
     @Test
@@ -205,7 +211,7 @@ class LegacyCommunityRouteCompatibilityTest {
                         com.ccapp.prayer.domain.enums.PrayerOfficialVisibilityScope.GLOBAL,
                         null,
                         null,
-                        List.of(),
+                        List.of(new PrayerMediaRefResponse(UUID.randomUUID(), com.ccapp.prayer.domain.enums.PrayerMediaUsageType.COVER, 0, "image/jpeg", "https://media.test/admin.jpg")),
                         null,
                         adminUserId,
                         OffsetDateTime.now(),
@@ -220,5 +226,36 @@ class LegacyCommunityRouteCompatibilityTest {
         assertEquals("true", response.getHeaders().getFirst("X-Deprecated-Route"));
         assertTrue(response.getHeaders().getFirst("X-Replacement-Route").endsWith("/publish"));
         assertTrue(response.getBody().data().featured());
+        assertEquals("https://media.test/admin.jpg", response.getBody().data().mediaUrl());
+    }
+
+    @Test
+    void oldAdminCreateRoute_shouldRejectLegacyMediaUrlInsteadOfDroppingItSilently() {
+        UUID adminUserId = UUID.randomUUID();
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+                AdminPrincipal.builder()
+                        .adminUserId(adminUserId)
+                        .role(AdminRole.ROLE_SUPER_ADMIN)
+                        .email("admin@ccapp.io")
+                        .build(),
+                null,
+                List.of(new SimpleGrantedAuthority(AdminRole.ROLE_SUPER_ADMIN.name()))
+        ));
+
+        AdminCommunityController controller = new AdminCommunityController(communityAdminService, prayerAdminPostService);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> controller.create(new CreateCommunityPostRequest(
+                        "Title",
+                        "Content",
+                        "https://legacy.test/media.jpg",
+                        null,
+                        null,
+                        "PUBLIC"
+                ))
+        );
+
+        assertEquals("LEGACY_COMMUNITY_MEDIA_URL_NOT_SUPPORTED", exception.getMessage());
     }
 }

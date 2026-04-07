@@ -10,11 +10,15 @@ import com.ccapp.prayer.dto.CreatePrayerCommentRequest;
 import com.ccapp.prayer.dto.CreatePrayerRequest;
 import com.ccapp.prayer.dto.DailyPrayerCompletionResponse;
 import com.ccapp.prayer.dto.DailyPrayerResponse;
+import com.ccapp.prayer.dto.PrayerCreateMediaUploadRequest;
+import com.ccapp.prayer.dto.PrayerCreateMediaUploadResponse;
 import com.ccapp.prayer.dto.PrayerCommentResponse;
 import com.ccapp.prayer.dto.PrayerDashboardResponse;
 import com.ccapp.prayer.dto.PrayerInteractionResponse;
+import com.ccapp.prayer.dto.PrayerMediaUploadConfirmationResponse;
 import com.ccapp.prayer.dto.PrayerPostResponse;
 import com.ccapp.prayer.dto.UpdatePrayerRequest;
+import com.ccapp.prayer.service.PrayerMediaUploadService;
 import com.ccapp.prayer.service.PrayerMobileService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -46,6 +50,7 @@ import java.util.UUID;
 public class PrayerMobileController {
 
     private final PrayerMobileService prayerMobileService;
+    private final PrayerMediaUploadService prayerMediaUploadService;
 
     @GetMapping("/feed")
     @Operation(summary = "List visible prayer feed items")
@@ -73,6 +78,34 @@ public class PrayerMobileController {
         UUID accountHolderId = SecurityUtils.currentAccountHolderId();
         PrayerPostResponse response = prayerMobileService.createPrayerRequest(principal.userId(), accountHolderId, request);
         return ResponseEntity.ok(CommonResponse.success("Prayer request created", response));
+    }
+
+    @PostMapping("/media/upload-url")
+    @Operation(summary = "Create a presigned upload URL for prayer post media")
+    public ResponseEntity<CommonResponse<PrayerCreateMediaUploadResponse>> createPrayerMediaUploadUrl(
+            @Valid @RequestBody PrayerCreateMediaUploadRequest request) {
+        AuthenticatedPrincipal principal = SecurityUtils.currentPrincipal();
+        UUID accountHolderId = SecurityUtils.currentAccountHolderId();
+        PrayerCreateMediaUploadResponse response = prayerMediaUploadService.createPrayerPostUploadUrl(
+                principal.userId(),
+                accountHolderId,
+                request
+        );
+        return ResponseEntity.ok(CommonResponse.success("Prayer media upload URL generated", response));
+    }
+
+    @PostMapping("/media/{mediaId}/confirm")
+    @Operation(summary = "Confirm an uploaded prayer post media file")
+    public ResponseEntity<CommonResponse<PrayerMediaUploadConfirmationResponse>> confirmPrayerMediaUpload(
+            @PathVariable UUID mediaId) {
+        AuthenticatedPrincipal principal = SecurityUtils.currentPrincipal();
+        UUID accountHolderId = SecurityUtils.currentAccountHolderId();
+        PrayerMediaUploadConfirmationResponse response = prayerMediaUploadService.confirmPrayerPostUpload(
+                principal.userId(),
+                accountHolderId,
+                mediaId
+        );
+        return ResponseEntity.ok(CommonResponse.success("Prayer media upload confirmed", response));
     }
 
     @GetMapping("/posts/{postId}")

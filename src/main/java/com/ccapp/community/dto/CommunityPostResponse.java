@@ -5,6 +5,8 @@ import java.util.UUID;
 
 /**
  * @deprecated Replaced by prayer post responses under {@code com.ccapp.prayer.dto}.
+ * The legacy {@code mediaUrl} field is now only a compatibility projection of the
+ * first prayer media reference download URL when present.
  */
 @Deprecated(since = "2026-04", forRemoval = false)
 public record CommunityPostResponse(

@@ -11,11 +11,9 @@ import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
 import com.ccapp.identity.account_holder.service.AccountHolderService;
 import com.ccapp.identity.delegation.domain.enums.PermissionLevel;
 import com.ccapp.identity.delegation.service.AccessControlService;
-import com.ccapp.media.repository.MediaFileRepository;
 import com.ccapp.prayer.domain.entity.PrayerAmen;
 import com.ccapp.prayer.domain.entity.PrayerComment;
 import com.ccapp.prayer.domain.entity.PrayerPost;
-import com.ccapp.prayer.domain.entity.PrayerPostMediaRef;
 import com.ccapp.prayer.domain.entity.PrayerSupport;
 import com.ccapp.prayer.domain.enums.PrayerDailyMissionCode;
 import com.ccapp.prayer.domain.enums.PrayerDailyPrayerResponseType;
@@ -35,7 +33,6 @@ import com.ccapp.prayer.dto.PrayerPostResponse;
 import com.ccapp.prayer.dto.UpdatePrayerRequest;
 import com.ccapp.prayer.repository.PrayerAmenRepository;
 import com.ccapp.prayer.repository.PrayerCommentRepository;
-import com.ccapp.prayer.repository.PrayerPostMediaRefRepository;
 import com.ccapp.prayer.repository.PrayerPostRepository;
 import com.ccapp.prayer.repository.PrayerSupportRepository;
 import lombok.RequiredArgsConstructor;
@@ -57,16 +54,15 @@ import java.util.UUID;
 public class PrayerMobileService {
 
     private final PrayerPostRepository prayerPostRepository;
-    private final PrayerPostMediaRefRepository prayerPostMediaRefRepository;
     private final PrayerAmenRepository prayerAmenRepository;
     private final PrayerSupportRepository prayerSupportRepository;
     private final PrayerCommentRepository prayerCommentRepository;
     private final PrayerPostMapper prayerPostMapper;
+    private final PrayerPostMediaService prayerPostMediaService;
     private final AccountHolderService accountHolderService;
     private final AccessControlService accessControlService;
     private final CircleRepository circleRepository;
     private final CircleMemberRepository circleMemberRepository;
-    private final MediaFileRepository mediaFileRepository;
     private final PrayerEngagementService prayerEngagementService;
     private final PrayerNotificationPublisher prayerNotificationPublisher;
 
@@ -119,8 +115,6 @@ public class PrayerMobileService {
         }
 
         PrayerVisibilityContext visibilityContext = resolveRequestVisibility(author, request.visibility());
-        validateOwnedMediaRefs(accountHolderId, request.mediaRefs());
-
         PrayerPost saved = prayerPostRepository.save(PrayerPost.builder()
                 .postType(PrayerPostType.REQUEST)
                 .lifecycleStatus(PrayerPostLifecycleStatus.PUBLISHED)
@@ -135,7 +129,7 @@ public class PrayerMobileService {
                 .publishedAt(OffsetDateTime.now())
                 .build());
 
-        replaceMediaRefs(saved.getId(), request.mediaRefs());
+        prayerPostMediaService.validateOwnedAndReplace(accountHolderId, saved.getId(), request.mediaRefs());
 
         log.info("Prayer request created postId={} accountHolderId={} visibility={}",
                 saved.getId(), accountHolderId, saved.getVisibility());
@@ -169,8 +163,6 @@ public class PrayerMobileService {
         }
 
         PrayerVisibilityContext visibilityContext = resolveRequestVisibility(owner, request.visibility());
-        validateOwnedMediaRefs(accountHolderId, request.mediaRefs());
-
         post.setContent(request.content().trim());
         post.setVisibility(request.visibility());
         post.setAudienceCircleId(visibilityContext.audienceCircleId());
@@ -178,7 +170,7 @@ public class PrayerMobileService {
         post.setAudienceCountryCode(visibilityContext.audienceCountryCode());
 
         PrayerPost saved = prayerPostRepository.save(post);
-        replaceMediaRefs(saved.getId(), request.mediaRefs());
+        prayerPostMediaService.validateOwnedAndReplace(accountHolderId, saved.getId(), request.mediaRefs());
 
         log.info("Prayer request updated postId={} accountHolderId={} visibility={}",
                 postId, accountHolderId, saved.getVisibility());
@@ -439,32 +431,6 @@ public class PrayerMobileService {
                 || post.getLifecycleStatus() == PrayerPostLifecycleStatus.DELETED) {
             throw new ConflictException("PRAYER_POST_UPDATE_NOT_ALLOWED");
         }
-    }
-
-    private void validateOwnedMediaRefs(UUID accountHolderId, List<com.ccapp.prayer.dto.PrayerMediaAttachmentInput> mediaRefs) {
-        if (mediaRefs == null || mediaRefs.isEmpty()) {
-            return;
-        }
-        for (com.ccapp.prayer.dto.PrayerMediaAttachmentInput ref : mediaRefs) {
-            mediaFileRepository.findByIdAndAccountHolderId(ref.mediaFileId(), accountHolderId)
-                    .orElseThrow(() -> new BusinessException("PRAYER_MEDIA_FILE_NOT_FOUND"));
-        }
-    }
-
-    private void replaceMediaRefs(UUID postId, List<com.ccapp.prayer.dto.PrayerMediaAttachmentInput> mediaRefs) {
-        prayerPostMediaRefRepository.deleteAll(prayerPostMediaRefRepository.findByPostIdOrderBySortOrderAsc(postId));
-        if (mediaRefs == null || mediaRefs.isEmpty()) {
-            return;
-        }
-        List<PrayerPostMediaRef> refs = mediaRefs.stream()
-                .map(ref -> PrayerPostMediaRef.builder()
-                        .postId(postId)
-                        .mediaFileId(ref.mediaFileId())
-                        .usageType(ref.usageType())
-                        .sortOrder(ref.sortOrder() == null ? 0 : ref.sortOrder())
-                        .build())
-                .toList();
-        prayerPostMediaRefRepository.saveAll(refs);
     }
 
     private PrayerPost findVisiblePostForRead(UUID postId, AccountHolder viewer) {

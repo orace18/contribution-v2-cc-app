@@ -9,6 +9,7 @@ import com.ccapp.identity.account_holder.domain.enums.AccountType;
 import com.ccapp.identity.account_holder.repository.AccountHolderRepository;
 import com.ccapp.identity.account_holder.service.AccountHolderService;
 import com.ccapp.identity.delegation.service.AccessControlService;
+import com.ccapp.media.storage.ObjectStorageService;
 import com.ccapp.prayer.domain.entity.PrayerPost;
 import com.ccapp.prayer.domain.enums.PrayerInteractionType;
 import com.ccapp.prayer.domain.enums.PrayerPostLifecycleStatus;
@@ -52,6 +53,7 @@ import static org.mockito.Mockito.when;
 })
 @Import({
         PrayerMobileService.class,
+        PrayerPostMediaService.class,
         PrayerPostMapper.class,
         TestJacksonAndCachingConfig.class
 })
@@ -80,6 +82,8 @@ class PrayerInteractionPhase3IntegrationTest {
     private PrayerEngagementService prayerEngagementService;
     @MockBean
     private PrayerNotificationPublisher prayerNotificationPublisher;
+    @MockBean
+    private ObjectStorageService objectStorageService;
 
     @BeforeEach
     void setUp() {

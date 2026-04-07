@@ -6,9 +6,7 @@ import com.ccapp.common.api.PageResponse;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.common.exception.ConflictException;
 import com.ccapp.common.exception.NotFoundException;
-import com.ccapp.media.repository.MediaFileRepository;
 import com.ccapp.prayer.domain.entity.PrayerPost;
-import com.ccapp.prayer.domain.entity.PrayerPostMediaRef;
 import com.ccapp.prayer.domain.enums.PrayerOfficialVisibilityScope;
 import com.ccapp.prayer.domain.enums.PrayerPostLifecycleStatus;
 import com.ccapp.prayer.domain.enums.PrayerPostType;
@@ -17,8 +15,6 @@ import com.ccapp.prayer.dto.AdminCreatePrayerPostRequest;
 import com.ccapp.prayer.dto.AdminPrayerPostResponse;
 import com.ccapp.prayer.dto.AdminUpdatePrayerPostRequest;
 import com.ccapp.prayer.dto.InternalDeepLinkRequest;
-import com.ccapp.prayer.dto.PrayerMediaAttachmentInput;
-import com.ccapp.prayer.repository.PrayerPostMediaRefRepository;
 import com.ccapp.prayer.repository.PrayerPostRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -50,9 +46,8 @@ public class PrayerAdminPostService {
     );
 
     private final PrayerPostRepository prayerPostRepository;
-    private final PrayerPostMediaRefRepository prayerPostMediaRefRepository;
     private final PrayerPostMapper prayerPostMapper;
-    private final MediaFileRepository mediaFileRepository;
+    private final PrayerPostMediaService prayerPostMediaService;
     private final ObjectMapper objectMapper;
     private final PrayerNotificationPublisher prayerNotificationPublisher;
 
@@ -90,7 +85,6 @@ public class PrayerAdminPostService {
                 request.targetChurchRef()
         );
         validateDeepLink(request.deepLink());
-        validateMediaRefs(request.mediaRefs());
 
         PrayerPost saved = prayerPostRepository.save(PrayerPost.builder()
                 .postType(PrayerPostType.OFFICIAL)
@@ -106,7 +100,7 @@ public class PrayerAdminPostService {
                 .deepLinkParamsJson(serializeDeepLinkParams(request.deepLink()))
                 .build());
 
-        replaceMediaRefs(saved.getId(), request.mediaRefs());
+        prayerPostMediaService.validateOfficialAndReplace(saved.getId(), request.mediaRefs());
         log.info("Prayer admin post created postId={} adminUserId={} visibility={}",
                 saved.getId(), adminUserId, saved.getVisibility());
         return prayerPostMapper.toAdminResponse(saved);
@@ -150,10 +144,9 @@ public class PrayerAdminPostService {
             post.setDeepLinkParamsJson(serializeDeepLinkParams(request.deepLink()));
         }
 
-        validateMediaRefs(request.mediaRefs());
         PrayerPost saved = prayerPostRepository.save(post);
         if (request.mediaRefs() != null) {
-            replaceMediaRefs(saved.getId(), request.mediaRefs());
+            prayerPostMediaService.validateOfficialAndReplace(saved.getId(), request.mediaRefs());
         }
 
         log.info("Prayer admin post updated postId={} adminUserId={} visibility={} status={}",
@@ -266,32 +259,6 @@ public class PrayerAdminPostService {
                 throw new BusinessException("PRAYER_DEEP_LINK_INVALID");
             }
         }
-    }
-
-    private void validateMediaRefs(List<PrayerMediaAttachmentInput> mediaRefs) {
-        if (mediaRefs == null || mediaRefs.isEmpty()) {
-            return;
-        }
-        for (PrayerMediaAttachmentInput ref : mediaRefs) {
-            mediaFileRepository.findById(ref.mediaFileId())
-                    .orElseThrow(() -> new BusinessException("PRAYER_MEDIA_FILE_NOT_FOUND"));
-        }
-    }
-
-    private void replaceMediaRefs(UUID postId, List<PrayerMediaAttachmentInput> mediaRefs) {
-        prayerPostMediaRefRepository.deleteAll(prayerPostMediaRefRepository.findByPostIdOrderBySortOrderAsc(postId));
-        if (mediaRefs == null || mediaRefs.isEmpty()) {
-            return;
-        }
-        List<PrayerPostMediaRef> refs = mediaRefs.stream()
-                .map(ref -> PrayerPostMediaRef.builder()
-                        .postId(postId)
-                        .mediaFileId(ref.mediaFileId())
-                        .usageType(ref.usageType())
-                        .sortOrder(ref.sortOrder() == null ? 0 : ref.sortOrder())
-                        .build())
-                .toList();
-        prayerPostMediaRefRepository.saveAll(refs);
     }
 
     private PrayerVisibilityScope toVisibilityScope(PrayerOfficialVisibilityScope visibility) {

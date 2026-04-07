@@ -2,11 +2,8 @@ package com.ccapp.prayer.service;
 
 import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
 import com.ccapp.identity.account_holder.repository.AccountHolderRepository;
-import com.ccapp.media.domain.entity.MediaFile;
-import com.ccapp.media.repository.MediaFileRepository;
 import com.ccapp.prayer.domain.entity.PrayerComment;
 import com.ccapp.prayer.domain.entity.PrayerPost;
-import com.ccapp.prayer.domain.entity.PrayerPostMediaRef;
 import com.ccapp.prayer.domain.enums.PrayerAuthorType;
 import com.ccapp.prayer.domain.enums.PrayerOfficialVisibilityScope;
 import com.ccapp.prayer.domain.enums.PrayerPostType;
@@ -20,7 +17,6 @@ import com.ccapp.prayer.dto.PrayerScopeContextResponse;
 import com.ccapp.prayer.dto.PrayerStatsResponse;
 import com.ccapp.prayer.dto.PrayerViewerStateResponse;
 import com.ccapp.prayer.repository.PrayerAmenRepository;
-import com.ccapp.prayer.repository.PrayerPostMediaRefRepository;
 import com.ccapp.prayer.repository.PrayerSupportRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -40,8 +36,7 @@ class PrayerPostMapper {
     };
 
     private final AccountHolderRepository accountHolderRepository;
-    private final MediaFileRepository mediaFileRepository;
-    private final PrayerPostMediaRefRepository prayerPostMediaRefRepository;
+    private final PrayerPostMediaService prayerPostMediaService;
     private final PrayerAmenRepository prayerAmenRepository;
     private final PrayerSupportRepository prayerSupportRepository;
     private final ObjectMapper objectMapper;
@@ -129,20 +124,7 @@ class PrayerPostMapper {
     }
 
     private List<PrayerMediaRefResponse> loadMediaRefs(UUID postId) {
-        return prayerPostMediaRefRepository.findByPostIdOrderBySortOrderAsc(postId).stream()
-                .map(this::toMediaRefResponse)
-                .toList();
-    }
-
-    private PrayerMediaRefResponse toMediaRefResponse(PrayerPostMediaRef ref) {
-        MediaFile mediaFile = mediaFileRepository.findById(ref.getMediaFileId()).orElse(null);
-        return new PrayerMediaRefResponse(
-                ref.getMediaFileId(),
-                ref.getUsageType(),
-                ref.getSortOrder(),
-                mediaFile == null ? null : mediaFile.getContentType(),
-                null
-        );
+        return prayerPostMediaService.loadPostMediaRefs(postId);
     }
 
     private InternalDeepLinkResponse buildDeepLink(PrayerPost post) {

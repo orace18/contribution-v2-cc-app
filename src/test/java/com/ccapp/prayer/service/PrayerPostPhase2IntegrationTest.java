@@ -2,6 +2,7 @@ package com.ccapp.prayer.service;
 
 import com.ccapp.admin.domain.enums.AdminRole;
 import com.ccapp.admin.security.AdminPrincipal;
+import com.ccapp.common.exception.BusinessException;
 import com.ccapp.circles.domain.entity.Circle;
 import com.ccapp.circles.domain.entity.CircleMember;
 import com.ccapp.circles.domain.enums.CircleMemberRole;
@@ -15,14 +16,22 @@ import com.ccapp.identity.account_holder.domain.enums.AccountType;
 import com.ccapp.identity.account_holder.repository.AccountHolderRepository;
 import com.ccapp.identity.account_holder.service.AccountHolderService;
 import com.ccapp.identity.delegation.service.AccessControlService;
+import com.ccapp.media.domain.entity.MediaFile;
+import com.ccapp.media.domain.enums.MediaStatus;
+import com.ccapp.media.domain.enums.MediaType;
+import com.ccapp.media.repository.MediaFileRepository;
+import com.ccapp.media.storage.ObjectStorageService;
+import com.ccapp.media.storage.PresignedUrl;
 import com.ccapp.prayer.domain.entity.PrayerPost;
 import com.ccapp.prayer.domain.enums.PrayerOfficialVisibilityScope;
+import com.ccapp.prayer.domain.enums.PrayerMediaUsageType;
 import com.ccapp.prayer.domain.enums.PrayerPostLifecycleStatus;
 import com.ccapp.prayer.domain.enums.PrayerPostType;
 import com.ccapp.prayer.domain.enums.PrayerVisibilityScope;
 import com.ccapp.prayer.dto.AdminCreatePrayerPostRequest;
 import com.ccapp.prayer.dto.AdminPrayerPostResponse;
 import com.ccapp.prayer.dto.CreatePrayerRequest;
+import com.ccapp.prayer.dto.PrayerMediaAttachmentInput;
 import com.ccapp.prayer.dto.PrayerPostResponse;
 import com.ccapp.prayer.dto.UpdatePrayerRequest;
 import com.ccapp.prayer.repository.PrayerPostRepository;
@@ -60,6 +69,7 @@ import static org.mockito.Mockito.when;
 @Import({
         PrayerMobileService.class,
         PrayerAdminPostService.class,
+        PrayerPostMediaService.class,
         PrayerPostMapper.class,
         TestJacksonAndCachingConfig.class
 })
@@ -77,6 +87,8 @@ class PrayerPostPhase2IntegrationTest {
     private CircleRepository circleRepository;
     @Autowired
     private CircleMemberRepository circleMemberRepository;
+    @Autowired
+    private MediaFileRepository mediaFileRepository;
 
     @MockBean
     private AccessControlService accessControlService;
@@ -86,6 +98,8 @@ class PrayerPostPhase2IntegrationTest {
     private PrayerEngagementService prayerEngagementService;
     @MockBean
     private PrayerNotificationPublisher prayerNotificationPublisher;
+    @MockBean
+    private ObjectStorageService objectStorageService;
 
     @BeforeEach
     void setUp() {
@@ -94,6 +108,8 @@ class PrayerPostPhase2IntegrationTest {
             UUID id = invocation.getArgument(0);
             return accountHolderRepository.findById(id).orElseThrow();
         });
+        when(objectStorageService.createDownloadUrl(any(), any(), any()))
+                .thenReturn(new PresignedUrl("https://media.test/download", OffsetDateTime.now().plusMinutes(15)));
     }
 
     @AfterEach
@@ -117,6 +133,57 @@ class PrayerPostPhase2IntegrationTest {
         assertEquals(PrayerVisibilityScope.COMMUNITY, response.visibility());
         assertEquals("BJ", response.scopeContext().audienceCountryCode());
         assertNotNull(response.publishedAt());
+    }
+
+    @Test
+    void createPost_shouldAttachReadyOwnedMediaAndExposeMetadata() {
+        UUID accountHolderId = createAccountHolder("Esther", "Doe", "BJ");
+        MediaFile media = saveReadyMedia(accountHolderId, MediaType.PRAYER_POST, "image/jpeg");
+
+        PrayerPostResponse response = prayerMobileService.createPrayerRequest(
+                accountHolderId,
+                accountHolderId,
+                new CreatePrayerRequest(
+                        UUID.randomUUID(),
+                        "Pray for my store opening.",
+                        PrayerVisibilityScope.GLOBAL,
+                        List.of(new PrayerMediaAttachmentInput(media.getId(), PrayerMediaUsageType.COVER, 0))
+                )
+        );
+
+        assertEquals(1, response.mediaRefs().size());
+        assertEquals(media.getId(), response.mediaRefs().getFirst().mediaFileId());
+        assertEquals("image/jpeg", response.mediaRefs().getFirst().contentType());
+        assertEquals("https://media.test/download", response.mediaRefs().getFirst().downloadUrl());
+    }
+
+    @Test
+    void createPost_shouldRejectInvalidMediaInput() {
+        UUID accountHolderId = createAccountHolder("Esther", "Doe", "BJ");
+        MediaFile pendingMedia = mediaFileRepository.save(MediaFile.builder()
+                .accountHolderId(accountHolderId)
+                .type(MediaType.PRAYER_POST)
+                .bucket("cc-media-public")
+                .objectKey("account-holders/" + accountHolderId + "/prayer-post/pending.jpg")
+                .contentType("image/jpeg")
+                .size(100L)
+                .status(MediaStatus.PENDING_UPLOAD)
+                .build());
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> prayerMobileService.createPrayerRequest(
+                        accountHolderId,
+                        accountHolderId,
+                        new CreatePrayerRequest(
+                                UUID.randomUUID(),
+                                "Please pray.",
+                                PrayerVisibilityScope.GLOBAL,
+                                List.of(new PrayerMediaAttachmentInput(pendingMedia.getId(), PrayerMediaUsageType.COVER, 0))
+                        )
+                )
+        );
+        assertEquals("PRAYER_MEDIA_NOT_READY", exception.getMessage());
     }
 
     @Test
@@ -248,6 +315,31 @@ class PrayerPostPhase2IntegrationTest {
         assertEquals(PrayerPostLifecycleStatus.ARCHIVED, archived.lifecycleStatus());
     }
 
+    @Test
+    void officialPostMediaSupport_shouldReturnPrayerMediaRefs() {
+        UUID adminUserId = UUID.randomUUID();
+        UUID accountHolderId = createAccountHolder("Uploader", "One", "BJ");
+        MediaFile media = saveReadyMedia(accountHolderId, MediaType.GENERIC_PUBLIC, "image/png");
+        setAdminSecurity(adminUserId, AdminRole.ROLE_SUPER_ADMIN, "BJ");
+
+        AdminPrayerPostResponse created = prayerAdminPostService.createPost(
+                adminUserId,
+                new AdminCreatePrayerPostRequest(
+                        "Official prayer",
+                        "We pray for every entrepreneur.",
+                        PrayerOfficialVisibilityScope.GLOBAL,
+                        null,
+                        null,
+                        List.of(new PrayerMediaAttachmentInput(media.getId(), PrayerMediaUsageType.COVER, 0)),
+                        null
+                )
+        );
+
+        assertEquals(1, created.mediaRefs().size());
+        assertEquals(media.getId(), created.mediaRefs().getFirst().mediaFileId());
+        assertEquals("image/png", created.mediaRefs().getFirst().contentType());
+    }
+
     private UUID createAccountHolder(String firstName, String lastName, String serviceCountryCode) {
         return accountHolderRepository.save(AccountHolder.builder()
                 .id(UUID.randomUUID())
@@ -310,6 +402,18 @@ class PrayerPostPhase2IntegrationTest {
                 .content(content)
                 .visibility(visibility)
                 .publishedAt(publishedAt)
+                .build());
+    }
+
+    private MediaFile saveReadyMedia(UUID accountHolderId, MediaType type, String contentType) {
+        return mediaFileRepository.save(MediaFile.builder()
+                .accountHolderId(accountHolderId)
+                .type(type)
+                .bucket("cc-media-public")
+                .objectKey("account-holders/" + accountHolderId + "/" + UUID.randomUUID())
+                .contentType(contentType)
+                .size(1024L)
+                .status(MediaStatus.READY)
                 .build());
     }
 

@@ -7,6 +7,7 @@ import com.ccapp.identity.account_holder.domain.enums.AccountType;
 import com.ccapp.identity.account_holder.repository.AccountHolderRepository;
 import com.ccapp.identity.account_holder.service.AccountHolderService;
 import com.ccapp.identity.delegation.service.AccessControlService;
+import com.ccapp.media.storage.ObjectStorageService;
 import com.ccapp.prayer.domain.entity.PrayerDailyCompletion;
 import com.ccapp.prayer.domain.entity.PrayerDailyContent;
 import com.ccapp.prayer.domain.entity.PrayerDailyMissionDefinition;
@@ -61,6 +62,7 @@ import static org.mockito.Mockito.when;
 @Import({
         PrayerMobileService.class,
         PrayerEngagementService.class,
+        PrayerPostMediaService.class,
         PrayerPostMapper.class,
         PrayerDailyMapper.class,
         PrayerTimezoneResolver.class,
@@ -91,6 +93,8 @@ class PrayerDailyPhase4IntegrationTest {
     private AccountHolderService accountHolderService;
     @MockBean
     private PrayerNotificationPublisher prayerNotificationPublisher;
+    @MockBean
+    private ObjectStorageService objectStorageService;
 
     @BeforeEach
     void setUp() {

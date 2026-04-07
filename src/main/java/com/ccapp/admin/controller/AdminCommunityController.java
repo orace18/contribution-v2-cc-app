@@ -2,6 +2,7 @@ package com.ccapp.admin.controller;
 
 import com.ccapp.admin.security.AdminSecurityUtils;
 import com.ccapp.common.api.CommonResponse;
+import com.ccapp.common.exception.BusinessException;
 import com.ccapp.community.dto.CommunityPostResponse;
 import com.ccapp.community.dto.CreateCommunityPostRequest;
 import com.ccapp.community.dto.FeatureCommunityPostRequest;
@@ -60,6 +61,9 @@ public class AdminCommunityController {
             @ApiResponse(responseCode = "400", description = "Validation or business rule error", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
     })
     public ResponseEntity<CommonResponse<CommunityPostResponse>> create(@Valid @RequestBody CreateCommunityPostRequest request) {
+        if (request.mediaUrl() != null && !request.mediaUrl().isBlank()) {
+            throw new BusinessException("LEGACY_COMMUNITY_MEDIA_URL_NOT_SUPPORTED");
+        }
         AdminPrayerPostResponse created = prayerAdminPostService.createPost(
                 AdminSecurityUtils.currentAdminUserId(),
                 new AdminCreatePrayerPostRequest(
@@ -124,7 +128,11 @@ public class AdminCommunityController {
                 post.id(),
                 post.title(),
                 post.content(),
-                null,
+                post.mediaRefs().stream()
+                        .map(com.ccapp.prayer.dto.PrayerMediaRefResponse::downloadUrl)
+                        .filter(url -> url != null && !url.isBlank())
+                        .findFirst()
+                        .orElse(null),
                 post.lifecycleStatus() == PrayerPostLifecycleStatus.PUBLISHED,
                 null,
                 post.publishedAt(),

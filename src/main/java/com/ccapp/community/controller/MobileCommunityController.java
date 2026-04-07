@@ -131,7 +131,11 @@ public class MobileCommunityController {
                 post.id(),
                 post.title(),
                 post.content(),
-                null,
+                post.mediaRefs().stream()
+                        .map(com.ccapp.prayer.dto.PrayerMediaRefResponse::downloadUrl)
+                        .filter(url -> url != null && !url.isBlank())
+                        .findFirst()
+                        .orElse(null),
                 post.postType() == PrayerPostType.OFFICIAL,
                 null,
                 post.publishedAt(),
