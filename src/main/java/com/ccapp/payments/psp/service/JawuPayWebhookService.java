@@ -79,6 +79,9 @@ public class JawuPayWebhookService {
     @Value("${psp.jawupay.mock-enabled:false}")
     private boolean mockEnabled;
 
+    @Value("${psp.jawupay.webhook.skip-validation:false}")
+    private boolean webhookSkipValidation;
+
     private Set<String> allowedIps;
     private byte[] webhookHmacSecretBytes;
 
@@ -88,11 +91,11 @@ public class JawuPayWebhookService {
                 .map(String::trim)
                 .filter(ip -> !ip.isEmpty())
                 .collect(Collectors.toUnmodifiableSet());
-        if (!mockEnabled && allowedIps.isEmpty()) {
+        if (!mockEnabled && !webhookSkipValidation && allowedIps.isEmpty()) {
             throw new IllegalStateException("psp.jawupay.webhook.allowedIps must not be empty");
         }
         String normalizedSecret = normalizeIdentifier(webhookHmacSecret);
-        if (!mockEnabled && normalizedSecret == null) {
+        if (!mockEnabled && !webhookSkipValidation && normalizedSecret == null) {
             throw new IllegalStateException("psp.jawupay.webhook.hmac-secret must not be empty");
         }
         if (normalizedSecret != null) {
@@ -680,7 +683,7 @@ public class JawuPayWebhookService {
     }
 
     private void validateIp(String remoteIp) {
-        if (mockEnabled) {
+        if (mockEnabled || webhookSkipValidation) {
             return;
         }
         if (!allowedIps.contains(remoteIp)) {
@@ -692,8 +695,8 @@ public class JawuPayWebhookService {
     private void validateSignature(byte[] rawRequestBody,
                                    String signatureHeader,
                                    String remoteIp) {
-        if (mockEnabled) {
-            log.warn("Webhook signature validation skipped: mock mode enabled remoteIp={}", remoteIp);
+        if (mockEnabled || webhookSkipValidation) {
+            log.warn("Webhook signature validation skipped: skip-validation={} mock={} remoteIp={}", webhookSkipValidation, mockEnabled, remoteIp);
             return;
         }
         if (rawRequestBody == null || rawRequestBody.length == 0) {
