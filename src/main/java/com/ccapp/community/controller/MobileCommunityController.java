@@ -8,9 +8,9 @@ import com.ccapp.community.dto.CommunityFeedResponse;
 import com.ccapp.community.dto.CommunityPostResponse;
 import com.ccapp.community.dto.PostCommentRequest;
 import com.ccapp.community.dto.PostCommentResponse;
-import com.ccapp.community.service.CommunityEngagementService;
-import com.ccapp.community.service.CommunityFeedService;
 import com.ccapp.prayer.domain.enums.PrayerPostType;
+import com.ccapp.prayer.dto.CreatePrayerCommentRequest;
+import com.ccapp.prayer.dto.PrayerCommentResponse;
 import com.ccapp.prayer.dto.PrayerPostResponse;
 import com.ccapp.prayer.service.PrayerMobileService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -36,8 +36,6 @@ import java.util.UUID;
 @SecurityRequirement(name = "bearerAuth")
 public class MobileCommunityController {
 
-    private final CommunityFeedService communityFeedService;
-    private final CommunityEngagementService communityEngagementService;
     private final PrayerMobileService prayerMobileService;
 
     @GetMapping("/feed")
@@ -70,23 +68,44 @@ public class MobileCommunityController {
     @PostMapping("/posts/{postId}/like")
     @Operation(summary = "Like a community post")
     public ResponseEntity<CommonResponse<Void>> likePost(@PathVariable UUID postId) {
+        AuthenticatedPrincipal principal = SecurityUtils.currentPrincipal();
         UUID accountHolderId = SecurityUtils.currentAccountHolderId();
-        communityEngagementService.likePost(postId, accountHolderId);
-        return ResponseEntity.ok(CommonResponse.success("Post liked", null));
+        prayerMobileService.recordAmen(principal.userId(), accountHolderId, postId);
+        return ResponseEntity.ok()
+                .headers(deprecationHeaders("/api/mobile/prayers/posts/" + postId + "/amen"))
+                .body(CommonResponse.success("Post liked", null));
     }
 
     @DeleteMapping("/posts/{postId}/like")
     @Operation(summary = "Unlike a community post")
     public ResponseEntity<CommonResponse<Void>> unlikePost(@PathVariable UUID postId) {
+        AuthenticatedPrincipal principal = SecurityUtils.currentPrincipal();
         UUID accountHolderId = SecurityUtils.currentAccountHolderId();
-        communityEngagementService.unlikePost(postId, accountHolderId);
-        return ResponseEntity.ok(CommonResponse.success("Post unliked", null));
+        prayerMobileService.removeAmenCompatibility(principal.userId(), accountHolderId, postId);
+        return ResponseEntity.ok()
+                .headers(deprecationHeaders("/api/mobile/prayers/posts/" + postId + "/amen"))
+                .body(CommonResponse.success("Post unliked", null));
     }
 
     @GetMapping("/posts/{postId}/comments")
     @Operation(summary = "List comments for a community post")
     public ResponseEntity<CommonResponse<List<PostCommentResponse>>> listComments(@PathVariable UUID postId) {
-        return ResponseEntity.ok(CommonResponse.success("Post comments", communityEngagementService.listComments(postId)));
+        AuthenticatedPrincipal principal = SecurityUtils.currentPrincipal();
+        UUID accountHolderId = SecurityUtils.currentAccountHolderId();
+        List<PostCommentResponse> response = prayerMobileService.listPrayerComments(
+                        principal.userId(),
+                        accountHolderId,
+                        postId,
+                        0,
+                        1000
+                )
+                .items()
+                .stream()
+                .map(this::toLegacyComment)
+                .toList();
+        return ResponseEntity.ok()
+                .headers(deprecationHeaders("/api/mobile/prayers/posts/" + postId + "/comments"))
+                .body(CommonResponse.success("Post comments", response));
     }
 
     @PostMapping("/posts/{postId}/comments")
@@ -94,9 +113,17 @@ public class MobileCommunityController {
     public ResponseEntity<CommonResponse<PostCommentResponse>> addComment(
             @PathVariable UUID postId,
             @Valid @RequestBody PostCommentRequest request) {
+        AuthenticatedPrincipal principal = SecurityUtils.currentPrincipal();
         UUID accountHolderId = SecurityUtils.currentAccountHolderId();
-        PostCommentResponse response = communityEngagementService.addComment(postId, accountHolderId, request);
-        return ResponseEntity.ok(CommonResponse.success("Comment added", response));
+        PrayerCommentResponse response = prayerMobileService.createPrayerComment(
+                principal.userId(),
+                accountHolderId,
+                postId,
+                new CreatePrayerCommentRequest(null, request.content())
+        );
+        return ResponseEntity.ok()
+                .headers(deprecationHeaders("/api/mobile/prayers/posts/" + postId + "/comments"))
+                .body(CommonResponse.success("Comment added", toLegacyComment(response)));
     }
 
     private CommunityPostResponse toCommunityPost(PrayerPostResponse post) {
@@ -112,6 +139,18 @@ public class MobileCommunityController {
                 post.stats().commentCount(),
                 post.viewerState().hasAmened(),
                 post.createdAt()
+        );
+    }
+
+    private PostCommentResponse toLegacyComment(PrayerCommentResponse comment) {
+        return new PostCommentResponse(
+                comment.id(),
+                comment.postId(),
+                comment.author().accountHolderId(),
+                comment.content(),
+                null,
+                List.of(),
+                comment.createdAt()
         );
     }
 

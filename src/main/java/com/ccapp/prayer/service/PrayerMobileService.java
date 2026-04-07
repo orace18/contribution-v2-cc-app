@@ -12,10 +12,15 @@ import com.ccapp.identity.account_holder.service.AccountHolderService;
 import com.ccapp.identity.delegation.domain.enums.PermissionLevel;
 import com.ccapp.identity.delegation.service.AccessControlService;
 import com.ccapp.media.repository.MediaFileRepository;
+import com.ccapp.prayer.domain.entity.PrayerAmen;
+import com.ccapp.prayer.domain.entity.PrayerComment;
 import com.ccapp.prayer.domain.entity.PrayerPost;
 import com.ccapp.prayer.domain.entity.PrayerPostMediaRef;
+import com.ccapp.prayer.domain.entity.PrayerSupport;
+import com.ccapp.prayer.domain.enums.PrayerInteractionType;
 import com.ccapp.prayer.domain.enums.PrayerPostLifecycleStatus;
 import com.ccapp.prayer.domain.enums.PrayerPostType;
+import com.ccapp.prayer.domain.enums.PrayerSupportType;
 import com.ccapp.prayer.domain.enums.PrayerVisibilityScope;
 import com.ccapp.prayer.dto.CreatePrayerCommentRequest;
 import com.ccapp.prayer.dto.CreatePrayerRequest;
@@ -27,15 +32,18 @@ import com.ccapp.prayer.dto.PrayerInteractionResponse;
 import com.ccapp.prayer.dto.PrayerPostResponse;
 import com.ccapp.prayer.dto.UpdatePrayerRequest;
 import com.ccapp.prayer.exception.PrayerPhase1NotImplementedException;
+import com.ccapp.prayer.repository.PrayerAmenRepository;
+import com.ccapp.prayer.repository.PrayerCommentRepository;
 import com.ccapp.prayer.repository.PrayerPostMediaRefRepository;
 import com.ccapp.prayer.repository.PrayerPostRepository;
+import com.ccapp.prayer.repository.PrayerSupportRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.security.access.AccessDeniedException;
 
 import java.time.OffsetDateTime;
 import java.util.Comparator;
@@ -51,6 +59,9 @@ public class PrayerMobileService {
 
     private final PrayerPostRepository prayerPostRepository;
     private final PrayerPostMediaRefRepository prayerPostMediaRefRepository;
+    private final PrayerAmenRepository prayerAmenRepository;
+    private final PrayerSupportRepository prayerSupportRepository;
+    private final PrayerCommentRepository prayerCommentRepository;
     private final PrayerPostMapper prayerPostMapper;
     private final AccountHolderService accountHolderService;
     private final AccessControlService accessControlService;
@@ -193,27 +204,118 @@ public class PrayerMobileService {
         return prayerPostMapper.toMobileResponse(saved, accountHolderId);
     }
 
+    @Transactional
     public PrayerInteractionResponse recordAmen(UUID actorUserId, UUID accountHolderId, UUID postId) {
-        throw notImplemented();
+        accessControlService.assertCanActOnAccountHolder(actorUserId, accountHolderId, PermissionLevel.TRANSACT);
+        AccountHolder viewer = accountHolderService.getById(accountHolderId);
+        PrayerPost post = findVisiblePostForWrite(postId, viewer);
+
+        PrayerAmen existing = prayerAmenRepository.findByPostIdAndAccountHolderId(postId, accountHolderId).orElse(null);
+        if (existing != null) {
+            return buildInteractionResponse(post, PrayerInteractionType.AMEN, false, existing.getCreatedAt(), accountHolderId);
+        }
+
+        PrayerAmen saved = prayerAmenRepository.save(PrayerAmen.builder()
+                .postId(postId)
+                .accountHolderId(accountHolderId)
+                .actorUserId(actorUserId)
+                .build());
+        post.setAmenCount(post.getAmenCount() + 1);
+        prayerPostRepository.save(post);
+
+        log.info("Prayer amen recorded postId={} accountHolderId={} created=true totalCount={}",
+                postId, accountHolderId, post.getAmenCount());
+        return buildInteractionResponse(post, PrayerInteractionType.AMEN, true, saved.getCreatedAt(), accountHolderId);
     }
 
+    @Transactional
     public PrayerInteractionResponse recordSupport(UUID actorUserId, UUID accountHolderId, UUID postId) {
-        throw notImplemented();
+        accessControlService.assertCanActOnAccountHolder(actorUserId, accountHolderId, PermissionLevel.TRANSACT);
+        AccountHolder viewer = accountHolderService.getById(accountHolderId);
+        PrayerPost post = findVisiblePostForWrite(postId, viewer);
+
+        if (post.getPostType() != PrayerPostType.REQUEST) {
+            throw new BusinessException("PRAYER_SUPPORT_NOT_ALLOWED");
+        }
+
+        PrayerSupport existing = prayerSupportRepository.findByPostIdAndAccountHolderId(postId, accountHolderId).orElse(null);
+        if (existing != null) {
+            return buildInteractionResponse(post, PrayerInteractionType.SUPPORT, false, existing.getCreatedAt(), accountHolderId);
+        }
+
+        PrayerSupport saved = prayerSupportRepository.save(PrayerSupport.builder()
+                .postId(postId)
+                .accountHolderId(accountHolderId)
+                .actorUserId(actorUserId)
+                .supportType(PrayerSupportType.PRAYED)
+                .build());
+        post.setSupportCount(post.getSupportCount() + 1);
+        prayerPostRepository.save(post);
+
+        log.info("Prayer support recorded postId={} accountHolderId={} created=true totalCount={}",
+                postId, accountHolderId, post.getSupportCount());
+        return buildInteractionResponse(post, PrayerInteractionType.SUPPORT, true, saved.getCreatedAt(), accountHolderId);
     }
 
+    @Transactional(readOnly = true)
     public PageResponse<PrayerCommentResponse> listPrayerComments(UUID actorUserId,
                                                                   UUID accountHolderId,
                                                                   UUID postId,
                                                                   int page,
                                                                   int size) {
-        throw notImplemented();
+        accessControlService.assertCanActOnAccountHolder(actorUserId, accountHolderId, PermissionLevel.VIEW);
+        AccountHolder viewer = accountHolderService.getById(accountHolderId);
+        findVisiblePostForRead(postId, viewer);
+
+        List<PrayerCommentResponse> comments = prayerCommentRepository.findByPostIdOrderByCreatedAtAscIdAsc(postId).stream()
+                .map(prayerPostMapper::toCommentResponse)
+                .toList();
+
+        PageRequest pageRequest = PageRequest.of(page, size);
+        int fromIndex = Math.min((int) pageRequest.getOffset(), comments.size());
+        int toIndex = Math.min(fromIndex + pageRequest.getPageSize(), comments.size());
+        List<PrayerCommentResponse> items = comments.subList(fromIndex, toIndex);
+
+        log.info("Prayer comments listed postId={} accountHolderId={} page={} size={} results={}",
+                postId, accountHolderId, page, size, items.size());
+
+        return PageResponse.from(new PageImpl<>(items, pageRequest, comments.size()));
     }
 
+    @Transactional
     public PrayerCommentResponse createPrayerComment(UUID actorUserId,
                                                      UUID accountHolderId,
                                                      UUID postId,
                                                      CreatePrayerCommentRequest request) {
-        throw notImplemented();
+        accessControlService.assertCanActOnAccountHolder(actorUserId, accountHolderId, PermissionLevel.TRANSACT);
+        AccountHolder viewer = accountHolderService.getById(accountHolderId);
+
+        if (request.clientRequestId() != null) {
+            PrayerComment existing = prayerCommentRepository.findByAccountHolderIdAndClientRequestId(accountHolderId, request.clientRequestId())
+                    .orElse(null);
+            if (existing != null) {
+                if (!existing.getPostId().equals(postId)) {
+                    throw new ConflictException("PRAYER_COMMENT_CLIENT_REQUEST_ID_CONFLICT");
+                }
+                findVisiblePostForRead(postId, viewer);
+                return prayerPostMapper.toCommentResponse(existing);
+            }
+        }
+
+        PrayerPost post = findVisiblePostForWrite(postId, viewer);
+        PrayerComment saved = prayerCommentRepository.save(PrayerComment.builder()
+                .postId(postId)
+                .accountHolderId(accountHolderId)
+                .actorUserId(actorUserId)
+                .clientRequestId(request.clientRequestId())
+                .content(request.content().trim())
+                .build());
+        post.setCommentCount(post.getCommentCount() + 1);
+        prayerPostRepository.save(post);
+
+        log.info("Prayer comment created postId={} accountHolderId={} commentId={} totalCount={}",
+                postId, accountHolderId, saved.getId(), post.getCommentCount());
+        return prayerPostMapper.toCommentResponse(saved);
     }
 
     public DailyPrayerResponse getCurrentDailyPrayer(UUID actorUserId, UUID accountHolderId, String timezone) {
@@ -228,6 +330,30 @@ public class PrayerMobileService {
 
     public PrayerDashboardResponse getPrayerDashboard(UUID actorUserId, UUID accountHolderId, String timezone) {
         throw notImplemented();
+    }
+
+    /**
+     * Temporary compatibility bridge for the deprecated legacy community unlike route.
+     */
+    @Transactional
+    public void removeAmenCompatibility(UUID actorUserId, UUID accountHolderId, UUID postId) {
+        accessControlService.assertCanActOnAccountHolder(actorUserId, accountHolderId, PermissionLevel.TRANSACT);
+        AccountHolder viewer = accountHolderService.getById(accountHolderId);
+        PrayerPost post = findVisiblePostForWrite(postId, viewer);
+
+        PrayerAmen existing = prayerAmenRepository.findByPostIdAndAccountHolderId(postId, accountHolderId).orElse(null);
+        if (existing == null) {
+            log.info("Prayer amen compatibility remove no-op postId={} accountHolderId={}", postId, accountHolderId);
+            return;
+        }
+
+        prayerAmenRepository.delete(existing);
+        if (post.getAmenCount() > 0) {
+            post.setAmenCount(post.getAmenCount() - 1);
+        }
+        prayerPostRepository.save(post);
+        log.info("Prayer amen compatibility removed postId={} accountHolderId={} totalCount={}",
+                postId, accountHolderId, post.getAmenCount());
     }
 
     private boolean isVisibleToViewer(PrayerPost post, AccountHolder viewer, boolean includeMinePrivate) {
@@ -322,6 +448,37 @@ public class PrayerMobileService {
                         .build())
                 .toList();
         prayerPostMediaRefRepository.saveAll(refs);
+    }
+
+    private PrayerPost findVisiblePostForRead(UUID postId, AccountHolder viewer) {
+        return prayerPostRepository.findById(postId)
+                .filter(candidate -> isVisibleToViewer(candidate, viewer, true))
+                .orElseThrow(() -> new NotFoundException("PRAYER_POST_NOT_FOUND"));
+    }
+
+    private PrayerPost findVisiblePostForWrite(UUID postId, AccountHolder viewer) {
+        return prayerPostRepository.findByIdForUpdate(postId)
+                .filter(candidate -> isVisibleToViewer(candidate, viewer, true))
+                .orElseThrow(() -> new NotFoundException("PRAYER_POST_NOT_FOUND"));
+    }
+
+    private PrayerInteractionResponse buildInteractionResponse(PrayerPost post,
+                                                               PrayerInteractionType interactionType,
+                                                               boolean created,
+                                                               OffsetDateTime recordedAt,
+                                                               UUID viewerAccountHolderId) {
+        int totalCount = switch (interactionType) {
+            case AMEN -> post.getAmenCount();
+            case SUPPORT -> post.getSupportCount();
+        };
+        return new PrayerInteractionResponse(
+                post.getId(),
+                interactionType,
+                created,
+                totalCount,
+                recordedAt,
+                prayerPostMapper.toViewerState(post, viewerAccountHolderId)
+        );
     }
 
     private PrayerPhase1NotImplementedException notImplemented() {

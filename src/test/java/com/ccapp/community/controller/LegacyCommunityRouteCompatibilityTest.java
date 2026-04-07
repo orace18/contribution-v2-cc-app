@@ -9,13 +9,16 @@ import com.ccapp.common.security.AuthenticatedPrincipal;
 import com.ccapp.community.dto.CommunityFeedResponse;
 import com.ccapp.community.dto.CommunityPostResponse;
 import com.ccapp.community.dto.FeatureCommunityPostRequest;
+import com.ccapp.community.dto.PostCommentRequest;
+import com.ccapp.community.dto.PostCommentResponse;
 import com.ccapp.community.service.CommunityAdminService;
-import com.ccapp.community.service.CommunityEngagementService;
-import com.ccapp.community.service.CommunityFeedService;
 import com.ccapp.prayer.domain.enums.PrayerPostLifecycleStatus;
 import com.ccapp.prayer.domain.enums.PrayerPostType;
 import com.ccapp.prayer.domain.enums.PrayerVisibilityScope;
+import com.ccapp.prayer.dto.CreatePrayerCommentRequest;
 import com.ccapp.prayer.dto.PrayerAuthorResponse;
+import com.ccapp.prayer.dto.PrayerCommentResponse;
+import com.ccapp.prayer.dto.PrayerInteractionResponse;
 import com.ccapp.prayer.dto.PrayerPostResponse;
 import com.ccapp.prayer.dto.PrayerScopeContextResponse;
 import com.ccapp.prayer.dto.PrayerStatsResponse;
@@ -38,15 +41,13 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class LegacyCommunityRouteCompatibilityTest {
 
-    @Mock
-    private CommunityFeedService communityFeedService;
-    @Mock
-    private CommunityEngagementService communityEngagementService;
     @Mock
     private PrayerMobileService prayerMobileService;
     @Mock
@@ -106,11 +107,7 @@ class LegacyCommunityRouteCompatibilityTest {
         when(prayerMobileService.getPrayerFeed(viewerId, viewerId, 0, 20, true))
                 .thenReturn(new PageResponse<>(List.of(official, request), 0, 20, 2, 1, false));
 
-        MobileCommunityController controller = new MobileCommunityController(
-                communityFeedService,
-                communityEngagementService,
-                prayerMobileService
-        );
+        MobileCommunityController controller = new MobileCommunityController(prayerMobileService);
 
         ResponseEntity<CommonResponse<CommunityFeedResponse>> response = controller.feed();
 
@@ -118,6 +115,70 @@ class LegacyCommunityRouteCompatibilityTest {
         assertEquals("/api/mobile/prayers/feed", response.getHeaders().getFirst("X-Replacement-Route"));
         assertEquals(1, response.getBody().data().featuredPosts().size());
         assertEquals(1, response.getBody().data().posts().size());
+    }
+
+    @Test
+    void oldMobileCommunityLike_shouldDelegateToPrayerAmenAndExposeDeprecationHeaders() {
+        UUID viewerId = UUID.randomUUID();
+        UUID postId = UUID.randomUUID();
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+                AuthenticatedPrincipal.builder()
+                        .userId(viewerId)
+                        .accountHolderId(viewerId)
+                        .build(),
+                null,
+                List.of()
+        ));
+
+        when(prayerMobileService.recordAmen(viewerId, viewerId, postId)).thenReturn(
+                new PrayerInteractionResponse(postId, com.ccapp.prayer.domain.enums.PrayerInteractionType.AMEN, true, 1, OffsetDateTime.now(), null)
+        );
+
+        MobileCommunityController controller = new MobileCommunityController(prayerMobileService);
+        ResponseEntity<CommonResponse<Void>> response = controller.likePost(postId);
+
+        assertEquals("true", response.getHeaders().getFirst("X-Deprecated-Route"));
+        assertTrue(response.getHeaders().getFirst("X-Replacement-Route").endsWith("/amen"));
+    }
+
+    @Test
+    void oldMobileCommunityComments_shouldDelegateToPrayerCommentsAndExposeDeprecationHeaders() {
+        UUID viewerId = UUID.randomUUID();
+        UUID postId = UUID.randomUUID();
+        OffsetDateTime createdAt = OffsetDateTime.now();
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+                AuthenticatedPrincipal.builder()
+                        .userId(viewerId)
+                        .accountHolderId(viewerId)
+                        .build(),
+                null,
+                List.of()
+        ));
+
+        PrayerCommentResponse prayerComment = new PrayerCommentResponse(
+                UUID.randomUUID(),
+                postId,
+                new PrayerAuthorResponse(viewerId, "Viewer", null, null),
+                "Comment",
+                createdAt
+        );
+        when(prayerMobileService.listPrayerComments(viewerId, viewerId, postId, 0, 1000))
+                .thenReturn(new PageResponse<>(List.of(prayerComment), 0, 1000, 1, 1, false));
+        when(prayerMobileService.createPrayerComment(eq(viewerId), eq(viewerId), eq(postId), any(CreatePrayerCommentRequest.class)))
+                .thenReturn(prayerComment);
+
+        MobileCommunityController controller = new MobileCommunityController(prayerMobileService);
+        ResponseEntity<CommonResponse<List<PostCommentResponse>>> listResponse = controller.listComments(postId);
+        ResponseEntity<CommonResponse<PostCommentResponse>> createResponse = controller.addComment(postId, new PostCommentRequest("Comment", null));
+
+        assertEquals("true", listResponse.getHeaders().getFirst("X-Deprecated-Route"));
+        assertTrue(listResponse.getHeaders().getFirst("X-Replacement-Route").endsWith("/comments"));
+        assertEquals(1, listResponse.getBody().data().size());
+        assertEquals(viewerId, listResponse.getBody().data().get(0).accountHolderId());
+
+        assertEquals("true", createResponse.getHeaders().getFirst("X-Deprecated-Route"));
+        assertTrue(createResponse.getHeaders().getFirst("X-Replacement-Route").endsWith("/comments"));
+        assertEquals(prayerComment.id(), createResponse.getBody().data().id());
     }
 
     @Test

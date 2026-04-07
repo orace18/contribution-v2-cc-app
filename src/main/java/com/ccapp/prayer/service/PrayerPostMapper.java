@@ -4,6 +4,7 @@ import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
 import com.ccapp.identity.account_holder.repository.AccountHolderRepository;
 import com.ccapp.media.domain.entity.MediaFile;
 import com.ccapp.media.repository.MediaFileRepository;
+import com.ccapp.prayer.domain.entity.PrayerComment;
 import com.ccapp.prayer.domain.entity.PrayerPost;
 import com.ccapp.prayer.domain.entity.PrayerPostMediaRef;
 import com.ccapp.prayer.domain.enums.PrayerAuthorType;
@@ -12,6 +13,7 @@ import com.ccapp.prayer.domain.enums.PrayerPostType;
 import com.ccapp.prayer.dto.AdminPrayerPostResponse;
 import com.ccapp.prayer.dto.InternalDeepLinkResponse;
 import com.ccapp.prayer.dto.PrayerAuthorResponse;
+import com.ccapp.prayer.dto.PrayerCommentResponse;
 import com.ccapp.prayer.dto.PrayerMediaRefResponse;
 import com.ccapp.prayer.dto.PrayerPostResponse;
 import com.ccapp.prayer.dto.PrayerScopeContextResponse;
@@ -65,7 +67,7 @@ class PrayerPostMapper {
                         post.getSupportCount(),
                         post.getCommentCount()
                 ),
-                buildViewerState(post, viewerAccountHolderId),
+                toViewerState(post, viewerAccountHolderId),
                 post.getCreatedAt(),
                 post.getPublishedAt()
         );
@@ -90,14 +92,32 @@ class PrayerPostMapper {
         );
     }
 
+    PrayerCommentResponse toCommentResponse(PrayerComment comment) {
+        return new PrayerCommentResponse(
+                comment.getId(),
+                comment.getPostId(),
+                buildAccountHolderAuthor(comment.getAccountHolderId()),
+                comment.getContent(),
+                comment.getCreatedAt()
+        );
+    }
+
+    PrayerViewerStateResponse toViewerState(PrayerPost post, UUID viewerAccountHolderId) {
+        return buildViewerState(post, viewerAccountHolderId);
+    }
+
     private PrayerAuthorResponse buildAuthor(PrayerPost post) {
         if (post.getPostType() == PrayerPostType.OFFICIAL) {
             return new PrayerAuthorResponse(null, "Club Chretien", PrayerAuthorType.ADMIN_PLATFORM, null);
         }
 
-        AccountHolder author = post.getAuthorAccountHolderId() == null
+        return buildAccountHolderAuthor(post.getAuthorAccountHolderId());
+    }
+
+    private PrayerAuthorResponse buildAccountHolderAuthor(UUID accountHolderId) {
+        AccountHolder author = accountHolderId == null
                 ? null
-                : accountHolderRepository.findById(post.getAuthorAccountHolderId()).orElse(null);
+                : accountHolderRepository.findById(accountHolderId).orElse(null);
         String displayName = author == null
                 ? "Member"
                 : ((author.getFirstName() == null ? "" : author.getFirstName().trim()) + " " +
@@ -105,7 +125,7 @@ class PrayerPostMapper {
         if (displayName.isBlank()) {
             displayName = "Member";
         }
-        return new PrayerAuthorResponse(post.getAuthorAccountHolderId(), displayName, PrayerAuthorType.ACCOUNT_HOLDER, null);
+        return new PrayerAuthorResponse(accountHolderId, displayName, PrayerAuthorType.ACCOUNT_HOLDER, null);
     }
 
     private List<PrayerMediaRefResponse> loadMediaRefs(UUID postId) {
