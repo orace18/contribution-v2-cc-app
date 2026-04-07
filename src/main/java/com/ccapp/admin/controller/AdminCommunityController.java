@@ -30,7 +30,9 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * @deprecated Replaced by {@code com.ccapp.prayer.controller.admin.AdminPrayerPostController}.
+ * @deprecated Compatibility adapter only. Replaced by
+ * {@code com.ccapp.prayer.controller.admin.AdminPrayerPostController}. New admin
+ * publishing flows must use {@code /api/admin/prayers/posts/**}.
  */
 @Deprecated(since = "2026-04", forRemoval = false)
 @RestController
@@ -44,7 +46,7 @@ public class AdminCommunityController {
     private final PrayerAdminPostService prayerAdminPostService;
 
     @GetMapping
-    @Operation(summary = "List all community posts")
+    @Operation(summary = "List all community posts", deprecated = true)
     public ResponseEntity<CommonResponse<List<CommunityPostResponse>>> list() {
         List<CommunityPostResponse> response = prayerAdminPostService.listPosts(0, 100, null, null).items().stream()
                 .map(this::toCommunityPost)
@@ -55,7 +57,7 @@ public class AdminCommunityController {
     }
 
     @PostMapping
-    @Operation(summary = "Create a community post")
+    @Operation(summary = "Create a community post", deprecated = true)
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Success", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
             @ApiResponse(responseCode = "400", description = "Validation or business rule error", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
@@ -82,7 +84,7 @@ public class AdminCommunityController {
     }
 
     @PostMapping("/{id}/feature")
-    @Operation(summary = "Feature a community post")
+    @Operation(summary = "Feature a community post", deprecated = true)
     @ApiResponses(value = {
             @ApiResponse(
                     responseCode = "200",
@@ -104,7 +106,7 @@ public class AdminCommunityController {
     }
 
     @PostMapping("/{id}/unfeature")
-    @Operation(summary = "Unfeature a community post")
+    @Operation(summary = "Unfeature a community post", deprecated = true)
     @ApiResponses(value = {
             @ApiResponse(
                     responseCode = "200",
@@ -165,6 +167,7 @@ public class AdminCommunityController {
 
     private HttpHeaders deprecationHeaders(String replacementRoute) {
         HttpHeaders headers = new HttpHeaders();
+        headers.add("Deprecation", "true");
         headers.add("X-Deprecated-Route", "true");
         headers.add("X-Replacement-Route", replacementRoute);
         return headers;

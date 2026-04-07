@@ -26,7 +26,9 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * @deprecated Replaced by {@code com.ccapp.prayer.controller.mobile.PrayerMobileController}.
+ * @deprecated Compatibility adapter only. Replaced by
+ * {@code com.ccapp.prayer.controller.mobile.PrayerMobileController}. New mobile
+ * integrations must use {@code /api/mobile/prayers/**}.
  */
 @Deprecated(since = "2026-04", forRemoval = false)
 @RestController
@@ -39,7 +41,7 @@ public class MobileCommunityController {
     private final PrayerMobileService prayerMobileService;
 
     @GetMapping("/feed")
-    @Operation(summary = "Get mobile community feed")
+    @Operation(summary = "Get mobile community feed", deprecated = true)
     public ResponseEntity<CommonResponse<CommunityFeedResponse>> feed() {
         AuthenticatedPrincipal principal = SecurityUtils.currentPrincipal();
         UUID accountHolderId = SecurityUtils.currentAccountHolderId();
@@ -66,7 +68,7 @@ public class MobileCommunityController {
     }
 
     @PostMapping("/posts/{postId}/like")
-    @Operation(summary = "Like a community post")
+    @Operation(summary = "Like a community post", deprecated = true)
     public ResponseEntity<CommonResponse<Void>> likePost(@PathVariable UUID postId) {
         AuthenticatedPrincipal principal = SecurityUtils.currentPrincipal();
         UUID accountHolderId = SecurityUtils.currentAccountHolderId();
@@ -77,7 +79,7 @@ public class MobileCommunityController {
     }
 
     @DeleteMapping("/posts/{postId}/like")
-    @Operation(summary = "Unlike a community post")
+    @Operation(summary = "Unlike a community post", deprecated = true)
     public ResponseEntity<CommonResponse<Void>> unlikePost(@PathVariable UUID postId) {
         AuthenticatedPrincipal principal = SecurityUtils.currentPrincipal();
         UUID accountHolderId = SecurityUtils.currentAccountHolderId();
@@ -88,7 +90,7 @@ public class MobileCommunityController {
     }
 
     @GetMapping("/posts/{postId}/comments")
-    @Operation(summary = "List comments for a community post")
+    @Operation(summary = "List comments for a community post", deprecated = true)
     public ResponseEntity<CommonResponse<List<PostCommentResponse>>> listComments(@PathVariable UUID postId) {
         AuthenticatedPrincipal principal = SecurityUtils.currentPrincipal();
         UUID accountHolderId = SecurityUtils.currentAccountHolderId();
@@ -109,7 +111,7 @@ public class MobileCommunityController {
     }
 
     @PostMapping("/posts/{postId}/comments")
-    @Operation(summary = "Add a comment to a community post")
+    @Operation(summary = "Add a comment to a community post", deprecated = true)
     public ResponseEntity<CommonResponse<PostCommentResponse>> addComment(
             @PathVariable UUID postId,
             @Valid @RequestBody PostCommentRequest request) {
@@ -160,6 +162,7 @@ public class MobileCommunityController {
 
     private HttpHeaders deprecationHeaders(String replacementRoute) {
         HttpHeaders headers = new HttpHeaders();
+        headers.add("Deprecation", "true");
         headers.add("X-Deprecated-Route", "true");
         headers.add("X-Replacement-Route", replacementRoute);
         return headers;

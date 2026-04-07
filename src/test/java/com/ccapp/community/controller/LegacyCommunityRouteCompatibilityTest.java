@@ -115,6 +115,7 @@ class LegacyCommunityRouteCompatibilityTest {
 
         ResponseEntity<CommonResponse<CommunityFeedResponse>> response = controller.feed();
 
+        assertEquals("true", response.getHeaders().getFirst("Deprecation"));
         assertEquals("true", response.getHeaders().getFirst("X-Deprecated-Route"));
         assertEquals("/api/mobile/prayers/feed", response.getHeaders().getFirst("X-Replacement-Route"));
         assertEquals(1, response.getBody().data().featuredPosts().size());
@@ -143,6 +144,7 @@ class LegacyCommunityRouteCompatibilityTest {
         MobileCommunityController controller = new MobileCommunityController(prayerMobileService);
         ResponseEntity<CommonResponse<Void>> response = controller.likePost(postId);
 
+        assertEquals("true", response.getHeaders().getFirst("Deprecation"));
         assertEquals("true", response.getHeaders().getFirst("X-Deprecated-Route"));
         assertTrue(response.getHeaders().getFirst("X-Replacement-Route").endsWith("/amen"));
     }
@@ -177,11 +179,13 @@ class LegacyCommunityRouteCompatibilityTest {
         ResponseEntity<CommonResponse<List<PostCommentResponse>>> listResponse = controller.listComments(postId);
         ResponseEntity<CommonResponse<PostCommentResponse>> createResponse = controller.addComment(postId, new PostCommentRequest("Comment", null));
 
+        assertEquals("true", listResponse.getHeaders().getFirst("Deprecation"));
         assertEquals("true", listResponse.getHeaders().getFirst("X-Deprecated-Route"));
         assertTrue(listResponse.getHeaders().getFirst("X-Replacement-Route").endsWith("/comments"));
         assertEquals(1, listResponse.getBody().data().size());
         assertEquals(viewerId, listResponse.getBody().data().get(0).accountHolderId());
 
+        assertEquals("true", createResponse.getHeaders().getFirst("Deprecation"));
         assertEquals("true", createResponse.getHeaders().getFirst("X-Deprecated-Route"));
         assertTrue(createResponse.getHeaders().getFirst("X-Replacement-Route").endsWith("/comments"));
         assertEquals(prayerComment.id(), createResponse.getBody().data().id());
@@ -223,6 +227,7 @@ class LegacyCommunityRouteCompatibilityTest {
         AdminCommunityController controller = new AdminCommunityController(communityAdminService, prayerAdminPostService);
         ResponseEntity<CommonResponse<CommunityPostResponse>> response = controller.feature(postId, new FeatureCommunityPostRequest(1));
 
+        assertEquals("true", response.getHeaders().getFirst("Deprecation"));
         assertEquals("true", response.getHeaders().getFirst("X-Deprecated-Route"));
         assertTrue(response.getHeaders().getFirst("X-Replacement-Route").endsWith("/publish"));
         assertTrue(response.getBody().data().featured());

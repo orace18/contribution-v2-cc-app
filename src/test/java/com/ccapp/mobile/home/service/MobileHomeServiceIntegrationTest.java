@@ -220,7 +220,7 @@ class MobileHomeServiceIntegrationTest {
         assertNotNull(response.circleSummary());
         assertEquals("Alpha Circle", response.circleSummary().name());
         assertEquals(1L, response.circleSummary().membersCount());
-        assertEquals(1, response.communityHighlights().size());
+        assertTrue(response.communityHighlights().isEmpty());
         assertEquals(1L, response.unreadMessages());
         assertEquals(1L, response.notifications().total());
         assertEquals(1, response.notifications().latest().size());

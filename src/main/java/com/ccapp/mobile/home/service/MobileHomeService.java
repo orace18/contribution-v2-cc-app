@@ -7,7 +7,6 @@ import com.ccapp.chat.repository.ChatMessageRepository;
 import com.ccapp.circles.domain.entity.Circle;
 import com.ccapp.circles.repository.CircleMemberRepository;
 import com.ccapp.circles.repository.CircleRepository;
-import com.ccapp.community.repository.CommunityPostRepository;
 import com.ccapp.credit.domain.enums.LoanStatus;
 import com.ccapp.credit.repository.CreditEligibilityRepository;
 import com.ccapp.credit.repository.LoanRepository;
@@ -38,6 +37,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+/**
+ * @deprecated Legacy home aggregation service kept only for backward-compatible
+ * internal usage during the Business Prayer handover. New mobile home flows
+ * must use {@link HomeFacadeService} and {@code MobileHomeDashboardResponse}.
+ */
+@Deprecated(since = "2026-04", forRemoval = false)
 @Service
 @RequiredArgsConstructor
 public class MobileHomeService {
@@ -64,7 +69,6 @@ public class MobileHomeService {
     private final LoanRepository loanRepository;
     private final CircleRepository circleRepository;
     private final CircleMemberRepository circleMemberRepository;
-    private final CommunityPostRepository communityPostRepository;
     private final ChatMessageRepository chatMessageRepository;
     private final NotificationRepository notificationRepository;
 
@@ -97,19 +101,9 @@ public class MobileHomeService {
                 .map(this::toCircleSummary)
                 .orElse(null);
 
-        // Legacy community highlight block kept only for mobile stability during the
-        // Business Prayer replacement. New prayer feed/dashboard adapters should replace it.
-        List<MobileHomeCommunityHighlightResponse> communityHighlights = communityPostRepository
-                .findFeaturedForFeed(PageRequest.of(0, 5)).stream()
-                .map(post -> new MobileHomeCommunityHighlightResponse(
-                        post.getId(),
-                        post.getTitle(),
-                        post.getContent(),
-                        post.getMediaUrl(),
-                        post.getFeaturedAt(),
-                        post.getCreatedAt()
-                ))
-                .toList();
+        // Keep the legacy field for wire compatibility only, but stop surfacing
+        // old community-feed content so mobile is not steered toward stale semantics.
+        List<MobileHomeCommunityHighlightResponse> communityHighlights = List.of();
 
         long unreadMessages = chatMessageRepository.countByRecipientAccountHolderIdAndMessageStatusIn(
                 accountHolderId,
