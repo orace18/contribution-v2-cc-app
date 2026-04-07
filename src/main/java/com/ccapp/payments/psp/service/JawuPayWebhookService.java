@@ -128,7 +128,11 @@ public class JawuPayWebhookService {
                 .orElseThrow(() -> new BusinessException("Operation not found for JawuPay webhook identifiers"));
 
         validateOperationIdIfPresent(request.operationId(), operation.getId());
-        verifyAmountCurrencyMatch(operation, requireAmount(request.amount()), requireCurrency(request.currency()));
+        if (request.amount() != null && request.amount() > 0) {
+            verifyAmountCurrencyMatch(operation, request.amount(), requireCurrency(request.currency()));
+        } else {
+            log.warn("Webhook amount/currency not provided, skipping amount check operationId={} paymentId={}", operation.getId(), paymentId);
+        }
         recordWebhookEvent(request, operation, paymentId, payoutId, providerReference);
 
         String auditPayload = buildAuditPayload(request, remoteIp, "RECEIVED", null);
