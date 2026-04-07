@@ -4,14 +4,21 @@ import com.ccapp.common.api.CommonResponse;
 import com.ccapp.common.api.PageResponse;
 import com.ccapp.common.security.AuthenticatedPrincipal;
 import com.ccapp.common.security.SecurityUtils;
+import com.ccapp.prayer.domain.enums.PrayerDailyPrayerResponseType;
+import com.ccapp.prayer.dto.CompleteDailyPrayerRequest;
 import com.ccapp.prayer.dto.CreatePrayerCommentRequest;
 import com.ccapp.prayer.dto.CreatePrayerRequest;
 import com.ccapp.prayer.dto.DailyPrayerCompletionResponse;
 import com.ccapp.prayer.dto.DailyPrayerResponse;
+import com.ccapp.prayer.dto.PrayerCreateMediaUploadRequest;
+import com.ccapp.prayer.dto.PrayerCreateMediaUploadResponse;
 import com.ccapp.prayer.dto.PrayerCommentResponse;
 import com.ccapp.prayer.dto.PrayerDashboardResponse;
 import com.ccapp.prayer.dto.PrayerInteractionResponse;
+import com.ccapp.prayer.dto.PrayerMediaUploadConfirmationResponse;
 import com.ccapp.prayer.dto.PrayerPostResponse;
+import com.ccapp.prayer.dto.UpdatePrayerRequest;
+import com.ccapp.prayer.service.PrayerMediaUploadService;
 import com.ccapp.prayer.service.PrayerMobileService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -24,6 +31,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -42,6 +50,7 @@ import java.util.UUID;
 public class PrayerMobileController {
 
     private final PrayerMobileService prayerMobileService;
+    private final PrayerMediaUploadService prayerMediaUploadService;
 
     @GetMapping("/feed")
     @Operation(summary = "List visible prayer feed items")
@@ -71,6 +80,34 @@ public class PrayerMobileController {
         return ResponseEntity.ok(CommonResponse.success("Prayer request created", response));
     }
 
+    @PostMapping("/media/upload-url")
+    @Operation(summary = "Create a presigned upload URL for prayer post media")
+    public ResponseEntity<CommonResponse<PrayerCreateMediaUploadResponse>> createPrayerMediaUploadUrl(
+            @Valid @RequestBody PrayerCreateMediaUploadRequest request) {
+        AuthenticatedPrincipal principal = SecurityUtils.currentPrincipal();
+        UUID accountHolderId = SecurityUtils.currentAccountHolderId();
+        PrayerCreateMediaUploadResponse response = prayerMediaUploadService.createPrayerPostUploadUrl(
+                principal.userId(),
+                accountHolderId,
+                request
+        );
+        return ResponseEntity.ok(CommonResponse.success("Prayer media upload URL generated", response));
+    }
+
+    @PostMapping("/media/{mediaId}/confirm")
+    @Operation(summary = "Confirm an uploaded prayer post media file")
+    public ResponseEntity<CommonResponse<PrayerMediaUploadConfirmationResponse>> confirmPrayerMediaUpload(
+            @PathVariable UUID mediaId) {
+        AuthenticatedPrincipal principal = SecurityUtils.currentPrincipal();
+        UUID accountHolderId = SecurityUtils.currentAccountHolderId();
+        PrayerMediaUploadConfirmationResponse response = prayerMediaUploadService.confirmPrayerPostUpload(
+                principal.userId(),
+                accountHolderId,
+                mediaId
+        );
+        return ResponseEntity.ok(CommonResponse.success("Prayer media upload confirmed", response));
+    }
+
     @GetMapping("/posts/{postId}")
     @Operation(summary = "Get a visible prayer post detail")
     public ResponseEntity<CommonResponse<PrayerPostResponse>> getPrayerPost(@PathVariable UUID postId) {
@@ -78,6 +115,26 @@ public class PrayerMobileController {
         UUID accountHolderId = SecurityUtils.currentAccountHolderId();
         PrayerPostResponse response = prayerMobileService.getPrayerPost(principal.userId(), accountHolderId, postId);
         return ResponseEntity.ok(CommonResponse.success("Prayer post", response));
+    }
+
+    @PatchMapping("/posts/{postId}")
+    @Operation(summary = "Update the current user's prayer request")
+    public ResponseEntity<CommonResponse<PrayerPostResponse>> updatePrayerPost(
+            @PathVariable UUID postId,
+            @Valid @RequestBody UpdatePrayerRequest request) {
+        AuthenticatedPrincipal principal = SecurityUtils.currentPrincipal();
+        UUID accountHolderId = SecurityUtils.currentAccountHolderId();
+        PrayerPostResponse response = prayerMobileService.updatePrayerRequest(principal.userId(), accountHolderId, postId, request);
+        return ResponseEntity.ok(CommonResponse.success("Prayer post updated", response));
+    }
+
+    @PostMapping("/posts/{postId}/archive")
+    @Operation(summary = "Archive the current user's prayer request")
+    public ResponseEntity<CommonResponse<PrayerPostResponse>> archivePrayerPost(@PathVariable UUID postId) {
+        AuthenticatedPrincipal principal = SecurityUtils.currentPrincipal();
+        UUID accountHolderId = SecurityUtils.currentAccountHolderId();
+        PrayerPostResponse response = prayerMobileService.archivePrayerRequest(principal.userId(), accountHolderId, postId);
+        return ResponseEntity.ok(CommonResponse.success("Prayer post archived", response));
     }
 
     @PutMapping("/posts/{postId}/amen")
@@ -135,7 +192,7 @@ public class PrayerMobileController {
     @GetMapping("/daily/current")
     @Operation(summary = "Get the current published daily prayer")
     public ResponseEntity<CommonResponse<DailyPrayerResponse>> getCurrentDailyPrayer(
-            @RequestParam(defaultValue = "Africa/Porto-Novo") String timezone) {
+            @RequestParam(required = false) String timezone) {
         AuthenticatedPrincipal principal = SecurityUtils.currentPrincipal();
         UUID accountHolderId = SecurityUtils.currentAccountHolderId();
         DailyPrayerResponse response = prayerMobileService.getCurrentDailyPrayer(principal.userId(), accountHolderId, timezone);
@@ -145,13 +202,18 @@ public class PrayerMobileController {
     @PostMapping("/daily/current/complete")
     @Operation(summary = "Record completion of today's daily prayer")
     public ResponseEntity<CommonResponse<DailyPrayerCompletionResponse>> completeCurrentDailyPrayer(
-            @RequestParam(defaultValue = "Africa/Porto-Novo") String timezone) {
+            @RequestParam(required = false) String timezone,
+            @Valid @RequestBody(required = false) CompleteDailyPrayerRequest request) {
         AuthenticatedPrincipal principal = SecurityUtils.currentPrincipal();
         UUID accountHolderId = SecurityUtils.currentAccountHolderId();
+        PrayerDailyPrayerResponseType responseType = request == null
+                ? PrayerDailyPrayerResponseType.PRAYED
+                : request.responseType();
         DailyPrayerCompletionResponse response = prayerMobileService.completeCurrentDailyPrayer(
                 principal.userId(),
                 accountHolderId,
-                timezone
+                timezone,
+                responseType
         );
         return ResponseEntity.ok(CommonResponse.success("Daily prayer completed", response));
     }
@@ -159,7 +221,7 @@ public class PrayerMobileController {
     @GetMapping("/dashboard")
     @Operation(summary = "Get current prayer streak, missions, and engagement stats")
     public ResponseEntity<CommonResponse<PrayerDashboardResponse>> getDashboard(
-            @RequestParam(defaultValue = "Africa/Porto-Novo") String timezone) {
+            @RequestParam(required = false) String timezone) {
         AuthenticatedPrincipal principal = SecurityUtils.currentPrincipal();
         UUID accountHolderId = SecurityUtils.currentAccountHolderId();
         PrayerDashboardResponse response = prayerMobileService.getPrayerDashboard(principal.userId(), accountHolderId, timezone);

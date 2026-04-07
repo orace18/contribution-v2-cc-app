@@ -120,15 +120,16 @@ Recommended metrics:
 
 ### Flow B: publish prayer request
 
-1. Mobile uploads media through the existing media module if needed.
-2. Mobile calls `POST /api/mobile/prayers/requests`.
-3. Backend validates content, visibility, and ownership/readiness of referenced media.
-4. Backend snapshots visibility context:
+1. Mobile optionally asks the prayer module for an upload intent via `POST /api/mobile/prayers/media/upload-url`, which delegates to the existing shared media infrastructure with prayer-safe defaults.
+2. Mobile uploads the file to object storage and confirms it through `POST /api/mobile/prayers/media/{mediaId}/confirm`.
+3. Mobile calls `POST /api/mobile/prayers/requests`.
+4. Backend validates content, visibility, and ownership/readiness of referenced media.
+5. Backend snapshots visibility context:
    - `circleId` for `CIRCLE`
    - `churchRef` for `CHURCH`
    - `serviceCountryCode` for `COMMUNITY`
-5. Backend saves a `REQUEST` post directly as `PUBLISHED`.
-6. Feed counters start at zero and the post becomes visible according to its scope.
+6. Backend saves a `REQUEST` post directly as `PUBLISHED`.
+7. Feed counters start at zero and the post becomes visible according to its scope.
 
 ### Flow C: support another user
 
@@ -175,7 +176,7 @@ Recommended metrics:
 - admin official posts
 - admin daily prayer publication
 - internal deep-link payloads for official posts
-- media references only, using existing media upload flow
+- media references plus a prayer-scoped upload intent backed by the existing media upload flow
 
 ### Explicitly out of scope for MVP
 
@@ -216,6 +217,11 @@ Recommended metrics:
 - Exactly one Support may exist for a `(postId, accountHolderId)` pair.
 - Comment creation is append-only in MVP.
 - All referenced media files must be `READY` and belong to the target account holder.
+- Prayer post media attachment validation must reject duplicate media refs on the same post request payload.
+- Prayer media usage must match MIME type family:
+  - `COVER` and `INLINE` accept image or video media
+  - `AUDIO` accepts audio media
+  - `ATTACHMENT` accepts any non-empty content type on a ready public prayer media file
 - Post detail and interaction endpoints must not leak inaccessible post existence; invisibility is handled as `404`.
 - Daily prayer completion is unique per `(accountHolderId, prayerDate)`.
 - Daily mission progress is unique per `(accountHolderId, missionDate, missionCode)`.
@@ -687,8 +693,10 @@ Recommended additions to `NotificationType`:
 
 - `PRAYER_SUPPORT_RECEIVED`
 - `PRAYER_COMMENT_RECEIVED`
-- `PRAYER_DAILY_REMINDER`
-- `PRAYER_STREAK_MILESTONE`
+- keep existing `PRAYER_REMINDER` for daily-prayer availability and reminder compatibility
+- `PRAYER_STREAK_AT_RISK`
+- `PRAYER_OFFICIAL_CONTENT_PUBLISHED`
+- keep `CIRCLE_PRAYED` deprecated only for backward compatibility; no new Business Prayer flow should emit it
 
 ### MVP anti-noise policy
 
@@ -704,6 +712,17 @@ Recommended additions to `NotificationType`:
 - Skip users with no active push token and no in-app delivery target.
 - Persist actual delivery attempts through the existing notifications module.
 
+### Notification payload shape for MVP
+
+- `type`
+- `title`
+- `message`
+- optional `targetId`
+- optional `deepLink`
+  - `routeKey`
+  - `label`
+  - `params`
+
 ## 11. Streak and Daily Mission Logic
 
 ### Prayer day boundary
@@ -715,6 +734,8 @@ Recommended additions to `NotificationType`:
 ### Streak rule
 
 - A streak day is earned only when `daily/current/complete` succeeds for that local date.
+- `daily/current/complete` accepts MVP response types `PRAYED` and `AMEN`.
+- If the response payload is omitted for backward compatibility, backend treats the completion as `PRAYED`.
 - Multiple completions on the same day do not increment streak again.
 - If the user completes on consecutive local dates, streak increments by one.
 - If the user skips one or more local dates, current streak resets to one on the next completion.
@@ -737,6 +758,34 @@ Recommended additions to `NotificationType`:
 - Missions are generated lazily for the current local day when dashboard is requested or a tracked action occurs.
 - Previous day unfinished missions become `EXPIRED`.
 - Completed missions remain queryable historically only if later reporting is added; MVP dashboard returns current day only.
+
+### MVP prayer suggestion model
+
+- Home prayer suggestion stays controlled and curated for MVP. No opaque real-time generative AI is required.
+- Source priority:
+  - current published daily prayer if it exists and the user has not yet responded for the local date
+  - otherwise an active curated suggestion template
+- Curated template storage supports:
+  - `templateKey`
+  - `title`
+  - `content`
+  - `category`
+  - optional flat `tags`
+  - `audioStatus`
+  - optional `audioUrl`
+- Initial categories:
+  - `BUSINESS_WISDOM`
+  - `PROVISION`
+  - `COURAGE`
+  - `UNITY`
+  - `DISCIPLINE`
+  - `GRATITUDE`
+- Anti-repetition rule:
+  - selection must avoid replaying the same curated template shown on the immediately previous local day when alternatives exist
+- MVP relevance hints:
+  - financing need biases toward `PROVISION` and `BUSINESS_WISDOM`
+  - no circle biases toward `UNITY` and `COURAGE`
+  - no active membership biases toward `DISCIPLINE`
 
 ## 12. Deep Link Model
 

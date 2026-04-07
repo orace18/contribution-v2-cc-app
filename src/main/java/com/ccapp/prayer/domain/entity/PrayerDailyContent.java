@@ -12,6 +12,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -30,6 +31,8 @@ import java.util.UUID;
 @Entity
 @Table(name = "prayer_daily_contents", indexes = {
         @Index(name = "idx_prayer_daily_contents_date_status", columnList = "prayer_date, status")
+}, uniqueConstraints = {
+        @UniqueConstraint(name = "uk_prayer_daily_contents_prayer_date", columnNames = "prayer_date")
 })
 public class PrayerDailyContent extends AuditableEntity {
 

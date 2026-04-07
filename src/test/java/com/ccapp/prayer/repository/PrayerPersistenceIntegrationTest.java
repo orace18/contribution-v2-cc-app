@@ -9,6 +9,7 @@ import com.ccapp.prayer.domain.entity.PrayerDailyMissionDefinition;
 import com.ccapp.prayer.domain.entity.PrayerEngagementDailyCheckin;
 import com.ccapp.prayer.domain.entity.PrayerPost;
 import com.ccapp.prayer.domain.entity.PrayerPostMediaRef;
+import com.ccapp.prayer.domain.entity.PrayerSuggestionTemplate;
 import com.ccapp.prayer.domain.entity.PrayerSupport;
 import com.ccapp.prayer.domain.entity.PrayerUserDailyMission;
 import com.ccapp.prayer.domain.enums.PrayerDailyMissionCode;
@@ -18,6 +19,8 @@ import com.ccapp.prayer.domain.enums.PrayerDailyPrayerStatus;
 import com.ccapp.prayer.domain.enums.PrayerMediaUsageType;
 import com.ccapp.prayer.domain.enums.PrayerPostLifecycleStatus;
 import com.ccapp.prayer.domain.enums.PrayerPostType;
+import com.ccapp.prayer.domain.enums.PrayerSuggestionAudioStatus;
+import com.ccapp.prayer.domain.enums.PrayerSuggestionCategory;
 import com.ccapp.prayer.domain.enums.PrayerSupportType;
 import com.ccapp.prayer.domain.enums.PrayerVisibilityScope;
 import org.junit.jupiter.api.Test;
@@ -60,6 +63,8 @@ class PrayerPersistenceIntegrationTest {
     private PrayerDailyMissionDefinitionRepository prayerDailyMissionDefinitionRepository;
     @Autowired
     private PrayerUserDailyMissionRepository prayerUserDailyMissionRepository;
+    @Autowired
+    private PrayerSuggestionTemplateRepository prayerSuggestionTemplateRepository;
 
     @Test
     void shouldPersistPrayerPhase1MvpAggregates() {
@@ -128,7 +133,7 @@ class PrayerPersistenceIntegrationTest {
                 .actorUserId(actorUserId)
                 .prayerDate(prayerDate)
                 .timezone("Africa/Porto-Novo")
-                .responseType(PrayerDailyPrayerResponseType.COMPLETED)
+                .responseType(PrayerDailyPrayerResponseType.PRAYED)
                 .build());
 
         prayerEngagementDailyCheckinRepository.save(PrayerEngagementDailyCheckin.builder()
@@ -136,7 +141,7 @@ class PrayerPersistenceIntegrationTest {
                 .actorUserId(actorUserId)
                 .localDate(prayerDate)
                 .timezone("Africa/Porto-Novo")
-                .responseType(PrayerDailyPrayerResponseType.COMPLETED)
+                .responseType(PrayerDailyPrayerResponseType.PRAYED)
                 .sourceReferenceId(dailyContent.getId())
                 .build());
 
@@ -158,6 +163,17 @@ class PrayerPersistenceIntegrationTest {
                 .targetValue(1)
                 .build());
 
+        prayerSuggestionTemplateRepository.save(PrayerSuggestionTemplate.builder()
+                .templateKey("BUSINESS_WISDOM_PLANNING")
+                .title("Sagesse pour tes decisions")
+                .content("Seigneur, guide mes choix aujourd hui.")
+                .category(PrayerSuggestionCategory.BUSINESS_WISDOM)
+                .tagsCsv("business,wisdom")
+                .audioStatus(PrayerSuggestionAudioStatus.PLACEHOLDER)
+                .active(true)
+                .sortOrder(10)
+                .build());
+
         assertEquals(1L, prayerAmenRepository.countByPostId(post.getId()));
         assertTrue(prayerAmenRepository.existsByPostIdAndAccountHolderId(post.getId(), authorAccountHolderId));
         assertEquals(1L, prayerSupportRepository.countByPostId(post.getId()));
@@ -174,5 +190,6 @@ class PrayerPersistenceIntegrationTest {
                 .findByAccountHolderIdAndMissionDateOrderByMissionCodeAsc(authorAccountHolderId, prayerDate);
         assertEquals(1, missions.size());
         assertEquals(PrayerDailyMissionStatus.COMPLETED, missions.getFirst().getStatus());
+        assertEquals(1, prayerSuggestionTemplateRepository.findByActiveTrueOrderBySortOrderAscIdAsc().size());
     }
 }

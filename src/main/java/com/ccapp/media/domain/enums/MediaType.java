@@ -7,5 +7,6 @@ public enum MediaType {
     KYC_SELFIE,
     GENERIC_PUBLIC,
     GENERIC_PRIVATE,
-    CIRCLE_CHAT   // images, vidéos, audios envoyés dans le chat de cercle
+    PRAYER_POST,
+    CIRCLE_CHAT // images, videos, audios sent in circle chat
 }

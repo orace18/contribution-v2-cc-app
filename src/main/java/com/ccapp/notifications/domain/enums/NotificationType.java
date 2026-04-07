@@ -21,6 +21,10 @@ public enum NotificationType {
 
     // Prayer
     PRAYER_REMINDER,
+    PRAYER_SUPPORT_RECEIVED,
+    PRAYER_COMMENT_RECEIVED,
+    PRAYER_STREAK_AT_RISK,
+    PRAYER_OFFICIAL_CONTENT_PUBLISHED,
     /**
      * @deprecated Legacy circle/community prayer notification. Replace with Business Prayer support notifications.
      */

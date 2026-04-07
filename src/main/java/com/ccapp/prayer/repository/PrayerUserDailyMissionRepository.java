@@ -2,6 +2,7 @@ package com.ccapp.prayer.repository;
 
 import com.ccapp.prayer.domain.entity.PrayerUserDailyMission;
 import com.ccapp.prayer.domain.enums.PrayerDailyMissionCode;
+import com.ccapp.prayer.domain.enums.PrayerDailyMissionStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.time.LocalDate;
@@ -17,5 +18,11 @@ public interface PrayerUserDailyMissionRepository extends JpaRepository<PrayerUs
             UUID accountHolderId,
             LocalDate missionDate,
             PrayerDailyMissionCode missionCode
+    );
+
+    List<PrayerUserDailyMission> findByAccountHolderIdAndMissionDateBeforeAndStatusOrderByMissionDateAscMissionCodeAsc(
+            UUID accountHolderId,
+            LocalDate missionDate,
+            PrayerDailyMissionStatus status
     );
 }

@@ -11,6 +11,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -27,6 +28,8 @@ import java.util.UUID;
 @Entity
 @Table(name = "prayer_daily_mission_definitions", indexes = {
         @Index(name = "idx_prayer_daily_mission_definitions_active_sort", columnList = "active, sort_order")
+}, uniqueConstraints = {
+        @UniqueConstraint(name = "uk_prayer_daily_mission_definitions_code", columnNames = "mission_code")
 })
 public class PrayerDailyMissionDefinition extends AuditableEntity {
 

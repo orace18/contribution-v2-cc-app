@@ -90,6 +90,60 @@ paths:
         '500':
           $ref: '#/components/responses/InternalServerErrorResponse'
 
+  /api/mobile/prayers/media/upload-url:
+    post:
+      tags:
+        - Prayer Mobile
+      operationId: createPrayerMediaUploadUrl
+      summary: Create a presigned upload URL for prayer post media
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PrayerCreateMediaUploadRequest'
+      responses:
+        '200':
+          description: Prayer media upload URL generated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrayerMediaUploadEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequestResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedResponse'
+        '403':
+          $ref: '#/components/responses/ForbiddenResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerErrorResponse'
+
+  /api/mobile/prayers/media/{mediaId}/confirm:
+    post:
+      tags:
+        - Prayer Mobile
+      operationId: confirmPrayerMediaUpload
+      summary: Confirm an uploaded prayer post media file
+      parameters:
+        - $ref: '#/components/parameters/MediaIdParam'
+      responses:
+        '200':
+          description: Prayer media upload confirmed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrayerMediaUploadConfirmationEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequestResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedResponse'
+        '403':
+          $ref: '#/components/responses/ForbiddenResponse'
+        '404':
+          $ref: '#/components/responses/NotFoundResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerErrorResponse'
+
   /api/mobile/prayers/posts/{postId}:
     get:
       tags:
@@ -254,6 +308,15 @@ paths:
       summary: Record completion of today's daily prayer
       parameters:
         - $ref: '#/components/parameters/TimezoneParam'
+      requestBody:
+        required: false
+        description: >
+          Optional explicit response type for the daily prayer. If omitted, the backend defaults
+          to `PRAYED` for backward compatibility with earlier generic completion clients.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompleteDailyPrayerRequest'
       responses:
         '200':
           description: Daily prayer completed for the local day
@@ -672,6 +735,13 @@ components:
       schema:
         type: string
         format: uuid
+    MediaIdParam:
+      name: mediaId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
     TimezoneParam:
       name: timezone
       in: query
@@ -797,6 +867,12 @@ components:
         - ACCOUNT_HOLDER
         - ADMIN_PLATFORM
 
+    PrayerDailyPrayerResponseType:
+      type: string
+      enum:
+        - PRAYED
+        - AMEN
+
     DailyMissionCode:
       type: string
       enum:
@@ -830,6 +906,14 @@ components:
         - INLINE
         - AUDIO
         - ATTACHMENT
+
+    MediaUploadStatus:
+      type: string
+      enum:
+        - PENDING_UPLOAD
+        - READY
+        - FAILED
+        - DELETED
 
     PrayerAuthorResponse:
       type: object
@@ -1080,10 +1164,22 @@ components:
             $ref: '#/components/schemas/PrayerMediaRefResponse'
         completedToday:
           type: boolean
+        todayResponseType:
+          allOf:
+            - $ref: '#/components/schemas/PrayerDailyPrayerResponseType'
+          nullable: true
         publishedAt:
           type: string
           format: date-time
           nullable: true
+
+    CompleteDailyPrayerRequest:
+      type: object
+      required:
+        - responseType
+      properties:
+        responseType:
+          $ref: '#/components/schemas/PrayerDailyPrayerResponseType'
 
     DailyPrayerCompletionResponse:
       type: object
@@ -1091,6 +1187,7 @@ components:
         - dailyPrayerId
         - prayerDate
         - completedAt
+        - responseType
         - currentStreak
         - longestStreak
       properties:
@@ -1103,6 +1200,8 @@ components:
         completedAt:
           type: string
           format: date-time
+        responseType:
+          $ref: '#/components/schemas/PrayerDailyPrayerResponseType'
         currentStreak:
           type: integer
           minimum: 1
@@ -1257,6 +1356,76 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/PrayerMediaAttachmentInput'
+
+    PrayerCreateMediaUploadRequest:
+      type: object
+      required:
+        - contentType
+        - size
+      properties:
+        contentType:
+          type: string
+          minLength: 1
+          maxLength: 128
+          example: image/jpeg
+        size:
+          type: integer
+          format: int64
+          minimum: 1
+          example: 1024
+        originalFileName:
+          type: string
+          nullable: true
+          maxLength: 255
+          example: storefront.jpg
+
+    PrayerCreateMediaUploadResponse:
+      type: object
+      required:
+        - mediaFileId
+        - uploadUrl
+        - expiresAt
+        - bucket
+        - objectKey
+      properties:
+        mediaFileId:
+          type: string
+          format: uuid
+        uploadUrl:
+          type: string
+          format: uri
+        expiresAt:
+          type: string
+          format: date-time
+        bucket:
+          type: string
+        objectKey:
+          type: string
+
+    PrayerMediaUploadConfirmationResponse:
+      type: object
+      required:
+        - mediaFileId
+        - contentType
+        - size
+        - status
+        - createdAt
+      properties:
+        mediaFileId:
+          type: string
+          format: uuid
+        contentType:
+          type: string
+          example: image/jpeg
+        size:
+          type: integer
+          format: int64
+          minimum: 1
+        status:
+          $ref: '#/components/schemas/MediaUploadStatus'
+        createdAt:
+          type: string
+          format: date-time
 
     CreatePrayerCommentRequest:
       type: object
@@ -1654,6 +1823,46 @@ components:
           example: Prayer post
         data:
           $ref: '#/components/schemas/PrayerPostResponse'
+        timestamp:
+          type: string
+          format: date-time
+
+    PrayerMediaUploadEnvelope:
+      type: object
+      required:
+        - success
+        - message
+        - data
+        - timestamp
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: Prayer media upload URL generated
+        data:
+          $ref: '#/components/schemas/PrayerCreateMediaUploadResponse'
+        timestamp:
+          type: string
+          format: date-time
+
+    PrayerMediaUploadConfirmationEnvelope:
+      type: object
+      required:
+        - success
+        - message
+        - data
+        - timestamp
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: Prayer media upload confirmed
+        data:
+          $ref: '#/components/schemas/PrayerMediaUploadConfirmationResponse'
         timestamp:
           type: string
           format: date-time

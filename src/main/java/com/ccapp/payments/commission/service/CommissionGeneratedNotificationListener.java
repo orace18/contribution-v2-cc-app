@@ -35,6 +35,8 @@ public class CommissionGeneratedNotificationListener implements DomainEventListe
                     null,
                     "Commission generated: " + event.amount() + " " + event.currency(),
                     null,
+                    null,
+                    null,
                     true
             )));
         } catch (RuntimeException ex) {

@@ -17,6 +17,8 @@ public record NotificationResponse(
         String templateCode,
         String title,
         String message,
+        String targetId,
+        NotificationDeepLinkResponse deepLink,
         NotificationStatus status,
         OffsetDateTime createdAt,
         OffsetDateTime sentAt,

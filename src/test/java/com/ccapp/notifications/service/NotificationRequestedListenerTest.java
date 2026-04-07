@@ -3,6 +3,7 @@ package com.ccapp.notifications.service;
 import com.ccapp.notifications.domain.enums.NotificationChannel;
 import com.ccapp.notifications.domain.enums.NotificationType;
 import com.ccapp.notifications.dto.CreateNotificationRequest;
+import com.ccapp.notifications.dto.NotificationDeepLinkRequest;
 import com.ccapp.notifications.event.NotificationRequestedEvent;
 import com.ccapp.common.events.IdempotentEventListenerExecutor;
 import org.junit.jupiter.api.Test;
@@ -46,6 +47,8 @@ class NotificationRequestedListenerTest {
                 "AGENT_ACTION_ASSISTED_SESSION",
                 "message",
                 null,
+                "target-123",
+                new NotificationDeepLinkRequest("DASHBOARD", "Open", java.util.Map.of("tab", "home")),
                 true
         );
 
@@ -66,6 +69,8 @@ class NotificationRequestedListenerTest {
         assertEquals(event.channel(), request.channel());
         assertEquals(event.templateCode(), request.templateCode());
         assertEquals(event.message(), request.message());
+        assertEquals(event.targetId(), request.targetId());
+        assertEquals(event.deepLink(), request.deepLink());
         assertEquals(event.sendNow(), request.sendNow());
     }
 

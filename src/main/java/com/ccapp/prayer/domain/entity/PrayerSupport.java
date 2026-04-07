@@ -11,6 +11,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -29,6 +30,8 @@ import java.util.UUID;
 @Table(name = "prayer_supports", indexes = {
         @Index(name = "idx_prayer_supports_post_account", columnList = "post_id, account_holder_id"),
         @Index(name = "idx_prayer_supports_account_created", columnList = "account_holder_id, created_at")
+}, uniqueConstraints = {
+        @UniqueConstraint(name = "uk_prayer_supports_post_account", columnNames = {"post_id", "account_holder_id"})
 })
 public class PrayerSupport {
 

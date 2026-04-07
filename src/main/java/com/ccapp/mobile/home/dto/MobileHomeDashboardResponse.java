@@ -1,5 +1,7 @@
 package com.ccapp.mobile.home.dto;
 
+import com.ccapp.prayer.dto.PrayerHomeSuggestionResponse;
+
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -11,7 +13,8 @@ public record MobileHomeDashboardResponse(
         NextActionSection nextAction,
         CircleSection circle,
         List<QuickAction> quickActions,
-        FinancingSection financing
+        FinancingSection financing,
+        PrayerHomeSuggestionResponse prayerSuggestion
 ) {
     public record UserSection(
             String firstName,
