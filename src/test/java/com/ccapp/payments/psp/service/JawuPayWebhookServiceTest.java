@@ -207,6 +207,7 @@ class JawuPayWebhookServiceTest {
         JawuPayWebhookRequest request = new JawuPayWebhookRequest(
                 "JAWUPAY",
                 "SUCCESS",
+                null,
                 PAYMENT_ID,
                 null,
                 null,
@@ -241,6 +242,7 @@ class JawuPayWebhookServiceTest {
         JawuPayWebhookRequest request = new JawuPayWebhookRequest(
                 "JAWUPAY",
                 "SUCCESS",
+                null,
                 PAYMENT_ID,
                 null,
                 null,
@@ -265,6 +267,7 @@ class JawuPayWebhookServiceTest {
         JawuPayWebhookRequest request = new JawuPayWebhookRequest(
                 "JAWUPAY",
                 "SUCCESS",
+                null,
                 PAYMENT_ID,
                 null,
                 null,
@@ -624,6 +627,7 @@ class JawuPayWebhookServiceTest {
         return new JawuPayWebhookRequest(
                 provider,
                 status,
+                null,
                 paymentId,
                 payoutId,
                 null,

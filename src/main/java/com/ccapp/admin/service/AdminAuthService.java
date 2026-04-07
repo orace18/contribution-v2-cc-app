@@ -104,11 +104,13 @@ public class AdminAuthService {
 
         String code = request.code();
         if (code == null || code.isBlank()) {
+            String otpAuthUri = totpService.buildOtpAuthUri(adminUser.getEmail(), adminUser.getTwoFactorSecret());
             log.info("Admin setup-2fa challenge issued adminUserId={}", adminUser.getId());
             return new AdminSetupTwoFactorResponse(
                     adminUser.isTwoFactorEnabled(),
                     adminUser.getTwoFactorSecret(),
-                    totpService.buildOtpAuthUri(adminUser.getEmail(), adminUser.getTwoFactorSecret()),
+                    otpAuthUri,
+                    totpService.buildQrCodeDataUrl(otpAuthUri),
                     null,
                     null,
                     0L
@@ -132,6 +134,7 @@ public class AdminAuthService {
         log.info("Admin setup-2fa success adminUserId={}", adminUser.getId());
         return new AdminSetupTwoFactorResponse(
                 true,
+                null,
                 null,
                 null,
                 accessToken,

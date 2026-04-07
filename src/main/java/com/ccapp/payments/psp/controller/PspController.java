@@ -127,18 +127,36 @@ public class PspController {
 
     private JawuPayWebhookRequest parseRequest(byte[] rawRequestBody) {
         try {
-            JawuPayWebhookRequest request = objectMapper.readValue(rawRequestBody, JawuPayWebhookRequest.class);
-            if (request.provider() == null || request.provider().isBlank()) {
-                throw new BusinessException("provider is required");
-            }
-            if (request.status() == null || request.status().isBlank()) {
+            JawuPayWebhookRequest raw = objectMapper.readValue(rawRequestBody, JawuPayWebhookRequest.class);
+            String provider = (raw.provider() != null && !raw.provider().isBlank())
+                    ? raw.provider()
+                    : "JAWUPAY";
+            String status = (raw.status() != null && !raw.status().isBlank())
+                    ? raw.status()
+                    : deriveStatusFromEvent(raw.event());
+            if (status == null) {
                 throw new BusinessException("status is required");
             }
-            return request;
+            return new JawuPayWebhookRequest(provider, status, raw.event(),
+                    raw.paymentId(), raw.payoutId(), raw.reference(),
+                    raw.providerReference(), raw.operationId(),
+                    raw.amount(), raw.currency(), raw.eventId());
         } catch (BusinessException ex) {
             throw ex;
         } catch (Exception ex) {
             throw new BusinessException("Invalid JawuPay webhook payload");
         }
+    }
+
+    private String deriveStatusFromEvent(String event) {
+        if (event == null || event.isBlank()) {
+            return null;
+        }
+        return switch (event.trim().toLowerCase(Locale.ROOT)) {
+            case "payment.succeeded", "payment.completed", "payment.paid" -> "SUCCESS";
+            case "payment.failed", "payment.declined", "payment.rejected",
+                 "payment.cancelled", "payment.canceled", "payment.expired" -> "FAILED";
+            default -> null;
+        };
     }
 }

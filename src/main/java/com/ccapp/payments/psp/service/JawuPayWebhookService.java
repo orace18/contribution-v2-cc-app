@@ -79,6 +79,9 @@ public class JawuPayWebhookService {
     @Value("${psp.jawupay.mock-enabled:false}")
     private boolean mockEnabled;
 
+    @Value("${psp.jawupay.webhook.skip-validation:false}")
+    private boolean webhookSkipValidation;
+
     private Set<String> allowedIps;
     private byte[] webhookHmacSecretBytes;
 
@@ -88,11 +91,11 @@ public class JawuPayWebhookService {
                 .map(String::trim)
                 .filter(ip -> !ip.isEmpty())
                 .collect(Collectors.toUnmodifiableSet());
-        if (!mockEnabled && allowedIps.isEmpty()) {
+        if (!mockEnabled && !webhookSkipValidation && allowedIps.isEmpty()) {
             throw new IllegalStateException("psp.jawupay.webhook.allowedIps must not be empty");
         }
         String normalizedSecret = normalizeIdentifier(webhookHmacSecret);
-        if (!mockEnabled && normalizedSecret == null) {
+        if (!mockEnabled && !webhookSkipValidation && normalizedSecret == null) {
             throw new IllegalStateException("psp.jawupay.webhook.hmac-secret must not be empty");
         }
         if (normalizedSecret != null) {
@@ -125,7 +128,11 @@ public class JawuPayWebhookService {
                 .orElseThrow(() -> new BusinessException("Operation not found for JawuPay webhook identifiers"));
 
         validateOperationIdIfPresent(request.operationId(), operation.getId());
-        verifyAmountCurrencyMatch(operation, requireAmount(request.amount()), requireCurrency(request.currency()));
+        if (request.amount() != null && request.amount() > 0) {
+            verifyAmountCurrencyMatch(operation, request.amount(), requireCurrency(request.currency()));
+        } else {
+            log.warn("Webhook amount/currency not provided, skipping amount check operationId={} paymentId={}", operation.getId(), paymentId);
+        }
         recordWebhookEvent(request, operation, paymentId, payoutId, providerReference);
 
         String auditPayload = buildAuditPayload(request, remoteIp, "RECEIVED", null);
@@ -680,6 +687,9 @@ public class JawuPayWebhookService {
     }
 
     private void validateIp(String remoteIp) {
+        if (mockEnabled || webhookSkipValidation) {
+            return;
+        }
         if (!allowedIps.contains(remoteIp)) {
             log.warn("Webhook blocked: ip={} not in allowlist", remoteIp);
             throw new AccessDeniedException("Webhook request from unauthorized IP: " + remoteIp);
@@ -689,6 +699,10 @@ public class JawuPayWebhookService {
     private void validateSignature(byte[] rawRequestBody,
                                    String signatureHeader,
                                    String remoteIp) {
+        if (mockEnabled || webhookSkipValidation) {
+            log.warn("Webhook signature validation skipped: skip-validation={} mock={} remoteIp={}", webhookSkipValidation, mockEnabled, remoteIp);
+            return;
+        }
         if (rawRequestBody == null || rawRequestBody.length == 0) {
             log.warn("Webhook blocked: empty body during signature verification remoteIp={}", remoteIp);
             throw new AccessDeniedException(INVALID_SIGNATURE_MESSAGE);

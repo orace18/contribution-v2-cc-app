@@ -4,16 +4,14 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="fix: rebuild">
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/media/controller/DevMediaController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/media/controller/DevMediaController.java" afterDir="false" />
-    </list>
+    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="fix: update config" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
   <component name="EmbeddingIndexingInfo">
-    <option name="cachedIndexableFilesCount" value="1339" />
+    <option name="cachedIndexableFilesCount" value="1371" />
   </component>
   <component name="FileTemplateManagerImpl">
     <option name="RECENT_TEMPLATES">
@@ -143,70 +141,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1772553173766</updated>
-    </task>
-    <task id="LOCAL-00085" summary="rebuild">
-      <option name="closed" value="true" />
-      <created>1774868581771</created>
-      <option name="number" value="00085" />
-      <option name="presentableId" value="LOCAL-00085" />
-      <option name="project" value="LOCAL" />
-      <updated>1774868581771</updated>
-    </task>
-    <task id="LOCAL-00086" summary="fix @Lob sur PostgreSQL mappe vers oid mais la colonne en DB est TEXT">
-      <option name="closed" value="true" />
-      <created>1774881316390</created>
-      <option name="number" value="00086" />
-      <option name="presentableId" value="LOCAL-00086" />
-      <option name="project" value="LOCAL" />
-      <updated>1774881316390</updated>
-    </task>
-    <task id="LOCAL-00087" summary="fix context path">
-      <option name="closed" value="true" />
-      <created>1774881893985</created>
-      <option name="number" value="00087" />
-      <option name="presentableId" value="LOCAL-00087" />
-      <option name="project" value="LOCAL" />
-      <updated>1774881893985</updated>
-    </task>
-    <task id="LOCAL-00088" summary="ticket 3">
-      <option name="closed" value="true" />
-      <created>1774882828399</created>
-      <option name="number" value="00088" />
-      <option name="presentableId" value="LOCAL-00088" />
-      <option name="project" value="LOCAL" />
-      <updated>1774882828399</updated>
-    </task>
-    <task id="LOCAL-00089" summary="ticket 4">
-      <option name="closed" value="true" />
-      <created>1774883474877</created>
-      <option name="number" value="00089" />
-      <option name="presentableId" value="LOCAL-00089" />
-      <option name="project" value="LOCAL" />
-      <updated>1774883474877</updated>
-    </task>
-    <task id="LOCAL-00090" summary="ticket 5">
-      <option name="closed" value="true" />
-      <created>1774884025061</created>
-      <option name="number" value="00090" />
-      <option name="presentableId" value="LOCAL-00090" />
-      <option name="project" value="LOCAL" />
-      <updated>1774884025061</updated>
-    </task>
-    <task id="LOCAL-00091" summary="ticket 6">
-      <option name="closed" value="true" />
-      <created>1774884516328</created>
-      <option name="number" value="00091" />
-      <option name="presentableId" value="LOCAL-00091" />
-      <option name="project" value="LOCAL" />
-      <updated>1774884516328</updated>
-    </task>
-    <task id="LOCAL-00092" summary="ip allowed">
-      <option name="closed" value="true" />
-      <created>1774956151019</created>
-      <option name="number" value="00092" />
-      <option name="presentableId" value="LOCAL-00092" />
-      <option name="project" value="LOCAL" />
-      <updated>1774956151022</updated>
     </task>
     <task id="LOCAL-00093" summary="Revue du FirebaseAdminTokenVerifier">
       <option name="closed" value="true" />
@@ -536,7 +470,71 @@
       <option name="project" value="LOCAL" />
       <updated>1775414366543</updated>
     </task>
-    <option name="localTasksCounter" value="134" />
+    <task id="LOCAL-00134" summary="fix: PUT /dev-media/{uuid}">
+      <option name="closed" value="true" />
+      <created>1775415775802</created>
+      <option name="number" value="00134" />
+      <option name="presentableId" value="LOCAL-00134" />
+      <option name="project" value="LOCAL" />
+      <updated>1775415775802</updated>
+    </task>
+    <task id="LOCAL-00135" summary="fix: webhook">
+      <option name="closed" value="true" />
+      <created>1775554767940</created>
+      <option name="number" value="00135" />
+      <option name="presentableId" value="LOCAL-00135" />
+      <option name="project" value="LOCAL" />
+      <updated>1775554767941</updated>
+    </task>
+    <task id="LOCAL-00136" summary="fix: webhook 1">
+      <option name="closed" value="true" />
+      <created>1775555349581</created>
+      <option name="number" value="00136" />
+      <option name="presentableId" value="LOCAL-00136" />
+      <option name="project" value="LOCAL" />
+      <updated>1775555349581</updated>
+    </task>
+    <task id="LOCAL-00137" summary="fix: webhook 1">
+      <option name="closed" value="true" />
+      <created>1775556412498</created>
+      <option name="number" value="00137" />
+      <option name="presentableId" value="LOCAL-00137" />
+      <option name="project" value="LOCAL" />
+      <updated>1775556412498</updated>
+    </task>
+    <task id="LOCAL-00138" summary="fix: webhook config revue">
+      <option name="closed" value="true" />
+      <created>1775560059095</created>
+      <option name="number" value="00138" />
+      <option name="presentableId" value="LOCAL-00138" />
+      <option name="project" value="LOCAL" />
+      <updated>1775560059095</updated>
+    </task>
+    <task id="LOCAL-00139" summary="fix: rebuild">
+      <option name="closed" value="true" />
+      <created>1775561018911</created>
+      <option name="number" value="00139" />
+      <option name="presentableId" value="LOCAL-00139" />
+      <option name="project" value="LOCAL" />
+      <updated>1775561018911</updated>
+    </task>
+    <task id="LOCAL-00140" summary="fix: update JawuPay HMAC secret fallback">
+      <option name="closed" value="true" />
+      <created>1775562743537</created>
+      <option name="number" value="00140" />
+      <option name="presentableId" value="LOCAL-00140" />
+      <option name="project" value="LOCAL" />
+      <updated>1775562743538</updated>
+    </task>
+    <task id="LOCAL-00141" summary="fix: update config">
+      <option name="closed" value="true" />
+      <created>1775563205811</created>
+      <option name="number" value="00141" />
+      <option name="presentableId" value="LOCAL-00141" />
+      <option name="project" value="LOCAL" />
+      <updated>1775563205812</updated>
+    </task>
+    <option name="localTasksCounter" value="142" />
     <servers />
   </component>
   <component name="UnknownFeatures">
@@ -567,12 +565,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="ticket 4" />
-    <MESSAGE value="ticket 5" />
-    <MESSAGE value="ticket 6" />
-    <MESSAGE value="ip allowed" />
-    <MESSAGE value="Revue du FirebaseAdminTokenVerifier" />
-    <MESSAGE value="Revue du JawuPayWebhookService" />
     <MESSAGE value="Retrait des logs de hibernate" />
     <MESSAGE value="Configuration firebase" />
     <MESSAGE value="Rebuild firebase" />
@@ -591,8 +583,14 @@
     <MESSAGE value="rebuild" />
     <MESSAGE value="fix: JawuPay valide la signature avec servletPath" />
     <MESSAGE value="fix: le payload signé" />
+    <MESSAGE value="fix: PUT /dev-media/{uuid}" />
+    <MESSAGE value="fix: webhook" />
+    <MESSAGE value="fix: webhook 1" />
+    <MESSAGE value="fix: webhook config revue" />
     <MESSAGE value="fix: rebuild" />
-    <option name="LAST_COMMIT_MESSAGE" value="fix: rebuild" />
+    <MESSAGE value="fix: update JawuPay HMAC secret fallback" />
+    <MESSAGE value="fix: update config" />
+    <option name="LAST_COMMIT_MESSAGE" value="fix: update config" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />

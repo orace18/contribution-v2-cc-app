@@ -5,11 +5,9 @@ import jakarta.validation.constraints.NotBlank;
 import java.util.UUID;
 
 public record JawuPayWebhookRequest(
-        @NotBlank(message = "provider is required")
         String provider,
-
-        @NotBlank(message = "status is required")
         String status,
+        String event,
 
         String paymentId,
         String payoutId,
@@ -26,7 +24,7 @@ public record JawuPayWebhookRequest(
                                  String paymentId,
                                  String payoutId,
                                  String reference) {
-        this(provider, status, paymentId, payoutId, reference, null, null, null, null, null);
+        this(provider, status, null, paymentId, payoutId, reference, null, null, null, null, null);
     }
 
     public boolean hasPrimaryReference() {
