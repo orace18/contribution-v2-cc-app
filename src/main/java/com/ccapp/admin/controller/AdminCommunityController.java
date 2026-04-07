@@ -1,10 +1,16 @@
 package com.ccapp.admin.controller;
 
+import com.ccapp.admin.security.AdminSecurityUtils;
 import com.ccapp.common.api.CommonResponse;
 import com.ccapp.community.dto.CommunityPostResponse;
 import com.ccapp.community.dto.CreateCommunityPostRequest;
 import com.ccapp.community.dto.FeatureCommunityPostRequest;
 import com.ccapp.community.service.CommunityAdminService;
+import com.ccapp.prayer.domain.enums.PrayerOfficialVisibilityScope;
+import com.ccapp.prayer.domain.enums.PrayerPostLifecycleStatus;
+import com.ccapp.prayer.dto.AdminCreatePrayerPostRequest;
+import com.ccapp.prayer.dto.AdminPrayerPostResponse;
+import com.ccapp.prayer.service.PrayerAdminPostService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
@@ -15,6 +21,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -33,11 +40,17 @@ import java.util.UUID;
 public class AdminCommunityController {
 
     private final CommunityAdminService communityAdminService;
+    private final PrayerAdminPostService prayerAdminPostService;
 
     @GetMapping
     @Operation(summary = "List all community posts")
     public ResponseEntity<CommonResponse<List<CommunityPostResponse>>> list() {
-        return ResponseEntity.ok(CommonResponse.success("Community posts", communityAdminService.listPosts()));
+        List<CommunityPostResponse> response = prayerAdminPostService.listPosts(0, 100, null, null).items().stream()
+                .map(this::toCommunityPost)
+                .toList();
+        return ResponseEntity.ok()
+                .headers(deprecationHeaders("/api/admin/prayers/posts"))
+                .body(CommonResponse.success("Community posts", response));
     }
 
     @PostMapping
@@ -47,8 +60,21 @@ public class AdminCommunityController {
             @ApiResponse(responseCode = "400", description = "Validation or business rule error", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
     })
     public ResponseEntity<CommonResponse<CommunityPostResponse>> create(@Valid @RequestBody CreateCommunityPostRequest request) {
-        CommunityPostResponse response = communityAdminService.create(request);
-        return ResponseEntity.ok(CommonResponse.success("Community post created", response));
+        AdminPrayerPostResponse created = prayerAdminPostService.createPost(
+                AdminSecurityUtils.currentAdminUserId(),
+                new AdminCreatePrayerPostRequest(
+                        request.title(),
+                        request.content(),
+                        mapLegacyVisibility(request.visibility()),
+                        resolveLegacyTargetCountryCode(request.visibility()),
+                        null,
+                        List.of(),
+                        null
+                )
+        );
+        return ResponseEntity.ok()
+                .headers(deprecationHeaders("/api/admin/prayers/posts"))
+                .body(CommonResponse.success("Community post created", toCommunityPost(created)));
     }
 
     @PostMapping("/{id}/feature")
@@ -67,8 +93,10 @@ public class AdminCommunityController {
     })
     public ResponseEntity<CommonResponse<CommunityPostResponse>> feature(@PathVariable UUID id,
                                                                          @Valid @RequestBody FeatureCommunityPostRequest request) {
-        CommunityPostResponse response = communityAdminService.feature(id, request.priority());
-        return ResponseEntity.ok(CommonResponse.success("Community post featured", response));
+        AdminPrayerPostResponse published = prayerAdminPostService.publishPost(AdminSecurityUtils.currentAdminUserId(), id);
+        return ResponseEntity.ok()
+                .headers(deprecationHeaders("/api/admin/prayers/posts/" + id + "/publish"))
+                .body(CommonResponse.success("Community post featured", toCommunityPost(published)));
     }
 
     @PostMapping("/{id}/unfeature")
@@ -85,7 +113,52 @@ public class AdminCommunityController {
             @ApiResponse(responseCode = "404", description = "Post not found", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
     })
     public ResponseEntity<CommonResponse<CommunityPostResponse>> unfeature(@PathVariable UUID id) {
-        CommunityPostResponse response = communityAdminService.unfeature(id);
-        return ResponseEntity.ok(CommonResponse.success("Community post unfeatured", response));
+        AdminPrayerPostResponse archived = prayerAdminPostService.archivePost(AdminSecurityUtils.currentAdminUserId(), id);
+        return ResponseEntity.ok()
+                .headers(deprecationHeaders("/api/admin/prayers/posts/" + id + "/archive"))
+                .body(CommonResponse.success("Community post unfeatured", toCommunityPost(archived)));
+    }
+
+    private CommunityPostResponse toCommunityPost(AdminPrayerPostResponse post) {
+        return new CommunityPostResponse(
+                post.id(),
+                post.title(),
+                post.content(),
+                null,
+                post.lifecycleStatus() == PrayerPostLifecycleStatus.PUBLISHED,
+                null,
+                post.publishedAt(),
+                0,
+                0,
+                false,
+                post.createdAt()
+        );
+    }
+
+    private PrayerOfficialVisibilityScope mapLegacyVisibility(String visibility) {
+        if (visibility == null || visibility.isBlank() || "PUBLIC".equalsIgnoreCase(visibility) || "GLOBAL".equalsIgnoreCase(visibility)) {
+            return PrayerOfficialVisibilityScope.GLOBAL;
+        }
+        if ("COMMUNITY".equalsIgnoreCase(visibility)) {
+            return PrayerOfficialVisibilityScope.COMMUNITY;
+        }
+        if ("CHURCH".equalsIgnoreCase(visibility)) {
+            return PrayerOfficialVisibilityScope.CHURCH;
+        }
+        return PrayerOfficialVisibilityScope.GLOBAL;
+    }
+
+    private String resolveLegacyTargetCountryCode(String visibility) {
+        if ("COMMUNITY".equalsIgnoreCase(visibility)) {
+            return AdminSecurityUtils.currentPrincipal().countryCode();
+        }
+        return null;
+    }
+
+    private HttpHeaders deprecationHeaders(String replacementRoute) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.add("X-Deprecated-Route", "true");
+        headers.add("X-Replacement-Route", replacementRoute);
+        return headers;
     }
 }

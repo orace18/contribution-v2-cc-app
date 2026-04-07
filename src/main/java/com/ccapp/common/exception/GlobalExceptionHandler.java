@@ -69,7 +69,10 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<CommonResponse<Void>> handleAccessDenied(AccessDeniedException ex) {
-        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(CommonResponse.error("Access denied"));
+        String message = (ex.getMessage() == null || ex.getMessage().isBlank())
+                ? "Access denied"
+                : ex.getMessage();
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(CommonResponse.error(message));
     }
 
     @ExceptionHandler(NoResourceFoundException.class)

@@ -12,6 +12,7 @@ import com.ccapp.prayer.dto.PrayerCommentResponse;
 import com.ccapp.prayer.dto.PrayerDashboardResponse;
 import com.ccapp.prayer.dto.PrayerInteractionResponse;
 import com.ccapp.prayer.dto.PrayerPostResponse;
+import com.ccapp.prayer.dto.UpdatePrayerRequest;
 import com.ccapp.prayer.service.PrayerMobileService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -24,6 +25,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -78,6 +80,26 @@ public class PrayerMobileController {
         UUID accountHolderId = SecurityUtils.currentAccountHolderId();
         PrayerPostResponse response = prayerMobileService.getPrayerPost(principal.userId(), accountHolderId, postId);
         return ResponseEntity.ok(CommonResponse.success("Prayer post", response));
+    }
+
+    @PatchMapping("/posts/{postId}")
+    @Operation(summary = "Update the current user's prayer request")
+    public ResponseEntity<CommonResponse<PrayerPostResponse>> updatePrayerPost(
+            @PathVariable UUID postId,
+            @Valid @RequestBody UpdatePrayerRequest request) {
+        AuthenticatedPrincipal principal = SecurityUtils.currentPrincipal();
+        UUID accountHolderId = SecurityUtils.currentAccountHolderId();
+        PrayerPostResponse response = prayerMobileService.updatePrayerRequest(principal.userId(), accountHolderId, postId, request);
+        return ResponseEntity.ok(CommonResponse.success("Prayer post updated", response));
+    }
+
+    @PostMapping("/posts/{postId}/archive")
+    @Operation(summary = "Archive the current user's prayer request")
+    public ResponseEntity<CommonResponse<PrayerPostResponse>> archivePrayerPost(@PathVariable UUID postId) {
+        AuthenticatedPrincipal principal = SecurityUtils.currentPrincipal();
+        UUID accountHolderId = SecurityUtils.currentAccountHolderId();
+        PrayerPostResponse response = prayerMobileService.archivePrayerRequest(principal.userId(), accountHolderId, postId);
+        return ResponseEntity.ok(CommonResponse.success("Prayer post archived", response));
     }
 
     @PutMapping("/posts/{postId}/amen")
