@@ -56,4 +56,10 @@ public class ShopProduct {
     @Column(name = "active", nullable = false)
     @Builder.Default
     private boolean active = true;
+
+    @Column(name = "category", length = 128)
+    private String category;
+
+    @Column(name = "image_url", length = 512)
+    private String imageUrl;
 }

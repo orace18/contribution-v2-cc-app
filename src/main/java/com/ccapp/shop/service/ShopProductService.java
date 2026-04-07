@@ -45,6 +45,8 @@ public class ShopProductService {
                 .commissionPercent(request.commissionPercent())
                 .cvValue(request.cvValue())
                 .active(request.active() == null || request.active())
+                .category(request.category() != null ? request.category().trim() : null)
+                .imageUrl(request.imageUrl() != null ? request.imageUrl().trim() : null)
                 .build());
         return toResponse(saved);
     }
@@ -61,11 +63,13 @@ public class ShopProductService {
                 product.getMerchantId(),
                 product.getName(),
                 product.getDescription(),
+                product.getCategory(),
                 product.getPrice(),
                 product.getCurrency(),
                 product.getCommissionPercent(),
                 product.getCvValue(),
-                product.isActive()
+                product.isActive(),
+                product.getImageUrl()
         );
     }
 }

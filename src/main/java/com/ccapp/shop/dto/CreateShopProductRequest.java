@@ -37,6 +37,12 @@ public record CreateShopProductRequest(
         @Digits(integer = 15, fraction = 4, message = "cvValue precision is invalid")
         BigDecimal cvValue,
 
-        Boolean active
+        Boolean active,
+
+        @Size(max = 128, message = "category max size is 128")
+        String category,
+
+        @Size(max = 512, message = "imageUrl max size is 512")
+        String imageUrl
 ) {
 }

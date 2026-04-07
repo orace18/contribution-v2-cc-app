@@ -8,10 +8,12 @@ public record ShopProductResponse(
         UUID merchantId,
         String name,
         String description,
+        String category,
         BigDecimal price,
         String currency,
         BigDecimal commissionPercent,
         BigDecimal cvValue,
-        boolean active
+        boolean active,
+        String imageUrl
 ) {
 }
