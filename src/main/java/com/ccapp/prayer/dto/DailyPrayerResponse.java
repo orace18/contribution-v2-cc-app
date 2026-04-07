@@ -1,5 +1,7 @@
 package com.ccapp.prayer.dto;
 
+import com.ccapp.prayer.domain.enums.PrayerDailyPrayerResponseType;
+
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -13,6 +15,7 @@ public record DailyPrayerResponse(
         String content,
         List<PrayerMediaRefResponse> mediaRefs,
         boolean completedToday,
+        PrayerDailyPrayerResponseType todayResponseType,
         OffsetDateTime publishedAt
 ) {
 }

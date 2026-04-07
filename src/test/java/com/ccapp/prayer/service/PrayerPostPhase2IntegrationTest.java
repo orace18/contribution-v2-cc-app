@@ -81,6 +81,8 @@ class PrayerPostPhase2IntegrationTest {
     private AccessControlService accessControlService;
     @MockBean
     private AccountHolderService accountHolderService;
+    @MockBean
+    private PrayerEngagementService prayerEngagementService;
 
     @BeforeEach
     void setUp() {

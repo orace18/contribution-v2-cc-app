@@ -17,6 +17,8 @@ import com.ccapp.prayer.domain.entity.PrayerComment;
 import com.ccapp.prayer.domain.entity.PrayerPost;
 import com.ccapp.prayer.domain.entity.PrayerPostMediaRef;
 import com.ccapp.prayer.domain.entity.PrayerSupport;
+import com.ccapp.prayer.domain.enums.PrayerDailyMissionCode;
+import com.ccapp.prayer.domain.enums.PrayerDailyPrayerResponseType;
 import com.ccapp.prayer.domain.enums.PrayerInteractionType;
 import com.ccapp.prayer.domain.enums.PrayerPostLifecycleStatus;
 import com.ccapp.prayer.domain.enums.PrayerPostType;
@@ -31,7 +33,6 @@ import com.ccapp.prayer.dto.PrayerDashboardResponse;
 import com.ccapp.prayer.dto.PrayerInteractionResponse;
 import com.ccapp.prayer.dto.PrayerPostResponse;
 import com.ccapp.prayer.dto.UpdatePrayerRequest;
-import com.ccapp.prayer.exception.PrayerPhase1NotImplementedException;
 import com.ccapp.prayer.repository.PrayerAmenRepository;
 import com.ccapp.prayer.repository.PrayerCommentRepository;
 import com.ccapp.prayer.repository.PrayerPostMediaRefRepository;
@@ -55,8 +56,6 @@ import java.util.UUID;
 @Slf4j
 public class PrayerMobileService {
 
-    private static final String NOT_IMPLEMENTED_MESSAGE = "PRAYER_PHASE1_NOT_IMPLEMENTED";
-
     private final PrayerPostRepository prayerPostRepository;
     private final PrayerPostMediaRefRepository prayerPostMediaRefRepository;
     private final PrayerAmenRepository prayerAmenRepository;
@@ -68,6 +67,7 @@ public class PrayerMobileService {
     private final CircleRepository circleRepository;
     private final CircleMemberRepository circleMemberRepository;
     private final MediaFileRepository mediaFileRepository;
+    private final PrayerEngagementService prayerEngagementService;
 
     @Transactional(readOnly = true)
     public PageResponse<PrayerPostResponse> getPrayerFeed(UUID actorUserId,
@@ -252,6 +252,8 @@ public class PrayerMobileService {
         post.setSupportCount(post.getSupportCount() + 1);
         prayerPostRepository.save(post);
 
+        prayerEngagementService.recordTrackedMissionAction(viewer, PrayerDailyMissionCode.SUPPORT_ONE_REQUEST);
+
         log.info("Prayer support recorded postId={} accountHolderId={} created=true totalCount={}",
                 postId, accountHolderId, post.getSupportCount());
         return buildInteractionResponse(post, PrayerInteractionType.SUPPORT, true, saved.getCreatedAt(), accountHolderId);
@@ -313,23 +315,35 @@ public class PrayerMobileService {
         post.setCommentCount(post.getCommentCount() + 1);
         prayerPostRepository.save(post);
 
+        prayerEngagementService.recordTrackedMissionAction(viewer, PrayerDailyMissionCode.COMMENT_ONE_POST);
+
         log.info("Prayer comment created postId={} accountHolderId={} commentId={} totalCount={}",
                 postId, accountHolderId, saved.getId(), post.getCommentCount());
         return prayerPostMapper.toCommentResponse(saved);
     }
 
+    @Transactional(readOnly = true)
     public DailyPrayerResponse getCurrentDailyPrayer(UUID actorUserId, UUID accountHolderId, String timezone) {
-        throw notImplemented();
+        accessControlService.assertCanActOnAccountHolder(actorUserId, accountHolderId, PermissionLevel.VIEW);
+        AccountHolder viewer = accountHolderService.getById(accountHolderId);
+        return prayerEngagementService.getCurrentDailyPrayer(viewer, timezone);
     }
 
+    @Transactional
     public DailyPrayerCompletionResponse completeCurrentDailyPrayer(UUID actorUserId,
                                                                     UUID accountHolderId,
-                                                                    String timezone) {
-        throw notImplemented();
+                                                                    String timezone,
+                                                                    PrayerDailyPrayerResponseType responseType) {
+        accessControlService.assertCanActOnAccountHolder(actorUserId, accountHolderId, PermissionLevel.TRANSACT);
+        AccountHolder viewer = accountHolderService.getById(accountHolderId);
+        return prayerEngagementService.completeCurrentDailyPrayer(actorUserId, viewer, timezone, responseType);
     }
 
+    @Transactional
     public PrayerDashboardResponse getPrayerDashboard(UUID actorUserId, UUID accountHolderId, String timezone) {
-        throw notImplemented();
+        accessControlService.assertCanActOnAccountHolder(actorUserId, accountHolderId, PermissionLevel.VIEW);
+        AccountHolder viewer = accountHolderService.getById(accountHolderId);
+        return prayerEngagementService.getPrayerDashboard(viewer, timezone);
     }
 
     /**
@@ -479,10 +493,6 @@ public class PrayerMobileService {
                 recordedAt,
                 prayerPostMapper.toViewerState(post, viewerAccountHolderId)
         );
-    }
-
-    private PrayerPhase1NotImplementedException notImplemented() {
-        return new PrayerPhase1NotImplementedException(NOT_IMPLEMENTED_MESSAGE);
     }
 
     private record PrayerVisibilityContext(UUID audienceCircleId, String audienceChurchRef, String audienceCountryCode) {

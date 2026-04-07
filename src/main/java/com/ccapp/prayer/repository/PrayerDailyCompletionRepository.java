@@ -12,5 +12,9 @@ public interface PrayerDailyCompletionRepository extends JpaRepository<PrayerDai
 
     Optional<PrayerDailyCompletion> findByAccountHolderIdAndPrayerDate(UUID accountHolderId, LocalDate prayerDate);
 
+    List<PrayerDailyCompletion> findByAccountHolderIdOrderByPrayerDateAsc(UUID accountHolderId);
+
     List<PrayerDailyCompletion> findByAccountHolderIdOrderByPrayerDateDesc(UUID accountHolderId);
+
+    long countByAccountHolderId(UUID accountHolderId);
 }

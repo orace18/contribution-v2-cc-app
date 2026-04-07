@@ -11,6 +11,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -29,6 +30,8 @@ import java.util.UUID;
 @Entity
 @Table(name = "prayer_engagement_daily_checkins", indexes = {
         @Index(name = "idx_prayer_checkins_account_date", columnList = "account_holder_id, local_date")
+}, uniqueConstraints = {
+        @UniqueConstraint(name = "uk_prayer_checkins_account_date", columnNames = {"account_holder_id", "local_date"})
 })
 public class PrayerEngagementDailyCheckin {
 
@@ -51,7 +54,7 @@ public class PrayerEngagementDailyCheckin {
     @Enumerated(EnumType.STRING)
     @Column(name = "response_type", nullable = false, length = 32)
     @Builder.Default
-    private PrayerDailyPrayerResponseType responseType = PrayerDailyPrayerResponseType.COMPLETED;
+    private PrayerDailyPrayerResponseType responseType = PrayerDailyPrayerResponseType.PRAYED;
 
     @Column(name = "source_reference_id")
     private UUID sourceReferenceId;
@@ -65,7 +68,7 @@ public class PrayerEngagementDailyCheckin {
             createdAt = OffsetDateTime.now();
         }
         if (responseType == null) {
-            responseType = PrayerDailyPrayerResponseType.COMPLETED;
+            responseType = PrayerDailyPrayerResponseType.PRAYED;
         }
     }
 }

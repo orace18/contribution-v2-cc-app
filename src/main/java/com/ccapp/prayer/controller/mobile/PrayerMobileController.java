@@ -4,6 +4,8 @@ import com.ccapp.common.api.CommonResponse;
 import com.ccapp.common.api.PageResponse;
 import com.ccapp.common.security.AuthenticatedPrincipal;
 import com.ccapp.common.security.SecurityUtils;
+import com.ccapp.prayer.domain.enums.PrayerDailyPrayerResponseType;
+import com.ccapp.prayer.dto.CompleteDailyPrayerRequest;
 import com.ccapp.prayer.dto.CreatePrayerCommentRequest;
 import com.ccapp.prayer.dto.CreatePrayerRequest;
 import com.ccapp.prayer.dto.DailyPrayerCompletionResponse;
@@ -157,7 +159,7 @@ public class PrayerMobileController {
     @GetMapping("/daily/current")
     @Operation(summary = "Get the current published daily prayer")
     public ResponseEntity<CommonResponse<DailyPrayerResponse>> getCurrentDailyPrayer(
-            @RequestParam(defaultValue = "Africa/Porto-Novo") String timezone) {
+            @RequestParam(required = false) String timezone) {
         AuthenticatedPrincipal principal = SecurityUtils.currentPrincipal();
         UUID accountHolderId = SecurityUtils.currentAccountHolderId();
         DailyPrayerResponse response = prayerMobileService.getCurrentDailyPrayer(principal.userId(), accountHolderId, timezone);
@@ -167,13 +169,18 @@ public class PrayerMobileController {
     @PostMapping("/daily/current/complete")
     @Operation(summary = "Record completion of today's daily prayer")
     public ResponseEntity<CommonResponse<DailyPrayerCompletionResponse>> completeCurrentDailyPrayer(
-            @RequestParam(defaultValue = "Africa/Porto-Novo") String timezone) {
+            @RequestParam(required = false) String timezone,
+            @Valid @RequestBody(required = false) CompleteDailyPrayerRequest request) {
         AuthenticatedPrincipal principal = SecurityUtils.currentPrincipal();
         UUID accountHolderId = SecurityUtils.currentAccountHolderId();
+        PrayerDailyPrayerResponseType responseType = request == null
+                ? PrayerDailyPrayerResponseType.PRAYED
+                : request.responseType();
         DailyPrayerCompletionResponse response = prayerMobileService.completeCurrentDailyPrayer(
                 principal.userId(),
                 accountHolderId,
-                timezone
+                timezone,
+                responseType
         );
         return ResponseEntity.ok(CommonResponse.success("Daily prayer completed", response));
     }
@@ -181,7 +188,7 @@ public class PrayerMobileController {
     @GetMapping("/dashboard")
     @Operation(summary = "Get current prayer streak, missions, and engagement stats")
     public ResponseEntity<CommonResponse<PrayerDashboardResponse>> getDashboard(
-            @RequestParam(defaultValue = "Africa/Porto-Novo") String timezone) {
+            @RequestParam(required = false) String timezone) {
         AuthenticatedPrincipal principal = SecurityUtils.currentPrincipal();
         UUID accountHolderId = SecurityUtils.currentAccountHolderId();
         PrayerDashboardResponse response = prayerMobileService.getPrayerDashboard(principal.userId(), accountHolderId, timezone);

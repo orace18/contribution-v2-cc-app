@@ -254,6 +254,15 @@ paths:
       summary: Record completion of today's daily prayer
       parameters:
         - $ref: '#/components/parameters/TimezoneParam'
+      requestBody:
+        required: false
+        description: >
+          Optional explicit response type for the daily prayer. If omitted, the backend defaults
+          to `PRAYED` for backward compatibility with earlier generic completion clients.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompleteDailyPrayerRequest'
       responses:
         '200':
           description: Daily prayer completed for the local day
@@ -797,6 +806,12 @@ components:
         - ACCOUNT_HOLDER
         - ADMIN_PLATFORM
 
+    PrayerDailyPrayerResponseType:
+      type: string
+      enum:
+        - PRAYED
+        - AMEN
+
     DailyMissionCode:
       type: string
       enum:
@@ -1080,10 +1095,22 @@ components:
             $ref: '#/components/schemas/PrayerMediaRefResponse'
         completedToday:
           type: boolean
+        todayResponseType:
+          allOf:
+            - $ref: '#/components/schemas/PrayerDailyPrayerResponseType'
+          nullable: true
         publishedAt:
           type: string
           format: date-time
           nullable: true
+
+    CompleteDailyPrayerRequest:
+      type: object
+      required:
+        - responseType
+      properties:
+        responseType:
+          $ref: '#/components/schemas/PrayerDailyPrayerResponseType'
 
     DailyPrayerCompletionResponse:
       type: object
@@ -1091,6 +1118,7 @@ components:
         - dailyPrayerId
         - prayerDate
         - completedAt
+        - responseType
         - currentStreak
         - longestStreak
       properties:
@@ -1103,6 +1131,8 @@ components:
         completedAt:
           type: string
           format: date-time
+        responseType:
+          $ref: '#/components/schemas/PrayerDailyPrayerResponseType'
         currentStreak:
           type: integer
           minimum: 1

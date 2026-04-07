@@ -12,5 +12,7 @@ public interface PrayerAmenRepository extends JpaRepository<PrayerAmen, UUID> {
 
     Optional<PrayerAmen> findByPostIdAndAccountHolderId(UUID postId, UUID accountHolderId);
 
+    long countByAccountHolderId(UUID accountHolderId);
+
     long countByPostId(UUID postId);
 }

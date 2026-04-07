@@ -715,6 +715,8 @@ Recommended additions to `NotificationType`:
 ### Streak rule
 
 - A streak day is earned only when `daily/current/complete` succeeds for that local date.
+- `daily/current/complete` accepts MVP response types `PRAYED` and `AMEN`.
+- If the response payload is omitted for backward compatibility, backend treats the completion as `PRAYED`.
 - Multiple completions on the same day do not increment streak again.
 - If the user completes on consecutive local dates, streak increments by one.
 - If the user skips one or more local dates, current streak resets to one on the next completion.
@@ -737,6 +739,34 @@ Recommended additions to `NotificationType`:
 - Missions are generated lazily for the current local day when dashboard is requested or a tracked action occurs.
 - Previous day unfinished missions become `EXPIRED`.
 - Completed missions remain queryable historically only if later reporting is added; MVP dashboard returns current day only.
+
+### MVP prayer suggestion model
+
+- Home prayer suggestion stays controlled and curated for MVP. No opaque real-time generative AI is required.
+- Source priority:
+  - current published daily prayer if it exists and the user has not yet responded for the local date
+  - otherwise an active curated suggestion template
+- Curated template storage supports:
+  - `templateKey`
+  - `title`
+  - `content`
+  - `category`
+  - optional flat `tags`
+  - `audioStatus`
+  - optional `audioUrl`
+- Initial categories:
+  - `BUSINESS_WISDOM`
+  - `PROVISION`
+  - `COURAGE`
+  - `UNITY`
+  - `DISCIPLINE`
+  - `GRATITUDE`
+- Anti-repetition rule:
+  - selection must avoid replaying the same curated template shown on the immediately previous local day when alternatives exist
+- MVP relevance hints:
+  - financing need biases toward `PROVISION` and `BUSINESS_WISDOM`
+  - no circle biases toward `UNITY` and `COURAGE`
+  - no active membership biases toward `DISCIPLINE`
 
 ## 12. Deep Link Model
 
