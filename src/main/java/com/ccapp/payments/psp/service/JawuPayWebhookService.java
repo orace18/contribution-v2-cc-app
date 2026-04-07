@@ -680,6 +680,9 @@ public class JawuPayWebhookService {
     }
 
     private void validateIp(String remoteIp) {
+        if (mockEnabled) {
+            return;
+        }
         if (!allowedIps.contains(remoteIp)) {
             log.warn("Webhook blocked: ip={} not in allowlist", remoteIp);
             throw new AccessDeniedException("Webhook request from unauthorized IP: " + remoteIp);
@@ -689,6 +692,10 @@ public class JawuPayWebhookService {
     private void validateSignature(byte[] rawRequestBody,
                                    String signatureHeader,
                                    String remoteIp) {
+        if (mockEnabled) {
+            log.warn("Webhook signature validation skipped: mock mode enabled remoteIp={}", remoteIp);
+            return;
+        }
         if (rawRequestBody == null || rawRequestBody.length == 0) {
             log.warn("Webhook blocked: empty body during signature verification remoteIp={}", remoteIp);
             throw new AccessDeniedException(INVALID_SIGNATURE_MESSAGE);
