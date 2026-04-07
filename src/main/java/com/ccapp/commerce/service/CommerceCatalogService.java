@@ -59,7 +59,9 @@ public class CommerceCatalogService {
                         request.currency(),
                         request.commissionPercent(),
                         request.cvValue(),
-                        request.active()
+                        request.active(),
+                        null,
+                        null
                 )
         );
         commerceProductRepository.save(CommerceProduct.builder()
