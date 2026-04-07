@@ -7,6 +7,10 @@ import lombok.*;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
+/**
+ * @deprecated Legacy community feed entity replaced by {@code com.ccapp.prayer.domain.entity.PrayerPost}.
+ */
+@Deprecated(since = "2026-04", forRemoval = false)
 @Getter
 @Setter
 @Builder

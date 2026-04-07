@@ -18,6 +18,10 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * @deprecated Replaced by {@code com.ccapp.prayer.controller.mobile.PrayerMobileController}.
+ */
+@Deprecated(since = "2026-04", forRemoval = false)
 @RestController
 @RequestMapping("/api/mobile/community")
 @RequiredArgsConstructor

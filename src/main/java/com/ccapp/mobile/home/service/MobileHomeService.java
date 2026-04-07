@@ -89,6 +89,8 @@ public class MobileHomeService {
                 .map(this::toCircleSummary)
                 .orElse(null);
 
+        // Legacy community highlight block kept only for mobile stability during the
+        // Business Prayer replacement. New prayer feed/dashboard adapters should replace it.
         List<MobileHomeCommunityHighlightResponse> communityHighlights = communityPostRepository
                 .findFeaturedForFeed(PageRequest.of(0, 5)).stream()
                 .map(post -> new MobileHomeCommunityHighlightResponse(

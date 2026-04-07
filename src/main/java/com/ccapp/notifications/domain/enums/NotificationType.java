@@ -21,6 +21,10 @@ public enum NotificationType {
 
     // Prayer
     PRAYER_REMINDER,
+    /**
+     * @deprecated Legacy circle/community prayer notification. Replace with Business Prayer support notifications.
+     */
+    @Deprecated(since = "2026-04", forRemoval = false)
     CIRCLE_PRAYED,
 
     // Tasks / engagement

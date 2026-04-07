@@ -21,6 +21,10 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * @deprecated Replaced by {@code com.ccapp.prayer.controller.admin.AdminPrayerPostController}.
+ */
+@Deprecated(since = "2026-04", forRemoval = false)
 @RestController
 @RequestMapping("/api/admin/community/posts")
 @RequiredArgsConstructor

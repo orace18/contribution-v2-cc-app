@@ -16,6 +16,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * @deprecated Replaced by the Business Prayer interaction model in {@code com.ccapp.prayer}.
+ */
+@Deprecated(since = "2026-04", forRemoval = false)
 @Service
 @RequiredArgsConstructor
 public class CommunityEngagementService {
