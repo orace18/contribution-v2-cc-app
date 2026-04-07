@@ -4,10 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="fix: update JawuPay HMAC secret fallback">
-      <change beforePath="$PROJECT_DIR$/.gitlab-ci.yml" beforeDir="false" afterPath="$PROJECT_DIR$/.gitlab-ci.yml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docker-compose-dev.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/docker-compose-dev.yaml" afterDir="false" />
-    </list>
+    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="fix: update config" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -144,14 +141,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1772553173766</updated>
-    </task>
-    <task id="LOCAL-00092" summary="ip allowed">
-      <option name="closed" value="true" />
-      <created>1774956151019</created>
-      <option name="number" value="00092" />
-      <option name="presentableId" value="LOCAL-00092" />
-      <option name="project" value="LOCAL" />
-      <updated>1774956151022</updated>
     </task>
     <task id="LOCAL-00093" summary="Revue du FirebaseAdminTokenVerifier">
       <option name="closed" value="true" />
@@ -537,7 +526,15 @@
       <option name="project" value="LOCAL" />
       <updated>1775562743538</updated>
     </task>
-    <option name="localTasksCounter" value="141" />
+    <task id="LOCAL-00141" summary="fix: update config">
+      <option name="closed" value="true" />
+      <created>1775563205811</created>
+      <option name="number" value="00141" />
+      <option name="presentableId" value="LOCAL-00141" />
+      <option name="project" value="LOCAL" />
+      <updated>1775563205812</updated>
+    </task>
+    <option name="localTasksCounter" value="142" />
     <servers />
   </component>
   <component name="UnknownFeatures">
@@ -568,7 +565,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="Revue du JawuPayWebhookService" />
     <MESSAGE value="Retrait des logs de hibernate" />
     <MESSAGE value="Configuration firebase" />
     <MESSAGE value="Rebuild firebase" />
@@ -593,7 +589,8 @@
     <MESSAGE value="fix: webhook config revue" />
     <MESSAGE value="fix: rebuild" />
     <MESSAGE value="fix: update JawuPay HMAC secret fallback" />
-    <option name="LAST_COMMIT_MESSAGE" value="fix: update JawuPay HMAC secret fallback" />
+    <MESSAGE value="fix: update config" />
+    <option name="LAST_COMMIT_MESSAGE" value="fix: update config" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />
