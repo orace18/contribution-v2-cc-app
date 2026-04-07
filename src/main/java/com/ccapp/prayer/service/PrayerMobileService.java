@@ -68,6 +68,7 @@ public class PrayerMobileService {
     private final CircleMemberRepository circleMemberRepository;
     private final MediaFileRepository mediaFileRepository;
     private final PrayerEngagementService prayerEngagementService;
+    private final PrayerNotificationPublisher prayerNotificationPublisher;
 
     @Transactional(readOnly = true)
     public PageResponse<PrayerPostResponse> getPrayerFeed(UUID actorUserId,
@@ -253,6 +254,7 @@ public class PrayerMobileService {
         prayerPostRepository.save(post);
 
         prayerEngagementService.recordTrackedMissionAction(viewer, PrayerDailyMissionCode.SUPPORT_ONE_REQUEST);
+        prayerNotificationPublisher.publishSupportReceived(accountHolderId, displayName(viewer), post);
 
         log.info("Prayer support recorded postId={} accountHolderId={} created=true totalCount={}",
                 postId, accountHolderId, post.getSupportCount());
@@ -316,6 +318,7 @@ public class PrayerMobileService {
         prayerPostRepository.save(post);
 
         prayerEngagementService.recordTrackedMissionAction(viewer, PrayerDailyMissionCode.COMMENT_ONE_POST);
+        prayerNotificationPublisher.publishCommentReceived(accountHolderId, displayName(viewer), post);
 
         log.info("Prayer comment created postId={} accountHolderId={} commentId={} totalCount={}",
                 postId, accountHolderId, saved.getId(), post.getCommentCount());
@@ -493,6 +496,16 @@ public class PrayerMobileService {
                 recordedAt,
                 prayerPostMapper.toViewerState(post, viewerAccountHolderId)
         );
+    }
+
+    private String displayName(AccountHolder accountHolder) {
+        if (accountHolder == null) {
+            return "Un membre";
+        }
+        String first = accountHolder.getFirstName() == null ? "" : accountHolder.getFirstName().trim();
+        String last = accountHolder.getLastName() == null ? "" : accountHolder.getLastName().trim();
+        String combined = (first + " " + last).trim();
+        return combined.isBlank() ? "Un membre" : combined;
     }
 
     private record PrayerVisibilityContext(UUID audienceCircleId, String audienceChurchRef, String audienceCountryCode) {

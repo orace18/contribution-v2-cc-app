@@ -32,6 +32,8 @@ public class NotificationRequestedListener implements DomainEventListener<Notifi
                     null,
                     event.message(),
                     event.variables(),
+                    event.targetId(),
+                    event.deepLink(),
                     event.sendNow()
             )));
         } catch (RuntimeException ex) {

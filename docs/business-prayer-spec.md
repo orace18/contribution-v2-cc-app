@@ -687,8 +687,10 @@ Recommended additions to `NotificationType`:
 
 - `PRAYER_SUPPORT_RECEIVED`
 - `PRAYER_COMMENT_RECEIVED`
-- `PRAYER_DAILY_REMINDER`
-- `PRAYER_STREAK_MILESTONE`
+- keep existing `PRAYER_REMINDER` for daily-prayer availability and reminder compatibility
+- `PRAYER_STREAK_AT_RISK`
+- `PRAYER_OFFICIAL_CONTENT_PUBLISHED`
+- keep `CIRCLE_PRAYED` deprecated only for backward compatibility; no new Business Prayer flow should emit it
 
 ### MVP anti-noise policy
 
@@ -703,6 +705,17 @@ Recommended additions to `NotificationType`:
 - Default reminder window for MVP: one reminder per local day.
 - Skip users with no active push token and no in-app delivery target.
 - Persist actual delivery attempts through the existing notifications module.
+
+### Notification payload shape for MVP
+
+- `type`
+- `title`
+- `message`
+- optional `targetId`
+- optional `deepLink`
+  - `routeKey`
+  - `label`
+  - `params`
 
 ## 11. Streak and Daily Mission Logic
 

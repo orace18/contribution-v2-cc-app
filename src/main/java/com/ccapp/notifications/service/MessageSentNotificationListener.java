@@ -34,6 +34,8 @@ public class MessageSentNotificationListener implements DomainEventListener<Mess
                     null,
                     "You received a new chat message.",
                     null,
+                    null,
+                    null,
                     true
             )));
         } catch (RuntimeException ex) {

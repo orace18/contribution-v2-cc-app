@@ -32,7 +32,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -52,6 +54,7 @@ public class PrayerAdminPostService {
     private final PrayerPostMapper prayerPostMapper;
     private final MediaFileRepository mediaFileRepository;
     private final ObjectMapper objectMapper;
+    private final PrayerNotificationPublisher prayerNotificationPublisher;
 
     @Transactional(readOnly = true)
     public PageResponse<AdminPrayerPostResponse> listPosts(int page,
@@ -86,6 +89,7 @@ public class PrayerAdminPostService {
                 request.targetCountryCode(),
                 request.targetChurchRef()
         );
+        validateDeepLink(request.deepLink());
         validateMediaRefs(request.mediaRefs());
 
         PrayerPost saved = prayerPostRepository.save(PrayerPost.builder()
@@ -127,6 +131,9 @@ public class PrayerAdminPostService {
         String targetCountryCode = request.targetCountryCode() == null ? post.getAudienceCountryCode() : request.targetCountryCode();
         String targetChurchRef = request.targetChurchRef() == null ? post.getAudienceChurchRef() : request.targetChurchRef();
         OfficialVisibilityContext visibilityContext = resolveOfficialVisibility(requestedVisibility, targetCountryCode, targetChurchRef);
+        if (request.deepLink() != null) {
+            validateDeepLink(request.deepLink());
+        }
 
         if (request.title() != null) {
             post.setTitle(request.title().trim());
@@ -174,6 +181,7 @@ public class PrayerAdminPostService {
         PrayerPost saved = prayerPostRepository.save(post);
 
         log.info("Prayer admin post published postId={} adminUserId={}", postId, adminUserId);
+        prayerNotificationPublisher.publishOfficialPostPublished(saved);
         return prayerPostMapper.toAdminResponse(saved);
     }
 
@@ -237,9 +245,26 @@ public class PrayerAdminPostService {
             return "{}";
         }
         try {
-            return objectMapper.writeValueAsString(deepLink.params());
+            return objectMapper.writeValueAsString(deepLink.params() == null ? Collections.emptyMap() : deepLink.params());
         } catch (JsonProcessingException ex) {
             throw new BusinessException("PRAYER_DEEP_LINK_INVALID");
+        }
+    }
+
+    private void validateDeepLink(InternalDeepLinkRequest deepLink) {
+        if (deepLink == null) {
+            return;
+        }
+        if (deepLink.params() == null) {
+            throw new BusinessException("PRAYER_DEEP_LINK_INVALID");
+        }
+        for (Map.Entry<String, String> entry : deepLink.params().entrySet()) {
+            if (entry.getKey() == null || entry.getKey().isBlank()) {
+                throw new BusinessException("PRAYER_DEEP_LINK_INVALID");
+            }
+            if (entry.getValue() == null) {
+                throw new BusinessException("PRAYER_DEEP_LINK_INVALID");
+            }
         }
     }
 

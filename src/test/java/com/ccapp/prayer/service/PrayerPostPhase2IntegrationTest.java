@@ -49,6 +49,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @DataJpaTest(properties = {
@@ -83,6 +84,8 @@ class PrayerPostPhase2IntegrationTest {
     private AccountHolderService accountHolderService;
     @MockBean
     private PrayerEngagementService prayerEngagementService;
+    @MockBean
+    private PrayerNotificationPublisher prayerNotificationPublisher;
 
     @BeforeEach
     void setUp() {
@@ -239,6 +242,7 @@ class PrayerPostPhase2IntegrationTest {
         AdminPrayerPostResponse published = prayerAdminPostService.publishPost(adminUserId, created.id());
         assertEquals(PrayerPostLifecycleStatus.PUBLISHED, published.lifecycleStatus());
         assertNotNull(published.publishedAt());
+        verify(prayerNotificationPublisher).publishOfficialPostPublished(any());
 
         AdminPrayerPostResponse archived = prayerAdminPostService.archivePost(adminUserId, created.id());
         assertEquals(PrayerPostLifecycleStatus.ARCHIVED, archived.lifecycleStatus());

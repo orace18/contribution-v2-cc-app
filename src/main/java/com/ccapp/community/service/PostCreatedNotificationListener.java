@@ -43,6 +43,8 @@ public class PostCreatedNotificationListener implements DomainEventListener<Post
                         null,
                         "Your community post has been published.",
                         null,
+                        null,
+                        null,
                         true
                 ));
             });

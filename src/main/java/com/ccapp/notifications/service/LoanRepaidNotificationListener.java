@@ -34,6 +34,8 @@ public class LoanRepaidNotificationListener implements DomainEventListener<LoanR
                     null,
                     "Your loan " + event.loanId() + " has been fully repaid.",
                     null,
+                    null,
+                    null,
                     true
             )));
         } catch (RuntimeException ex) {

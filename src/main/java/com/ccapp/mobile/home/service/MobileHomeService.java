@@ -1,5 +1,7 @@
 package com.ccapp.mobile.home.service;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ccapp.chat.domain.enums.ChatMessageStatus;
 import com.ccapp.chat.repository.ChatMessageRepository;
 import com.ccapp.circles.domain.entity.Circle;
@@ -31,12 +33,18 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 public class MobileHomeService {
+
+    private static final ObjectMapper NOTIFICATION_DEEP_LINK_MAPPER = new ObjectMapper();
+    private static final TypeReference<Map<String, String>> STRING_MAP_TYPE = new TypeReference<>() {
+    };
 
     private static final List<LoanStatus> ACTIVE_LOAN_STATUSES = List.of(
             LoanStatus.APPROVED,
@@ -116,6 +124,12 @@ public class MobileHomeService {
                         notification.getType(),
                         notification.getTitle(),
                         notification.getMessage(),
+                        notification.getTargetId(),
+                        notification.getDeepLinkRouteKey() == null ? null : new com.ccapp.notifications.dto.NotificationDeepLinkResponse(
+                                notification.getDeepLinkRouteKey(),
+                                notification.getDeepLinkLabel(),
+                                parseDeepLinkParams(notification.getDeepLinkParamsJson())
+                        ),
                         notification.getStatus(),
                         notification.getCreatedAt()
                 ))
@@ -130,6 +144,17 @@ public class MobileHomeService {
                 unreadMessages,
                 new MobileHomeNotificationSummaryResponse(notificationsTotal, latestNotifications)
         );
+    }
+
+    private Map<String, String> parseDeepLinkParams(String rawJson) {
+        if (rawJson == null || rawJson.isBlank()) {
+            return Collections.emptyMap();
+        }
+        try {
+            return NOTIFICATION_DEEP_LINK_MAPPER.readValue(rawJson, STRING_MAP_TYPE);
+        } catch (Exception ignored) {
+            return Collections.emptyMap();
+        }
     }
 
     private MobileHomeMembershipResponse buildMembership(UUID accountHolderId) {

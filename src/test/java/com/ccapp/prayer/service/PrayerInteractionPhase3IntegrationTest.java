@@ -39,7 +39,10 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @DataJpaTest(properties = {
@@ -75,6 +78,8 @@ class PrayerInteractionPhase3IntegrationTest {
     private AccountHolderService accountHolderService;
     @MockBean
     private PrayerEngagementService prayerEngagementService;
+    @MockBean
+    private PrayerNotificationPublisher prayerNotificationPublisher;
 
     @BeforeEach
     void setUp() {
@@ -124,6 +129,11 @@ class PrayerInteractionPhase3IntegrationTest {
         assertEquals(1L, prayerSupportRepository.countByPostId(post.getId()));
         assertEquals(1, prayerPostRepository.findById(post.getId()).orElseThrow().getSupportCount());
         assertEquals(0L, circleMemberInteractionRepository.count());
+        verify(prayerNotificationPublisher).publishSupportReceived(
+                org.mockito.ArgumentMatchers.eq(supporterId),
+                org.mockito.ArgumentMatchers.eq("Supporter One"),
+                argThat(persisted -> persisted != null && post.getId().equals(persisted.getId()))
+        );
     }
 
     @Test
@@ -154,6 +164,11 @@ class PrayerInteractionPhase3IntegrationTest {
         assertEquals(commenterId, comments.get(0).author().accountHolderId());
         assertEquals(1L, prayerCommentRepository.countByPostId(post.getId()));
         assertEquals(1, prayerPostRepository.findById(post.getId()).orElseThrow().getCommentCount());
+        verify(prayerNotificationPublisher).publishCommentReceived(
+                org.mockito.ArgumentMatchers.eq(commenterId),
+                org.mockito.ArgumentMatchers.eq("Commenter One"),
+                argThat(persisted -> persisted != null && post.getId().equals(persisted.getId()))
+        );
     }
 
     @Test
@@ -220,6 +235,7 @@ class PrayerInteractionPhase3IntegrationTest {
         );
 
         assertEquals("PRAYER_SUPPORT_NOT_ALLOWED", exception.getMessage());
+        verify(prayerNotificationPublisher, never()).publishSupportReceived(any(), any(), any());
     }
 
     private UUID createAccountHolder(String firstName, String lastName, String serviceCountryCode) {

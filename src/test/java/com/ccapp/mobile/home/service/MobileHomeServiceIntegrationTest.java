@@ -202,6 +202,10 @@ class MobileHomeServiceIntegrationTest {
                 .channel(NotificationChannel.IN_APP)
                 .templateCode("HOME_TEST")
                 .message("Notification body")
+                .targetId("wallet-home")
+                .deepLinkRouteKey("WALLET_HOME")
+                .deepLinkLabel("Open wallet")
+                .deepLinkParamsJson("{\"tab\":\"overview\"}")
                 .status(NotificationStatus.SENT)
                 .build());
 
@@ -220,6 +224,10 @@ class MobileHomeServiceIntegrationTest {
         assertEquals(1L, response.unreadMessages());
         assertEquals(1L, response.notifications().total());
         assertEquals(1, response.notifications().latest().size());
+        assertEquals("wallet-home", response.notifications().latest().getFirst().targetId());
+        assertNotNull(response.notifications().latest().getFirst().deepLink());
+        assertEquals("WALLET_HOME", response.notifications().latest().getFirst().deepLink().routeKey());
+        assertEquals("overview", response.notifications().latest().getFirst().deepLink().params().get("tab"));
     }
 
     private UUID createAccountHolder(String firstName, String lastName) {

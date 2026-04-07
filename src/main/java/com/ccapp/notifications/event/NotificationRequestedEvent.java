@@ -1,6 +1,7 @@
 package com.ccapp.notifications.event;
 
 import com.ccapp.common.events.DomainEvent;
+import com.ccapp.notifications.dto.NotificationDeepLinkRequest;
 import com.ccapp.notifications.domain.enums.NotificationChannel;
 import com.ccapp.notifications.domain.enums.NotificationType;
 
@@ -18,6 +19,8 @@ public record NotificationRequestedEvent(
         String templateCode,
         String message,
         Map<String, String> variables,
+        String targetId,
+        NotificationDeepLinkRequest deepLink,
         Boolean sendNow
 ) implements DomainEvent {
 
@@ -39,6 +42,8 @@ public record NotificationRequestedEvent(
                 templateCode,
                 message,
                 variables,
+                null,
+                null,
                 sendNow
         );
     }

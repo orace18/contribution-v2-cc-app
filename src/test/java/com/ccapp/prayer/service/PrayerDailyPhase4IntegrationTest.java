@@ -89,6 +89,8 @@ class PrayerDailyPhase4IntegrationTest {
     private AccessControlService accessControlService;
     @MockBean
     private AccountHolderService accountHolderService;
+    @MockBean
+    private PrayerNotificationPublisher prayerNotificationPublisher;
 
     @BeforeEach
     void setUp() {
