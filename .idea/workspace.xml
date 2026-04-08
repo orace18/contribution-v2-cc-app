@@ -4,14 +4,16 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="fix: update config" />
+    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="fix: Cpass config whatsapp">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
   <component name="EmbeddingIndexingInfo">
-    <option name="cachedIndexableFilesCount" value="1371" />
+    <option name="cachedIndexableFilesCount" value="1393" />
   </component>
   <component name="FileTemplateManagerImpl">
     <option name="RECENT_TEMPLATES">
@@ -141,46 +143,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1772553173766</updated>
-    </task>
-    <task id="LOCAL-00093" summary="Revue du FirebaseAdminTokenVerifier">
-      <option name="closed" value="true" />
-      <created>1774956378979</created>
-      <option name="number" value="00093" />
-      <option name="presentableId" value="LOCAL-00093" />
-      <option name="project" value="LOCAL" />
-      <updated>1774956378979</updated>
-    </task>
-    <task id="LOCAL-00094" summary="Revue du JawuPayWebhookService">
-      <option name="closed" value="true" />
-      <created>1774956752622</created>
-      <option name="number" value="00094" />
-      <option name="presentableId" value="LOCAL-00094" />
-      <option name="project" value="LOCAL" />
-      <updated>1774956752622</updated>
-    </task>
-    <task id="LOCAL-00095" summary="Retrait des logs de hibernate">
-      <option name="closed" value="true" />
-      <created>1774966065961</created>
-      <option name="number" value="00095" />
-      <option name="presentableId" value="LOCAL-00095" />
-      <option name="project" value="LOCAL" />
-      <updated>1774966065961</updated>
-    </task>
-    <task id="LOCAL-00096" summary="Configuration firebase">
-      <option name="closed" value="true" />
-      <created>1774967118302</created>
-      <option name="number" value="00096" />
-      <option name="presentableId" value="LOCAL-00096" />
-      <option name="project" value="LOCAL" />
-      <updated>1774967118302</updated>
-    </task>
-    <task id="LOCAL-00097" summary="Rebuild">
-      <option name="closed" value="true" />
-      <created>1774968201598</created>
-      <option name="number" value="00097" />
-      <option name="presentableId" value="LOCAL-00097" />
-      <option name="project" value="LOCAL" />
-      <updated>1774968201598</updated>
     </task>
     <task id="LOCAL-00098" summary="Rebuild">
       <option name="closed" value="true" />
@@ -534,7 +496,47 @@
       <option name="project" value="LOCAL" />
       <updated>1775563205812</updated>
     </task>
-    <option name="localTasksCounter" value="142" />
+    <task id="LOCAL-00142" summary="fix: update config">
+      <option name="closed" value="true" />
+      <created>1775566517202</created>
+      <option name="number" value="00142" />
+      <option name="presentableId" value="LOCAL-00142" />
+      <option name="project" value="LOCAL" />
+      <updated>1775566517202</updated>
+    </task>
+    <task id="LOCAL-00143" summary="fix: update docker-compose-dev.yaml">
+      <option name="closed" value="true" />
+      <created>1775567114193</created>
+      <option name="number" value="00143" />
+      <option name="presentableId" value="LOCAL-00143" />
+      <option name="project" value="LOCAL" />
+      <updated>1775567114193</updated>
+    </task>
+    <task id="LOCAL-00144" summary="fix: webhook skip-validation flag + sync HMAC secrets&quot;">
+      <option name="closed" value="true" />
+      <created>1775567918382</created>
+      <option name="number" value="00144" />
+      <option name="presentableId" value="LOCAL-00144" />
+      <option name="project" value="LOCAL" />
+      <updated>1775567918382</updated>
+    </task>
+    <task id="LOCAL-00145" summary="fix: rendre amount/currency optionnels dans le webhook JawuPay sandbox">
+      <option name="closed" value="true" />
+      <created>1775568673783</created>
+      <option name="number" value="00145" />
+      <option name="presentableId" value="LOCAL-00145" />
+      <option name="project" value="LOCAL" />
+      <updated>1775568673783</updated>
+    </task>
+    <task id="LOCAL-00146" summary="fix: Cpass config whatsapp">
+      <option name="closed" value="true" />
+      <created>1775570417550</created>
+      <option name="number" value="00146" />
+      <option name="presentableId" value="LOCAL-00146" />
+      <option name="project" value="LOCAL" />
+      <updated>1775570417551</updated>
+    </task>
+    <option name="localTasksCounter" value="147" />
     <servers />
   </component>
   <component name="UnknownFeatures">
@@ -565,10 +567,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="Retrait des logs de hibernate" />
-    <MESSAGE value="Configuration firebase" />
-    <MESSAGE value="Rebuild firebase" />
-    <MESSAGE value="Exposer une api pour moyen de paiement." />
     <MESSAGE value="Check nom dans cercle" />
     <MESSAGE value="View cercle" />
     <MESSAGE value="Migration flyway" />
@@ -590,7 +588,11 @@
     <MESSAGE value="fix: rebuild" />
     <MESSAGE value="fix: update JawuPay HMAC secret fallback" />
     <MESSAGE value="fix: update config" />
-    <option name="LAST_COMMIT_MESSAGE" value="fix: update config" />
+    <MESSAGE value="fix: update docker-compose-dev.yaml" />
+    <MESSAGE value="fix: webhook skip-validation flag + sync HMAC secrets&quot;" />
+    <MESSAGE value="fix: rendre amount/currency optionnels dans le webhook JawuPay sandbox" />
+    <MESSAGE value="fix: Cpass config whatsapp" />
+    <option name="LAST_COMMIT_MESSAGE" value="fix: Cpass config whatsapp" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />

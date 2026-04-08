@@ -191,7 +191,7 @@ public class KycSubmissionService {
             );
             CPassKycDocumentResponse documentResponse = cPassKycGateway.submitDocument(
                     caseId,
-                    requiredType.name(),
+                    toCpassDocumentType(requiredType),
                     createCpassUploadResource(mediaFile, downloadUrl.url()),
                     Map.of(
                             "accountHolderId", accountHolder.getId().toString(),
@@ -462,6 +462,13 @@ public class KycSubmissionService {
             CPassKycInitResponse initResponse,
             List<CPassKycDocumentResponse> documentResponses
     ) {
+    }
+
+    private String toCpassDocumentType(KycDocumentType documentType) {
+        return switch (documentType) {
+            case IDENTITY_FRONT, IDENTITY_BACK -> "ID_CARD";
+            case SELFIE -> "SELFIE";
+        };
     }
 
     private record ProviderSignals(
