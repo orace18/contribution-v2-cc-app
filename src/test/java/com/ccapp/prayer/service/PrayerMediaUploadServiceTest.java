@@ -72,6 +72,7 @@ class PrayerMediaUploadServiceTest {
                         MediaType.PRAYER_POST,
                         "cc-media-public",
                         "account-holders/" + accountHolderId + "/prayer-post/file.jpg",
+                        "https://cdn.test/prayer/file.jpg",
                         "image/jpeg",
                         1024L,
                         MediaStatus.READY,
