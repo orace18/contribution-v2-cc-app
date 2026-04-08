@@ -10,6 +10,7 @@ import com.ccapp.payments.operation.domain.enums.OperationStatus;
 import com.ccapp.payments.operation.domain.enums.OperationType;
 import com.ccapp.payments.operation.service.OperationService;
 import com.ccapp.payments.psp.client.JawuPayPspClient;
+import com.ccapp.payments.psp.client.JawuPayPspException;
 import com.ccapp.payments.psp.domain.entity.JawuPayWebhookEvent;
 import com.ccapp.payments.psp.dto.JawuPayPaymentResponse;
 import com.ccapp.payments.psp.dto.JawuPayPayoutDetailsResponse;
@@ -495,6 +496,34 @@ class JawuPayWebhookServiceTest {
     }
 
     @Test
+    void checkAndApplyPaymentStatus_notFoundAtPsp_marksOperationFailedAndStopsPendingLoop() {
+        Operation op = pendingPspOperation(OperationType.WALLET_DEPOSIT_PSP);
+        when(operationService.findByPaymentIdOrPspReference(PAYMENT_ID)).thenReturn(Optional.of(op));
+        when(pspClient.getPayment(PAYMENT_ID)).thenThrow(
+                new JawuPayPspException(
+                        "JawuPay PSP error: HTTP 400 BAD_REQUEST for GET /api/v1/payment/" + PAYMENT_ID,
+                        400,
+                        "{\"status\":400,\"code\":\"BAD_REQUEST\",\"message\":\"Payment not found\",\"data\":null}"
+                )
+        );
+        when(operationService.recordPspMetadata(eq(OPERATION_ID), any())).thenReturn(op);
+
+        Operation failed = failedOperation(OperationType.WALLET_DEPOSIT_PSP);
+        when(operationService.markFailed(OPERATION_ID)).thenReturn(failed);
+
+        service.checkAndApplyPaymentStatus(PAYMENT_ID);
+
+        ArgumentCaptor<OperationService.PspMetadata> metadataCaptor =
+                ArgumentCaptor.forClass(OperationService.PspMetadata.class);
+        verify(operationService).recordPspMetadata(eq(OPERATION_ID), metadataCaptor.capture());
+        assertThat(metadataCaptor.getValue().pspStatus()).isEqualTo("NOT_FOUND");
+        assertThat(metadataCaptor.getValue().pspPayload()).contains("PAYMENT_NOT_FOUND");
+        assertThat(metadataCaptor.getValue().pspPayload()).contains(PAYMENT_ID);
+        verify(operationService).markFailed(OPERATION_ID);
+        verifyNoInteractions(walletDepositService);
+    }
+
+    @Test
     void checkAndApplyPaymentStatus_providerReferenceFallback_resolvesOperationAndCallsPsp() {
         Operation op = pendingPspOperation(OperationType.WALLET_DEPOSIT_PSP);
         op.setPaymentId(null);
@@ -591,6 +620,34 @@ class JawuPayWebhookServiceTest {
         assertThat(metadataCaptor.getValue().paymentMethod()).isEqualTo("MOBILE_MONEY_MTN");
         assertThat(metadataCaptor.getValue().pspStatus()).isEqualTo("SUCCESS");
         verify(walletWithdrawalService).confirmWithdrawal(OPERATION_ID);
+    }
+
+    @Test
+    void checkAndApplyPayoutStatus_notFoundAtPsp_marksOperationFailedAndTriggersFailureSideEffects() {
+        Operation op = pendingPspOperation(OperationType.WALLET_WITHDRAWAL);
+        when(operationService.findByPayoutIdOrPspReference(PAYOUT_ID)).thenReturn(Optional.of(op));
+        when(pspClient.getPayout(PAYOUT_ID)).thenThrow(
+                new JawuPayPspException(
+                        "JawuPay PSP error: HTTP 400 BAD_REQUEST for GET /api/v1/payout/" + PAYOUT_ID,
+                        400,
+                        "{\"status\":400,\"code\":\"BAD_REQUEST\",\"message\":\"Payout not found\",\"data\":null}"
+                )
+        );
+        when(operationService.recordPspMetadata(eq(OPERATION_ID), any())).thenReturn(op);
+
+        Operation failed = failedOperation(OperationType.WALLET_WITHDRAWAL);
+        when(operationService.markFailed(OPERATION_ID)).thenReturn(failed);
+
+        service.checkAndApplyPayoutStatus(PAYOUT_ID);
+
+        ArgumentCaptor<OperationService.PspMetadata> metadataCaptor =
+                ArgumentCaptor.forClass(OperationService.PspMetadata.class);
+        verify(operationService).recordPspMetadata(eq(OPERATION_ID), metadataCaptor.capture());
+        assertThat(metadataCaptor.getValue().pspStatus()).isEqualTo("NOT_FOUND");
+        assertThat(metadataCaptor.getValue().pspPayload()).contains("PAYOUT_NOT_FOUND");
+        assertThat(metadataCaptor.getValue().pspPayload()).contains(PAYOUT_ID);
+        verify(operationService).markFailed(OPERATION_ID);
+        verify(walletWithdrawalService).handlePspWithdrawalFailure(OPERATION_ID);
     }
 
     @Test

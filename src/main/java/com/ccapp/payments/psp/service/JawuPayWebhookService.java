@@ -9,6 +9,7 @@ import com.ccapp.payments.operation.domain.enums.OperationStatus;
 import com.ccapp.payments.operation.domain.enums.OperationType;
 import com.ccapp.payments.operation.service.OperationService;
 import com.ccapp.payments.operation.service.OperationService.PspMetadata;
+import com.ccapp.payments.psp.client.JawuPayPspException;
 import com.ccapp.payments.psp.client.JawuPayPspClient;
 import com.ccapp.payments.psp.domain.entity.JawuPayWebhookEvent;
 import com.ccapp.payments.psp.dto.JawuPayPaymentResponse;
@@ -209,7 +210,16 @@ public class JawuPayWebhookService {
                 operation.getPspStatus(),
                 paymentLookupReference);
 
-        JawuPayPaymentResponse payment = pspClient.getPayment(paymentLookupReference);
+        JawuPayPaymentResponse payment;
+        try {
+            payment = pspClient.getPayment(paymentLookupReference);
+        } catch (JawuPayPspException ex) {
+            if (ex.isNotFoundLike()) {
+                handleMissingPaymentAtPsp(operation, paymentLookupReference, ex);
+                return;
+            }
+            throw ex;
+        }
         log.info("PSP status returned: {} for operationId={} lookupReference={}",
                 payment.status(), operation.getId(), paymentLookupReference);
         verifyAmountCurrencyMatch(operation, payment.amount(), payment.currency());
@@ -235,6 +245,33 @@ public class JawuPayWebhookService {
     }
 
     @Transactional
+    void handleMissingPaymentAtPsp(Operation operation, String paymentLookupReference, JawuPayPspException ex) {
+        if (operation == null) {
+            return;
+        }
+        log.warn("PSP reconciliation payment not found operationId={} lookupReference={} providerReference={} paymentId={} pspReference={}",
+                operation.getId(),
+                paymentLookupReference,
+                operation.getProviderReference(),
+                operation.getPaymentId(),
+                operation.getPspReference());
+        Operation updatedOperation = operationService.recordPspMetadata(
+                operation.getId(),
+                new PspMetadata(
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        "NOT_FOUND",
+                        buildPspLookupFailurePayload("PAYMENT_NOT_FOUND", paymentLookupReference, ex)
+                )
+        );
+        applyPspStatusToOperation(updatedOperation, "NOT_FOUND");
+    }
+
+    @Transactional
     public void checkAndApplyPayoutStatus(String payoutId) {
         Optional<Operation> maybeOperation = operationService.findByPayoutIdOrPspReference(payoutId);
         if (maybeOperation.isEmpty()) {
@@ -243,7 +280,16 @@ public class JawuPayWebhookService {
         }
         Operation operation = maybeOperation.get();
 
-        JawuPayPayoutDetailsResponse payout = pspClient.getPayout(payoutId);
+        JawuPayPayoutDetailsResponse payout;
+        try {
+            payout = pspClient.getPayout(payoutId);
+        } catch (JawuPayPspException ex) {
+            if (ex.isNotFoundLike()) {
+                handleMissingPayoutAtPsp(operation, payoutId, ex);
+                return;
+            }
+            throw ex;
+        }
         verifyAmountCurrencyMatch(operation, payout.amount(), payout.currency());
 
         Operation updatedOperation = operationService.recordPspMetadata(
@@ -252,6 +298,33 @@ public class JawuPayWebhookService {
         );
 
         applyPspStatusToOperation(updatedOperation, payout.status());
+    }
+
+    @Transactional
+    void handleMissingPayoutAtPsp(Operation operation, String payoutLookupReference, JawuPayPspException ex) {
+        if (operation == null) {
+            return;
+        }
+        log.warn("PSP reconciliation payout not found operationId={} lookupReference={} providerReference={} payoutId={} pspReference={}",
+                operation.getId(),
+                payoutLookupReference,
+                operation.getProviderReference(),
+                operation.getPayoutId(),
+                operation.getPspReference());
+        Operation updatedOperation = operationService.recordPspMetadata(
+                operation.getId(),
+                new PspMetadata(
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        "NOT_FOUND",
+                        buildPspLookupFailurePayload("PAYOUT_NOT_FOUND", payoutLookupReference, ex)
+                )
+        );
+        applyPspStatusToOperation(updatedOperation, "NOT_FOUND");
     }
 
     @Transactional
@@ -667,6 +740,24 @@ public class JawuPayWebhookService {
         return normalizeIdentifier(second);
     }
 
+    private String buildPspLookupFailurePayload(String failureType,
+                                                String lookupReference,
+                                                JawuPayPspException ex) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("failureType", failureType);
+        payload.put("lookupReference", lookupReference);
+        payload.put("httpStatusCode", ex.httpStatusCode());
+        payload.put("message", normalizeErrorMessage(ex.getMessage()));
+        payload.put("responseBody", normalizeErrorMessage(ex.responseBody()));
+        payload.put("recordedAt", OffsetDateTime.now().toString());
+        try {
+            return objectMapper.writeValueAsString(payload);
+        } catch (JsonProcessingException jsonProcessingException) {
+            log.warn("Failed to serialize PSP lookup failure payload lookupReference={}", lookupReference, jsonProcessingException);
+            return "{\"failureType\":\"" + failureType + "\",\"lookupReference\":\"" + lookupReference + "\"}";
+        }
+    }
+
     private enum InternalStatus { SUCCESS, FAILED, PENDING }
 
     private InternalStatus mapStatus(String raw) {
@@ -675,7 +766,7 @@ public class JawuPayWebhookService {
         }
         return switch (raw.trim().toUpperCase(Locale.ROOT)) {
             case "SUCCESS", "CONFIRMED", "PAID", "COMPLETED" -> InternalStatus.SUCCESS;
-            case "FAILED", "DECLINED", "REJECTED", "CANCELLED", "CANCELED", "EXPIRED", "TIMEOUT" -> InternalStatus.FAILED;
+            case "FAILED", "DECLINED", "REJECTED", "CANCELLED", "CANCELED", "EXPIRED", "TIMEOUT", "NOT_FOUND" -> InternalStatus.FAILED;
             default -> InternalStatus.PENDING;
         };
     }

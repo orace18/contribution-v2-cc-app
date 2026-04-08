@@ -109,7 +109,9 @@ public class JawuPayPspClientImpl implements JawuPayPspClient {
                                     req.getMethod(), req.getURI(), resp.getStatusCode(), responseBody);
                             throw new JawuPayPspException(
                                     "JawuPay PSP error: HTTP " + resp.getStatusCode()
-                                            + " for " + req.getMethod() + " " + req.getURI());
+                                            + " for " + req.getMethod() + " " + req.getURI(),
+                                    resp.getStatusCode().value(),
+                                    responseBody);
                         })
                 .build();
     }
