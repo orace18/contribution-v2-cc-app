@@ -100,6 +100,20 @@ public class DelegationService {
                 .filter(delegation -> delegation.getExpiresAt() == null || delegation.getExpiresAt().isAfter(OffsetDateTime.now()));
     }
 
+    @Transactional(readOnly = true)
+    public Optional<AccountDelegation> findActiveManagerDelegation(UUID accountHolderId, UUID delegateUserId) {
+        log.debug("Identity delegation findActiveManagerDelegation accountHolderId={} delegateUserId={}",
+                accountHolderId, delegateUserId);
+        return accountDelegationRepository
+                .findFirstByAccountHolderIdAndDelegateUserIdAndRoleAndStatusOrderByCreatedAtDesc(
+                        accountHolderId,
+                        delegateUserId,
+                        DelegationRole.MANAGER,
+                        DelegationStatus.ACTIVE
+                )
+                .filter(delegation -> delegation.getExpiresAt() == null || delegation.getExpiresAt().isAfter(OffsetDateTime.now()));
+    }
+
     @Transactional
     public void deactivateActiveDelegations(UUID accountHolderId) {
         log.info("Identity delegation deactivateActiveDelegations accountHolderId={}", accountHolderId);
@@ -114,5 +128,18 @@ public class DelegationService {
         });
         accountDelegationRepository.saveAll(activeDelegations);
         log.info("Identity delegation deactivated accountHolderId={} count={}", accountHolderId, activeDelegations.size());
+    }
+
+    @Transactional
+    public void revokeActiveManagerDelegation(UUID accountHolderId, UUID delegateUserId) {
+        log.info("Identity delegation revokeActiveManagerDelegation accountHolderId={} delegateUserId={}",
+                accountHolderId, delegateUserId);
+        findActiveManagerDelegation(accountHolderId, delegateUserId).ifPresent(delegation -> {
+            delegation.setStatus(DelegationStatus.REVOKED);
+            delegation.setExpiresAt(OffsetDateTime.now());
+            accountDelegationRepository.save(delegation);
+            log.info("Identity delegation revoked delegationId={} accountHolderId={} delegateUserId={}",
+                    delegation.getId(), accountHolderId, delegateUserId);
+        });
     }
 }

@@ -31,7 +31,7 @@ public class MobileIdentityController {
     private final IdentityService identityService;
 
     @PostMapping("/link-account")
-    @Operation(summary = "Link an assisted account to the authenticated smartphone user")
+    @Operation(summary = "Claim an assisted account for the real smartphone owner after device adoption")
     @ApiResponses(value = {
             @ApiResponse(
                     responseCode = "200",

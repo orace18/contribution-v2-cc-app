@@ -1,6 +1,7 @@
 package com.ccapp.identity.delegation.repository;
 
 import com.ccapp.identity.delegation.domain.entity.AccountDelegation;
+import com.ccapp.identity.delegation.domain.enums.DelegationRole;
 import com.ccapp.identity.delegation.domain.enums.DelegationStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 
@@ -22,6 +23,13 @@ public interface AccountDelegationRepository extends JpaRepository<AccountDelega
     );
 
     Optional<AccountDelegation> findFirstByAccountHolderIdAndStatusOrderByCreatedAtDesc(UUID accountHolderId, DelegationStatus status);
+
+    Optional<AccountDelegation> findFirstByAccountHolderIdAndDelegateUserIdAndRoleAndStatusOrderByCreatedAtDesc(
+            UUID accountHolderId,
+            UUID delegateUserId,
+            DelegationRole role,
+            DelegationStatus status
+    );
 
     List<AccountDelegation> findByAccountHolderIdAndStatus(UUID accountHolderId, DelegationStatus status);
 }

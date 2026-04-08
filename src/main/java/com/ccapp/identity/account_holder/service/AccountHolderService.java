@@ -105,9 +105,47 @@ public class AccountHolderService {
     public void updateName(UUID accountHolderId, String firstName, String lastName) {
         log.info("Identity account-holder updateName accountHolderId={}", accountHolderId);
         AccountHolder accountHolder = getById(accountHolderId);
-        accountHolder.setFirstName(firstName.trim());
-        accountHolder.setLastName(lastName.trim());
+        accountHolder.setFirstName(normalizeName(firstName));
+        accountHolder.setLastName(normalizeName(lastName));
         accountHolderRepository.save(accountHolder);
+    }
+
+    @Transactional
+    public AccountHolder createManagedAccount(UUID managerUserId,
+                                              String firstName,
+                                              String lastName,
+                                              String phoneNumber,
+                                              String requestedCountryCode) {
+        log.info("Identity account-holder createManagedAccount managerUserId={} requestedCountryCode={}",
+                managerUserId, requestedCountryCode);
+        String selectedCountryCode = countryService.resolveSelectedCountryOrThrow(requestedCountryCode).getCode();
+        String serviceCountryCode = countryService.resolveServiceCountryForSelection(selectedCountryCode).getCode();
+        String normalizedPhone = normalizePhone(phoneNumber);
+
+        if (accountHolderRepository.existsByPhoneNumber(normalizedPhone)) {
+            log.warn("Identity account-holder createManagedAccount denied phone conflict managerUserId={} phone={}",
+                    managerUserId, normalizedPhone);
+            throw new ConflictException("Phone number already used");
+        }
+
+        AccountHolder created = accountHolderRepository.save(AccountHolder.builder()
+                .id(UUID.randomUUID())
+                .firstName(normalizeName(firstName))
+                .lastName(normalizeName(lastName))
+                .phoneNumber(normalizedPhone)
+                .countryCode(selectedCountryCode)
+                .serviceCountryCode(serviceCountryCode)
+                .accountType(AccountType.ASSISTED)
+                .createdByUserId(managerUserId)
+                .createdVia(AccountCreatedVia.MANAGED_ACCOUNT)
+                .kycStatus(KycStatus.NOT_STARTED)
+                .kycLevel(KycLevel.LEVEL_0_UNVERIFIED)
+                .build());
+        log.info("Identity account-holder createManagedAccount success accountHolderId={} serviceCountryCode={} createdByUserId={}",
+                created.getId(), created.getServiceCountryCode(), managerUserId);
+        countryChartOfAccountsService.findOrCreateWallet(created);
+        domainEventPublisher.publish(AccountHolderCreatedEvent.create(created.getId()));
+        return created;
     }
 
     @Transactional
@@ -134,8 +172,8 @@ public class AccountHolderService {
             throw new ConflictException("Phone number already used");
         }
 
-        accountHolder.setFirstName(firstName);
-        accountHolder.setLastName(lastName);
+        accountHolder.setFirstName(normalizeName(firstName));
+        accountHolder.setLastName(normalizeName(lastName));
         accountHolder.setPhoneNumber(normalizedPhone);
         accountHolder.setCountryCode(selectedCountryCode);
         accountHolder.setServiceCountryCode(serviceCountryCode);
@@ -144,5 +182,27 @@ public class AccountHolderService {
                 saved.getId(), saved.getCountryCode(), saved.getServiceCountryCode());
         countryChartOfAccountsService.findOrCreateWallet(saved);
         return saved;
+    }
+
+    private String normalizeName(String value) {
+        if (value == null) {
+            throw new BusinessException("Name is required");
+        }
+        String normalized = value.trim();
+        if (normalized.isBlank()) {
+            throw new BusinessException("Name is required");
+        }
+        return normalized;
+    }
+
+    private String normalizePhone(String value) {
+        if (value == null) {
+            throw new BusinessException("Phone number is required");
+        }
+        String normalized = value.trim();
+        if (normalized.isBlank()) {
+            throw new BusinessException("Phone number is required");
+        }
+        return normalized;
     }
 }

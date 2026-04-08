@@ -31,8 +31,9 @@ public class MobileCircleController {
 
     private final CircleService circleService;
 
+    @Deprecated(forRemoval = false)
     @PostMapping("/{circleId}/assisted-members")
-    @Operation(summary = "Create an assisted member and attach to circle")
+    @Operation(summary = "Deprecated assisted-member circle flow; managed accounts now own this creation domain")
     @ApiResponses(value = {
             @ApiResponse(
                     responseCode = "200",
