@@ -161,7 +161,7 @@ public class AdminBackofficeCommerceService {
                         request.cvValue(),
                         request.active(),
                         null,
-                        null
+                        request.imageUrl()
                 )
         );
 
@@ -187,6 +187,7 @@ public class AdminBackofficeCommerceService {
         product.setCommissionPercent(request.commissionPercent());
         product.setCvValue(request.cvValue());
         product.setActive(request.active() == null || request.active());
+        product.setImageUrl(request.imageUrl() != null ? request.imageUrl().trim() : null);
         shopProductRepository.save(product);
 
         CommerceProduct commerceProduct = commerceProductRepository.findById(productId)
@@ -276,6 +277,7 @@ public class AdminBackofficeCommerceService {
                 product.isActive() ? "ACTIVE" : "INACTIVE",
                 null,
                 null,
+                product.getImageUrl(),
                 createdAt
         );
     }

@@ -296,6 +296,7 @@ public class MediaService {
                 media.getType(),
                 media.getBucket(),
                 media.getObjectKey(),
+                objectStorageService.publicObjectUrl(media.getBucket(), media.getObjectKey()),
                 media.getContentType(),
                 media.getSize(),
                 media.getStatus(),

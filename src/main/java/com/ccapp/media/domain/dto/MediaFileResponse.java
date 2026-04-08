@@ -12,6 +12,7 @@ public record MediaFileResponse(
         MediaType type,
         String bucket,
         String objectKey,
+        String publicUrl,
         String contentType,
         Long size,
         MediaStatus status,

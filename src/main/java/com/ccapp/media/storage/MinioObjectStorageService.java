@@ -74,6 +74,23 @@ public class MinioObjectStorageService implements ObjectStorageService, AutoClos
     }
 
     @Override
+    public String publicObjectUrl(String bucket, String objectKey) {
+        String baseEndpoint = mediaStorageSettings.publicEndpoint() != null
+                ? mediaStorageSettings.publicEndpoint()
+                : mediaStorageSettings.endpoint();
+        String normalizedBase = baseEndpoint.replaceAll("/+$", "");
+        if (mediaStorageSettings.pathStyle()) {
+            return normalizedBase + "/" + bucket + "/" + objectKey;
+        }
+        java.net.URI endpointUri = mediaStorageSettings.presignerEndpointUri();
+        String scheme = endpointUri.getScheme();
+        String host = endpointUri.getHost();
+        int port = endpointUri.getPort();
+        String authority = port > 0 ? host + ":" + port : host;
+        return scheme + "://" + bucket + "." + authority + "/" + objectKey;
+    }
+
+    @Override
     public void putObject(String bucket, String objectKey, byte[] data, String contentType) {
         try {
             log.info(

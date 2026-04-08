@@ -20,6 +20,7 @@ public record AdminBackofficeProductRequest(
         @NotNull @DecimalMin(value = "0.0", inclusive = true) @DecimalMax(value = "100.0", inclusive = true) @Digits(integer = 3, fraction = 2) BigDecimal commissionPercent,
         @NotNull @DecimalMin(value = "0.0", inclusive = true) @Digits(integer = 15, fraction = 4) BigDecimal dsbAmount,
         @NotBlank String deliveryType,
-        Boolean active
+        Boolean active,
+        @Size(max = 512) String imageUrl
 ) {
 }
