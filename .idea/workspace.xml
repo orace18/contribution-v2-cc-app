@@ -4,9 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="fix: Cpass config whatsapp">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-    </list>
+    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="fix: Kyc type verification" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -143,14 +141,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1772553173766</updated>
-    </task>
-    <task id="LOCAL-00098" summary="Rebuild">
-      <option name="closed" value="true" />
-      <created>1774968208029</created>
-      <option name="number" value="00098" />
-      <option name="presentableId" value="LOCAL-00098" />
-      <option name="project" value="LOCAL" />
-      <updated>1774968208030</updated>
     </task>
     <task id="LOCAL-00099" summary="Rebuild">
       <option name="closed" value="true" />
@@ -536,7 +526,15 @@
       <option name="project" value="LOCAL" />
       <updated>1775570417551</updated>
     </task>
-    <option name="localTasksCounter" value="147" />
+    <task id="LOCAL-00147" summary="fix: Kyc type verification">
+      <option name="closed" value="true" />
+      <created>1775638264915</created>
+      <option name="number" value="00147" />
+      <option name="presentableId" value="LOCAL-00147" />
+      <option name="project" value="LOCAL" />
+      <updated>1775638264916</updated>
+    </task>
+    <option name="localTasksCounter" value="148" />
     <servers />
   </component>
   <component name="UnknownFeatures">
@@ -567,7 +565,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="Check nom dans cercle" />
     <MESSAGE value="View cercle" />
     <MESSAGE value="Migration flyway" />
     <MESSAGE value="fingerprint" />
@@ -592,7 +589,8 @@
     <MESSAGE value="fix: webhook skip-validation flag + sync HMAC secrets&quot;" />
     <MESSAGE value="fix: rendre amount/currency optionnels dans le webhook JawuPay sandbox" />
     <MESSAGE value="fix: Cpass config whatsapp" />
-    <option name="LAST_COMMIT_MESSAGE" value="fix: Cpass config whatsapp" />
+    <MESSAGE value="fix: Kyc type verification" />
+    <option name="LAST_COMMIT_MESSAGE" value="fix: Kyc type verification" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />
