@@ -4,10 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="fix: Kyc type verification">
-      <change beforePath="$PROJECT_DIR$/src/main/resources/firebase/firebase-service-account-dev.json" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/firebase/firebase-service-account-dev.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/resources/firebase/firebase-service-account-prod.json" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/firebase/firebase-service-account-prod.json" afterDir="false" />
-    </list>
+    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="fix: update firebase" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -144,14 +141,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1772553173766</updated>
-    </task>
-    <task id="LOCAL-00100" summary="Rebuild">
-      <option name="closed" value="true" />
-      <created>1774970559474</created>
-      <option name="number" value="00100" />
-      <option name="presentableId" value="LOCAL-00100" />
-      <option name="project" value="LOCAL" />
-      <updated>1774970559474</updated>
     </task>
     <task id="LOCAL-00101" summary="Rebuild firebase">
       <option name="closed" value="true" />
@@ -537,7 +526,15 @@
       <option name="project" value="LOCAL" />
       <updated>1775638820481</updated>
     </task>
-    <option name="localTasksCounter" value="149" />
+    <task id="LOCAL-00149" summary="fix: update firebase">
+      <option name="closed" value="true" />
+      <created>1775642280904</created>
+      <option name="number" value="00149" />
+      <option name="presentableId" value="LOCAL-00149" />
+      <option name="project" value="LOCAL" />
+      <updated>1775642280905</updated>
+    </task>
+    <option name="localTasksCounter" value="150" />
     <servers />
   </component>
   <component name="UnknownFeatures">
@@ -568,7 +565,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="View cercle" />
     <MESSAGE value="Migration flyway" />
     <MESSAGE value="fingerprint" />
     <MESSAGE value="synchronisation" />
@@ -593,7 +589,8 @@
     <MESSAGE value="fix: rendre amount/currency optionnels dans le webhook JawuPay sandbox" />
     <MESSAGE value="fix: Cpass config whatsapp" />
     <MESSAGE value="fix: Kyc type verification" />
-    <option name="LAST_COMMIT_MESSAGE" value="fix: Kyc type verification" />
+    <MESSAGE value="fix: update firebase" />
+    <option name="LAST_COMMIT_MESSAGE" value="fix: update firebase" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />
