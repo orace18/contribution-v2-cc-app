@@ -3,6 +3,7 @@ package com.ccapp.mobile.onboarding.controller;
 import com.ccapp.common.api.ApiEnvelope;
 import com.ccapp.common.security.AuthenticatedPrincipal;
 import com.ccapp.common.security.SecurityUtils;
+import com.ccapp.identity.managedaccounts.service.ManagedAccountReadContextService;
 import com.ccapp.mobile.onboarding.dto.MobileOnboardingPlanResponse;
 import com.ccapp.mobile.onboarding.dto.MobileOnboardingStatusResponse;
 import com.ccapp.mobile.onboarding.dto.MobilePlanSelectionResponse;
@@ -45,6 +46,7 @@ public class MobileOnboardingController {
     private final MobileOnboardingService mobileOnboardingService;
     private final MobileOnboardingJourneyService mobileOnboardingJourneyService;
     private final MobileOnboardingStatusService mobileOnboardingStatusService;
+    private final ManagedAccountReadContextService managedAccountReadContextService;
 
     @GetMapping("/plans")
     @Operation(summary = "List onboarding plans for the requested country catalog")
@@ -124,14 +126,19 @@ public class MobileOnboardingController {
     @GetMapping("/status")
     @Operation(summary = "Get onboarding journey status for mobile orchestration")
     @SecurityRequirement(name = "bearerAuth")
-    public ResponseEntity<ApiEnvelope<MobileOnboardingStatusResponse>> status() {
+    public ResponseEntity<ApiEnvelope<MobileOnboardingStatusResponse>> status(
+            @Parameter(description = "Optional target accountHolderId for an authorized managed account")
+            @RequestParam(name = "accountHolderId", required = false) UUID requestedAccountHolderId) {
         AuthenticatedPrincipal principal = SecurityUtils.currentPrincipal();
-        UUID accountHolderId = principal.accountHolderId() != null
-                ? principal.accountHolderId()
-                : SecurityUtils.currentAccountHolderId();
+        UUID actorUserId = resolveActorUserId();
+        UUID accountHolderId = managedAccountReadContextService.resolveViewTargetAccountHolderId(
+                actorUserId,
+                principal.accountHolderId() != null ? principal.accountHolderId() : SecurityUtils.currentAccountHolderId(),
+                requestedAccountHolderId
+        );
         return ResponseEntity.ok(ApiEnvelope.success(
                 "Onboarding status",
-                mobileOnboardingStatusService.getStatus(principal.userId(), accountHolderId)
+                mobileOnboardingStatusService.getStatus(actorUserId, accountHolderId)
         ));
     }
 

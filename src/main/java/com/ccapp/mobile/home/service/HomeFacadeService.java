@@ -97,7 +97,7 @@ public class HomeFacadeService {
         );
 
         return new MobileHomeDashboardResponse(
-                buildUser(accountHolder, profile, activeMembership.orElse(null)),
+                buildUser(actorUserId, accountHolder, profile, activeMembership.orElse(null)),
                 buildEngagement(accountHolderId, allTasks),
                 buildNextAction(accountHolder, profile, myCircle, activeMembership.isPresent(), planSelection.orElse(null), allTasks),
                 buildCircle(myCircle),
@@ -107,7 +107,8 @@ public class HomeFacadeService {
         );
     }
 
-    private MobileHomeDashboardResponse.UserSection buildUser(AccountHolder accountHolder,
+    private MobileHomeDashboardResponse.UserSection buildUser(UUID actorUserId,
+                                                              AccountHolder accountHolder,
                                                               UserProfile profile,
                                                               Membership activeMembership) {
         String membershipType = activeMembership == null
@@ -115,10 +116,14 @@ public class HomeFacadeService {
                 : activeMembership.getPlanGrade() != null
                 ? activeMembership.getPlanGrade().name()
                 : activeMembership.getPlanCode();
+        boolean delegatedAccess = isDelegatedAccess(actorUserId, accountHolder.getId());
         return new MobileHomeDashboardResponse.UserSection(
                 accountHolder.getFirstName(),
                 profile != null && profile.getProfilePhotoMediaId() != null ? profile.getProfilePhotoMediaId().toString() : null,
-                membershipType
+                membershipType,
+                accountHolder.getId(),
+                accountHolder.getAccountType() == com.ccapp.identity.account_holder.domain.enums.AccountType.ASSISTED,
+                delegatedAccess
         );
     }
 
@@ -419,5 +424,14 @@ public class HomeFacadeService {
 
     private BigDecimal defaultAmount(BigDecimal amount) {
         return amount == null ? BigDecimal.ZERO : amount;
+    }
+
+    private boolean isDelegatedAccess(UUID actorUserId, UUID targetAccountHolderId) {
+        if (actorUserId == null || targetAccountHolderId == null) {
+            return false;
+        }
+        return appUserRepository.findById(actorUserId)
+                .map(appUser -> !targetAccountHolderId.equals(appUser.getAccountHolderId()))
+                .orElse(!targetAccountHolderId.equals(actorUserId));
     }
 }

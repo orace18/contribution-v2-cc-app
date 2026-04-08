@@ -3,9 +3,11 @@ package com.ccapp.mobile.home.controller;
 import com.ccapp.common.api.ApiEnvelope;
 import com.ccapp.common.security.AuthenticatedPrincipal;
 import com.ccapp.common.security.SecurityUtils;
+import com.ccapp.identity.managedaccounts.service.ManagedAccountReadContextService;
 import com.ccapp.mobile.home.dto.MobileHomeDashboardResponse;
 import com.ccapp.mobile.home.service.HomeFacadeService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -16,6 +18,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.UUID;
@@ -28,6 +31,7 @@ import java.util.UUID;
 public class MobileHomeController {
 
     private final HomeFacadeService homeFacadeService;
+    private final ManagedAccountReadContextService managedAccountReadContextService;
 
     @GetMapping
     @Operation(summary = "Aggregate mobile home data")
@@ -36,11 +40,18 @@ public class MobileHomeController {
             @ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content(schema = @Schema(implementation = ApiEnvelope.class))),
             @ApiResponse(responseCode = "404", description = "Account holder not found", content = @Content(schema = @Schema(implementation = ApiEnvelope.class)))
     })
-    public ResponseEntity<ApiEnvelope<MobileHomeDashboardResponse>> getHome() {
-        UUID accountHolderId = SecurityUtils.currentAccountHolderId();
+    public ResponseEntity<ApiEnvelope<MobileHomeDashboardResponse>> getHome(
+            @Parameter(description = "Optional target accountHolderId for an authorized managed account")
+            @RequestParam(name = "accountHolderId", required = false) UUID requestedAccountHolderId) {
+        UUID actorUserId = resolveActorUserId();
+        UUID accountHolderId = managedAccountReadContextService.resolveViewTargetAccountHolderId(
+                actorUserId,
+                SecurityUtils.currentAccountHolderId(),
+                requestedAccountHolderId
+        );
         return ResponseEntity.ok(ApiEnvelope.success(
                 "Mobile home",
-                homeFacadeService.getHome(resolveActorUserId(), accountHolderId)
+                homeFacadeService.getHome(actorUserId, accountHolderId)
         ));
     }
 

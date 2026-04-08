@@ -3,10 +3,12 @@ package com.ccapp.mobile.wallet.controller;
 import com.ccapp.common.api.CommonResponse;
 import com.ccapp.common.security.AuthenticatedPrincipal;
 import com.ccapp.common.security.SecurityUtils;
+import com.ccapp.identity.managedaccounts.service.ManagedAccountReadContextService;
 import com.ccapp.wallet.dto.WalletDashboardOperationResponse;
 import com.ccapp.wallet.dto.WalletDashboardResponse;
 import com.ccapp.wallet.service.WalletDashboardService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -17,6 +19,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -30,6 +33,7 @@ import java.util.UUID;
 public class MobileWalletDashboardController {
 
     private final WalletDashboardService walletDashboardService;
+    private final ManagedAccountReadContextService managedAccountReadContextService;
 
     @GetMapping("/dashboard")
     @Operation(summary = "Get wallet dashboard")
@@ -38,11 +42,18 @@ public class MobileWalletDashboardController {
             @ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
             @ApiResponse(responseCode = "404", description = "Account holder not found", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
     })
-    public ResponseEntity<CommonResponse<WalletDashboardResponse>> dashboard() {
-        UUID accountHolderId = SecurityUtils.currentAccountHolderId();
+    public ResponseEntity<CommonResponse<WalletDashboardResponse>> dashboard(
+            @Parameter(description = "Optional target accountHolderId for an authorized managed account")
+            @RequestParam(name = "accountHolderId", required = false) UUID requestedAccountHolderId) {
+        UUID actorUserId = resolveActorUserId();
+        UUID accountHolderId = managedAccountReadContextService.resolveViewTargetAccountHolderId(
+                actorUserId,
+                SecurityUtils.currentAccountHolderId(),
+                requestedAccountHolderId
+        );
         return ResponseEntity.ok(CommonResponse.success(
                 "Wallet dashboard",
-                walletDashboardService.getDashboard(resolveActorUserId(), accountHolderId)
+                walletDashboardService.getDashboard(actorUserId, accountHolderId)
         ));
     }
 
@@ -53,11 +64,18 @@ public class MobileWalletDashboardController {
             @ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
             @ApiResponse(responseCode = "404", description = "Account holder not found", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
     })
-    public ResponseEntity<CommonResponse<List<WalletDashboardOperationResponse>>> operations() {
-        UUID accountHolderId = SecurityUtils.currentAccountHolderId();
+    public ResponseEntity<CommonResponse<List<WalletDashboardOperationResponse>>> operations(
+            @Parameter(description = "Optional target accountHolderId for an authorized managed account")
+            @RequestParam(name = "accountHolderId", required = false) UUID requestedAccountHolderId) {
+        UUID actorUserId = resolveActorUserId();
+        UUID accountHolderId = managedAccountReadContextService.resolveViewTargetAccountHolderId(
+                actorUserId,
+                SecurityUtils.currentAccountHolderId(),
+                requestedAccountHolderId
+        );
         return ResponseEntity.ok(CommonResponse.success(
                 "Wallet operations",
-                walletDashboardService.getRecentOperations(resolveActorUserId(), accountHolderId)
+                walletDashboardService.getRecentOperations(actorUserId, accountHolderId)
         ));
     }
 

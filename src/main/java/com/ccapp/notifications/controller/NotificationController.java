@@ -3,11 +3,13 @@ package com.ccapp.notifications.controller;
 import com.ccapp.common.api.CommonResponse;
 import com.ccapp.common.security.AuthenticatedPrincipal;
 import com.ccapp.common.security.SecurityUtils;
+import com.ccapp.identity.managedaccounts.service.ManagedAccountReadContextService;
 import com.ccapp.notifications.dto.CreateNotificationRequest;
 import com.ccapp.notifications.dto.NotificationResponse;
 import com.ccapp.notifications.dto.SendMultiChannelNotificationRequest;
 import com.ccapp.notifications.service.NotificationService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -30,6 +32,7 @@ import java.util.UUID;
 public class NotificationController {
 
     private final NotificationService notificationService;
+    private final ManagedAccountReadContextService managedAccountReadContextService;
 
     @PostMapping
     @Operation(summary = "Create a notification")
@@ -103,9 +106,15 @@ public class NotificationController {
             @ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
             @ApiResponse(responseCode = "404", description = "Account holder not found", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
     })
-    public ResponseEntity<CommonResponse<List<NotificationResponse>>> myNotifications() {
-        UUID accountHolderId = SecurityUtils.currentAccountHolderId();
+    public ResponseEntity<CommonResponse<List<NotificationResponse>>> myNotifications(
+            @Parameter(description = "Optional target accountHolderId for an authorized managed account")
+            @RequestParam(name = "accountHolderId", required = false) UUID requestedAccountHolderId) {
         UUID actorUserId = resolveActorUserId();
+        UUID accountHolderId = managedAccountReadContextService.resolveViewTargetAccountHolderId(
+                actorUserId,
+                SecurityUtils.currentAccountHolderId(),
+                requestedAccountHolderId
+        );
         return ResponseEntity.ok(CommonResponse.success(
                 "Notifications",
                 notificationService.getNotificationsForUser(actorUserId, accountHolderId)
@@ -118,8 +127,15 @@ public class NotificationController {
             @ApiResponse(responseCode = "200", description = "Success", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
             @ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
     })
-    public ResponseEntity<CommonResponse<Long>> unreadCount() {
-        UUID accountHolderId = SecurityUtils.currentAccountHolderId();
+    public ResponseEntity<CommonResponse<Long>> unreadCount(
+            @Parameter(description = "Optional target accountHolderId for an authorized managed account")
+            @RequestParam(name = "accountHolderId", required = false) UUID requestedAccountHolderId) {
+        UUID actorUserId = resolveActorUserId();
+        UUID accountHolderId = managedAccountReadContextService.resolveViewTargetAccountHolderId(
+                actorUserId,
+                SecurityUtils.currentAccountHolderId(),
+                requestedAccountHolderId
+        );
         return ResponseEntity.ok(CommonResponse.success("Unread count", notificationService.getUnreadCount(accountHolderId)));
     }
 

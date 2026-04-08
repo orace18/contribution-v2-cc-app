@@ -19,7 +19,10 @@ public record MobileHomeDashboardResponse(
     public record UserSection(
             String firstName,
             String profilePicture,
-            String membershipType
+            String membershipType,
+            UUID accountHolderId,
+            boolean managedAccount,
+            boolean delegatedAccess
     ) {
     }
 
