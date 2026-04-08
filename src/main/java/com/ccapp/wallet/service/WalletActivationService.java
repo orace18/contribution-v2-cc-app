@@ -9,11 +9,15 @@ import com.ccapp.identity.wallet.domain.entity.Wallet;
 import com.ccapp.identity.wallet.repository.WalletRepository;
 import com.ccapp.identity.wallet.service.WalletService;
 import com.ccapp.mobile.onboarding.service.MobileOnboardingJourneyService;
+import com.ccapp.payments.subscription.domain.entity.Membership;
+import com.ccapp.payments.subscription.domain.enums.MembershipStatus;
+import com.ccapp.payments.subscription.service.MembershipService;
 import com.ccapp.wallet.domain.enums.WalletType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.OffsetDateTime;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -26,11 +30,12 @@ public class WalletActivationService {
     private final WalletRepository walletRepository;
     private final WalletService walletService;
     private final MobileOnboardingJourneyService mobileOnboardingJourneyService;
+    private final MembershipService membershipService;
 
     @Transactional
     public Wallet activate(UUID accountHolderId) {
-        if (!isIdentityOnboardingCompleted(accountHolderId)) {
-            throw new BusinessException("Identity onboarding incomplete");
+        if (!isWalletActivationReady(accountHolderId)) {
+            throw new BusinessException("Membership activation incomplete");
         }
 
         String verifiedPhoneNumber = findVerifiedPhoneNumber(accountHolderId)
@@ -41,7 +46,7 @@ public class WalletActivationService {
 
     @Transactional
     public Optional<Wallet> activateIfEligible(UUID accountHolderId) {
-        if (!isIdentityOnboardingCompleted(accountHolderId)) {
+        if (!isWalletActivationReady(accountHolderId)) {
             return Optional.empty();
         }
 
@@ -82,9 +87,19 @@ public class WalletActivationService {
         return resolvedWallet;
     }
 
-    private boolean isIdentityOnboardingCompleted(UUID accountHolderId) {
+    private boolean isWalletActivationReady(UUID accountHolderId) {
+        Membership latestMembership = membershipService.findLatestMembership(accountHolderId).orElse(null);
+        if (latestMembership != null && isMembershipActive(latestMembership)) {
+            return true;
+        }
+
         OnboardingStatusResponse identityStatus = identityOnboardingService.getOnboardingStatus(accountHolderId);
         return identityStatus != null && identityStatus.onboardingCompleted();
+    }
+
+    private boolean isMembershipActive(Membership membership) {
+        return membership.getStatus() == MembershipStatus.ACTIVE
+                && (membership.getExpiresAt() == null || membership.getExpiresAt().isAfter(OffsetDateTime.now()));
     }
 
     private Optional<String> findVerifiedPhoneNumber(UUID accountHolderId) {
