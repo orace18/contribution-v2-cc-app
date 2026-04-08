@@ -13,12 +13,16 @@ import com.ccapp.notifications.domain.enums.NotificationChannel;
 import com.ccapp.notifications.domain.enums.NotificationStatus;
 import com.ccapp.notifications.domain.enums.NotificationType;
 import com.ccapp.notifications.dto.CreateNotificationRequest;
+import com.ccapp.notifications.dto.NotificationDeepLinkRequest;
+import com.ccapp.notifications.dto.NotificationDeepLinkResponse;
 import com.ccapp.notifications.dto.NotificationAttemptResponse;
 import com.ccapp.notifications.dto.NotificationResponse;
 import com.ccapp.notifications.dto.SendMultiChannelNotificationRequest;
 import com.ccapp.notifications.repository.NotificationAttemptRepository;
 import com.ccapp.notifications.repository.NotificationRepository;
 import com.ccapp.notifications.template.NotificationTemplateService;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,13 +31,18 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 public class NotificationService {
+
+    private static final TypeReference<Map<String, String>> STRING_MAP = new TypeReference<>() {
+    };
 
     private final NotificationRepository notificationRepository;
     private final NotificationAttemptRepository notificationAttemptRepository;
@@ -42,6 +51,7 @@ public class NotificationService {
     private final AccountHolderService accountHolderService;
     private final AppUserRepository appUserRepository;
     private final AccessControlService accessControlService;
+    private final ObjectMapper objectMapper;
 
     @Transactional
     public NotificationResponse createNotification(CreateNotificationRequest request) {
@@ -64,6 +74,10 @@ public class NotificationService {
                 .templateCode(resolved.templateCode())
                 .title(resolveTitle(request.type(), resolved.title()))
                 .message(resolved.message())
+                .targetId(normalizeTargetId(request.targetId()))
+                .deepLinkRouteKey(request.deepLink() == null ? null : normalizeRouteKey(request.deepLink()))
+                .deepLinkLabel(request.deepLink() == null ? null : normalizeLabel(request.deepLink()))
+                .deepLinkParamsJson(serializeDeepLinkParams(request.deepLink()))
                 .status(NotificationStatus.PENDING)
                 .build());
 
@@ -147,6 +161,8 @@ public class NotificationService {
                     request.title(),
                     request.message(),
                     request.variables(),
+                    null,
+                    null,
                     sendNow
             )));
         }
@@ -235,6 +251,8 @@ public class NotificationService {
                 notification.getTemplateCode(),
                 notification.getTitle(),
                 notification.getMessage(),
+                notification.getTargetId(),
+                buildDeepLink(notification),
                 notification.getStatus(),
                 notification.getCreatedAt(),
                 notification.getSentAt(),
@@ -248,5 +266,56 @@ public class NotificationService {
             return rawTitle.trim();
         }
         return type == null ? "Notification" : type.name();
+    }
+
+    private String normalizeTargetId(String targetId) {
+        if (targetId == null || targetId.isBlank()) {
+            return null;
+        }
+        return targetId.trim();
+    }
+
+    private String normalizeRouteKey(NotificationDeepLinkRequest deepLink) {
+        return deepLink.routeKey().trim();
+    }
+
+    private String normalizeLabel(NotificationDeepLinkRequest deepLink) {
+        if (deepLink.label() == null || deepLink.label().isBlank()) {
+            return null;
+        }
+        return deepLink.label().trim();
+    }
+
+    private String serializeDeepLinkParams(NotificationDeepLinkRequest deepLink) {
+        if (deepLink == null) {
+            return "{}";
+        }
+        try {
+            return objectMapper.writeValueAsString(deepLink.params() == null ? Collections.emptyMap() : deepLink.params());
+        } catch (Exception ex) {
+            return "{}";
+        }
+    }
+
+    private NotificationDeepLinkResponse buildDeepLink(Notification notification) {
+        if (notification.getDeepLinkRouteKey() == null || notification.getDeepLinkRouteKey().isBlank()) {
+            return null;
+        }
+        try {
+            Map<String, String> params = notification.getDeepLinkParamsJson() == null || notification.getDeepLinkParamsJson().isBlank()
+                    ? Collections.emptyMap()
+                    : objectMapper.readValue(notification.getDeepLinkParamsJson(), STRING_MAP);
+            return new NotificationDeepLinkResponse(
+                    notification.getDeepLinkRouteKey(),
+                    notification.getDeepLinkLabel(),
+                    params
+            );
+        } catch (Exception ex) {
+            return new NotificationDeepLinkResponse(
+                    notification.getDeepLinkRouteKey(),
+                    notification.getDeepLinkLabel(),
+                    Collections.emptyMap()
+            );
+        }
     }
 }

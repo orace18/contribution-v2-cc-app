@@ -451,6 +451,8 @@ public class TaskEngineService {
                     null,
                     "Tache accomplie: " + task.getTitle(),
                     Map.of("taskType", task.getTaskType().name()),
+                    null,
+                    null,
                     true
             ));
         } catch (RuntimeException ex) {

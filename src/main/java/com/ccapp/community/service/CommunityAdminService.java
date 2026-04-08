@@ -18,6 +18,10 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * @deprecated Replaced by {@code com.ccapp.prayer.service.PrayerAdminPostService}.
+ */
+@Deprecated(since = "2026-04", forRemoval = false)
 @Service
 @RequiredArgsConstructor
 public class CommunityAdminService {

@@ -50,6 +50,8 @@ public class NotificationController {
                 request.title(),
                 request.message(),
                 request.variables(),
+                request.targetId(),
+                request.deepLink(),
                 request.sendNow()
         );
         return ResponseEntity.ok(CommonResponse.success("Notification created", notificationService.createNotification(normalized)));

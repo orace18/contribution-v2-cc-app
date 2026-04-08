@@ -30,6 +30,8 @@ import com.ccapp.progress.domain.enums.TaskType;
 import com.ccapp.progress.dto.TaskResponse;
 import com.ccapp.progress.repository.UserTaskRepository;
 import com.ccapp.progress.service.TaskEngineService;
+import com.ccapp.prayer.dto.PrayerHomeSuggestionResponse;
+import com.ccapp.prayer.service.PrayerSuggestionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -72,6 +74,7 @@ public class HomeFacadeService {
     private final UserProfileRepository userProfileRepository;
     private final CreditScoringService creditScoringService;
     private final MobilePlanSelectionRepository mobilePlanSelectionRepository;
+    private final PrayerSuggestionService prayerSuggestionService;
 
     @Transactional
     public MobileHomeDashboardResponse getHome(UUID actorUserId, UUID accountHolderId) {
@@ -85,6 +88,13 @@ public class HomeFacadeService {
         List<TaskResponse> allTasks = taskEngineService.getAllUserTasks(accountHolderId);
         MyCircleResponse myCircle = findMyCircle(accountHolderId);
         CreditEligibilityResponse eligibility = creditScoringService.getEligibility(actorUserId, accountHolderId);
+        MobileHomeDashboardResponse.FinancingSection financing = buildFinancing(profile, eligibility);
+        PrayerHomeSuggestionResponse prayerSuggestion = prayerSuggestionService.getHomeSuggestion(
+                accountHolder,
+                myCircle != null,
+                activeMembership.isPresent(),
+                financing.remainingAmount().signum() > 0
+        );
 
         return new MobileHomeDashboardResponse(
                 buildUser(accountHolder, profile, activeMembership.orElse(null)),
@@ -92,7 +102,8 @@ public class HomeFacadeService {
                 buildNextAction(accountHolder, profile, myCircle, activeMembership.isPresent(), planSelection.orElse(null), allTasks),
                 buildCircle(myCircle),
                 DEFAULT_QUICK_ACTIONS,
-                buildFinancing(profile, eligibility)
+                financing,
+                prayerSuggestion
         );
     }
 

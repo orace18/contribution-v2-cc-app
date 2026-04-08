@@ -5,6 +5,11 @@ import jakarta.validation.constraints.Size;
 
 import java.util.UUID;
 
+/**
+ * @deprecated Replaced by Business Prayer admin/mobile post creation requests.
+ * Legacy {@code mediaUrl} input is no longer accepted; use prayer media references instead.
+ */
+@Deprecated(since = "2026-04", forRemoval = false)
 public record CreateCommunityPostRequest(
         @NotBlank(message = "title is required")
         @Size(max = 255, message = "title max size is 255")

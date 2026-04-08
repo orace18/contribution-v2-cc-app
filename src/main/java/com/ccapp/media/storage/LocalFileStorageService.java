@@ -54,6 +54,11 @@ public class LocalFileStorageService implements ObjectStorageService, AutoClosea
     }
 
     @Override
+    public String publicObjectUrl(String bucket, String objectKey) {
+        return buildPublicUrl(resolveFileId(bucket, objectKey));
+    }
+
+    @Override
     public boolean objectExists(String bucket, String objectKey) {
         return Files.exists(dataPath(resolveFileId(bucket, objectKey)));
     }

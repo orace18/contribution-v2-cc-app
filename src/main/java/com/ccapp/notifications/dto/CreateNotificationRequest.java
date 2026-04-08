@@ -2,6 +2,7 @@ package com.ccapp.notifications.dto;
 
 import com.ccapp.notifications.domain.enums.NotificationChannel;
 import com.ccapp.notifications.domain.enums.NotificationType;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
@@ -30,6 +31,12 @@ public record CreateNotificationRequest(
         String message,
 
         Map<String, String> variables,
+
+        @Size(max = 128, message = "targetId max size is 128")
+        String targetId,
+
+        @Valid
+        NotificationDeepLinkRequest deepLink,
 
         Boolean sendNow
 ) {

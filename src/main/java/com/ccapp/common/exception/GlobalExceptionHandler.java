@@ -1,6 +1,7 @@
 package com.ccapp.common.exception;
 
 import com.ccapp.common.api.CommonResponse;
+import com.ccapp.prayer.exception.PrayerPhase1NotImplementedException;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -42,6 +43,11 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(CommonResponse.error(ex.getMessage()));
     }
 
+    @ExceptionHandler(PrayerPhase1NotImplementedException.class)
+    public ResponseEntity<CommonResponse<Void>> handlePrayerPhase1NotImplemented(PrayerPhase1NotImplementedException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).body(CommonResponse.error(ex.getMessage()));
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<CommonResponse<Void>> handleValidation(MethodArgumentNotValidException ex) {
         String message = ex.getBindingResult().getFieldErrors().stream()
@@ -63,7 +69,10 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<CommonResponse<Void>> handleAccessDenied(AccessDeniedException ex) {
-        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(CommonResponse.error("Access denied"));
+        String message = (ex.getMessage() == null || ex.getMessage().isBlank())
+                ? "Access denied"
+                : ex.getMessage();
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(CommonResponse.error(message));
     }
 
     @ExceptionHandler(NoResourceFoundException.class)

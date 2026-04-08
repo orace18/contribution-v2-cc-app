@@ -181,7 +181,7 @@ public class MediaService {
 
     private String resolveBucket(MediaType type) {
         return switch (type) {
-            case PROFILE_PHOTO, GENERIC_PUBLIC, CIRCLE_CHAT -> publicBucket;
+            case PROFILE_PHOTO, GENERIC_PUBLIC, PRAYER_POST, CIRCLE_CHAT -> publicBucket;
             case KYC_IDENTITY_FRONT, KYC_IDENTITY_BACK, KYC_SELFIE -> kycBucket;
             case GENERIC_PRIVATE -> privateBucket;
         };
@@ -246,7 +246,7 @@ public class MediaService {
     private boolean isImageType(MediaType type) {
         return switch (type) {
             case PROFILE_PHOTO, KYC_IDENTITY_FRONT, KYC_IDENTITY_BACK, KYC_SELFIE, GENERIC_PUBLIC -> true;
-            case GENERIC_PRIVATE, CIRCLE_CHAT -> false; // CIRCLE_CHAT accepte image/video/audio
+            case GENERIC_PRIVATE, PRAYER_POST, CIRCLE_CHAT -> false; // prayer posts and circle chat can carry non-image media
         };
     }
 
@@ -296,6 +296,7 @@ public class MediaService {
                 media.getType(),
                 media.getBucket(),
                 media.getObjectKey(),
+                objectStorageService.publicObjectUrl(media.getBucket(), media.getObjectKey()),
                 media.getContentType(),
                 media.getSize(),
                 media.getStatus(),

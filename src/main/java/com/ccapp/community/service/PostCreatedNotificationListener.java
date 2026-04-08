@@ -12,6 +12,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
+/**
+ * @deprecated Legacy community-feed publication listener. Business Prayer will publish its own notification flow.
+ */
+@Deprecated(since = "2026-04", forRemoval = false)
 @Component
 @RequiredArgsConstructor
 @Slf4j
@@ -38,6 +42,8 @@ public class PostCreatedNotificationListener implements DomainEventListener<Post
                         "COMMUNITY_POST_CREATED",
                         null,
                         "Your community post has been published.",
+                        null,
+                        null,
                         null,
                         true
                 ));

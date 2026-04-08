@@ -21,6 +21,7 @@ public record AdminBackofficeProductResponse(
         String status,
         String eventTitle,
         String ticketTypeName,
+        String imageUrl,
         OffsetDateTime createdAt
 ) {
 }

@@ -48,6 +48,18 @@ public class Notification {
     @Column(name = "message", nullable = false, length = 2000)
     private String message;
 
+    @Column(name = "target_id", length = 128)
+    private String targetId;
+
+    @Column(name = "deep_link_route_key", length = 64)
+    private String deepLinkRouteKey;
+
+    @Column(name = "deep_link_label", length = 160)
+    private String deepLinkLabel;
+
+    @Column(name = "deep_link_params_json", columnDefinition = "TEXT")
+    private String deepLinkParamsJson;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 16)
     private NotificationStatus status;
@@ -68,6 +80,9 @@ public class Notification {
         }
         if (status == null) {
             status = NotificationStatus.PENDING;
+        }
+        if (deepLinkParamsJson == null || deepLinkParamsJson.isBlank()) {
+            deepLinkParamsJson = "{}";
         }
     }
 }

@@ -1,0 +1,2058 @@
+openapi: 3.0.3
+info:
+  title: Club Chretien Business Prayer API
+  version: 1.0.0-draft
+  description: |
+    OpenAPI-first MVP contract for the Business Prayer module.
+
+    Scope covered:
+    - prayer feed
+    - user prayer requests
+    - prayer detail
+    - Amen
+    - support / "I prayed for this person"
+    - comments
+    - daily prayer
+    - streak and missions dashboard
+    - admin official posts
+    - admin daily prayer publication
+
+servers:
+  - url: /
+    description: Relative controller paths inside the monolith
+
+tags:
+  - name: Prayer Mobile
+    description: Mobile prayer feed, interactions, daily prayer, and dashboard
+  - name: Prayer Admin Posts
+    description: Admin management of official prayer feed posts
+  - name: Prayer Admin Daily
+    description: Admin management of daily prayer content
+
+security:
+  - bearerAuth: []
+
+paths:
+  /api/mobile/prayers/feed:
+    get:
+      tags:
+        - Prayer Mobile
+      operationId: getPrayerFeed
+      summary: List visible prayer feed items
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/SizeParam'
+        - name: includeMinePrivate
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: true
+      responses:
+        '200':
+          description: Prayer feed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrayerFeedEnvelope'
+        '401':
+          $ref: '#/components/responses/UnauthorizedResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerErrorResponse'
+
+  /api/mobile/prayers/requests:
+    post:
+      tags:
+        - Prayer Mobile
+      operationId: createPrayerRequest
+      summary: Publish a prayer request
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePrayerRequest'
+      responses:
+        '200':
+          description: Prayer request created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrayerPostEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequestResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedResponse'
+        '403':
+          $ref: '#/components/responses/ForbiddenResponse'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerErrorResponse'
+
+  /api/mobile/prayers/media/upload-url:
+    post:
+      tags:
+        - Prayer Mobile
+      operationId: createPrayerMediaUploadUrl
+      summary: Create a presigned upload URL for prayer post media
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PrayerCreateMediaUploadRequest'
+      responses:
+        '200':
+          description: Prayer media upload URL generated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrayerMediaUploadEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequestResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedResponse'
+        '403':
+          $ref: '#/components/responses/ForbiddenResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerErrorResponse'
+
+  /api/mobile/prayers/media/{mediaId}/confirm:
+    post:
+      tags:
+        - Prayer Mobile
+      operationId: confirmPrayerMediaUpload
+      summary: Confirm an uploaded prayer post media file
+      parameters:
+        - $ref: '#/components/parameters/MediaIdParam'
+      responses:
+        '200':
+          description: Prayer media upload confirmed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrayerMediaUploadConfirmationEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequestResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedResponse'
+        '403':
+          $ref: '#/components/responses/ForbiddenResponse'
+        '404':
+          $ref: '#/components/responses/NotFoundResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerErrorResponse'
+
+  /api/mobile/prayers/posts/{postId}:
+    get:
+      tags:
+        - Prayer Mobile
+      operationId: getPrayerPost
+      summary: Get a visible prayer post detail
+      parameters:
+        - $ref: '#/components/parameters/PostIdParam'
+      responses:
+        '200':
+          description: Prayer post detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrayerPostEnvelope'
+        '401':
+          $ref: '#/components/responses/UnauthorizedResponse'
+        '404':
+          $ref: '#/components/responses/NotFoundResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerErrorResponse'
+
+  /api/mobile/prayers/posts/{postId}/amen:
+    put:
+      tags:
+        - Prayer Mobile
+      operationId: recordPrayerAmen
+      summary: Record an Amen reaction on a visible post
+      parameters:
+        - $ref: '#/components/parameters/PostIdParam'
+      responses:
+        '200':
+          description: Amen recorded or already present
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrayerInteractionEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequestResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedResponse'
+        '403':
+          $ref: '#/components/responses/ForbiddenResponse'
+        '404':
+          $ref: '#/components/responses/NotFoundResponse'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerErrorResponse'
+
+  /api/mobile/prayers/posts/{postId}/support:
+    put:
+      tags:
+        - Prayer Mobile
+      operationId: recordPrayerSupport
+      summary: Record an "I prayed for this person" reaction on a visible request post
+      parameters:
+        - $ref: '#/components/parameters/PostIdParam'
+      responses:
+        '200':
+          description: Support recorded or already present
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrayerInteractionEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequestResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedResponse'
+        '403':
+          $ref: '#/components/responses/ForbiddenResponse'
+        '404':
+          $ref: '#/components/responses/NotFoundResponse'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerErrorResponse'
+
+  /api/mobile/prayers/posts/{postId}/comments:
+    get:
+      tags:
+        - Prayer Mobile
+      operationId: listPrayerComments
+      summary: List comments for a visible prayer post
+      parameters:
+        - $ref: '#/components/parameters/PostIdParam'
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/SizeParam'
+      responses:
+        '200':
+          description: Prayer comments
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrayerCommentPageEnvelope'
+        '401':
+          $ref: '#/components/responses/UnauthorizedResponse'
+        '404':
+          $ref: '#/components/responses/NotFoundResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerErrorResponse'
+    post:
+      tags:
+        - Prayer Mobile
+      operationId: createPrayerComment
+      summary: Add a comment to a visible prayer post
+      parameters:
+        - $ref: '#/components/parameters/PostIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePrayerCommentRequest'
+      responses:
+        '200':
+          description: Prayer comment created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrayerCommentEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequestResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedResponse'
+        '403':
+          $ref: '#/components/responses/ForbiddenResponse'
+        '404':
+          $ref: '#/components/responses/NotFoundResponse'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerErrorResponse'
+
+  /api/mobile/prayers/daily/current:
+    get:
+      tags:
+        - Prayer Mobile
+      operationId: getCurrentDailyPrayer
+      summary: Get the current published daily prayer
+      parameters:
+        - $ref: '#/components/parameters/TimezoneParam'
+      responses:
+        '200':
+          description: Current daily prayer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DailyPrayerEnvelope'
+        '401':
+          $ref: '#/components/responses/UnauthorizedResponse'
+        '404':
+          $ref: '#/components/responses/NotFoundResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerErrorResponse'
+
+  /api/mobile/prayers/daily/current/complete:
+    post:
+      tags:
+        - Prayer Mobile
+      operationId: completeCurrentDailyPrayer
+      summary: Record completion of today's daily prayer
+      parameters:
+        - $ref: '#/components/parameters/TimezoneParam'
+      requestBody:
+        required: false
+        description: >
+          Optional explicit response type for the daily prayer. If omitted, the backend defaults
+          to `PRAYED` for backward compatibility with earlier generic completion clients.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompleteDailyPrayerRequest'
+      responses:
+        '200':
+          description: Daily prayer completed for the local day
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DailyPrayerCompletionEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequestResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedResponse'
+        '404':
+          $ref: '#/components/responses/NotFoundResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerErrorResponse'
+
+  /api/mobile/prayers/dashboard:
+    get:
+      tags:
+        - Prayer Mobile
+      operationId: getPrayerDashboard
+      summary: Get current prayer streak, missions, and engagement stats
+      parameters:
+        - $ref: '#/components/parameters/TimezoneParam'
+      responses:
+        '200':
+          description: Prayer dashboard
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrayerDashboardEnvelope'
+        '401':
+          $ref: '#/components/responses/UnauthorizedResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerErrorResponse'
+
+  /api/admin/prayers/posts:
+    get:
+      tags:
+        - Prayer Admin Posts
+      operationId: listAdminPrayerPosts
+      summary: List official prayer posts
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/SizeParam'
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/PrayerPostLifecycleStatus'
+        - name: visibility
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/AdminOfficialVisibilityScope'
+      responses:
+        '200':
+          description: Official prayer posts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminPrayerPostPageEnvelope'
+        '401':
+          $ref: '#/components/responses/UnauthorizedResponse'
+        '403':
+          $ref: '#/components/responses/ForbiddenResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerErrorResponse'
+    post:
+      tags:
+        - Prayer Admin Posts
+      operationId: createAdminPrayerPost
+      summary: Create an official prayer post draft
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminCreatePrayerPostRequest'
+      responses:
+        '200':
+          description: Official prayer post created as draft
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminPrayerPostEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequestResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedResponse'
+        '403':
+          $ref: '#/components/responses/ForbiddenResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerErrorResponse'
+
+  /api/admin/prayers/posts/{postId}:
+    get:
+      tags:
+        - Prayer Admin Posts
+      operationId: getAdminPrayerPost
+      summary: Get an official prayer post
+      parameters:
+        - $ref: '#/components/parameters/PostIdParam'
+      responses:
+        '200':
+          description: Official prayer post
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminPrayerPostEnvelope'
+        '401':
+          $ref: '#/components/responses/UnauthorizedResponse'
+        '403':
+          $ref: '#/components/responses/ForbiddenResponse'
+        '404':
+          $ref: '#/components/responses/NotFoundResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerErrorResponse'
+    patch:
+      tags:
+        - Prayer Admin Posts
+      operationId: updateAdminPrayerPost
+      summary: Update an official prayer post draft
+      parameters:
+        - $ref: '#/components/parameters/PostIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminUpdatePrayerPostRequest'
+      responses:
+        '200':
+          description: Official prayer post updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminPrayerPostEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequestResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedResponse'
+        '403':
+          $ref: '#/components/responses/ForbiddenResponse'
+        '404':
+          $ref: '#/components/responses/NotFoundResponse'
+        '409':
+          $ref: '#/components/responses/ConflictResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerErrorResponse'
+
+  /api/admin/prayers/posts/{postId}/publish:
+    post:
+      tags:
+        - Prayer Admin Posts
+      operationId: publishAdminPrayerPost
+      summary: Publish an official prayer post
+      parameters:
+        - $ref: '#/components/parameters/PostIdParam'
+      responses:
+        '200':
+          description: Official prayer post published
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminPrayerPostEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequestResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedResponse'
+        '403':
+          $ref: '#/components/responses/ForbiddenResponse'
+        '404':
+          $ref: '#/components/responses/NotFoundResponse'
+        '409':
+          $ref: '#/components/responses/ConflictResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerErrorResponse'
+
+  /api/admin/prayers/posts/{postId}/archive:
+    post:
+      tags:
+        - Prayer Admin Posts
+      operationId: archiveAdminPrayerPost
+      summary: Archive an official prayer post
+      parameters:
+        - $ref: '#/components/parameters/PostIdParam'
+      responses:
+        '200':
+          description: Official prayer post archived
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminPrayerPostEnvelope'
+        '401':
+          $ref: '#/components/responses/UnauthorizedResponse'
+        '403':
+          $ref: '#/components/responses/ForbiddenResponse'
+        '404':
+          $ref: '#/components/responses/NotFoundResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerErrorResponse'
+
+  /api/admin/prayers/daily:
+    get:
+      tags:
+        - Prayer Admin Daily
+      operationId: listAdminDailyPrayers
+      summary: List daily prayer records
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/SizeParam'
+        - name: fromDate
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: toDate
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/DailyPrayerStatus'
+      responses:
+        '200':
+          description: Daily prayer records
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminDailyPrayerPageEnvelope'
+        '401':
+          $ref: '#/components/responses/UnauthorizedResponse'
+        '403':
+          $ref: '#/components/responses/ForbiddenResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerErrorResponse'
+    post:
+      tags:
+        - Prayer Admin Daily
+      operationId: createAdminDailyPrayer
+      summary: Create a daily prayer draft
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminCreateDailyPrayerRequest'
+      responses:
+        '200':
+          description: Daily prayer draft created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminDailyPrayerEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequestResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedResponse'
+        '403':
+          $ref: '#/components/responses/ForbiddenResponse'
+        '409':
+          $ref: '#/components/responses/ConflictResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerErrorResponse'
+
+  /api/admin/prayers/daily/{dailyPrayerId}:
+    get:
+      tags:
+        - Prayer Admin Daily
+      operationId: getAdminDailyPrayer
+      summary: Get a daily prayer record
+      parameters:
+        - $ref: '#/components/parameters/DailyPrayerIdParam'
+      responses:
+        '200':
+          description: Daily prayer record
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminDailyPrayerEnvelope'
+        '401':
+          $ref: '#/components/responses/UnauthorizedResponse'
+        '403':
+          $ref: '#/components/responses/ForbiddenResponse'
+        '404':
+          $ref: '#/components/responses/NotFoundResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerErrorResponse'
+    patch:
+      tags:
+        - Prayer Admin Daily
+      operationId: updateAdminDailyPrayer
+      summary: Update a daily prayer draft
+      parameters:
+        - $ref: '#/components/parameters/DailyPrayerIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminUpdateDailyPrayerRequest'
+      responses:
+        '200':
+          description: Daily prayer updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminDailyPrayerEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequestResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedResponse'
+        '403':
+          $ref: '#/components/responses/ForbiddenResponse'
+        '404':
+          $ref: '#/components/responses/NotFoundResponse'
+        '409':
+          $ref: '#/components/responses/ConflictResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerErrorResponse'
+
+  /api/admin/prayers/daily/{dailyPrayerId}/publish:
+    post:
+      tags:
+        - Prayer Admin Daily
+      operationId: publishAdminDailyPrayer
+      summary: Publish a daily prayer record
+      parameters:
+        - $ref: '#/components/parameters/DailyPrayerIdParam'
+      responses:
+        '200':
+          description: Daily prayer published
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminDailyPrayerEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequestResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedResponse'
+        '403':
+          $ref: '#/components/responses/ForbiddenResponse'
+        '404':
+          $ref: '#/components/responses/NotFoundResponse'
+        '409':
+          $ref: '#/components/responses/ConflictResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerErrorResponse'
+
+  /api/admin/prayers/daily/{dailyPrayerId}/archive:
+    post:
+      tags:
+        - Prayer Admin Daily
+      operationId: archiveAdminDailyPrayer
+      summary: Archive a daily prayer record
+      parameters:
+        - $ref: '#/components/parameters/DailyPrayerIdParam'
+      responses:
+        '200':
+          description: Daily prayer archived
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminDailyPrayerEnvelope'
+        '401':
+          $ref: '#/components/responses/UnauthorizedResponse'
+        '403':
+          $ref: '#/components/responses/ForbiddenResponse'
+        '404':
+          $ref: '#/components/responses/NotFoundResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerErrorResponse'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    PageParam:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+    SizeParam:
+      name: size
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 50
+        default: 20
+    PostIdParam:
+      name: postId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    DailyPrayerIdParam:
+      name: dailyPrayerId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    MediaIdParam:
+      name: mediaId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    TimezoneParam:
+      name: timezone
+      in: query
+      required: false
+      description: IANA timezone identifier used for local-day streak and mission resolution.
+      schema:
+        type: string
+        example: Africa/Porto-Novo
+
+  responses:
+    BadRequestResponse:
+      description: Validation or business-rule error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CommonErrorResponse'
+    UnauthorizedResponse:
+      description: Unauthenticated
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CommonErrorResponse'
+    ForbiddenResponse:
+      description: Access denied
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CommonErrorResponse'
+    NotFoundResponse:
+      description: Resource not found or not visible
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CommonErrorResponse'
+    ConflictResponse:
+      description: State conflict
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CommonErrorResponse'
+    TooManyRequestsResponse:
+      description: Rate limit exceeded
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CommonErrorResponse'
+    InternalServerErrorResponse:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CommonErrorResponse'
+
+  schemas:
+    CommonErrorResponse:
+      type: object
+      required:
+        - success
+        - message
+        - timestamp
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          description: Stable machine-readable error code for prayer endpoints.
+          example: PRAYER_POST_NOT_FOUND
+        data:
+          type: object
+          nullable: true
+        timestamp:
+          type: string
+          format: date-time
+
+    PrayerVisibilityScope:
+      type: string
+      enum:
+        - PRIVATE
+        - CIRCLE
+        - CHURCH
+        - COMMUNITY
+        - GLOBAL
+
+    AdminOfficialVisibilityScope:
+      type: string
+      enum:
+        - CHURCH
+        - COMMUNITY
+        - GLOBAL
+
+    PrayerPostType:
+      type: string
+      enum:
+        - REQUEST
+        - OFFICIAL
+
+    PrayerPostLifecycleStatus:
+      type: string
+      enum:
+        - DRAFT
+        - PUBLISHED
+        - ARCHIVED
+        - MODERATED
+        - DELETED
+
+    DailyPrayerStatus:
+      type: string
+      enum:
+        - DRAFT
+        - PUBLISHED
+        - ARCHIVED
+
+    PrayerInteractionType:
+      type: string
+      enum:
+        - AMEN
+        - SUPPORT
+
+    PrayerAuthorType:
+      type: string
+      enum:
+        - ACCOUNT_HOLDER
+        - ADMIN_PLATFORM
+
+    PrayerDailyPrayerResponseType:
+      type: string
+      enum:
+        - PRAYED
+        - AMEN
+
+    DailyMissionCode:
+      type: string
+      enum:
+        - READ_DAILY_PRAYER
+        - SUPPORT_ONE_REQUEST
+        - COMMENT_ONE_POST
+
+    DailyMissionStatus:
+      type: string
+      enum:
+        - PENDING
+        - COMPLETED
+        - EXPIRED
+
+    DeepLinkRouteKey:
+      type: string
+      enum:
+        - PRAYER_DAY
+        - PRAYER_FEED
+        - WALLET_HOME
+        - WALLET_FUND
+        - STORE_HOME
+        - MEMBERSHIP_PLANS
+        - FINANCING_HOME
+        - NOTIFICATION_CENTER
+
+    MediaUsageType:
+      type: string
+      enum:
+        - COVER
+        - INLINE
+        - AUDIO
+        - ATTACHMENT
+
+    MediaUploadStatus:
+      type: string
+      enum:
+        - PENDING_UPLOAD
+        - READY
+        - FAILED
+        - DELETED
+
+    PrayerAuthorResponse:
+      type: object
+      required:
+        - displayName
+        - authorType
+      properties:
+        accountHolderId:
+          type: string
+          format: uuid
+          nullable: true
+        displayName:
+          type: string
+          example: Esther Doe
+        authorType:
+          $ref: '#/components/schemas/PrayerAuthorType'
+        avatarMediaId:
+          type: string
+          format: uuid
+          nullable: true
+
+    PrayerScopeContext:
+      type: object
+      properties:
+        audienceCircleId:
+          type: string
+          format: uuid
+          nullable: true
+        audienceChurchRef:
+          type: string
+          nullable: true
+          example: church:paroisse-sainte-famille
+        audienceCountryCode:
+          type: string
+          nullable: true
+          example: BJ
+
+    PrayerMediaRefResponse:
+      type: object
+      required:
+        - mediaFileId
+        - usageType
+        - sortOrder
+      properties:
+        mediaFileId:
+          type: string
+          format: uuid
+        usageType:
+          $ref: '#/components/schemas/MediaUsageType'
+        sortOrder:
+          type: integer
+          minimum: 0
+        contentType:
+          type: string
+          nullable: true
+          example: image/jpeg
+        downloadUrl:
+          type: string
+          format: uri
+          nullable: true
+
+    InternalDeepLinkResponse:
+      type: object
+      required:
+        - routeKey
+        - params
+      properties:
+        routeKey:
+          $ref: '#/components/schemas/DeepLinkRouteKey'
+        label:
+          type: string
+          nullable: true
+          example: Ouvrir mon wallet
+        params:
+          type: object
+          additionalProperties:
+            type: string
+          example:
+            source: business-prayer
+
+    PrayerStatsResponse:
+      type: object
+      required:
+        - amenCount
+        - supportCount
+        - commentCount
+      properties:
+        amenCount:
+          type: integer
+          minimum: 0
+        supportCount:
+          type: integer
+          minimum: 0
+        commentCount:
+          type: integer
+          minimum: 0
+
+    PrayerViewerStateResponse:
+      type: object
+      required:
+        - hasAmened
+        - hasSupported
+        - canAmen
+        - canSupport
+        - canComment
+      properties:
+        hasAmened:
+          type: boolean
+        hasSupported:
+          type: boolean
+        canAmen:
+          type: boolean
+        canSupport:
+          type: boolean
+        canComment:
+          type: boolean
+
+    PrayerPostResponse:
+      type: object
+      required:
+        - id
+        - postType
+        - lifecycleStatus
+        - content
+        - visibility
+        - author
+        - stats
+        - viewerState
+        - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        postType:
+          $ref: '#/components/schemas/PrayerPostType'
+        lifecycleStatus:
+          $ref: '#/components/schemas/PrayerPostLifecycleStatus'
+        title:
+          type: string
+          nullable: true
+          example: Une parole pour entreprendre avec foi
+        content:
+          type: string
+          maxLength: 4000
+        visibility:
+          $ref: '#/components/schemas/PrayerVisibilityScope'
+        author:
+          $ref: '#/components/schemas/PrayerAuthorResponse'
+        scopeContext:
+          $ref: '#/components/schemas/PrayerScopeContext'
+        mediaRefs:
+          type: array
+          items:
+            $ref: '#/components/schemas/PrayerMediaRefResponse'
+        deepLink:
+          allOf:
+            - $ref: '#/components/schemas/InternalDeepLinkResponse'
+          nullable: true
+        stats:
+          $ref: '#/components/schemas/PrayerStatsResponse'
+        viewerState:
+          $ref: '#/components/schemas/PrayerViewerStateResponse'
+        createdAt:
+          type: string
+          format: date-time
+        publishedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    PrayerInteractionResponse:
+      type: object
+      required:
+        - postId
+        - interactionType
+        - created
+        - totalCount
+        - recordedAt
+      properties:
+        postId:
+          type: string
+          format: uuid
+        interactionType:
+          $ref: '#/components/schemas/PrayerInteractionType'
+        created:
+          type: boolean
+          description: false when the idempotent interaction already existed.
+        totalCount:
+          type: integer
+          minimum: 0
+        recordedAt:
+          type: string
+          format: date-time
+        viewerState:
+          $ref: '#/components/schemas/PrayerViewerStateResponse'
+
+    PrayerCommentResponse:
+      type: object
+      required:
+        - id
+        - postId
+        - author
+        - content
+        - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        postId:
+          type: string
+          format: uuid
+        author:
+          $ref: '#/components/schemas/PrayerAuthorResponse'
+        content:
+          type: string
+          maxLength: 2000
+        createdAt:
+          type: string
+          format: date-time
+
+    DailyPrayerResponse:
+      type: object
+      required:
+        - id
+        - prayerDate
+        - content
+        - completedToday
+      properties:
+        id:
+          type: string
+          format: uuid
+        prayerDate:
+          type: string
+          format: date
+        title:
+          type: string
+          nullable: true
+        scriptureReference:
+          type: string
+          nullable: true
+          example: Proverbs 16:3
+        content:
+          type: string
+          maxLength: 4000
+        mediaRefs:
+          type: array
+          items:
+            $ref: '#/components/schemas/PrayerMediaRefResponse'
+        completedToday:
+          type: boolean
+        todayResponseType:
+          allOf:
+            - $ref: '#/components/schemas/PrayerDailyPrayerResponseType'
+          nullable: true
+        publishedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    CompleteDailyPrayerRequest:
+      type: object
+      required:
+        - responseType
+      properties:
+        responseType:
+          $ref: '#/components/schemas/PrayerDailyPrayerResponseType'
+
+    DailyPrayerCompletionResponse:
+      type: object
+      required:
+        - dailyPrayerId
+        - prayerDate
+        - completedAt
+        - responseType
+        - currentStreak
+        - longestStreak
+      properties:
+        dailyPrayerId:
+          type: string
+          format: uuid
+        prayerDate:
+          type: string
+          format: date
+        completedAt:
+          type: string
+          format: date-time
+        responseType:
+          $ref: '#/components/schemas/PrayerDailyPrayerResponseType'
+        currentStreak:
+          type: integer
+          minimum: 1
+        longestStreak:
+          type: integer
+          minimum: 1
+        completedMissionCodes:
+          type: array
+          items:
+            $ref: '#/components/schemas/DailyMissionCode'
+
+    PrayerRecentDayResponse:
+      type: object
+      required:
+        - date
+        - completed
+      properties:
+        date:
+          type: string
+          format: date
+        completed:
+          type: boolean
+
+    PrayerStreakResponse:
+      type: object
+      required:
+        - currentStreak
+        - longestStreak
+        - recentDays
+      properties:
+        currentStreak:
+          type: integer
+          minimum: 0
+        longestStreak:
+          type: integer
+          minimum: 0
+        lastCompletedDate:
+          type: string
+          format: date
+          nullable: true
+        recentDays:
+          type: array
+          items:
+            $ref: '#/components/schemas/PrayerRecentDayResponse'
+
+    PrayerEngagementStatsResponse:
+      type: object
+      required:
+        - requestsPublishedCount
+        - amenGivenCount
+        - supportGivenCount
+        - supportReceivedCount
+        - commentsWrittenCount
+        - commentsReceivedCount
+        - dailyPrayersCompletedCount
+      properties:
+        requestsPublishedCount:
+          type: integer
+          minimum: 0
+        amenGivenCount:
+          type: integer
+          minimum: 0
+        supportGivenCount:
+          type: integer
+          minimum: 0
+        supportReceivedCount:
+          type: integer
+          minimum: 0
+        commentsWrittenCount:
+          type: integer
+          minimum: 0
+        commentsReceivedCount:
+          type: integer
+          minimum: 0
+        dailyPrayersCompletedCount:
+          type: integer
+          minimum: 0
+
+    PrayerMissionProgressResponse:
+      type: object
+      required:
+        - missionCode
+        - title
+        - description
+        - status
+        - progressValue
+        - targetValue
+      properties:
+        missionCode:
+          $ref: '#/components/schemas/DailyMissionCode'
+        title:
+          type: string
+        description:
+          type: string
+        status:
+          $ref: '#/components/schemas/DailyMissionStatus'
+        progressValue:
+          type: integer
+          minimum: 0
+        targetValue:
+          type: integer
+          minimum: 1
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    PrayerDashboardResponse:
+      type: object
+      required:
+        - timezone
+        - localDate
+        - dailyPrayerCompletedToday
+        - streak
+        - engagementStats
+        - missions
+      properties:
+        timezone:
+          type: string
+          example: Africa/Porto-Novo
+        localDate:
+          type: string
+          format: date
+        dailyPrayerCompletedToday:
+          type: boolean
+        streak:
+          $ref: '#/components/schemas/PrayerStreakResponse'
+        engagementStats:
+          $ref: '#/components/schemas/PrayerEngagementStatsResponse'
+        missions:
+          type: array
+          items:
+            $ref: '#/components/schemas/PrayerMissionProgressResponse'
+
+    CreatePrayerRequest:
+      type: object
+      required:
+        - content
+        - visibility
+      properties:
+        clientRequestId:
+          type: string
+          format: uuid
+          nullable: true
+        content:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        visibility:
+          $ref: '#/components/schemas/PrayerVisibilityScope'
+        mediaRefs:
+          type: array
+          items:
+            $ref: '#/components/schemas/PrayerMediaAttachmentInput'
+
+    PrayerCreateMediaUploadRequest:
+      type: object
+      required:
+        - contentType
+        - size
+      properties:
+        contentType:
+          type: string
+          minLength: 1
+          maxLength: 128
+          example: image/jpeg
+        size:
+          type: integer
+          format: int64
+          minimum: 1
+          example: 1024
+        originalFileName:
+          type: string
+          nullable: true
+          maxLength: 255
+          example: storefront.jpg
+
+    PrayerCreateMediaUploadResponse:
+      type: object
+      required:
+        - mediaFileId
+        - uploadUrl
+        - expiresAt
+        - bucket
+        - objectKey
+      properties:
+        mediaFileId:
+          type: string
+          format: uuid
+        uploadUrl:
+          type: string
+          format: uri
+        expiresAt:
+          type: string
+          format: date-time
+        bucket:
+          type: string
+        objectKey:
+          type: string
+
+    PrayerMediaUploadConfirmationResponse:
+      type: object
+      required:
+        - mediaFileId
+        - contentType
+        - size
+        - status
+        - createdAt
+      properties:
+        mediaFileId:
+          type: string
+          format: uuid
+        contentType:
+          type: string
+          example: image/jpeg
+        size:
+          type: integer
+          format: int64
+          minimum: 1
+        status:
+          $ref: '#/components/schemas/MediaUploadStatus'
+        createdAt:
+          type: string
+          format: date-time
+
+    CreatePrayerCommentRequest:
+      type: object
+      required:
+        - content
+      properties:
+        clientRequestId:
+          type: string
+          format: uuid
+          nullable: true
+        content:
+          type: string
+          minLength: 1
+          maxLength: 2000
+
+    PrayerMediaAttachmentInput:
+      type: object
+      required:
+        - mediaFileId
+        - usageType
+      properties:
+        mediaFileId:
+          type: string
+          format: uuid
+        usageType:
+          $ref: '#/components/schemas/MediaUsageType'
+        sortOrder:
+          type: integer
+          minimum: 0
+          default: 0
+
+    AdminCreatePrayerPostRequest:
+      type: object
+      required:
+        - title
+        - content
+        - visibility
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 160
+        content:
+          type: string
+          minLength: 1
+          maxLength: 4000
+        visibility:
+          $ref: '#/components/schemas/AdminOfficialVisibilityScope'
+        targetCountryCode:
+          type: string
+          nullable: true
+          description: Required when visibility is COMMUNITY.
+          example: BJ
+        targetChurchRef:
+          type: string
+          nullable: true
+          description: Required when visibility is CHURCH.
+        mediaRefs:
+          type: array
+          items:
+            $ref: '#/components/schemas/PrayerMediaAttachmentInput'
+        deepLink:
+          allOf:
+            - $ref: '#/components/schemas/InternalDeepLinkRequest'
+          nullable: true
+
+    AdminUpdatePrayerPostRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 160
+        content:
+          type: string
+          minLength: 1
+          maxLength: 4000
+        visibility:
+          $ref: '#/components/schemas/AdminOfficialVisibilityScope'
+        targetCountryCode:
+          type: string
+          nullable: true
+        targetChurchRef:
+          type: string
+          nullable: true
+        mediaRefs:
+          type: array
+          items:
+            $ref: '#/components/schemas/PrayerMediaAttachmentInput'
+        deepLink:
+          allOf:
+            - $ref: '#/components/schemas/InternalDeepLinkRequest'
+          nullable: true
+
+    InternalDeepLinkRequest:
+      type: object
+      required:
+        - routeKey
+        - params
+      properties:
+        routeKey:
+          $ref: '#/components/schemas/DeepLinkRouteKey'
+        label:
+          type: string
+          nullable: true
+        params:
+          type: object
+          additionalProperties:
+            type: string
+
+    AdminPrayerPostResponse:
+      type: object
+      required:
+        - id
+        - postType
+        - lifecycleStatus
+        - title
+        - content
+        - visibility
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        postType:
+          $ref: '#/components/schemas/PrayerPostType'
+        lifecycleStatus:
+          $ref: '#/components/schemas/PrayerPostLifecycleStatus'
+        title:
+          type: string
+        content:
+          type: string
+        visibility:
+          $ref: '#/components/schemas/AdminOfficialVisibilityScope'
+        targetCountryCode:
+          type: string
+          nullable: true
+        targetChurchRef:
+          type: string
+          nullable: true
+        mediaRefs:
+          type: array
+          items:
+            $ref: '#/components/schemas/PrayerMediaRefResponse'
+        deepLink:
+          allOf:
+            - $ref: '#/components/schemas/InternalDeepLinkResponse'
+          nullable: true
+        createdByAdminUserId:
+          type: string
+          format: uuid
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        publishedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    AdminCreateDailyPrayerRequest:
+      type: object
+      required:
+        - prayerDate
+        - content
+      properties:
+        prayerDate:
+          type: string
+          format: date
+        title:
+          type: string
+          nullable: true
+          maxLength: 160
+        scriptureReference:
+          type: string
+          nullable: true
+          maxLength: 160
+        content:
+          type: string
+          minLength: 1
+          maxLength: 4000
+        mediaRefs:
+          type: array
+          items:
+            $ref: '#/components/schemas/PrayerMediaAttachmentInput'
+
+    AdminUpdateDailyPrayerRequest:
+      type: object
+      properties:
+        prayerDate:
+          type: string
+          format: date
+        title:
+          type: string
+          nullable: true
+          maxLength: 160
+        scriptureReference:
+          type: string
+          nullable: true
+          maxLength: 160
+        content:
+          type: string
+          minLength: 1
+          maxLength: 4000
+        mediaRefs:
+          type: array
+          items:
+            $ref: '#/components/schemas/PrayerMediaAttachmentInput'
+
+    AdminDailyPrayerResponse:
+      type: object
+      required:
+        - id
+        - prayerDate
+        - status
+        - content
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        prayerDate:
+          type: string
+          format: date
+        status:
+          $ref: '#/components/schemas/DailyPrayerStatus'
+        title:
+          type: string
+          nullable: true
+        scriptureReference:
+          type: string
+          nullable: true
+        content:
+          type: string
+        mediaRefs:
+          type: array
+          items:
+            $ref: '#/components/schemas/PrayerMediaRefResponse'
+        createdByAdminUserId:
+          type: string
+          format: uuid
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        publishedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    PageResponsePrayerPost:
+      type: object
+      required:
+        - items
+        - page
+        - size
+        - totalElements
+        - totalPages
+        - hasNext
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PrayerPostResponse'
+        page:
+          type: integer
+        size:
+          type: integer
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+        hasNext:
+          type: boolean
+
+    PageResponsePrayerComment:
+      type: object
+      required:
+        - items
+        - page
+        - size
+        - totalElements
+        - totalPages
+        - hasNext
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PrayerCommentResponse'
+        page:
+          type: integer
+        size:
+          type: integer
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+        hasNext:
+          type: boolean
+
+    PageResponseAdminPrayerPost:
+      type: object
+      required:
+        - items
+        - page
+        - size
+        - totalElements
+        - totalPages
+        - hasNext
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminPrayerPostResponse'
+        page:
+          type: integer
+        size:
+          type: integer
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+        hasNext:
+          type: boolean
+
+    PageResponseAdminDailyPrayer:
+      type: object
+      required:
+        - items
+        - page
+        - size
+        - totalElements
+        - totalPages
+        - hasNext
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminDailyPrayerResponse'
+        page:
+          type: integer
+        size:
+          type: integer
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+        hasNext:
+          type: boolean
+
+    PrayerFeedEnvelope:
+      type: object
+      required:
+        - success
+        - message
+        - data
+        - timestamp
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: Prayer feed
+        data:
+          $ref: '#/components/schemas/PageResponsePrayerPost'
+        timestamp:
+          type: string
+          format: date-time
+
+    PrayerPostEnvelope:
+      type: object
+      required:
+        - success
+        - message
+        - data
+        - timestamp
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+          example: Prayer post
+        data:
+          $ref: '#/components/schemas/PrayerPostResponse'
+        timestamp:
+          type: string
+          format: date-time
+
+    PrayerMediaUploadEnvelope:
+      type: object
+      required:
+        - success
+        - message
+        - data
+        - timestamp
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: Prayer media upload URL generated
+        data:
+          $ref: '#/components/schemas/PrayerCreateMediaUploadResponse'
+        timestamp:
+          type: string
+          format: date-time
+
+    PrayerMediaUploadConfirmationEnvelope:
+      type: object
+      required:
+        - success
+        - message
+        - data
+        - timestamp
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: Prayer media upload confirmed
+        data:
+          $ref: '#/components/schemas/PrayerMediaUploadConfirmationResponse'
+        timestamp:
+          type: string
+          format: date-time
+
+    PrayerInteractionEnvelope:
+      type: object
+      required:
+        - success
+        - message
+        - data
+        - timestamp
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+          example: Prayer interaction recorded
+        data:
+          $ref: '#/components/schemas/PrayerInteractionResponse'
+        timestamp:
+          type: string
+          format: date-time
+
+    PrayerCommentEnvelope:
+      type: object
+      required:
+        - success
+        - message
+        - data
+        - timestamp
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+          example: Prayer comment created
+        data:
+          $ref: '#/components/schemas/PrayerCommentResponse'
+        timestamp:
+          type: string
+          format: date-time
+
+    PrayerCommentPageEnvelope:
+      type: object
+      required:
+        - success
+        - message
+        - data
+        - timestamp
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+          example: Prayer comments
+        data:
+          $ref: '#/components/schemas/PageResponsePrayerComment'
+        timestamp:
+          type: string
+          format: date-time
+
+    DailyPrayerEnvelope:
+      type: object
+      required:
+        - success
+        - message
+        - data
+        - timestamp
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+          example: Daily prayer
+        data:
+          $ref: '#/components/schemas/DailyPrayerResponse'
+        timestamp:
+          type: string
+          format: date-time
+
+    DailyPrayerCompletionEnvelope:
+      type: object
+      required:
+        - success
+        - message
+        - data
+        - timestamp
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+          example: Daily prayer completed
+        data:
+          $ref: '#/components/schemas/DailyPrayerCompletionResponse'
+        timestamp:
+          type: string
+          format: date-time
+
+    PrayerDashboardEnvelope:
+      type: object
+      required:
+        - success
+        - message
+        - data
+        - timestamp
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+          example: Prayer dashboard
+        data:
+          $ref: '#/components/schemas/PrayerDashboardResponse'
+        timestamp:
+          type: string
+          format: date-time
+
+    AdminPrayerPostEnvelope:
+      type: object
+      required:
+        - success
+        - message
+        - data
+        - timestamp
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+          example: Official prayer post
+        data:
+          $ref: '#/components/schemas/AdminPrayerPostResponse'
+        timestamp:
+          type: string
+          format: date-time
+
+    AdminPrayerPostPageEnvelope:
+      type: object
+      required:
+        - success
+        - message
+        - data
+        - timestamp
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+          example: Official prayer posts
+        data:
+          $ref: '#/components/schemas/PageResponseAdminPrayerPost'
+        timestamp:
+          type: string
+          format: date-time
+
+    AdminDailyPrayerEnvelope:
+      type: object
+      required:
+        - success
+        - message
+        - data
+        - timestamp
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+          example: Daily prayer record
+        data:
+          $ref: '#/components/schemas/AdminDailyPrayerResponse'
+        timestamp:
+          type: string
+          format: date-time
+
+    AdminDailyPrayerPageEnvelope:
+      type: object
+      required:
+        - success
+        - message
+        - data
+        - timestamp
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+          example: Daily prayer records
+        data:
+          $ref: '#/components/schemas/PageResponseAdminDailyPrayer'
+        timestamp:
+          type: string
+          format: date-time
