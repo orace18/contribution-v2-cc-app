@@ -131,8 +131,7 @@ public class MobileOnboardingJourneyService {
         MobileOnboardingJourney journey = getOrCreate(accountHolderId);
         promoteStatus(journey, MobileOnboardingJourneyStatus.AUTHENTICATED);
 
-        if (isIdentityOnboardingCompleted(accountHolderId)
-                && promoteStatus(journey, MobileOnboardingJourneyStatus.PHONE_VERIFIED)) {
+        if (promoteStatus(journey, MobileOnboardingJourneyStatus.PHONE_VERIFIED)) {
             publish(accountHolderId, MobileOnboardingEventType.PHONE_VERIFIED, Map.of());
         }
         activateWalletIfEligible(journey, normalizeOptional(phoneNumber), accountHolderId);
@@ -477,13 +476,13 @@ public class MobileOnboardingJourneyService {
             promoteStatus(copy, MobileOnboardingJourneyStatus.ACTIVE_MEMBER);
         }
 
-        boolean identityCompleted = isIdentityOnboardingCompleted(accountHolderId);
+        boolean walletActivationReady = isWalletActivationReady(accountHolderId);
         String verifiedPhoneNumber = findVerifiedPhoneNumber(accountHolderId);
-        if (identityCompleted && verifiedPhoneNumber != null) {
+        if (verifiedPhoneNumber != null) {
             promoteStatus(copy, MobileOnboardingJourneyStatus.PHONE_VERIFIED);
         }
 
-        if (identityCompleted
+        if (walletActivationReady
                 && verifiedPhoneNumber != null
                 && walletRepository.findFirstByAccountHolderIdAndStatusOrderByCreatedAtDesc(accountHolderId, "ACTIVE").isPresent()) {
             promoteStatus(copy, MobileOnboardingJourneyStatus.WALLET_ACTIVATED);
@@ -593,7 +592,7 @@ public class MobileOnboardingJourneyService {
     private void activateWalletIfEligible(MobileOnboardingJourney journey,
                                           String verifiedPhoneNumber,
                                           UUID actorUserId) {
-        if (!isIdentityOnboardingCompleted(journey.getAccountHolderId())) {
+        if (!isWalletActivationReady(journey.getAccountHolderId())) {
             return;
         }
 
@@ -660,7 +659,11 @@ public class MobileOnboardingJourneyService {
                 .orElse(null);
     }
 
-    private boolean isIdentityOnboardingCompleted(UUID accountHolderId) {
+    private boolean isWalletActivationReady(UUID accountHolderId) {
+        Membership latestMembership = membershipService.findLatestMembership(accountHolderId).orElse(null);
+        if (latestMembership != null && isMembershipActive(latestMembership)) {
+            return true;
+        }
         return identityOnboardingService.getOnboardingStatus(accountHolderId).onboardingCompleted();
     }
 
@@ -1033,7 +1036,14 @@ public class MobileOnboardingJourneyService {
                     "/api/mobile/onboarding/status",
                     "Wait for PSP confirmation callback"
             );
-            case PAYMENT_CONFIRMED, ACTIVE_MEMBER -> new MobileOnboardingStatusResponse.NextStep(
+            case PAYMENT_CONFIRMED, ACTIVE_MEMBER -> findVerifiedPhoneNumber(journey.getAccountHolderId()) != null
+                    ? new MobileOnboardingStatusResponse.NextStep(
+                    "WAIT_WALLET_ACTIVATION",
+                    "GET",
+                    "/wallet/status",
+                    "Wallet activation is in progress"
+            )
+                    : new MobileOnboardingStatusResponse.NextStep(
                     "VERIFY_PHONE",
                     "POST",
                     "/api/mobile/phone-verifications/start",
