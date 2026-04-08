@@ -128,9 +128,9 @@ public class MediaService {
                                          UUID mediaId,
                                          byte[] data,
                                          String contentType) {
-        UUID targetAccountHolderId = resolveTargetAccountHolderId(actorAccountHolderId, null);
-        assertDelegatedAccess(actorUserId, actorAccountHolderId, targetAccountHolderId);
-        MediaFile media = loadOwnedMedia(targetAccountHolderId, mediaId);
+        MediaFile media = mediaFileRepository.findById(mediaId)
+                .orElseThrow(() -> new NotFoundException("Media file not found"));
+        assertDelegatedAccess(actorUserId, actorAccountHolderId, media.getAccountHolderId());
         if (media.getStatus() != MediaStatus.PENDING_UPLOAD) {
             throw new BusinessException("Media file is not pending upload");
         }

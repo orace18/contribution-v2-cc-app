@@ -1,6 +1,7 @@
 package com.ccapp.identity.managedaccounts.service;
 
 import com.ccapp.common.exception.UnauthorizedException;
+import com.ccapp.common.exception.ConflictException;
 import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
 import com.ccapp.identity.account_holder.domain.enums.AccountCreatedVia;
 import com.ccapp.identity.account_holder.domain.enums.AccountType;
@@ -17,6 +18,7 @@ import com.ccapp.identity.delegation.service.DelegationService;
 import com.ccapp.identity.domain.enums.KycLevel;
 import com.ccapp.identity.domain.enums.KycStatus;
 import com.ccapp.identity.managedaccounts.dto.CreateManagedAccountRequest;
+import com.ccapp.identity.managedaccounts.dto.LinkExistingManagedAccountRequest;
 import com.ccapp.identity.managedaccounts.dto.ManagedAccountDetailResponse;
 import com.ccapp.identity.managedaccounts.dto.ManagedAccountSummaryResponse;
 import com.ccapp.identity.managedaccounts.dto.UpdateManagedAccountRequest;
@@ -207,6 +209,112 @@ class ManagedAccountsServiceTest {
         verify(accessControlService).assertCanActOnAccountHolder(actorUserId, managedAccountId, PermissionLevel.FULL);
         verify(delegationService).revokeActiveManagerDelegation(managedAccountId, actorUserId);
         verify(accountHolderRepository, never()).deleteById(any());
+    }
+
+    @Test
+    void linkExistingManagedAccount_shouldCreateDelegationWhenManagedAccountIsAvailable() {
+        UUID actorUserId = UUID.randomUUID();
+        UUID actorAccountHolderId = UUID.randomUUID();
+        UUID verificationId = UUID.randomUUID();
+        UUID managedAccountId = UUID.randomUUID();
+        LinkExistingManagedAccountRequest request = new LinkExistingManagedAccountRequest(
+                "+22961000009",
+                verificationId
+        );
+        AccountHolder existing = assistedAccount(managedAccountId, "Joelle", "Sossa", "+22961000009");
+        AccountDelegation delegation = delegation(managedAccountId, actorUserId, PermissionLevel.FULL, OffsetDateTime.now());
+
+        when(accountHolderRepository.findByPhoneNumber("+22961000009")).thenReturn(Optional.of(existing));
+        when(delegationService.findActiveManagerDelegation(managedAccountId)).thenReturn(Optional.empty());
+        when(delegationService.createManagerDelegation(managedAccountId, actorUserId)).thenReturn(delegation);
+        when(notificationService.getUnreadCount(managedAccountId)).thenReturn(2L);
+
+        ManagedAccountDetailResponse response = managedAccountsService.linkExistingManagedAccount(
+                actorUserId,
+                actorAccountHolderId,
+                request
+        );
+
+        verify(phoneVerificationService).assertVerifiedForPhone(actorAccountHolderId, "+22961000009", verificationId);
+        verify(delegationService).createManagerDelegation(managedAccountId, actorUserId);
+        assertThat(response.accountHolderId()).isEqualTo(managedAccountId);
+        assertThat(response.unreadNotificationCount()).isEqualTo(2L);
+    }
+
+    @Test
+    void linkExistingManagedAccount_shouldBeIdempotentForSameManager() {
+        UUID actorUserId = UUID.randomUUID();
+        UUID actorAccountHolderId = UUID.randomUUID();
+        UUID verificationId = UUID.randomUUID();
+        UUID managedAccountId = UUID.randomUUID();
+        LinkExistingManagedAccountRequest request = new LinkExistingManagedAccountRequest(
+                "+22961000010",
+                verificationId
+        );
+        AccountHolder existing = assistedAccount(managedAccountId, "Joelle", "Sossa", "+22961000010");
+        AccountDelegation delegation = delegation(managedAccountId, actorUserId, PermissionLevel.FULL, OffsetDateTime.now().minusDays(1));
+
+        when(accountHolderRepository.findByPhoneNumber("+22961000010")).thenReturn(Optional.of(existing));
+        when(delegationService.findActiveManagerDelegation(managedAccountId)).thenReturn(Optional.of(delegation));
+        when(notificationService.getUnreadCount(managedAccountId)).thenReturn(1L);
+
+        ManagedAccountDetailResponse response = managedAccountsService.linkExistingManagedAccount(
+                actorUserId,
+                actorAccountHolderId,
+                request
+        );
+
+        verify(phoneVerificationService).assertVerifiedForPhone(actorAccountHolderId, "+22961000010", verificationId);
+        verify(accessControlService).assertCanActOnAccountHolder(actorUserId, managedAccountId, PermissionLevel.VIEW);
+        verify(delegationService, never()).createManagerDelegation(any(), any());
+        assertThat(response.accountHolderId()).isEqualTo(managedAccountId);
+    }
+
+    @Test
+    void linkExistingManagedAccount_shouldRejectWhenAnotherManagerIsAlreadyActive() {
+        UUID actorUserId = UUID.randomUUID();
+        UUID actorAccountHolderId = UUID.randomUUID();
+        UUID verificationId = UUID.randomUUID();
+        UUID managedAccountId = UUID.randomUUID();
+        LinkExistingManagedAccountRequest request = new LinkExistingManagedAccountRequest(
+                "+22961000011",
+                verificationId
+        );
+        AccountHolder existing = assistedAccount(managedAccountId, "Joelle", "Sossa", "+22961000011");
+        AccountDelegation otherManager = delegation(managedAccountId, UUID.randomUUID(), PermissionLevel.FULL, OffsetDateTime.now().minusDays(1));
+
+        when(accountHolderRepository.findByPhoneNumber("+22961000011")).thenReturn(Optional.of(existing));
+        when(delegationService.findActiveManagerDelegation(managedAccountId)).thenReturn(Optional.of(otherManager));
+
+        assertThatThrownBy(() -> managedAccountsService.linkExistingManagedAccount(
+                actorUserId,
+                actorAccountHolderId,
+                request
+        ))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("MANAGED_ACCOUNT_ALREADY_LINKED");
+    }
+
+    @Test
+    void linkExistingManagedAccount_shouldRejectNonAssistedAccount() {
+        UUID actorUserId = UUID.randomUUID();
+        UUID actorAccountHolderId = UUID.randomUUID();
+        UUID verificationId = UUID.randomUUID();
+        LinkExistingManagedAccountRequest request = new LinkExistingManagedAccountRequest(
+                "+22961000012",
+                verificationId
+        );
+
+        when(accountHolderRepository.findByPhoneNumber("+22961000012"))
+                .thenReturn(Optional.of(standardAccount(UUID.randomUUID(), "Owner", "User")));
+
+        assertThatThrownBy(() -> managedAccountsService.linkExistingManagedAccount(
+                actorUserId,
+                actorAccountHolderId,
+                request
+        ))
+                .isInstanceOf(com.ccapp.common.exception.BusinessException.class)
+                .hasMessageContaining("MANAGED_ACCOUNT_REQUIRED");
     }
 
     private AccountHolder assistedAccount(UUID accountHolderId, String firstName, String lastName, String phoneNumber) {

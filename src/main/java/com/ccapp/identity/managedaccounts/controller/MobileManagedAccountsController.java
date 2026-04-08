@@ -3,6 +3,7 @@ package com.ccapp.identity.managedaccounts.controller;
 import com.ccapp.common.api.CommonResponse;
 import com.ccapp.common.security.SecurityUtils;
 import com.ccapp.identity.managedaccounts.dto.CreateManagedAccountRequest;
+import com.ccapp.identity.managedaccounts.dto.LinkExistingManagedAccountRequest;
 import com.ccapp.identity.managedaccounts.dto.ManagedAccountDetailResponse;
 import com.ccapp.identity.managedaccounts.dto.ManagedAccountSummaryResponse;
 import com.ccapp.identity.managedaccounts.dto.UpdateManagedAccountRequest;
@@ -77,6 +78,26 @@ public class MobileManagedAccountsController {
         return ResponseEntity.ok(CommonResponse.success(
                 "Managed account created",
                 managedAccountsService.createManagedAccount(
+                        SecurityUtils.currentUserId(),
+                        SecurityUtils.currentAccountHolderId(),
+                        request
+                )
+        ));
+    }
+
+    @PostMapping("/link-existing")
+    @Operation(summary = "Link an existing assisted account to the authenticated manager after phone verification")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Success", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Validation or business rule error", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "409", description = "Managed account already linked to another manager", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
+    })
+    public ResponseEntity<CommonResponse<ManagedAccountDetailResponse>> linkExistingManagedAccount(
+            @Valid @RequestBody LinkExistingManagedAccountRequest request) {
+        return ResponseEntity.ok(CommonResponse.success(
+                "Managed account linked",
+                managedAccountsService.linkExistingManagedAccount(
                         SecurityUtils.currentUserId(),
                         SecurityUtils.currentAccountHolderId(),
                         request

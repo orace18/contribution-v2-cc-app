@@ -1,6 +1,7 @@
 package com.ccapp.identity.managedaccounts.service;
 
 import com.ccapp.common.exception.BusinessException;
+import com.ccapp.common.exception.ConflictException;
 import com.ccapp.common.exception.UnauthorizedException;
 import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
 import com.ccapp.identity.account_holder.domain.enums.AccountType;
@@ -13,6 +14,7 @@ import com.ccapp.identity.delegation.service.AccessControlService;
 import com.ccapp.identity.delegation.service.DelegatedActionService;
 import com.ccapp.identity.delegation.service.DelegationService;
 import com.ccapp.identity.managedaccounts.dto.CreateManagedAccountRequest;
+import com.ccapp.identity.managedaccounts.dto.LinkExistingManagedAccountRequest;
 import com.ccapp.identity.managedaccounts.dto.ManagedAccountDetailResponse;
 import com.ccapp.identity.managedaccounts.dto.ManagedAccountSummaryResponse;
 import com.ccapp.identity.managedaccounts.dto.UpdateManagedAccountRequest;
@@ -37,6 +39,8 @@ import java.util.stream.Collectors;
 public class ManagedAccountsService {
 
     private static final String MANAGED_ACCOUNT_REQUIRED = "MANAGED_ACCOUNT_REQUIRED";
+    private static final String MANAGED_ACCOUNT_ALREADY_LINKED = "MANAGED_ACCOUNT_ALREADY_LINKED";
+    private static final String MANAGED_ACCOUNT_NOT_FOUND_FOR_PHONE = "MANAGED_ACCOUNT_NOT_FOUND_FOR_PHONE";
 
     private final AccountHolderService accountHolderService;
     private final AccountHolderRepository accountHolderRepository;
@@ -108,6 +112,38 @@ public class ManagedAccountsService {
         delegationService.deactivateActiveDelegations(created.getId());
         AccountDelegation delegation = delegationService.createManagerDelegation(created.getId(), actorUserId);
         return toDetail(created, delegation);
+    }
+
+    @Transactional
+    public ManagedAccountDetailResponse linkExistingManagedAccount(UUID actorUserId,
+                                                                   UUID actorAccountHolderId,
+                                                                   LinkExistingManagedAccountRequest request) {
+        log.info("Managed accounts link existing actorUserId={} actorAccountHolderId={}",
+                actorUserId, actorAccountHolderId);
+        phoneVerificationService.assertVerifiedForPhone(
+                actorAccountHolderId,
+                request.phoneNumber(),
+                request.phoneVerificationId()
+        );
+
+        AccountHolder accountHolder = accountHolderRepository.findByPhoneNumber(normalizePhone(request.phoneNumber()))
+                .orElseThrow(() -> new BusinessException(MANAGED_ACCOUNT_NOT_FOUND_FOR_PHONE));
+        if (accountHolder.getAccountType() != AccountType.ASSISTED) {
+            throw new BusinessException(MANAGED_ACCOUNT_REQUIRED);
+        }
+
+        AccountDelegation existingManager = delegationService.findActiveManagerDelegation(accountHolder.getId())
+                .orElse(null);
+        if (existingManager != null) {
+            if (existingManager.getDelegateUserId().equals(actorUserId)) {
+                accessControlService.assertCanActOnAccountHolder(actorUserId, accountHolder.getId(), PermissionLevel.VIEW);
+                return toDetail(accountHolder, existingManager);
+            }
+            throw new ConflictException(MANAGED_ACCOUNT_ALREADY_LINKED);
+        }
+
+        AccountDelegation delegation = delegationService.createManagerDelegation(accountHolder.getId(), actorUserId);
+        return toDetail(accountHolder, delegation);
     }
 
     @Transactional
@@ -214,6 +250,17 @@ public class ManagedAccountsService {
         String lastName = accountHolder.getLastName() == null ? "" : accountHolder.getLastName().trim();
         String displayName = (firstName + " " + lastName).trim();
         return displayName.isBlank() ? "Unknown" : displayName;
+    }
+
+    private String normalizePhone(String value) {
+        if (value == null) {
+            throw new BusinessException("Phone number is required");
+        }
+        String normalized = value.trim().replaceAll("\\s+", "");
+        if (normalized.isBlank()) {
+            throw new BusinessException("Phone number is required");
+        }
+        return normalized;
     }
 
     private record ManagedAccountContext(AccountHolder accountHolder, AccountDelegation delegation) {
