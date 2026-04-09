@@ -11,6 +11,9 @@ import com.ccapp.seedcapital.readiness.domain.enums.SeedCapitalSatisfiedCriterio
 import com.ccapp.seedcapital.readiness.dto.CircleTrustScoreResponse;
 import com.ccapp.seedcapital.readiness.dto.SeedCapitalEligibilityResponse;
 import com.ccapp.seedcapital.readiness.repository.SeedCapitalEligibilityRepository;
+import com.ccapp.seedcapital.savings.domain.enums.ImfSavingsGateState;
+import com.ccapp.seedcapital.savings.dto.CircleSavingsGateResponse;
+import com.ccapp.seedcapital.savings.service.ImfSavingsGateService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,6 +41,7 @@ public class SeedCapitalEligibilityService {
     private final CircleTrustScoreService circleTrustScoreService;
     private final SeedCapitalEligibilityRepository seedCapitalEligibilityRepository;
     private final FinancialAccessPolicy financialAccessPolicy;
+    private final ImfSavingsGateService imfSavingsGateService;
 
     @Transactional
     public SeedCapitalEligibilityResponse evaluate(UUID circleId) {
@@ -53,6 +57,10 @@ public class SeedCapitalEligibilityService {
         boolean coachAssigned = circleCoachAssignmentService.hasAssignedCoach(circleId);
         CircleTrustScoreResponse trustScore = circleTrustScoreService.getScoreForEvaluation(circleId);
         boolean trustScoreThresholdMet = trustScore.globalScore().compareTo(MIN_TRUST_SCORE) >= 0;
+        CircleSavingsGateResponse savingsGate = imfSavingsGateService.evaluate(circleId);
+        boolean imfChannelCoverageMet = savingsGate.state() != ImfSavingsGateState.CHANNELS_MISSING
+                && savingsGate.state() != ImfSavingsGateState.CHANNELS_NOT_READY;
+        boolean savingsDisciplineMet = savingsGate.state() == ImfSavingsGateState.READY;
 
         EnumSet<SeedCapitalSatisfiedCriterion> satisfiedCriteria = EnumSet.noneOf(SeedCapitalSatisfiedCriterion.class);
         EnumSet<SeedCapitalBlockingReason> blockingReasons = EnumSet.noneOf(SeedCapitalBlockingReason.class);
@@ -82,11 +90,19 @@ public class SeedCapitalEligibilityService {
         } else {
             blockingReasons.add(SeedCapitalBlockingReason.TRUST_SCORE_BELOW_THRESHOLD);
         }
+        if (imfChannelCoverageMet) {
+            satisfiedCriteria.add(SeedCapitalSatisfiedCriterion.IMF_CHANNELS_READY);
+        }
+        if (savingsDisciplineMet) {
+            satisfiedCriteria.add(SeedCapitalSatisfiedCriterion.SAVINGS_DISCIPLINE_PROVEN);
+        }
 
-        List<SeedCapitalPendingCriterion> pendingCriteria = List.of(
-                SeedCapitalPendingCriterion.IMF_CHANNEL_ACTIVE,
-                SeedCapitalPendingCriterion.SAVINGS_DISCIPLINE_PROVEN
-        );
+        List<SeedCapitalPendingCriterion> pendingCriteria = switch (savingsGate.state()) {
+            case CHANNELS_MISSING -> List.of(SeedCapitalPendingCriterion.IMF_CHANNEL_MISSING);
+            case CHANNELS_NOT_READY -> List.of(SeedCapitalPendingCriterion.IMF_CHANNEL_NOT_READY);
+            case DISCIPLINE_INSUFFICIENT -> List.of(SeedCapitalPendingCriterion.SAVINGS_DISCIPLINE_INSUFFICIENT);
+            case READY -> List.of();
+        };
         boolean eligible = blockingReasons.isEmpty();
         SeedCapitalEligibilityState state = !eligible
                 ? SeedCapitalEligibilityState.BLOCKED
@@ -104,6 +120,13 @@ public class SeedCapitalEligibilityService {
         eligibility.setMeetingsRequirementMet(meetingsRequirementMet);
         eligibility.setCoachAssigned(coachAssigned);
         eligibility.setTrustScoreThresholdMet(trustScoreThresholdMet);
+        eligibility.setImfChannelCoverageMet(imfChannelCoverageMet);
+        eligibility.setSavingsDisciplineMet(savingsDisciplineMet);
+        eligibility.setSavingsGateState(savingsGate.state());
+        eligibility.setConfiguredImfChannelsCount(savingsGate.configuredChannelsCount());
+        eligibility.setReadyImfChannelsCount(savingsGate.readyChannelsCount());
+        eligibility.setQualifyingSavingsCyclesCount(savingsGate.qualifyingSavingsCyclesCount());
+        eligibility.setRequiredSavingsCyclesCount(savingsGate.requiredSavingsCyclesCount());
         eligibility.setBlockingReasons(toCsv(blockingReasons));
         eligibility.setSatisfiedCriteria(toCsv(satisfiedCriteria));
         eligibility.setPendingCriteria(toCsv(pendingCriteria));
@@ -113,7 +136,7 @@ public class SeedCapitalEligibilityService {
         return toResponse(saved);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public SeedCapitalEligibilityResponse getEligibility(UUID requesterAccountHolderId, UUID circleId) {
         circleReadinessAccessService.assertCanViewReadiness(requesterAccountHolderId, circleId);
         return seedCapitalEligibilityRepository.findById(circleId)
@@ -132,6 +155,13 @@ public class SeedCapitalEligibilityService {
                 eligibility.isMeetingsRequirementMet(),
                 eligibility.isCoachAssigned(),
                 eligibility.isTrustScoreThresholdMet(),
+                eligibility.isImfChannelCoverageMet(),
+                eligibility.isSavingsDisciplineMet(),
+                eligibility.getSavingsGateState(),
+                eligibility.getConfiguredImfChannelsCount(),
+                eligibility.getReadyImfChannelsCount(),
+                eligibility.getQualifyingSavingsCyclesCount(),
+                eligibility.getRequiredSavingsCyclesCount(),
                 parseCsv(eligibility.getSatisfiedCriteria(), SeedCapitalSatisfiedCriterion.class),
                 parseCsv(eligibility.getBlockingReasons(), SeedCapitalBlockingReason.class),
                 parseCsv(eligibility.getPendingCriteria(), SeedCapitalPendingCriterion.class),

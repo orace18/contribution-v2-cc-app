@@ -1,5 +1,7 @@
 package com.ccapp.financial.access.service;
 
+import com.ccapp.country.dto.CountryContext;
+import com.ccapp.country.service.CountryContextService;
 import com.ccapp.financial.access.domain.FinancialAccessReasonCode;
 import com.ccapp.financial.access.domain.FinancialAccessState;
 import com.ccapp.financial.access.domain.MemberFinancialProfile;
@@ -14,6 +16,9 @@ import com.ccapp.identity.wallet.repository.WalletRepository;
 import com.ccapp.payments.subscription.domain.entity.Membership;
 import com.ccapp.payments.subscription.domain.enums.MembershipStatus;
 import com.ccapp.payments.subscription.service.MembershipService;
+import com.ccapp.seedcapital.savings.domain.entity.ImfSavingsChannel;
+import com.ccapp.seedcapital.savings.domain.enums.ImfSavingsChannelStatus;
+import com.ccapp.seedcapital.savings.repository.ImfSavingsChannelRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,10 +36,12 @@ public class MemberFinancialProfileService {
     private static final String IMF_CHANNEL_NOT_CONFIGURED = "NOT_CONFIGURED";
 
     private final AccountHolderService accountHolderService;
+    private final CountryContextService countryContextService;
     private final MembershipService membershipService;
     private final WalletRepository walletRepository;
     private final AppUserRepository appUserRepository;
     private final UserRepository userRepository;
+    private final ImfSavingsChannelRepository imfSavingsChannelRepository;
 
     @Transactional(readOnly = true)
     public MemberFinancialProfile getProfile(UUID accountHolderId) {
@@ -46,6 +53,10 @@ public class MemberFinancialProfileService {
         Wallet latestWallet = walletRepository.findByAccountHolderIdOrderByCreatedAtDesc(accountHolderId)
                 .stream()
                 .findFirst()
+                .orElse(null);
+        CountryContext countryContext = countryContextService.resolve(accountHolderId);
+        ImfSavingsChannel imfSavingsChannel = imfSavingsChannelRepository
+                .findFirstByAccountHolderIdAndCountryCodeOrderByUpdatedAtDesc(accountHolderId, countryContext.countryCode())
                 .orElse(null);
         boolean walletActive = walletRepository
                 .findFirstByAccountHolderIdAndStatusOrderByCreatedAtDesc(accountHolderId, ACTIVE_WALLET_STATUS)
@@ -66,8 +77,8 @@ public class MemberFinancialProfileService {
                 walletActive,
                 accountRestricted,
                 blockingReasons.isEmpty() ? FinancialAccessState.FINANCIAL_ALLOWED : FinancialAccessState.FINANCIAL_DENIED,
-                false,
-                IMF_CHANNEL_NOT_CONFIGURED,
+                imfSavingsChannel != null && imfSavingsChannel.getStatus() == ImfSavingsChannelStatus.ACTIVE,
+                imfSavingsChannel != null ? imfSavingsChannel.getStatus().name() : IMF_CHANNEL_NOT_CONFIGURED,
                 blockingReasons
         );
     }

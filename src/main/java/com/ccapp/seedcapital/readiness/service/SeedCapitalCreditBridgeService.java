@@ -1,5 +1,6 @@
 package com.ccapp.seedcapital.readiness.service;
 
+import com.ccapp.common.exception.BusinessException;
 import com.ccapp.credit.dto.CreditEligibilityResponse;
 import com.ccapp.credit.service.CreditScoringService;
 import com.ccapp.financial.access.domain.FinancialAccessDecision;
@@ -27,7 +28,7 @@ public class SeedCapitalCreditBridgeService {
     private final SeedCapitalEligibilityService seedCapitalEligibilityService;
     private final CreditScoringService creditScoringService;
 
-    @Transactional(readOnly = true)
+    @Transactional
     public SeedCapitalCreditCandidateResponse getCandidate(UUID requesterAccountHolderId, UUID circleId) {
         circleReadinessAccessService.assertCircleMember(requesterAccountHolderId, circleId);
 
@@ -52,10 +53,24 @@ public class SeedCapitalCreditBridgeService {
                 readiness.trustScore(),
                 readiness.blockingReasons(),
                 readiness.pendingCriteria(),
+                readiness.savingsGateState(),
+                readiness.configuredImfChannelsCount(),
+                readiness.readyImfChannelsCount(),
+                readiness.qualifyingSavingsCyclesCount(),
+                readiness.requiredSavingsCyclesCount(),
                 creditEligibility.eligibilityScore(),
                 creditEligibility.maxEligibleAmount(),
                 OffsetDateTime.now()
         );
+    }
+
+    @Transactional(readOnly = true)
+    public SeedCapitalCreditCandidateResponse requireCandidate(UUID requesterAccountHolderId, UUID circleId) {
+        SeedCapitalCreditCandidateResponse candidate = getCandidate(requesterAccountHolderId, circleId);
+        if (!candidate.candidate()) {
+            throw new BusinessException(blockingMessage(candidate));
+        }
+        return candidate;
     }
 
     private SeedCapitalCreditBridgeState resolveState(FinancialAccessDecision memberAccessDecision,
@@ -75,5 +90,20 @@ public class SeedCapitalCreditBridgeService {
             return SeedCapitalCreditBridgeState.BLOCKED_BY_CREDIT_SCORING;
         }
         return SeedCapitalCreditBridgeState.CANDIDATE_FOR_CREDIT_APPLICATION;
+    }
+
+    private String blockingMessage(SeedCapitalCreditCandidateResponse candidate) {
+        return switch (candidate.state()) {
+            case BLOCKED_BY_MEMBER_ACCESS ->
+                    "Credit application blocked by member financial access: " + candidate.memberAccessReasonCodes();
+            case BLOCKED_BY_CIRCLE_READINESS ->
+                    "Credit application blocked by circle readiness: " + candidate.readinessBlockingReasons();
+            case WAITING_FUTURE_GATES ->
+                    "Credit application is waiting future gates: " + candidate.readinessPendingCriteria();
+            case BLOCKED_BY_CREDIT_SCORING ->
+                    "Credit application blocked by credit scoring";
+            case CANDIDATE_FOR_CREDIT_APPLICATION ->
+                    "Credit application candidate accepted";
+        };
     }
 }

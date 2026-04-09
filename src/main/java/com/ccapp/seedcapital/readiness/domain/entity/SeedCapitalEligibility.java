@@ -2,6 +2,7 @@ package com.ccapp.seedcapital.readiness.domain.entity;
 
 import com.ccapp.common.model.AuditableEntity;
 import com.ccapp.seedcapital.readiness.domain.enums.SeedCapitalEligibilityState;
+import com.ccapp.seedcapital.savings.domain.enums.ImfSavingsGateState;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -58,6 +59,28 @@ public class SeedCapitalEligibility extends AuditableEntity {
     @Column(name = "trust_score_threshold_met", nullable = false)
     private boolean trustScoreThresholdMet;
 
+    @Column(name = "imf_channel_coverage_met", nullable = false)
+    private boolean imfChannelCoverageMet;
+
+    @Column(name = "savings_discipline_met", nullable = false)
+    private boolean savingsDisciplineMet;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "savings_gate_state", length = 32)
+    private ImfSavingsGateState savingsGateState;
+
+    @Column(name = "configured_imf_channels_count", nullable = false)
+    private int configuredImfChannelsCount;
+
+    @Column(name = "ready_imf_channels_count", nullable = false)
+    private int readyImfChannelsCount;
+
+    @Column(name = "qualifying_savings_cycles_count", nullable = false)
+    private int qualifyingSavingsCyclesCount;
+
+    @Column(name = "required_savings_cycles_count", nullable = false)
+    private int requiredSavingsCyclesCount;
+
     @Column(name = "blocking_reasons", columnDefinition = "TEXT")
     private String blockingReasons;
 
@@ -86,6 +109,9 @@ public class SeedCapitalEligibility extends AuditableEntity {
         }
         if (trustScore == null) {
             trustScore = BigDecimal.ZERO;
+        }
+        if (requiredSavingsCyclesCount <= 0) {
+            requiredSavingsCyclesCount = 2;
         }
         if (evaluatedAt == null) {
             evaluatedAt = OffsetDateTime.now();

@@ -4,6 +4,7 @@ import com.ccapp.seedcapital.readiness.domain.enums.SeedCapitalBlockingReason;
 import com.ccapp.seedcapital.readiness.domain.enums.SeedCapitalEligibilityState;
 import com.ccapp.seedcapital.readiness.domain.enums.SeedCapitalPendingCriterion;
 import com.ccapp.seedcapital.readiness.domain.enums.SeedCapitalSatisfiedCriterion;
+import com.ccapp.seedcapital.savings.domain.enums.ImfSavingsGateState;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -20,6 +21,13 @@ public record SeedCapitalEligibilityResponse(
         boolean meetingsRequirementMet,
         boolean coachAssigned,
         boolean trustScoreThresholdMet,
+        boolean imfChannelCoverageMet,
+        boolean savingsDisciplineMet,
+        ImfSavingsGateState savingsGateState,
+        int configuredImfChannelsCount,
+        int readyImfChannelsCount,
+        int qualifyingSavingsCyclesCount,
+        int requiredSavingsCyclesCount,
         List<SeedCapitalSatisfiedCriterion> satisfiedCriteria,
         List<SeedCapitalBlockingReason> blockingReasons,
         List<SeedCapitalPendingCriterion> pendingCriteria,

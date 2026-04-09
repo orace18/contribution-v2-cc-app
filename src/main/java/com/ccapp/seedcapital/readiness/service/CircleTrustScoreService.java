@@ -105,7 +105,7 @@ public class CircleTrustScoreService {
         return toResponse(saved);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public CircleTrustScoreResponse getScore(UUID requesterAccountHolderId, UUID circleId) {
         circleReadinessAccessService.assertCanViewReadiness(requesterAccountHolderId, circleId);
         return circleTrustScoreRepository.findById(circleId)
@@ -113,7 +113,7 @@ public class CircleTrustScoreService {
                 .orElseGet(() -> recalculateScore(circleId));
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public CircleTrustScoreResponse getScoreForEvaluation(UUID circleId) {
         circleReadinessAccessService.requireActiveCircle(circleId);
         return circleTrustScoreRepository.findById(circleId)

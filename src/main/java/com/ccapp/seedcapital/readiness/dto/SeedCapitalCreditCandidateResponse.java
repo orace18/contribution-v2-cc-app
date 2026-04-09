@@ -6,6 +6,7 @@ import com.ccapp.seedcapital.readiness.domain.enums.SeedCapitalBlockingReason;
 import com.ccapp.seedcapital.readiness.domain.enums.SeedCapitalCreditBridgeState;
 import com.ccapp.seedcapital.readiness.domain.enums.SeedCapitalEligibilityState;
 import com.ccapp.seedcapital.readiness.domain.enums.SeedCapitalPendingCriterion;
+import com.ccapp.seedcapital.savings.domain.enums.ImfSavingsGateState;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -23,6 +24,11 @@ public record SeedCapitalCreditCandidateResponse(
         BigDecimal readinessTrustScore,
         List<SeedCapitalBlockingReason> readinessBlockingReasons,
         List<SeedCapitalPendingCriterion> readinessPendingCriteria,
+        ImfSavingsGateState savingsGateState,
+        int configuredImfChannelsCount,
+        int readyImfChannelsCount,
+        int qualifyingSavingsCyclesCount,
+        int requiredSavingsCyclesCount,
         BigDecimal creditEligibilityScore,
         BigDecimal maxEligibleAmount,
         OffsetDateTime evaluatedAt

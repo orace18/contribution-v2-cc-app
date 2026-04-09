@@ -16,6 +16,7 @@ import com.ccapp.seedcapital.readiness.domain.enums.SeedCapitalEligibilityState;
 import com.ccapp.seedcapital.readiness.domain.enums.SeedCapitalPendingCriterion;
 import com.ccapp.seedcapital.readiness.dto.SeedCapitalCreditCandidateResponse;
 import com.ccapp.seedcapital.readiness.dto.SeedCapitalEligibilityResponse;
+import com.ccapp.seedcapital.savings.domain.enums.ImfSavingsGateState;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -89,11 +90,18 @@ class SeedCapitalCreditBridgeServiceTest {
                         true,
                         true,
                         true,
+                        false,
+                        false,
+                        ImfSavingsGateState.CHANNELS_MISSING,
+                        0,
+                        0,
+                        0,
+                        2,
                         List.of(),
                         List.of(),
                         List.of(
-                                SeedCapitalPendingCriterion.IMF_CHANNEL_ACTIVE,
-                                SeedCapitalPendingCriterion.SAVINGS_DISCIPLINE_PROVEN
+                                SeedCapitalPendingCriterion.IMF_CHANNEL_MISSING,
+                                SeedCapitalPendingCriterion.SAVINGS_DISCIPLINE_INSUFFICIENT
                         ),
                         OffsetDateTime.now()
                 )
@@ -115,9 +123,10 @@ class SeedCapitalCreditBridgeServiceTest {
         assertFalse(response.candidate());
         assertEquals(SeedCapitalCreditBridgeState.WAITING_FUTURE_GATES, response.state());
         assertEquals(List.of(
-                SeedCapitalPendingCriterion.IMF_CHANNEL_ACTIVE,
-                SeedCapitalPendingCriterion.SAVINGS_DISCIPLINE_PROVEN
+                SeedCapitalPendingCriterion.IMF_CHANNEL_MISSING,
+                SeedCapitalPendingCriterion.SAVINGS_DISCIPLINE_INSUFFICIENT
         ), response.readinessPendingCriteria());
+        assertEquals(ImfSavingsGateState.CHANNELS_MISSING, response.savingsGateState());
     }
 
     @Test
@@ -161,6 +170,13 @@ class SeedCapitalCreditBridgeServiceTest {
                         true,
                         true,
                         true,
+                        true,
+                        true,
+                        ImfSavingsGateState.READY,
+                        3,
+                        3,
+                        2,
+                        2,
                         List.of(),
                         List.of(),
                         List.of(),
@@ -227,6 +243,13 @@ class SeedCapitalCreditBridgeServiceTest {
                         false,
                         false,
                         false,
+                        false,
+                        false,
+                        ImfSavingsGateState.CHANNELS_MISSING,
+                        0,
+                        0,
+                        0,
+                        2,
                         List.of(),
                         List.of(SeedCapitalBlockingReason.INVALID_CIRCLE_SIZE),
                         List.of(),

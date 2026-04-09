@@ -10,6 +10,9 @@ import com.ccapp.seedcapital.readiness.domain.enums.SeedCapitalPendingCriterion;
 import com.ccapp.seedcapital.readiness.dto.CircleTrustScoreResponse;
 import com.ccapp.seedcapital.readiness.dto.SeedCapitalEligibilityResponse;
 import com.ccapp.seedcapital.readiness.repository.SeedCapitalEligibilityRepository;
+import com.ccapp.seedcapital.savings.domain.enums.ImfSavingsGateState;
+import com.ccapp.seedcapital.savings.dto.CircleSavingsGateResponse;
+import com.ccapp.seedcapital.savings.service.ImfSavingsGateService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -43,12 +46,14 @@ class SeedCapitalEligibilityServiceTest {
     private SeedCapitalEligibilityRepository seedCapitalEligibilityRepository;
     @Mock
     private FinancialAccessPolicy financialAccessPolicy;
+    @Mock
+    private ImfSavingsGateService imfSavingsGateService;
 
     @InjectMocks
     private SeedCapitalEligibilityService seedCapitalEligibilityService;
 
     @Test
-    void evaluate_shouldReturnReadyForFutureGatesWhenCurrentCriteriaPass() {
+    void evaluate_shouldReturnEligibleWhenCurrentCriteriaAndSavingsGatePass() {
         UUID circleId = UUID.randomUUID();
         CircleMember member1 = CircleMember.builder().accountHolderId(UUID.randomUUID()).build();
         CircleMember member2 = CircleMember.builder().accountHolderId(UUID.randomUUID()).build();
@@ -79,18 +84,29 @@ class SeedCapitalEligibilityServiceTest {
                 new BigDecimal("88.00"),
                 OffsetDateTime.now()
         ));
+        when(imfSavingsGateService.evaluate(circleId)).thenReturn(new CircleSavingsGateResponse(
+                circleId,
+                "BJ",
+                ImfSavingsGateState.READY,
+                3,
+                3,
+                3,
+                2,
+                2,
+                OffsetDateTime.now()
+        ));
         when(seedCapitalEligibilityRepository.findById(circleId)).thenReturn(Optional.empty());
         when(seedCapitalEligibilityRepository.save(any(SeedCapitalEligibility.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         SeedCapitalEligibilityResponse response = seedCapitalEligibilityService.evaluate(circleId);
 
         assertTrue(response.eligible());
-        assertEquals(SeedCapitalEligibilityState.READY_FOR_FUTURE_GATES, response.state());
+        assertEquals(SeedCapitalEligibilityState.ELIGIBLE, response.state());
         assertTrue(response.blockingReasons().isEmpty());
-        assertEquals(List.of(
-                SeedCapitalPendingCriterion.IMF_CHANNEL_ACTIVE,
-                SeedCapitalPendingCriterion.SAVINGS_DISCIPLINE_PROVEN
-        ), response.pendingCriteria());
+        assertTrue(response.pendingCriteria().isEmpty());
+        assertEquals(ImfSavingsGateState.READY, response.savingsGateState());
+        assertEquals(3, response.readyImfChannelsCount());
+        assertEquals(2, response.qualifyingSavingsCyclesCount());
     }
 
     @Test
@@ -123,6 +139,17 @@ class SeedCapitalEligibilityServiceTest {
                 new BigDecimal("21.50"),
                 OffsetDateTime.now()
         ));
+        when(imfSavingsGateService.evaluate(circleId)).thenReturn(new CircleSavingsGateResponse(
+                circleId,
+                "BJ",
+                ImfSavingsGateState.CHANNELS_MISSING,
+                2,
+                0,
+                0,
+                0,
+                2,
+                OffsetDateTime.now()
+        ));
         when(seedCapitalEligibilityRepository.findById(circleId)).thenReturn(Optional.empty());
         when(seedCapitalEligibilityRepository.save(any(SeedCapitalEligibility.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -135,5 +162,6 @@ class SeedCapitalEligibilityServiceTest {
         assertTrue(response.blockingReasons().contains(SeedCapitalBlockingReason.MEETINGS_NOT_REGULAR));
         assertTrue(response.blockingReasons().contains(SeedCapitalBlockingReason.COACH_NOT_ASSIGNED));
         assertTrue(response.blockingReasons().contains(SeedCapitalBlockingReason.TRUST_SCORE_BELOW_THRESHOLD));
+        assertTrue(response.pendingCriteria().contains(SeedCapitalPendingCriterion.IMF_CHANNEL_MISSING));
     }
 }
