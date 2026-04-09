@@ -171,7 +171,7 @@ public class MobileHomeService {
     }
 
     private MobileHomeCircleSummaryResponse toCircleSummary(Circle circle) {
-        long membersCount = circleMemberRepository.countByCircle_IdAndFinancialMemberTrue(circle.getId());
+        long membersCount = circleMemberRepository.countByCircle_Id(circle.getId());
         return new MobileHomeCircleSummaryResponse(
                 circle.getId(),
                 circle.getName(),

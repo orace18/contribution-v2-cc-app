@@ -44,7 +44,7 @@ public class AdminCircleManagementService {
         return new AdminCircleDetailsResponse(
                 circle.getId(),
                 circle.getName(),
-                circle.getCoachId(),
+                legacyCircleManagerAccountHolderId(circle),
                 circle.getStatus(),
                 circle.getCreatedAt(),
                 members
@@ -66,15 +66,19 @@ public class AdminCircleManagementService {
     }
 
     private AdminCircleSummaryResponse toSummary(Circle circle) {
-        long membersCount = circleMemberRepository.countByCircle_IdAndFinancialMemberTrue(circle.getId());
+        long membersCount = circleMemberRepository.countByCircle_Id(circle.getId());
         return new AdminCircleSummaryResponse(
                 circle.getId(),
                 circle.getName(),
-                circle.getCoachId(),
+                legacyCircleManagerAccountHolderId(circle),
                 circle.getStatus(),
                 membersCount,
                 circle.getCreatedAt()
         );
+    }
+
+    private UUID legacyCircleManagerAccountHolderId(Circle circle) {
+        return circle.getCoachId();
     }
 
     private AdminCircleMemberResponse toMember(CircleMember member) {

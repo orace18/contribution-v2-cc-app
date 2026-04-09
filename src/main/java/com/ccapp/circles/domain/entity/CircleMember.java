@@ -21,6 +21,10 @@ import java.util.UUID;
 }, uniqueConstraints = {
         @UniqueConstraint(name = "uk_circle_members_circle_account_holder", columnNames = {"circle_id", "account_holder_id"})
 })
+/**
+ * Social membership inside a circle.
+ * Legacy financial columns are kept only for backward compatibility until PR4 removes the old circle finance path.
+ */
 public class CircleMember extends AuditableEntity {
 
     @Id
@@ -38,15 +42,18 @@ public class CircleMember extends AuditableEntity {
     @Column(name = "role", nullable = false, length = 16)
     private CircleMemberRole role;
 
+    @Deprecated(since = "2026-04", forRemoval = false)
     @Column(name = "is_financial_member", nullable = false)
     private boolean financialMember;
 
     @Column(name = "business_activity", length = 255)
     private String businessActivity;
 
+    @Deprecated(since = "2026-04", forRemoval = false)
     @Column(name = "loan_status", length = 32)
     private String loanStatus;
 
+    @Deprecated(since = "2026-04", forRemoval = false)
     @Column(name = "repayment_progress", precision = 5, scale = 2)
     private BigDecimal repaymentProgress;
 

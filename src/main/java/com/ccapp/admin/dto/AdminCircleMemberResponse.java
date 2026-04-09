@@ -10,7 +10,9 @@ public record AdminCircleMemberResponse(
         UUID accountHolderId,
         CircleMemberRole role,
         String businessActivity,
+        @Deprecated(since = "2026-04", forRemoval = false)
         String loanStatus,
+        @Deprecated(since = "2026-04", forRemoval = false)
         BigDecimal repaymentProgress,
         OffsetDateTime joinedAt
 ) {

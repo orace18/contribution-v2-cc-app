@@ -8,6 +8,7 @@ import java.util.UUID;
 public record AdminCircleSummaryResponse(
         UUID circleId,
         String name,
+        @Deprecated(since = "2026-04", forRemoval = false)
         UUID coachId,
         CircleStatus status,
         long membersCount,

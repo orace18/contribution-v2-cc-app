@@ -47,7 +47,7 @@ public class CircleController {
     @Operation(summary = "Creer un cercle")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Succes - cercle cree", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
-            @ApiResponse(responseCode = "400", description = "Regle metier invalide (MEMBER_NOT_ACTIVE, SPONSOR_NOT_FOUND, cercle complet)", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Regle metier invalide (MEMBER_NOT_ACTIVE, cercle complet)", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
             @ApiResponse(responseCode = "401", description = "Non authentifie", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
             @ApiResponse(responseCode = "404", description = "Utilisateur introuvable", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
             @ApiResponse(responseCode = "409", description = "Utilisateur deja dans un cercle actif", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
@@ -110,10 +110,10 @@ public class CircleController {
     }
 
     @DeleteMapping("/{circleId}/members/{memberAccountHolderId}")
-    @Operation(summary = "Retirer un membre du cercle (createur uniquement)")
+    @Operation(summary = "Retirer un membre du cercle (proprietaire legacy uniquement)")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Membre retire"),
-            @ApiResponse(responseCode = "400", description = "Regle metier invalide (CIRCLE_LOCKED_BY_ACTIVE_LOAN, creator cannot remove themselves)"),
+            @ApiResponse(responseCode = "400", description = "Regle metier invalide (CIRCLE_LOCKED_BY_ACTIVE_LOAN, circle owner cannot remove themselves)"),
             @ApiResponse(responseCode = "403", description = "Acces refuse — pas le createur du cercle"),
             @ApiResponse(responseCode = "404", description = "Cercle ou membre introuvable")
     })

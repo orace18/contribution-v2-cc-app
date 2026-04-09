@@ -29,7 +29,7 @@ public class CircleProgressService {
     public CircleProgressResponse recalculateCircleProgress(UUID circleId) {
         ensureCircleExists(circleId);
 
-        int membersCount = Math.toIntExact(circleMemberRepository.countByCircle_IdAndFinancialMemberTrue(circleId));
+        int membersCount = Math.toIntExact(circleMemberRepository.countByCircle_Id(circleId));
         int membersCompletedTraining = capByMembers(
                 membersCount,
                 circleActivityRepository.countDistinctActorsByCircleIdAndActivityType(circleId, ActivityType.TRAINING_COMPLETED)

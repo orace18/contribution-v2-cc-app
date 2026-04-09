@@ -33,7 +33,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class CircleInviteService {
 
-    private static final int DEFAULT_MAX_FINANCIAL_MEMBERS = 5;
+    private static final int DEFAULT_MAX_MEMBERS = 6;
     private static final SecureRandom TOKEN_RANDOM = new SecureRandom();
     private static final String CIRCLE_INVITE_EXPIRED = "CIRCLE_INVITE_EXPIRED";
     private static final String CIRCLE_INVITE_EXHAUSTED = "CIRCLE_INVITE_EXHAUSTED";
@@ -74,7 +74,7 @@ public class CircleInviteService {
         Circle circle = loadCircle(circleId);
         assertCircleParticipant(actorAccountHolderId, circleId);
 
-        int remainingSlots = remainingFinancialSlots(circleId);
+        int remainingSlots = remainingMemberSlots(circleId);
         if (remainingSlots <= 0) {
             throw new BusinessException("CIRCLE_FULL");
         }
@@ -127,7 +127,7 @@ public class CircleInviteService {
         ensureInviteIsUsable(invite);
 
         Circle circle = inviteCode.getCircle();
-        long membersCount = circleMemberRepository.countByCircle_IdAndFinancialMemberTrue(circle.getId());
+        long membersCount = circleMemberRepository.countByCircle_Id(circle.getId());
 
         return new ResolveInviteCodeResponse(
                 circle.getId(),
@@ -214,12 +214,12 @@ public class CircleInviteService {
                 .orElseThrow(() -> new NotFoundException("Circle invite not found"));
     }
 
-    private int remainingFinancialSlots(UUID circleId) {
-        long count = circleMemberRepository.countByCircle_IdAndFinancialMemberTrue(circleId);
+    private int remainingMemberSlots(UUID circleId) {
+        long count = circleMemberRepository.countByCircle_Id(circleId);
         Circle circle = circleRepository.findById(circleId)
                 .orElseThrow(() -> new NotFoundException("Circle not found"));
-        int maxFinancialMembers = resolveMaxFinancialMembers(circle.getCountryCode());
-        return Math.max(0, maxFinancialMembers - (int) count);
+        int maxMembers = resolveMaxMembers(circle.getCountryCode());
+        return Math.max(0, maxMembers - (int) count);
     }
 
     private void ensureInviteIsUsable(CircleInvite invite) {
@@ -285,7 +285,7 @@ public class CircleInviteService {
         return normalized;
     }
 
-    private int resolveMaxFinancialMembers(String countryCode) {
+    private int resolveMaxMembers(String countryCode) {
         CountryConfigResolver.ResolvedConfig circleConfig = countryConfigResolver.resolveActiveConfig(
                 countryCode,
                 CountryConfigType.GENERAL
@@ -295,12 +295,12 @@ public class CircleInviteService {
                 ? (ObjectNode) payload.get("circle")
                 : payload;
         if (!circlePayload.has("maxMembers") || circlePayload.get("maxMembers").isNull()) {
-            return DEFAULT_MAX_FINANCIAL_MEMBERS;
+            return DEFAULT_MAX_MEMBERS;
         }
         if (!circlePayload.get("maxMembers").canConvertToInt()) {
             throw new BusinessException("general.circle.maxMembers must be an integer");
         }
         int value = circlePayload.get("maxMembers").intValue();
-        return value > 0 ? value : DEFAULT_MAX_FINANCIAL_MEMBERS;
+        return value > 0 ? value : DEFAULT_MAX_MEMBERS;
     }
 }
