@@ -5,12 +5,15 @@ import com.ccapp.common.security.SecurityUtils;
 import com.ccapp.seedcapital.readiness.dto.AssignCircleCoachRequest;
 import com.ccapp.seedcapital.readiness.dto.CircleCoachAssignmentResponse;
 import com.ccapp.seedcapital.readiness.dto.CircleMeetingResponse;
+import com.ccapp.seedcapital.readiness.dto.CircleNetworkCoachingResponse;
+import com.ccapp.seedcapital.readiness.dto.SeedCapitalCreditCandidateResponse;
 import com.ccapp.seedcapital.readiness.dto.CircleTrustScoreResponse;
 import com.ccapp.seedcapital.readiness.dto.RecordCircleMeetingRequest;
 import com.ccapp.seedcapital.readiness.dto.SeedCapitalEligibilityResponse;
 import com.ccapp.seedcapital.readiness.service.CircleCoachAssignmentService;
 import com.ccapp.seedcapital.readiness.service.CircleMeetingService;
 import com.ccapp.seedcapital.readiness.service.CircleTrustScoreService;
+import com.ccapp.seedcapital.readiness.service.SeedCapitalCreditBridgeService;
 import com.ccapp.seedcapital.readiness.service.SeedCapitalEligibilityService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -42,6 +45,7 @@ public class CircleReadinessController {
     private final CircleCoachAssignmentService circleCoachAssignmentService;
     private final CircleTrustScoreService circleTrustScoreService;
     private final SeedCapitalEligibilityService seedCapitalEligibilityService;
+    private final SeedCapitalCreditBridgeService seedCapitalCreditBridgeService;
 
     @PostMapping("/meetings")
     @Operation(summary = "Enregistrer une reunion de cercle")
@@ -85,6 +89,16 @@ public class CircleReadinessController {
         ));
     }
 
+    @GetMapping("/network-coaching")
+    @Operation(summary = "Consulter l'heritage canonique du coaching reseau")
+    public ResponseEntity<CommonResponse<CircleNetworkCoachingResponse>> networkCoaching(@PathVariable UUID circleId) {
+        UUID requesterAccountHolderId = SecurityUtils.currentAccountHolderId();
+        return ResponseEntity.ok(CommonResponse.success(
+                "Circle network coaching",
+                circleCoachAssignmentService.getNetworkCoaching(requesterAccountHolderId, circleId)
+        ));
+    }
+
     @GetMapping("/trust-score")
     @Operation(summary = "Consulter le trust score canonique du cercle")
     public ResponseEntity<CommonResponse<CircleTrustScoreResponse>> trustScore(@PathVariable UUID circleId) {
@@ -102,6 +116,16 @@ public class CircleReadinessController {
         return ResponseEntity.ok(CommonResponse.success(
                 "Seed capital eligibility",
                 seedCapitalEligibilityService.getEligibility(requesterAccountHolderId, circleId)
+        ));
+    }
+
+    @GetMapping("/credit-candidate/me")
+    @Operation(summary = "Consulter le pont canonique readiness vers candidature credit")
+    public ResponseEntity<CommonResponse<SeedCapitalCreditCandidateResponse>> creditCandidate(@PathVariable UUID circleId) {
+        UUID requesterAccountHolderId = SecurityUtils.currentAccountHolderId();
+        return ResponseEntity.ok(CommonResponse.success(
+                "Seed capital credit candidate",
+                seedCapitalCreditBridgeService.getCandidate(requesterAccountHolderId, circleId)
         ));
     }
 }

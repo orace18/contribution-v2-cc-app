@@ -27,11 +27,13 @@ public class CircleTrustScoreService {
     private static final BigDecimal MEETINGS_WEIGHT = new BigDecimal("0.25");
     private static final BigDecimal ACTIVITY_WEIGHT = new BigDecimal("0.10");
     private static final BigDecimal COACH_WEIGHT = new BigDecimal("0.10");
+    private static final BigDecimal MAX_NETWORK_BONUS_POINTS = new BigDecimal("8.00");
     private static final long TRUST_SCORE_WINDOW_DAYS = 60L;
 
     private final CircleReadinessAccessService circleReadinessAccessService;
     private final CircleMeetingService circleMeetingService;
     private final CircleCoachAssignmentService circleCoachAssignmentService;
+    private final CircleNetworkCoachingService circleNetworkCoachingService;
     private final CircleTrustScoreRepository circleTrustScoreRepository;
     private final CircleActivityRepository circleActivityRepository;
     private final FinancialAccessPolicy financialAccessPolicy;
@@ -52,6 +54,7 @@ public class CircleTrustScoreService {
                 OffsetDateTime.now().minusDays(TRUST_SCORE_WINDOW_DAYS)
         ));
         boolean coachAssigned = circleCoachAssignmentService.hasAssignedCoach(circleId);
+        CircleNetworkCoachingService.NetworkCoachingSnapshot networkSnapshot = circleNetworkCoachingService.resolveSnapshot(circleId);
 
         BigDecimal membershipComplianceScore = membersCount == 0
                 ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP)
@@ -68,12 +71,17 @@ public class CircleTrustScoreService {
                 ? HUNDRED
                 : BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
 
-        BigDecimal globalScore = membershipComplianceScore.multiply(MEMBERSHIP_WEIGHT)
+        BigDecimal baseScore = membershipComplianceScore.multiply(MEMBERSHIP_WEIGHT)
                 .add(circleSizeScore.multiply(SIZE_WEIGHT))
                 .add(meetingsScore.multiply(MEETINGS_WEIGHT))
                 .add(activityScore.multiply(ACTIVITY_WEIGHT))
                 .add(coachScore.multiply(COACH_WEIGHT))
                 .setScale(2, RoundingMode.HALF_UP);
+        BigDecimal networkBonusScore = qualifiesForNetworkBonus(membershipComplianceScore, circleSizeScore, completedMeetingsCount)
+                ? MAX_NETWORK_BONUS_POINTS.multiply(networkSnapshot.networkSignalScore())
+                .divide(HUNDRED, 2, RoundingMode.HALF_UP)
+                : BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        BigDecimal globalScore = baseScore.add(networkBonusScore).min(HUNDRED).setScale(2, RoundingMode.HALF_UP);
 
         CircleTrustScore score = circleTrustScoreRepository.findById(circleId)
                 .orElseGet(() -> CircleTrustScore.builder().circleId(circleId).build());
@@ -87,6 +95,10 @@ public class CircleTrustScoreService {
         score.setMeetingsScore(meetingsScore);
         score.setActivityScore(activityScore);
         score.setCoachScore(coachScore);
+        score.setNetworkSignalScore(networkSnapshot.networkSignalScore());
+        score.setNetworkBonusScore(networkBonusScore);
+        score.setNetworkAdvisorsCount(networkSnapshot.advisorsCount());
+        score.setNetworkCoachLevel(networkSnapshot.coachLevel());
         score.setGlobalScore(globalScore);
 
         CircleTrustScore saved = circleTrustScoreRepository.save(score);
@@ -122,6 +134,10 @@ public class CircleTrustScoreService {
                 score.getMeetingsScore(),
                 score.getActivityScore(),
                 score.getCoachScore(),
+                score.getNetworkSignalScore(),
+                score.getNetworkBonusScore(),
+                score.getNetworkAdvisorsCount(),
+                score.getNetworkCoachLevel(),
                 score.getGlobalScore(),
                 score.getUpdatedAt()
         );
@@ -129,5 +145,13 @@ public class CircleTrustScoreService {
 
     private boolean isValidCircleSize(int membersCount) {
         return membersCount >= 3 && membersCount <= 6;
+    }
+
+    private boolean qualifiesForNetworkBonus(BigDecimal membershipComplianceScore,
+                                             BigDecimal circleSizeScore,
+                                             int completedMeetingsCount) {
+        return membershipComplianceScore.compareTo(new BigDecimal("80.00")) >= 0
+                && circleSizeScore.compareTo(HUNDRED) >= 0
+                && completedMeetingsCount >= 2;
     }
 }

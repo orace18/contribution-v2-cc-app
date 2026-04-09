@@ -9,6 +9,7 @@ import com.ccapp.seedcapital.readiness.domain.entity.CircleCoachAssignment;
 import com.ccapp.seedcapital.readiness.domain.enums.CircleCoachAssignmentSource;
 import com.ccapp.seedcapital.readiness.dto.AssignCircleCoachRequest;
 import com.ccapp.seedcapital.readiness.dto.CircleCoachAssignmentResponse;
+import com.ccapp.seedcapital.readiness.dto.CircleNetworkCoachingResponse;
 import com.ccapp.seedcapital.readiness.repository.CircleCoachAssignmentRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -26,6 +27,7 @@ public class CircleCoachAssignmentService {
     private final CircleCoachAssignmentRepository circleCoachAssignmentRepository;
     private final AccountHolderRepository accountHolderRepository;
     private final DomainEventPublisher domainEventPublisher;
+    private final CircleNetworkCoachingService circleNetworkCoachingService;
 
     @Transactional
     public CircleCoachAssignmentResponse assignCoach(UUID requesterAccountHolderId,
@@ -60,27 +62,45 @@ public class CircleCoachAssignmentService {
         circleReadinessAccessService.assertCanViewReadiness(requesterAccountHolderId, circleId);
         return circleCoachAssignmentRepository.findById(circleId)
                 .map(this::toResponse)
-                .orElseGet(() -> new CircleCoachAssignmentResponse(
-                        circleId,
-                        false,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null
-                ));
+                .orElseGet(() -> inheritedAssignmentResponse(circleId));
     }
 
     @Transactional(readOnly = true)
     public Optional<UUID> findAssignedCoachAccountHolderId(UUID circleId) {
-        return circleCoachAssignmentRepository.findById(circleId)
+        Optional<UUID> explicitCoach = circleCoachAssignmentRepository.findById(circleId)
                 .map(CircleCoachAssignment::getCoachAccountHolderId);
+        if (explicitCoach.isPresent()) {
+            return explicitCoach;
+        }
+        CircleNetworkCoachingService.NetworkCoachingSnapshot snapshot = circleNetworkCoachingService.resolveSnapshot(circleId);
+        return snapshot.coachResolved() ? Optional.of(snapshot.coachAccountHolderId()) : Optional.empty();
     }
 
     @Transactional(readOnly = true)
     public boolean hasAssignedCoach(UUID circleId) {
-        return circleCoachAssignmentRepository.existsById(circleId);
+        return circleCoachAssignmentRepository.existsById(circleId)
+                || circleNetworkCoachingService.resolveSnapshot(circleId).coachResolved();
+    }
+
+    @Transactional(readOnly = true)
+    public CircleNetworkCoachingResponse getNetworkCoaching(UUID requesterAccountHolderId, UUID circleId) {
+        circleReadinessAccessService.assertCanViewReadiness(requesterAccountHolderId, circleId);
+        CircleNetworkCoachingService.NetworkCoachingSnapshot snapshot = circleNetworkCoachingService.resolveSnapshot(circleId);
+        return new CircleNetworkCoachingResponse(
+                snapshot.circleId(),
+                snapshot.coachResolved(),
+                snapshot.coachAccountHolderId(),
+                snapshot.membersCount(),
+                snapshot.lineageCoverageCount(),
+                snapshot.lineageCoverageRequired(),
+                snapshot.lineageCoverageScore(),
+                snapshot.coachLevel(),
+                snapshot.advisorAccountHolderIds(),
+                snapshot.coachGrade(),
+                snapshot.coachTeamSize(),
+                snapshot.networkSignalScore(),
+                snapshot.coachLinkedAt()
+        );
     }
 
     private CircleCoachAssignmentResponse toResponse(CircleCoachAssignment assignment) {
@@ -93,6 +113,32 @@ public class CircleCoachAssignmentService {
                 assignment.getAssignedByAccountHolderId(),
                 assignment.getAssignedAt(),
                 assignment.getUpdatedAt()
+        );
+    }
+
+    private CircleCoachAssignmentResponse inheritedAssignmentResponse(UUID circleId) {
+        CircleNetworkCoachingService.NetworkCoachingSnapshot snapshot = circleNetworkCoachingService.resolveSnapshot(circleId);
+        if (!snapshot.coachResolved()) {
+            return new CircleCoachAssignmentResponse(
+                    circleId,
+                    false,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null
+            );
+        }
+        return new CircleCoachAssignmentResponse(
+                circleId,
+                true,
+                snapshot.coachAccountHolderId(),
+                CircleCoachAssignmentSource.NETWORK_INHERITED,
+                "Inherited from MLM network lineage",
+                null,
+                snapshot.coachLinkedAt(),
+                null
         );
     }
 

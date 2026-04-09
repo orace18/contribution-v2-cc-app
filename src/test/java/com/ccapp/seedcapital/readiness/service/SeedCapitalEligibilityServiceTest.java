@@ -72,6 +72,10 @@ class SeedCapitalEligibilityServiceTest {
                 new BigDecimal("100.00"),
                 new BigDecimal("80.00"),
                 new BigDecimal("100.00"),
+                new BigDecimal("50.00"),
+                new BigDecimal("4.00"),
+                1,
+                2,
                 new BigDecimal("88.00"),
                 OffsetDateTime.now()
         ));
@@ -112,6 +116,10 @@ class SeedCapitalEligibilityServiceTest {
                 BigDecimal.ZERO,
                 new BigDecimal("20.00"),
                 BigDecimal.ZERO,
+                BigDecimal.ZERO,
+                BigDecimal.ZERO,
+                0,
+                null,
                 new BigDecimal("21.50"),
                 OffsetDateTime.now()
         ));

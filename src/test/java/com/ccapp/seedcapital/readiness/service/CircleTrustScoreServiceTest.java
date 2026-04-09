@@ -31,6 +31,8 @@ class CircleTrustScoreServiceTest {
     @Mock
     private CircleCoachAssignmentService circleCoachAssignmentService;
     @Mock
+    private CircleNetworkCoachingService circleNetworkCoachingService;
+    @Mock
     private CircleTrustScoreRepository circleTrustScoreRepository;
     @Mock
     private com.ccapp.circlesocial.repository.CircleActivityRepository circleActivityRepository;
@@ -41,7 +43,7 @@ class CircleTrustScoreServiceTest {
     private CircleTrustScoreService circleTrustScoreService;
 
     @Test
-    void recalculateScore_shouldCombineMembershipMeetingsActivityAndCoachFactors() {
+    void recalculateScore_shouldKeepNetworkBonusAtZeroWhenFundamentalsAreNotStrongEnough() {
         UUID circleId = UUID.randomUUID();
         CircleMember member1 = CircleMember.builder().accountHolderId(UUID.randomUUID()).build();
         CircleMember member2 = CircleMember.builder().accountHolderId(UUID.randomUUID()).build();
@@ -56,6 +58,22 @@ class CircleTrustScoreServiceTest {
         when(circleMeetingService.countCompletedMeetingsWithQuorumSince(eq(circleId), any(OffsetDateTime.class))).thenReturn(2L);
         when(circleActivityRepository.countByCircleIdAndCreatedAtAfter(eq(circleId), any(OffsetDateTime.class))).thenReturn(3L);
         when(circleCoachAssignmentService.hasAssignedCoach(circleId)).thenReturn(true);
+        when(circleNetworkCoachingService.resolveSnapshot(circleId)).thenReturn(
+                new CircleNetworkCoachingService.NetworkCoachingSnapshot(
+                        circleId,
+                        UUID.randomUUID(),
+                        4,
+                        3,
+                        3,
+                        new java.math.BigDecimal("75.00"),
+                        2,
+                        List.of(UUID.randomUUID()),
+                        "GOLD",
+                        4L,
+                        new java.math.BigDecimal("50.00"),
+                        OffsetDateTime.now().minusDays(10)
+                )
+        );
         when(circleTrustScoreRepository.findById(circleId)).thenReturn(java.util.Optional.empty());
         when(circleTrustScoreRepository.save(any(CircleTrustScore.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -70,6 +88,53 @@ class CircleTrustScoreServiceTest {
         assertEquals("100.00", response.meetingsScore().toPlainString());
         assertEquals("60.00", response.activityScore().toPlainString());
         assertEquals("100.00", response.coachScore().toPlainString());
+        assertEquals("50.00", response.networkSignalScore().toPlainString());
+        assertEquals("0.00", response.networkBonusScore().toPlainString());
+        assertEquals(1, response.networkAdvisorsCount());
+        assertEquals(2, response.networkCoachLevel());
         assertEquals("87.25", response.globalScore().toPlainString());
+    }
+
+    @Test
+    void recalculateScore_shouldApplyCappedNetworkBonusWhenFundamentalsAreMet() {
+        UUID circleId = UUID.randomUUID();
+        CircleMember member1 = CircleMember.builder().accountHolderId(UUID.randomUUID()).build();
+        CircleMember member2 = CircleMember.builder().accountHolderId(UUID.randomUUID()).build();
+        CircleMember member3 = CircleMember.builder().accountHolderId(UUID.randomUUID()).build();
+        CircleMember member4 = CircleMember.builder().accountHolderId(UUID.randomUUID()).build();
+
+        when(circleReadinessAccessService.requireActiveMembers(circleId)).thenReturn(List.of(member1, member2, member3, member4));
+        when(financialAccessPolicy.isAllowed(member1.getAccountHolderId(), FinancialAccessUseCase.SEED_CAPITAL_ACCESS)).thenReturn(true);
+        when(financialAccessPolicy.isAllowed(member2.getAccountHolderId(), FinancialAccessUseCase.SEED_CAPITAL_ACCESS)).thenReturn(true);
+        when(financialAccessPolicy.isAllowed(member3.getAccountHolderId(), FinancialAccessUseCase.SEED_CAPITAL_ACCESS)).thenReturn(true);
+        when(financialAccessPolicy.isAllowed(member4.getAccountHolderId(), FinancialAccessUseCase.SEED_CAPITAL_ACCESS)).thenReturn(true);
+        when(circleMeetingService.countCompletedMeetingsWithQuorumSince(eq(circleId), any(OffsetDateTime.class))).thenReturn(2L);
+        when(circleActivityRepository.countByCircleIdAndCreatedAtAfter(eq(circleId), any(OffsetDateTime.class))).thenReturn(3L);
+        when(circleCoachAssignmentService.hasAssignedCoach(circleId)).thenReturn(true);
+        when(circleNetworkCoachingService.resolveSnapshot(circleId)).thenReturn(
+                new CircleNetworkCoachingService.NetworkCoachingSnapshot(
+                        circleId,
+                        UUID.randomUUID(),
+                        4,
+                        3,
+                        3,
+                        new java.math.BigDecimal("75.00"),
+                        2,
+                        List.of(UUID.randomUUID()),
+                        "GOLD",
+                        4L,
+                        new java.math.BigDecimal("50.00"),
+                        OffsetDateTime.now().minusDays(10)
+                )
+        );
+        when(circleTrustScoreRepository.findById(circleId)).thenReturn(java.util.Optional.empty());
+        when(circleTrustScoreRepository.save(any(CircleTrustScore.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        CircleTrustScoreResponse response = circleTrustScoreService.recalculateScore(circleId);
+
+        assertEquals("100.00", response.membershipComplianceScore().toPlainString());
+        assertEquals("50.00", response.networkSignalScore().toPlainString());
+        assertEquals("4.00", response.networkBonusScore().toPlainString());
+        assertEquals("100.00", response.globalScore().toPlainString());
     }
 }

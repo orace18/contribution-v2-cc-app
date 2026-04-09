@@ -23,6 +23,7 @@ public class CircleReadinessAccessService {
     private final CircleRepository circleRepository;
     private final CircleMemberRepository circleMemberRepository;
     private final CircleCoachAssignmentRepository circleCoachAssignmentRepository;
+    private final CircleNetworkCoachingService circleNetworkCoachingService;
 
     @Transactional(readOnly = true)
     public Circle requireActiveCircle(UUID circleId) {
@@ -67,8 +68,22 @@ public class CircleReadinessAccessService {
 
     @Transactional(readOnly = true)
     public boolean isAssignedCoach(UUID circleId, UUID accountHolderId) {
-        return circleCoachAssignmentRepository.findById(circleId)
+        boolean explicitCoach = circleCoachAssignmentRepository.findById(circleId)
                 .map(assignment -> Objects.equals(assignment.getCoachAccountHolderId(), accountHolderId))
                 .orElse(false);
+        if (explicitCoach) {
+            return true;
+        }
+        CircleNetworkCoachingService.NetworkCoachingSnapshot snapshot = circleNetworkCoachingService.resolveSnapshot(circleId);
+        return snapshot.coachResolved()
+                && Objects.equals(snapshot.coachAccountHolderId(), accountHolderId);
+    }
+
+    @Transactional(readOnly = true)
+    public void assertCircleMember(UUID requesterAccountHolderId, UUID circleId) {
+        requireActiveCircle(circleId);
+        if (!circleMemberRepository.existsByCircle_IdAndAccountHolderId(circleId, requesterAccountHolderId)) {
+            throw new BusinessException("Circle membership is required");
+        }
     }
 }

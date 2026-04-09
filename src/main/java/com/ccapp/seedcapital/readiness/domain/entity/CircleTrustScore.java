@@ -58,6 +58,18 @@ public class CircleTrustScore extends AuditableEntity {
     @Column(name = "coach_score", nullable = false, precision = 5, scale = 2)
     private BigDecimal coachScore;
 
+    @Column(name = "network_signal_score", nullable = false, precision = 5, scale = 2)
+    private BigDecimal networkSignalScore;
+
+    @Column(name = "network_bonus_score", nullable = false, precision = 5, scale = 2)
+    private BigDecimal networkBonusScore;
+
+    @Column(name = "network_advisors_count", nullable = false)
+    private Integer networkAdvisorsCount;
+
+    @Column(name = "network_coach_level")
+    private Integer networkCoachLevel;
+
     @Column(name = "global_score", nullable = false, precision = 5, scale = 2)
     private BigDecimal globalScore;
 
@@ -89,6 +101,15 @@ public class CircleTrustScore extends AuditableEntity {
         }
         if (coachScore == null) {
             coachScore = BigDecimal.ZERO;
+        }
+        if (networkSignalScore == null) {
+            networkSignalScore = BigDecimal.ZERO;
+        }
+        if (networkBonusScore == null) {
+            networkBonusScore = BigDecimal.ZERO;
+        }
+        if (networkAdvisorsCount == null) {
+            networkAdvisorsCount = 0;
         }
         if (globalScore == null) {
             globalScore = BigDecimal.ZERO;

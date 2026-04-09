@@ -16,6 +16,10 @@ public record CircleTrustScoreResponse(
         BigDecimal meetingsScore,
         BigDecimal activityScore,
         BigDecimal coachScore,
+        BigDecimal networkSignalScore,
+        BigDecimal networkBonusScore,
+        int networkAdvisorsCount,
+        Integer networkCoachLevel,
         BigDecimal globalScore,
         OffsetDateTime updatedAt
 ) {
