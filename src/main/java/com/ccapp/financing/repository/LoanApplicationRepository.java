@@ -13,7 +13,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-public interface LoanApplicationRepository extends JpaRepository<LoanApplication, UUID> {
+public interface LoanApplicationRepository extends JpaRepository<LoanApplication, UUID>, LoanApplicationRepositoryCustom {
 
     Page<LoanApplication> findByAccountHolderIdOrderByCreatedAtDesc(UUID accountHolderId, Pageable pageable);
 
@@ -52,20 +52,6 @@ public interface LoanApplicationRepository extends JpaRepository<LoanApplication
     Page<LoanApplication> searchForPartner(UUID partnerId,
                                            LoanApplicationStatus status,
                                            Pageable pageable);
-
-    @Query("""
-            select la
-            from LoanApplication la
-            join FinancingOffer fo on fo.id = la.offerId
-            where (:partnerId is null or fo.partnerId = :partnerId)
-              and (:status is null or la.status = :status)
-              and (:countryCode is null or upper(fo.countryCode) = upper(:countryCode))
-            order by la.createdAt desc
-            """)
-    Page<LoanApplication> searchForAdmin(UUID partnerId,
-                                         LoanApplicationStatus status,
-                                         String countryCode,
-                                         Pageable pageable);
 
     @Query("""
             select la
