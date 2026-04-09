@@ -1,23 +1,17 @@
 package com.ccapp.mobile.sponsor.service;
 
+import com.ccapp.financial.access.domain.FinancialAccessUseCase;
+import com.ccapp.financial.access.service.FinancialAccessPolicy;
 import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
-import com.ccapp.identity.wallet.repository.WalletRepository;
 import com.ccapp.mlm.repository.MlmRelationshipRepository;
-import com.ccapp.payments.subscription.domain.enums.MembershipStatus;
-import com.ccapp.payments.subscription.repository.MembershipRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
-
-import java.time.OffsetDateTime;
 
 @Component
 @RequiredArgsConstructor
 public class SponsorEligibilityValidator {
 
-    private static final String WALLET_ACTIVE = "ACTIVE";
-
-    private final WalletRepository walletRepository;
-    private final MembershipRepository membershipRepository;
+    private final FinancialAccessPolicy financialAccessPolicy;
     private final MlmRelationshipRepository mlmRelationshipRepository;
 
     /**
@@ -32,18 +26,7 @@ public class SponsorEligibilityValidator {
             return false;
         }
 
-        boolean walletActive = walletRepository
-                .findFirstByAccountHolderIdAndStatusOrderByCreatedAtDesc(accountHolder.getId(), WALLET_ACTIVE)
-                .isPresent();
-        if (!walletActive) {
-            return false;
-        }
-
-        boolean membershipActive = membershipRepository
-                .findFirstByAccountHolderIdAndStatusAndExpiresAtAfterOrderByExpiresAtDesc(
-                        accountHolder.getId(), MembershipStatus.ACTIVE, OffsetDateTime.now())
-                .isPresent();
-        if (!membershipActive) {
+        if (!financialAccessPolicy.isAllowed(accountHolder.getId(), FinancialAccessUseCase.NETWORK_SPONSOR_ELIGIBILITY)) {
             return false;
         }
 

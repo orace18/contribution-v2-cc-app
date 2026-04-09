@@ -24,6 +24,8 @@ import com.ccapp.credit.dto.LoanResponse;
 import com.ccapp.credit.dto.RepaymentScheduleResponse;
 import com.ccapp.credit.repository.LoanRepository;
 import com.ccapp.credit.repository.RepaymentScheduleRepository;
+import com.ccapp.financial.access.domain.FinancialAccessUseCase;
+import com.ccapp.financial.access.service.FinancialAccessPolicy;
 import com.ccapp.ledger.service.AccountingPostingService;
 import com.ccapp.financing.domain.entity.FinancialPartner;
 import com.ccapp.financing.domain.enums.FinancialPartnerStatus;
@@ -78,6 +80,7 @@ public class LoanService {
     private final CountryContextService countryContextService;
     private final CountryConfigResolver countryConfigResolver;
     private final AdminPolicyRepository adminPolicyRepository;
+    private final FinancialAccessPolicy financialAccessPolicy;
     private final FinancialPartnerRepository financialPartnerRepository;
     private final InstitutionLedgerService institutionLedgerService;
     private final WalletRepository walletRepository;
@@ -94,6 +97,7 @@ public class LoanService {
         CountryContext countryContext = countryContextService.resolve(accountHolderId);
         String serviceCountryCode = countryContext.serviceCountryCode();
         accessControlService.assertCanActOnAccountHolder(actorUserId, accountHolderId, PermissionLevel.TRANSACT);
+        financialAccessPolicy.assertAllowed(accountHolderId, FinancialAccessUseCase.CREDIT_APPLICATION);
         ensureCreditPolicyConfigured(serviceCountryCode);
 
         var circle = circleRepository.findByIdAndStatus(request.circleId(), CircleStatus.ACTIVE)
