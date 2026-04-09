@@ -8,6 +8,7 @@ import com.ccapp.circlesocial.service.CircleActivityService;
 import com.ccapp.circlesocial.service.CircleProgressService;
 import com.ccapp.circlesocial.service.CircleScoreService;
 import com.ccapp.circles.domain.enums.CircleStatus;
+import com.ccapp.circles.service.CircleMeetingPolicyService;
 import com.ccapp.circles.service.CircleMobileQueryService;
 import com.ccapp.circles.service.CircleService;
 import com.ccapp.common.api.CommonResponse;
@@ -39,6 +40,7 @@ public class CircleController {
 
     private final CircleService circleService;
     private final CircleMobileQueryService circleMobileQueryService;
+    private final CircleMeetingPolicyService circleMeetingPolicyService;
     private final CircleActivityService circleActivityService;
     private final CircleProgressService circleProgressService;
     private final CircleScoreService circleScoreService;
@@ -98,6 +100,16 @@ public class CircleController {
         return ResponseEntity.ok(CommonResponse.success("My active circle", circleService.getMyCircle(accountHolderId)));
     }
 
+    @GetMapping("/{circleId}")
+    @Operation(summary = "Recuperer le detail canonique d'un cercle pour mobile")
+    public ResponseEntity<CommonResponse<CircleDetailResponse>> circleDetail(@PathVariable UUID circleId) {
+        UUID requesterAccountHolderId = SecurityUtils.currentAccountHolderId();
+        return ResponseEntity.ok(CommonResponse.success(
+                "Circle detail",
+                circleMobileQueryService.getCircleDetail(requesterAccountHolderId, circleId)
+        ));
+    }
+
     @GetMapping("/{circleId}/members")
     @Operation(summary = "Lister les membres d'un cercle")
     @ApiResponses(value = {
@@ -107,6 +119,17 @@ public class CircleController {
     })
     public ResponseEntity<CommonResponse<List<CircleMemberResponse>>> listMembers(@PathVariable UUID circleId) {
         return ResponseEntity.ok(CommonResponse.success("Circle members", circleService.listMembers(circleId)));
+    }
+
+    @PatchMapping("/{circleId}/meeting-policy")
+    @Operation(summary = "Mettre a jour la cadence canonique des reunions du cercle")
+    public ResponseEntity<CommonResponse<CircleMeetingPolicyResponse>> updateMeetingPolicy(@PathVariable UUID circleId,
+                                                                                           @Valid @RequestBody UpdateCircleMeetingPolicyRequest request) {
+        UUID requesterAccountHolderId = SecurityUtils.currentAccountHolderId();
+        return ResponseEntity.ok(CommonResponse.success(
+                "Circle meeting policy updated",
+                circleMeetingPolicyService.updatePolicy(requesterAccountHolderId, circleId, request)
+        ));
     }
 
     @DeleteMapping("/{circleId}/members/{memberAccountHolderId}")

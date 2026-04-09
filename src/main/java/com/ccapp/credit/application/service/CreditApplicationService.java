@@ -7,6 +7,8 @@ import com.ccapp.country.service.CountryContextService;
 import com.ccapp.credit.application.domain.entity.CreditApplication;
 import com.ccapp.credit.application.domain.enums.CreditApplicationProductType;
 import com.ccapp.credit.application.domain.enums.CreditApplicationStatus;
+import com.ccapp.credit.application.dto.CreditApplicationProjectRequest;
+import com.ccapp.credit.application.dto.CreditApplicationProjectResponse;
 import com.ccapp.credit.application.dto.CreateSeedCapitalCreditApplicationRequest;
 import com.ccapp.credit.application.dto.CreditApplicationResponse;
 import com.ccapp.credit.application.repository.CreditApplicationRepository;
@@ -79,6 +81,10 @@ public class CreditApplicationService {
                 .currency(countryContext.currency())
                 .requestedDurationMonths(request.requestedDurationMonths())
                 .requestedInterestRate(request.requestedInterestRate())
+                .projectName(projectName(request.project()))
+                .projectSector(projectSector(request.project()))
+                .projectDescription(projectDescription(request.project()))
+                .projectUseOfFunds(projectUseOfFunds(request.project()))
                 .readinessState(candidate.readinessState())
                 .readinessTrustScore(candidate.readinessTrustScore())
                 .creditEligibilityScore(candidate.creditEligibilityScore())
@@ -123,6 +129,7 @@ public class CreditApplicationService {
                 application.getCurrency(),
                 application.getRequestedDurationMonths(),
                 application.getRequestedInterestRate(),
+                toProjectResponse(application),
                 application.getReadinessState(),
                 application.getReadinessTrustScore(),
                 application.getCreditEligibilityScore(),
@@ -139,6 +146,21 @@ public class CreditApplicationService {
                 application.getBridgeEvaluatedAt(),
                 application.getCreatedAt(),
                 application.getUpdatedAt()
+        );
+    }
+
+    private CreditApplicationProjectResponse toProjectResponse(CreditApplication application) {
+        if (isBlank(application.getProjectName())
+                && isBlank(application.getProjectSector())
+                && isBlank(application.getProjectDescription())
+                && isBlank(application.getProjectUseOfFunds())) {
+            return null;
+        }
+        return new CreditApplicationProjectResponse(
+                application.getProjectName(),
+                application.getProjectSector(),
+                application.getProjectDescription(),
+                application.getProjectUseOfFunds()
         );
     }
 
@@ -162,5 +184,36 @@ public class CreditApplicationService {
                 .filter(value -> !value.isEmpty())
                 .map(value -> Enum.valueOf(enumType, value))
                 .toList();
+    }
+
+    private String projectName(CreditApplicationProjectRequest project) {
+        return project == null ? null : normalizeOptionalText(project.name(), 160);
+    }
+
+    private String projectSector(CreditApplicationProjectRequest project) {
+        return project == null ? null : normalizeOptionalText(project.sector(), 120);
+    }
+
+    private String projectDescription(CreditApplicationProjectRequest project) {
+        return project == null ? null : normalizeOptionalText(project.description(), 1000);
+    }
+
+    private String projectUseOfFunds(CreditApplicationProjectRequest project) {
+        return project == null ? null : normalizeOptionalText(project.useOfFunds(), 500);
+    }
+
+    private String normalizeOptionalText(String value, int maxLength) {
+        if (value == null) {
+            return null;
+        }
+        String normalized = value.trim();
+        if (normalized.isBlank()) {
+            return null;
+        }
+        return normalized.length() <= maxLength ? normalized : normalized.substring(0, maxLength);
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 }

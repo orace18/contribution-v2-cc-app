@@ -20,6 +20,7 @@ import com.ccapp.circles.repository.CircleRepaymentRepository;
 import com.ccapp.circles.repository.CircleRepository;
 import com.ccapp.circlesocial.domain.entity.CircleProgress;
 import com.ccapp.circlesocial.repository.CircleProgressRepository;
+import com.ccapp.chat.service.ChatConversationService;
 import com.ccapp.chat.domain.entity.ChatMessage;
 import com.ccapp.chat.domain.enums.ChatMessageStatus;
 import com.ccapp.chat.repository.ChatMessageRepository;
@@ -29,6 +30,11 @@ import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
 import com.ccapp.identity.account_holder.domain.enums.AccountType;
 import com.ccapp.identity.account_holder.repository.AccountHolderRepository;
 import com.ccapp.identity.account_holder.service.AccountHolderService;
+import com.ccapp.seedcapital.readiness.repository.CircleMeetingRepository;
+import com.ccapp.seedcapital.readiness.service.CircleReadinessAccessService;
+import com.ccapp.seedcapital.readiness.service.CircleTrustScoreService;
+import com.ccapp.seedcapital.readiness.service.SeedCapitalCreditBridgeService;
+import com.ccapp.seedcapital.savings.service.ImfSavingsGateService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -75,6 +81,20 @@ class CircleMobileQueryServiceIntegrationTest {
 
     @MockBean
     private AccountHolderService accountHolderService;
+    @MockBean
+    private CircleReadinessAccessService circleReadinessAccessService;
+    @MockBean
+    private CircleMeetingRepository circleMeetingRepository;
+    @MockBean
+    private CircleTrustScoreService circleTrustScoreService;
+    @MockBean
+    private ImfSavingsGateService imfSavingsGateService;
+    @MockBean
+    private SeedCapitalCreditBridgeService seedCapitalCreditBridgeService;
+    @MockBean
+    private ChatConversationService chatConversationService;
+    @MockBean
+    private CircleMeetingPolicyService circleMeetingPolicyService;
 
     @BeforeEach
     void setUp() {

@@ -5,6 +5,7 @@ import com.ccapp.circles.domain.entity.CircleMemberInteraction;
 import com.ccapp.circles.domain.enums.CircleMemberInteractionType;
 import com.ccapp.circles.domain.enums.CircleMemberRole;
 import com.ccapp.circles.domain.enums.CircleStatus;
+import com.ccapp.circles.dto.CircleDetailResponse;
 import com.ccapp.circles.dto.CircleListItemResponse;
 import com.ccapp.circles.dto.CircleMemberFinancialsResponse;
 import com.ccapp.circles.dto.CircleMemberHistoryItemResponse;
@@ -30,6 +31,14 @@ import com.ccapp.identity.account_holder.service.AccountHolderService;
 import com.ccapp.identity.app_user.repository.AppUserRepository;
 import com.ccapp.identity.repository.UserProfileRepository;
 import com.ccapp.identity.repository.UserRepository;
+import com.ccapp.chat.service.ChatConversationService;
+import com.ccapp.seedcapital.readiness.domain.enums.SeedCapitalCreditBridgeState;
+import com.ccapp.seedcapital.readiness.domain.enums.CircleMeetingStatus;
+import com.ccapp.seedcapital.readiness.repository.CircleMeetingRepository;
+import com.ccapp.seedcapital.readiness.service.CircleReadinessAccessService;
+import com.ccapp.seedcapital.readiness.service.CircleTrustScoreService;
+import com.ccapp.seedcapital.readiness.service.SeedCapitalCreditBridgeService;
+import com.ccapp.seedcapital.savings.service.ImfSavingsGateService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -65,6 +74,13 @@ public class CircleMobileQueryService {
     private final AppUserRepository appUserRepository;
     private final UserRepository userRepository;
     private final UserProfileRepository userProfileRepository;
+    private final CircleReadinessAccessService circleReadinessAccessService;
+    private final CircleMeetingRepository circleMeetingRepository;
+    private final CircleTrustScoreService circleTrustScoreService;
+    private final ImfSavingsGateService imfSavingsGateService;
+    private final SeedCapitalCreditBridgeService seedCapitalCreditBridgeService;
+    private final ChatConversationService chatConversationService;
+    private final CircleMeetingPolicyService circleMeetingPolicyService;
 
     @Transactional(readOnly = true)
     public PageResponse<CircleListItemResponse> listUserCircles(UUID accountHolderId,
@@ -93,6 +109,38 @@ public class CircleMobileQueryService {
                 row.getLastActivity()
         ));
         return PageResponse.from(mappedPage);
+    }
+
+    @Transactional
+    public CircleDetailResponse getCircleDetail(UUID requesterAccountHolderId, UUID circleId) {
+        circleReadinessAccessService.assertCanViewReadiness(requesterAccountHolderId, circleId);
+        var circle = circleReadinessAccessService.requireActiveCircle(circleId);
+        UUID conversationId = chatConversationService.getOrCreateCircleConversationId(circleId);
+        int membersCount = Math.toIntExact(circleMemberRepository.countByCircle_Id(circleId));
+        OffsetDateTime nextMeetingAt = circleMeetingRepository
+                .findFirstByCircleIdAndStatusAndMeetingAtAfterOrderByMeetingAtAsc(
+                        circleId,
+                        CircleMeetingStatus.SCHEDULED,
+                        OffsetDateTime.now()
+                )
+                .map(meeting -> meeting.getMeetingAt())
+                .orElse(null);
+        SeedCapitalCreditBridgeState creditCandidateState = circleMemberRepository.existsByCircle_IdAndAccountHolderId(circleId, requesterAccountHolderId)
+                ? seedCapitalCreditBridgeService.getCandidate(requesterAccountHolderId, circleId).state()
+                : null;
+
+        return new CircleDetailResponse(
+                circle.getId(),
+                circle.getName(),
+                circle.getStatus(),
+                conversationId,
+                membersCount,
+                nextMeetingAt,
+                circleTrustScoreService.getScore(requesterAccountHolderId, circleId).globalScore(),
+                imfSavingsGateService.getGate(requesterAccountHolderId, circleId).state(),
+                creditCandidateState,
+                circleMeetingPolicyService.resolvePolicy(circle)
+        );
     }
 
     @Transactional(readOnly = true)

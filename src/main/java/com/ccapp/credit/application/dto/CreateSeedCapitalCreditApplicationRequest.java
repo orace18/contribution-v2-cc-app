@@ -1,5 +1,6 @@
 package com.ccapp.credit.application.dto;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -21,6 +22,9 @@ public record CreateSeedCapitalCreditApplicationRequest(
         Integer requestedDurationMonths,
 
         @DecimalMin(value = "0.00", message = "requestedInterestRate must be >= 0")
-        BigDecimal requestedInterestRate
+        BigDecimal requestedInterestRate,
+
+        @Valid
+        CreditApplicationProjectRequest project
 ) {
 }

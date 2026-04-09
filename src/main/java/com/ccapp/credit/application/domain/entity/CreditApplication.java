@@ -68,6 +68,18 @@ public class CreditApplication extends AuditableEntity {
     @Column(name = "requested_interest_rate", precision = 5, scale = 2)
     private BigDecimal requestedInterestRate;
 
+    @Column(name = "project_name", length = 160)
+    private String projectName;
+
+    @Column(name = "project_sector", length = 120)
+    private String projectSector;
+
+    @Column(name = "project_description", length = 1000)
+    private String projectDescription;
+
+    @Column(name = "project_use_of_funds", length = 500)
+    private String projectUseOfFunds;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "readiness_state", nullable = false, length = 32)
     private SeedCapitalEligibilityState readinessState;

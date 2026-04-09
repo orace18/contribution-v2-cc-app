@@ -24,6 +24,7 @@ public record CreditApplicationResponse(
         String currency,
         Integer requestedDurationMonths,
         BigDecimal requestedInterestRate,
+        CreditApplicationProjectResponse project,
         SeedCapitalEligibilityState readinessState,
         BigDecimal readinessTrustScore,
         BigDecimal creditEligibilityScore,

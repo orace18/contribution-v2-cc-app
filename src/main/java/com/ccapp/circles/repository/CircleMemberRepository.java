@@ -5,6 +5,7 @@ import com.ccapp.circles.domain.enums.CircleMemberRole;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -27,6 +28,8 @@ public interface CircleMemberRepository extends JpaRepository<CircleMember, UUID
 
     @Deprecated(since = "2026-04", forRemoval = false)
     List<CircleMember> findByCircle_IdAndFinancialMemberTrueOrderByJoinedAtAsc(UUID circleId);
+
+    List<CircleMember> findByCircle_IdInOrderByJoinedAtAsc(Collection<UUID> circleIds);
 
     Optional<CircleMember> findByCircle_IdAndRole(UUID circleId, CircleMemberRole role);
 

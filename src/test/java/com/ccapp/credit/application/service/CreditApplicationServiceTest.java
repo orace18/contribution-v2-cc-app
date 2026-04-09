@@ -5,6 +5,7 @@ import com.ccapp.country.dto.CountryContext;
 import com.ccapp.country.service.CountryContextService;
 import com.ccapp.credit.application.domain.entity.CreditApplication;
 import com.ccapp.credit.application.domain.enums.CreditApplicationStatus;
+import com.ccapp.credit.application.dto.CreditApplicationProjectRequest;
 import com.ccapp.credit.application.dto.CreateSeedCapitalCreditApplicationRequest;
 import com.ccapp.credit.application.dto.CreditApplicationResponse;
 import com.ccapp.credit.application.repository.CreditApplicationRepository;
@@ -60,11 +61,18 @@ class CreditApplicationServiceTest {
         UUID actorUserId = UUID.randomUUID();
         UUID accountHolderId = UUID.randomUUID();
         UUID circleId = UUID.randomUUID();
+        CreditApplicationProjectRequest project = new CreditApplicationProjectRequest(
+                "Boutique de vetements",
+                "Commerce",
+                "Achat de stock initial",
+                "Stock + petit equipement"
+        );
         CreateSeedCapitalCreditApplicationRequest request = new CreateSeedCapitalCreditApplicationRequest(
                 circleId,
                 new BigDecimal("250000.0000"),
                 6,
-                new BigDecimal("5.50")
+                new BigDecimal("5.50"),
+                project
         );
         when(accountHolderService.getById(accountHolderId)).thenReturn(AccountHolder.builder().id(accountHolderId).build());
         doNothing().when(accessControlService).assertCanActOnAccountHolder(actorUserId, accountHolderId, PermissionLevel.TRANSACT);
@@ -117,8 +125,12 @@ class CreditApplicationServiceTest {
         assertEquals("500000.0000", saved.getMaxEligibleAmount().toPlainString());
         assertEquals(ImfSavingsGateState.READY, saved.getSavingsGateState());
         assertEquals(3, saved.getReadyImfChannelsCount());
+        assertEquals("Boutique de vetements", saved.getProjectName());
+        assertEquals("Commerce", saved.getProjectSector());
         assertEquals("XOF", response.currency());
         assertEquals(CreditApplicationStatus.SUBMITTED, response.workflowState());
+        assertEquals("Boutique de vetements", response.project().name());
+        assertEquals("Stock + petit equipement", response.project().useOfFunds());
     }
 
     @Test
@@ -129,6 +141,7 @@ class CreditApplicationServiceTest {
         CreateSeedCapitalCreditApplicationRequest request = new CreateSeedCapitalCreditApplicationRequest(
                 circleId,
                 new BigDecimal("600000.0000"),
+                null,
                 null,
                 null
         );
@@ -181,6 +194,7 @@ class CreditApplicationServiceTest {
                 circleId,
                 new BigDecimal("250000.0000"),
                 null,
+                null,
                 null
         );
         when(accountHolderService.getById(accountHolderId)).thenReturn(AccountHolder.builder().id(accountHolderId).build());
@@ -231,6 +245,7 @@ class CreditApplicationServiceTest {
         CreateSeedCapitalCreditApplicationRequest request = new CreateSeedCapitalCreditApplicationRequest(
                 circleId,
                 new BigDecimal("250000.0000"),
+                null,
                 null,
                 null
         );

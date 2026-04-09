@@ -1,14 +1,18 @@
 package com.ccapp.seedcapital.savings.controller;
 
 import com.ccapp.common.api.CommonResponse;
+import com.ccapp.common.security.AuthenticatedPrincipal;
 import com.ccapp.common.security.SecurityUtils;
 import com.ccapp.seedcapital.savings.dto.CircleSavingsGateResponse;
 import com.ccapp.seedcapital.savings.dto.ConfirmSavingsContributionRequest;
+import com.ccapp.seedcapital.savings.dto.CreateSavingsContributionPaymentIntentRequest;
 import com.ccapp.seedcapital.savings.dto.CreateSavingsCycleRequest;
 import com.ccapp.seedcapital.savings.dto.MemberSavingsContributionResponse;
+import com.ccapp.seedcapital.savings.dto.SavingsContributionPaymentIntentResponse;
 import com.ccapp.seedcapital.savings.dto.SavingsCycleResponse;
 import com.ccapp.seedcapital.savings.service.ImfSavingsGateService;
 import com.ccapp.seedcapital.savings.service.MemberSavingsContributionService;
+import com.ccapp.seedcapital.savings.service.SavingsContributionPaymentIntentService;
 import com.ccapp.seedcapital.savings.service.SavingsCycleService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -37,6 +41,7 @@ public class CircleSavingsController {
 
     private final SavingsCycleService savingsCycleService;
     private final MemberSavingsContributionService memberSavingsContributionService;
+    private final SavingsContributionPaymentIntentService savingsContributionPaymentIntentService;
     private final ImfSavingsGateService imfSavingsGateService;
 
     @PostMapping("/savings-cycles")
@@ -70,6 +75,24 @@ public class CircleSavingsController {
         ));
     }
 
+    @PostMapping("/savings-cycles/{cycleId}/contributions/me/payment-intents")
+    @Operation(summary = "Initier le paiement canonique de ma contribution d'epargne")
+    public ResponseEntity<CommonResponse<SavingsContributionPaymentIntentResponse>> createMyPaymentIntent(@PathVariable UUID circleId,
+                                                                                                          @PathVariable UUID cycleId,
+                                                                                                          @Valid @RequestBody CreateSavingsContributionPaymentIntentRequest request) {
+        UUID requesterAccountHolderId = SecurityUtils.currentAccountHolderId();
+        return ResponseEntity.ok(CommonResponse.success(
+                "Savings contribution payment initiated",
+                savingsContributionPaymentIntentService.createMyPaymentIntent(
+                        resolveActorUserId(),
+                        requesterAccountHolderId,
+                        circleId,
+                        cycleId,
+                        request
+                )
+        ));
+    }
+
     @PostMapping("/savings-cycles/{cycleId}/contributions/me/confirm")
     @Operation(summary = "Confirmer ma contribution d'epargne IMF sur un cycle de cercle")
     public ResponseEntity<CommonResponse<MemberSavingsContributionResponse>> confirmMyContribution(@PathVariable UUID circleId,
@@ -91,5 +114,10 @@ public class CircleSavingsController {
                 "Savings contributions",
                 memberSavingsContributionService.listCycleContributions(requesterAccountHolderId, circleId, cycleId)
         ));
+    }
+
+    private UUID resolveActorUserId() {
+        AuthenticatedPrincipal principal = SecurityUtils.currentPrincipal();
+        return principal.userId() != null ? principal.userId() : SecurityUtils.currentAccountHolderId();
     }
 }

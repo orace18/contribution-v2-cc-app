@@ -4,6 +4,11 @@ import com.ccapp.circlesocial.domain.enums.ActivityType;
 import com.ccapp.circlesocial.event.CircleActivityRequestedEvent;
 import com.ccapp.common.events.DomainEventPublisher;
 import com.ccapp.common.exception.BusinessException;
+import com.ccapp.common.exception.NotFoundException;
+import com.ccapp.payments.operation.domain.entity.Operation;
+import com.ccapp.payments.operation.domain.enums.OperationStatus;
+import com.ccapp.payments.operation.domain.enums.OperationType;
+import com.ccapp.payments.operation.service.OperationService;
 import com.ccapp.seedcapital.readiness.service.CircleReadinessAccessService;
 import com.ccapp.seedcapital.savings.domain.entity.ImfSavingsChannel;
 import com.ccapp.seedcapital.savings.domain.entity.MemberSavingsContribution;
@@ -21,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 @Service
@@ -31,6 +37,7 @@ public class MemberSavingsContributionService {
     private final SavingsCycleService savingsCycleService;
     private final ImfSavingsChannelService imfSavingsChannelService;
     private final MemberSavingsContributionRepository memberSavingsContributionRepository;
+    private final OperationService operationService;
     private final DomainEventPublisher domainEventPublisher;
 
     @Transactional
@@ -51,11 +58,19 @@ public class MemberSavingsContributionService {
                 .orElseThrow(() -> new BusinessException("Savings contribution expectation not found for circle member"));
 
         BigDecimal confirmedAmount = request.confirmedAmount().setScale(4);
+        Operation paymentOperation = resolveReferencedPaymentOperation(
+                requesterAccountHolderId,
+                circleId,
+                cycleId,
+                confirmedAmount,
+                request.transactionReference()
+        );
         contribution.setConfirmedAmount(confirmedAmount);
         contribution.setStatus(resolveStatus(confirmedAmount, contribution.getExpectedAmount()));
         contribution.setConfirmedAt(OffsetDateTime.now());
         contribution.setPartnerReference(normalizeOptionalText(request.partnerReference()));
         contribution.setTransactionReference(firstNonBlank(
+                paymentOperation != null ? paymentOperation.getId().toString() : null,
                 normalizeOptionalText(request.transactionReference()),
                 readyChannel.getExternalChannelReference()
         ));
@@ -95,6 +110,46 @@ public class MemberSavingsContributionService {
                 : MemberSavingsContributionStatus.PARTIALLY_CONFIRMED;
     }
 
+    private Operation resolveReferencedPaymentOperation(UUID requesterAccountHolderId,
+                                                        UUID circleId,
+                                                        UUID cycleId,
+                                                        BigDecimal confirmedAmount,
+                                                        String transactionReference) {
+        String normalizedReference = normalizeOptionalText(transactionReference);
+        if (normalizedReference == null) {
+            return null;
+        }
+
+        UUID operationId;
+        try {
+            operationId = UUID.fromString(normalizedReference);
+        } catch (IllegalArgumentException exception) {
+            return null;
+        }
+
+        Operation operation;
+        try {
+            operation = operationService.getById(operationId);
+        } catch (NotFoundException exception) {
+            return null;
+        }
+
+        if (!Objects.equals(operation.getAccountHolderId(), requesterAccountHolderId)) {
+            throw new BusinessException("Savings payment intent does not belong to the current member");
+        }
+        if (operation.getType() != OperationType.WALLET_PAYMENT
+                || !SavingsContributionPaymentIntentMetadata.matchesDescription(operation.getDescription(), circleId, cycleId)) {
+            throw new BusinessException("Referenced transaction is not a canonical savings contribution payment");
+        }
+        if (operation.getStatus() != OperationStatus.CONFIRMED) {
+            throw new BusinessException("Savings payment intent is not confirmed");
+        }
+        if (operation.getAmount().compareTo(confirmedAmount) != 0) {
+            throw new BusinessException("Confirmed amount must match the referenced savings payment amount");
+        }
+        return operation;
+    }
+
     private MemberSavingsContributionResponse toResponse(MemberSavingsContribution contribution) {
         return new MemberSavingsContributionResponse(
                 contribution.getId(),
@@ -121,10 +176,15 @@ public class MemberSavingsContributionService {
         return normalized.isBlank() ? null : normalized;
     }
 
-    private String firstNonBlank(String primary, String fallback) {
-        if (primary != null && !primary.isBlank()) {
-            return primary;
+    private String firstNonBlank(String... values) {
+        if (values == null) {
+            return null;
         }
-        return fallback;
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return null;
     }
 }
