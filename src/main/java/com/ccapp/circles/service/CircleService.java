@@ -39,6 +39,7 @@ import com.ccapp.identity.repository.UserProfileRepository;
 import com.ccapp.identity.repository.UserRepository;
 import com.ccapp.mlm.repository.MlmRelationshipRepository;
 import com.ccapp.progress.event.CircleJoinedEvent;
+import com.ccapp.seedcapital.readiness.service.CircleCoachAssignmentService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -84,6 +85,7 @@ public class CircleService {
     private final ObjectMapper objectMapper;
     private final ChatConversationService chatConversationService;
     private final UserProfileRepository userProfileRepository;
+    private final CircleCoachAssignmentService circleCoachAssignmentService;
 
     @Transactional
     public CircleResponse createCircle(UUID accountHolderId, CreateCircleRequest request) {
@@ -222,7 +224,7 @@ public class CircleService {
         return new MyCircleResponse(
                 circle.getId(),
                 circle.getName(),
-                legacyCircleManagerAccountHolderId(circle),
+                resolvedCoachAccountHolderId(circle),
                 circle.getStatus(),
                 circle.getCreatedAt(),
                 conversationId,
@@ -253,6 +255,7 @@ public class CircleService {
         CircleMemberResponse coach = participants.stream()
                 .filter(member -> member.role() == CircleMemberRole.COACH)
                 .findFirst()
+                .or(() -> resolveAssignedCoachParticipant(circleId, participants))
                 .orElse(null);
         List<CircleMemberResponse> advisors = participants.stream()
                 .filter(member -> isAdvisorRole(member.role()))
@@ -334,7 +337,7 @@ public class CircleService {
         return new CircleResponse(
                 circle.getId(),
                 circle.getName(),
-                legacyCircleManagerAccountHolderId(circle),
+                resolvedCoachAccountHolderId(circle),
                 circle.getStatus(),
                 circle.getCreatedAt(),
                 conversationId,
@@ -393,8 +396,62 @@ public class CircleService {
         return combined.isEmpty() ? "Unknown" : combined;
     }
 
+    private Optional<CircleMemberResponse> resolveAssignedCoachParticipant(UUID circleId,
+                                                                           List<CircleMemberResponse> participants) {
+        return circleCoachAssignmentService.findAssignedCoachAccountHolderId(circleId)
+                .map(assignedCoachId -> participants.stream()
+                        .filter(member -> Objects.equals(member.accountHolderId(), assignedCoachId))
+                        .findFirst()
+                        .map(this::copyAsCoach)
+                        .orElseGet(() -> buildSyntheticCoachResponse(assignedCoachId)));
+    }
+
+    private CircleMemberResponse copyAsCoach(CircleMemberResponse member) {
+        return new CircleMemberResponse(
+                member.id(),
+                member.accountHolderId(),
+                CircleMemberRole.COACH,
+                member.name(),
+                member.profilePhotoMediaId(),
+                member.activity(),
+                member.memberType(),
+                member.managerName(),
+                member.businessActivity(),
+                member.loanStatus(),
+                member.repaymentProgress(),
+                member.joinedAt()
+        );
+    }
+
+    private CircleMemberResponse buildSyntheticCoachResponse(UUID coachAccountHolderId) {
+        AccountHolder accountHolder = accountHolderRepository.findById(coachAccountHolderId)
+                .orElseThrow(() -> new NotFoundException("Coach account holder not found"));
+        UserProfile profile = userProfileRepository.findByUserId(coachAccountHolderId).orElse(null);
+        String coachName = resolveDisplayName(accountHolder, profile);
+        UUID profilePhotoMediaId = profile != null ? profile.getProfilePhotoMediaId() : null;
+        return new CircleMemberResponse(
+                null,
+                coachAccountHolderId,
+                CircleMemberRole.COACH,
+                coachName,
+                profilePhotoMediaId,
+                null,
+                accountHolder.getAccountType().name(),
+                null,
+                null,
+                null,
+                null,
+                null
+        );
+    }
+
     private UUID legacyCircleManagerAccountHolderId(Circle circle) {
         return circle.getCoachId();
+    }
+
+    private UUID resolvedCoachAccountHolderId(Circle circle) {
+        return circleCoachAssignmentService.findAssignedCoachAccountHolderId(circle.getId())
+                .orElseGet(() -> legacyCircleManagerAccountHolderId(circle));
     }
 
     private String normalizeOptionalText(String value) {
