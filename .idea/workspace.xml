@@ -4,14 +4,14 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="fix: update firebase" />
+    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="fix: update database" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
   <component name="EmbeddingIndexingInfo">
-    <option name="cachedIndexableFilesCount" value="1393" />
+    <option name="cachedIndexableFilesCount" value="1502" />
   </component>
   <component name="FileTemplateManagerImpl">
     <option name="RECENT_TEMPLATES">
@@ -141,22 +141,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1772553173766</updated>
-    </task>
-    <task id="LOCAL-00101" summary="Rebuild firebase">
-      <option name="closed" value="true" />
-      <created>1774971852616</created>
-      <option name="number" value="00101" />
-      <option name="presentableId" value="LOCAL-00101" />
-      <option name="project" value="LOCAL" />
-      <updated>1774971852616</updated>
-    </task>
-    <task id="LOCAL-00102" summary="Rebuild firebase">
-      <option name="closed" value="true" />
-      <created>1774973881683</created>
-      <option name="number" value="00102" />
-      <option name="presentableId" value="LOCAL-00102" />
-      <option name="project" value="LOCAL" />
-      <updated>1774973881683</updated>
     </task>
     <task id="LOCAL-00103" summary="Exposer une api pour moyen de paiement.">
       <option name="closed" value="true" />
@@ -534,7 +518,23 @@
       <option name="project" value="LOCAL" />
       <updated>1775642280905</updated>
     </task>
-    <option name="localTasksCounter" value="150" />
+    <task id="LOCAL-00150" summary="fix: update database">
+      <option name="closed" value="true" />
+      <created>1775665015805</created>
+      <option name="number" value="00150" />
+      <option name="presentableId" value="LOCAL-00150" />
+      <option name="project" value="LOCAL" />
+      <updated>1775665015805</updated>
+    </task>
+    <task id="LOCAL-00151" summary="fix: update database">
+      <option name="closed" value="true" />
+      <created>1775665371474</created>
+      <option name="number" value="00151" />
+      <option name="presentableId" value="LOCAL-00151" />
+      <option name="project" value="LOCAL" />
+      <updated>1775665371474</updated>
+    </task>
+    <option name="localTasksCounter" value="152" />
     <servers />
   </component>
   <component name="UnknownFeatures">
@@ -565,7 +565,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="Migration flyway" />
     <MESSAGE value="fingerprint" />
     <MESSAGE value="synchronisation" />
     <MESSAGE value="mise en place de api numero parent" />
@@ -590,7 +589,8 @@
     <MESSAGE value="fix: Cpass config whatsapp" />
     <MESSAGE value="fix: Kyc type verification" />
     <MESSAGE value="fix: update firebase" />
-    <option name="LAST_COMMIT_MESSAGE" value="fix: update firebase" />
+    <MESSAGE value="fix: update database" />
+    <option name="LAST_COMMIT_MESSAGE" value="fix: update database" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />
