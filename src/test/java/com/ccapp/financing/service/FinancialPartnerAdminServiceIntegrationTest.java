@@ -15,6 +15,7 @@ import com.ccapp.financing.domain.enums.PartnerApiIntegrationType;
 import com.ccapp.financing.dto.CreateFinancialPartnerRequest;
 import com.ccapp.financing.dto.FinancialPartnerResponse;
 import com.ccapp.financing.dto.UpdateFinancialPartnerRequest;
+import com.ccapp.financing.repository.FinancialPartnerRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
@@ -40,6 +41,8 @@ class FinancialPartnerAdminServiceIntegrationTest {
     private CountryRepository countryRepository;
     @Autowired
     private CountryChartAccountRepository countryChartAccountRepository;
+    @Autowired
+    private FinancialPartnerRepository financialPartnerRepository;
 
     @Test
     void createListUpdateAndGetPartner_shouldWorkWithPaginationAndFilters() {
@@ -122,5 +125,31 @@ class FinancialPartnerAdminServiceIntegrationTest {
         assertEquals("support@seed.example", loaded.contactEmail());
         assertEquals("Updated seed finance partner", loaded.description());
         assertEquals("471100", loaded.settlementAccount());
+    }
+
+    @Test
+    void listPartners_shouldTolerateLegacySupportedProductsValues() {
+        financialPartnerRepository.save(com.ccapp.financing.domain.entity.FinancialPartner.builder()
+                .name("Legacy Partner")
+                .type(FinancialPartnerType.IMF)
+                .countryCode("BJ")
+                .currency("XOF")
+                .status(FinancialPartnerStatus.ACTIVE)
+                .supportedProducts("CREDIT,legacy_product")
+                .apiIntegrationType(PartnerApiIntegrationType.MANUAL)
+                .settlementAccount("471100")
+                .build());
+
+        PageResponse<FinancialPartnerResponse> page = financialPartnerAdminService.listPartners(
+                null,
+                null,
+                null,
+                null,
+                0,
+                20
+        );
+
+        assertEquals(1, page.items().size());
+        assertEquals(List.of(FinancialProductType.CREDIT), page.items().getFirst().supportedProducts());
     }
 }

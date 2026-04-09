@@ -15,6 +15,7 @@ import com.ccapp.financing.dto.FinancialPartnerResponse;
 import com.ccapp.financing.dto.UpdateFinancialPartnerRequest;
 import com.ccapp.financing.repository.FinancialPartnerRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -22,12 +23,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Arrays;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class FinancialPartnerAdminService {
 
     private static final int DEFAULT_PAGE_SIZE = 20;
@@ -248,10 +252,27 @@ public class FinancialPartnerAdminService {
         if (supportedProducts == null || supportedProducts.isBlank()) {
             return List.of(FinancialProductType.CREDIT);
         }
-        return Arrays.stream(supportedProducts.split(","))
+        List<FinancialProductType> parsedProducts = Arrays.stream(supportedProducts.split(","))
                 .map(String::trim)
                 .filter(value -> !value.isEmpty())
-                .map(value -> FinancialProductType.valueOf(value.toUpperCase(Locale.ROOT)))
+                .map(this::parseSupportedProduct)
+                .flatMap(Optional::stream)
+                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new))
+                .stream()
                 .toList();
+        if (!parsedProducts.isEmpty()) {
+            return parsedProducts;
+        }
+        log.warn("financial_partner_supported_products_invalid fallback=CREDIT raw={}", supportedProducts);
+        return List.of(FinancialProductType.CREDIT);
+    }
+
+    private Optional<FinancialProductType> parseSupportedProduct(String rawValue) {
+        try {
+            return Optional.of(FinancialProductType.valueOf(rawValue.toUpperCase(Locale.ROOT)));
+        } catch (IllegalArgumentException ex) {
+            log.warn("financial_partner_supported_product_ignored rawValue={}", rawValue);
+            return Optional.empty();
+        }
     }
 }
