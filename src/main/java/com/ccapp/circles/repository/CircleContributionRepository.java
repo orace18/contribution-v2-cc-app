@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import java.util.List;
 import java.util.UUID;
 
+@Deprecated(since = "2026-04", forRemoval = false)
 public interface CircleContributionRepository extends JpaRepository<CircleContribution, UUID> {
 
     long countByCycle_Id(UUID cycleId);

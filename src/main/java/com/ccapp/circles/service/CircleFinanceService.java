@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.UUID;
 
 @Service
+@Deprecated(since = "2026-04", forRemoval = false)
 public class CircleFinanceService {
 
     private static final String CIRCLE_FINANCE_DISABLED_FOR_MVP = "CIRCLE_FINANCE_DISABLED_FOR_MVP";

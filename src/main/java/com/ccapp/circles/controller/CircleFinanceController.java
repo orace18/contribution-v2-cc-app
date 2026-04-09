@@ -31,7 +31,7 @@ import java.util.UUID;
 @Tag(name = "Circle Finance", description = "Legacy circle finance endpoints kept temporarily for compatibility")
 @SecurityRequirement(name = "bearerAuth")
 @Slf4j
-@Deprecated
+@Deprecated(since = "2026-04", forRemoval = false)
 public class CircleFinanceController {
 
     private final CircleFinanceService circleFinanceService;

@@ -19,6 +19,7 @@ import java.util.UUID;
 }, uniqueConstraints = {
         @UniqueConstraint(name = "uk_circle_cycles_circle_cycle_number", columnNames = {"circle_id", "cycle_number"})
 })
+@Deprecated(since = "2026-04", forRemoval = false)
 public class CircleCycle {
 
     @Id

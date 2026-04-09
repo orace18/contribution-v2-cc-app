@@ -62,8 +62,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class LoanService {
 
-    private static final long DEFAULT_MIN_FINANCIAL_MEMBERS_PER_CIRCLE = 3;
-    private static final long DEFAULT_MAX_FINANCIAL_MEMBERS_PER_CIRCLE = 5;
+    private static final long DEFAULT_MIN_MEMBERS_PER_CIRCLE = 3;
+    private static final long DEFAULT_MAX_MEMBERS_PER_CIRCLE = 6;
     private static final EnumSet<LoanStatus> CIRCLE_LOCKING_STATUSES = EnumSet.of(
             LoanStatus.APPROVED,
             LoanStatus.DISBURSED,
@@ -108,12 +108,12 @@ public class LoanService {
         if (!serviceCountryCode.equalsIgnoreCase(circle.getCountryCode())) {
             throw new BusinessException("Circle country must match account holder service country");
         }
-        if (!circleMemberRepository.existsByCircle_IdAndAccountHolderIdAndFinancialMemberTrue(request.circleId(), accountHolderId)) {
+        if (!circleMemberRepository.existsByCircle_IdAndAccountHolderId(request.circleId(), accountHolderId)) {
             throw new BusinessException("Account holder is not a member of this circle");
         }
         CircleMemberBounds bounds = resolveCircleMemberBounds(serviceCountryCode);
-        long financialMembersCount = circleMemberRepository.countByCircle_IdAndFinancialMemberTrue(request.circleId());
-        if (financialMembersCount < bounds.minFinancialMembers() || financialMembersCount > bounds.maxFinancialMembers()) {
+        long membersCount = circleMemberRepository.countByCircle_Id(request.circleId());
+        if (membersCount < bounds.minMembers() || membersCount > bounds.maxMembers()) {
             throw new BusinessException("Circle members count is outside configured limits");
         }
         if (loanRepository.existsByCircleIdAndStatusIn(request.circleId(), CIRCLE_LOCKING_STATUSES)) {
@@ -266,8 +266,8 @@ public class LoanService {
         ObjectNode circlePayload = payload.has("circle") && payload.get("circle").isObject()
                 ? (ObjectNode) payload.get("circle")
                 : payload;
-        long min = longField(circlePayload, "minMembers", DEFAULT_MIN_FINANCIAL_MEMBERS_PER_CIRCLE);
-        long max = longField(circlePayload, "maxMembers", DEFAULT_MAX_FINANCIAL_MEMBERS_PER_CIRCLE);
+        long min = longField(circlePayload, "minMembers", DEFAULT_MIN_MEMBERS_PER_CIRCLE);
+        long max = longField(circlePayload, "maxMembers", DEFAULT_MAX_MEMBERS_PER_CIRCLE);
         if (max < min) {
             throw new BusinessException("general.circle.maxMembers must be >= minMembers");
         }
@@ -374,6 +374,6 @@ public class LoanService {
         );
     }
 
-    private record CircleMemberBounds(long minFinancialMembers, long maxFinancialMembers) {
+    private record CircleMemberBounds(long minMembers, long maxMembers) {
     }
 }

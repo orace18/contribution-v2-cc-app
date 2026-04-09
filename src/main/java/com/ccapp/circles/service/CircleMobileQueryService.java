@@ -1,30 +1,30 @@
 package com.ccapp.circles.service;
 
-import com.ccapp.circles.domain.entity.CircleContribution;
-import com.ccapp.circles.domain.entity.CircleLoan;
 import com.ccapp.circles.domain.entity.CircleMember;
 import com.ccapp.circles.domain.entity.CircleMemberInteraction;
-import com.ccapp.circles.domain.entity.CircleRepayment;
 import com.ccapp.circles.domain.enums.CircleMemberInteractionType;
 import com.ccapp.circles.domain.enums.CircleMemberRole;
-import com.ccapp.circles.domain.enums.CircleRepaymentStatus;
 import com.ccapp.circles.domain.enums.CircleStatus;
 import com.ccapp.circles.dto.CircleListItemResponse;
 import com.ccapp.circles.dto.CircleMemberFinancialsResponse;
 import com.ccapp.circles.dto.CircleMemberHistoryItemResponse;
 import com.ccapp.circles.dto.CircleMemberInteractionResponse;
 import com.ccapp.circles.dto.CircleMemberProfileResponse;
-import com.ccapp.circles.repository.CircleContributionRepository;
-import com.ccapp.circles.repository.CircleLoanRepository;
 import com.ccapp.circles.repository.CircleMemberInteractionRepository;
 import com.ccapp.circles.repository.CircleMemberRepository;
-import com.ccapp.circles.repository.CircleRepaymentRepository;
 import com.ccapp.circles.repository.CircleRepository;
 import com.ccapp.circlesocial.domain.entity.CircleActivity;
 import com.ccapp.circlesocial.repository.CircleActivityRepository;
 import com.ccapp.common.api.PageResponse;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.common.exception.NotFoundException;
+import com.ccapp.credit.domain.entity.Loan;
+import com.ccapp.credit.domain.entity.LoanRepayment;
+import com.ccapp.credit.domain.entity.RepaymentSchedule;
+import com.ccapp.credit.domain.enums.InstallmentStatus;
+import com.ccapp.credit.repository.LoanRepaymentRepository;
+import com.ccapp.credit.repository.LoanRepository;
+import com.ccapp.credit.repository.RepaymentScheduleRepository;
 import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
 import com.ccapp.identity.account_holder.service.AccountHolderService;
 import com.ccapp.identity.app_user.repository.AppUserRepository;
@@ -40,9 +40,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
-import java.time.LocalTime;
 import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -58,9 +56,9 @@ public class CircleMobileQueryService {
 
     private final CircleRepository circleRepository;
     private final CircleMemberRepository circleMemberRepository;
-    private final CircleLoanRepository circleLoanRepository;
-    private final CircleRepaymentRepository circleRepaymentRepository;
-    private final CircleContributionRepository circleContributionRepository;
+    private final LoanRepository loanRepository;
+    private final RepaymentScheduleRepository repaymentScheduleRepository;
+    private final LoanRepaymentRepository loanRepaymentRepository;
     private final CircleActivityRepository circleActivityRepository;
     private final CircleMemberInteractionRepository circleMemberInteractionRepository;
     private final AccountHolderService accountHolderService;
@@ -131,9 +129,9 @@ public class CircleMobileQueryService {
                                                               UUID circleId,
                                                               UUID memberAccountHolderId) {
         ensureParticipant(circleId, requesterAccountHolderId);
-        CircleMember member = loadCircleMember(circleId, memberAccountHolderId);
+        loadCircleMember(circleId, memberAccountHolderId);
 
-        CircleLoan loan = circleLoanRepository.findLatestMemberLoanByCircle(circleId, member.getId()).orElse(null);
+        Loan loan = findLatestCanonicalLoan(memberAccountHolderId, circleId);
         if (loan == null) {
             return new CircleMemberFinancialsResponse(
                     BigDecimal.ZERO,
@@ -144,29 +142,28 @@ public class CircleMobileQueryService {
             );
         }
 
-        List<CircleRepayment> repayments = circleRepaymentRepository.findByLoan_IdOrderByDueDateAsc(loan.getId());
+        List<RepaymentSchedule> schedules = repaymentScheduleRepository.findByLoan_IdOrderByInstallmentNumberAsc(loan.getId());
+        List<LoanRepayment> repayments = loanRepaymentRepository.findByLoan_IdOrderByPaidAtAsc(loan.getId());
+
+        BigDecimal totalDue = calculateTotalDue(loan, schedules);
         BigDecimal paid = repayments.stream()
-                .filter(repayment -> repayment.getStatus() == CircleRepaymentStatus.PAID || repayment.getStatus() == CircleRepaymentStatus.LATE)
-                .map(CircleRepayment::getAmount)
+                .map(LoanRepayment::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        long installmentsPaid = repayments.stream()
-                .filter(repayment -> repayment.getStatus() == CircleRepaymentStatus.PAID || repayment.getStatus() == CircleRepaymentStatus.LATE)
-                .count();
-
-        LocalDate nextInstallmentDate = repayments.stream()
-                .filter(repayment -> repayment.getStatus() == CircleRepaymentStatus.PENDING)
-                .map(CircleRepayment::getDueDate)
-                .sorted()
-                .findFirst()
-                .orElse(null);
-
-        BigDecimal expected = loan.getAmount().add(loan.getAmount()
-                .multiply(loan.getInterest())
-                .divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP));
-        BigDecimal remaining = expected.subtract(paid);
+        BigDecimal remaining = totalDue.subtract(paid);
         if (remaining.signum() < 0) {
             remaining = BigDecimal.ZERO;
         }
+
+        long installmentsPaid = schedules.stream()
+                .filter(schedule -> schedule.getStatus() == InstallmentStatus.PAID)
+                .count();
+
+        LocalDate nextInstallmentDate = schedules.stream()
+                .filter(schedule -> schedule.getStatus() == InstallmentStatus.PENDING || schedule.getStatus() == InstallmentStatus.LATE)
+                .map(RepaymentSchedule::getDueDate)
+                .sorted()
+                .findFirst()
+                .orElse(null);
 
         return new CircleMemberFinancialsResponse(
                 loan.getAmount(),
@@ -179,54 +176,57 @@ public class CircleMobileQueryService {
 
     @Transactional(readOnly = true)
     public PageResponse<CircleMemberHistoryItemResponse> getMemberHistory(UUID requesterAccountHolderId,
-                                                                           UUID circleId,
-                                                                           UUID memberAccountHolderId,
-                                                                           Integer page,
-                                                                           Integer size) {
+                                                                          UUID circleId,
+                                                                          UUID memberAccountHolderId,
+                                                                          Integer page,
+                                                                          Integer size) {
         ensureParticipant(circleId, requesterAccountHolderId);
         CircleMember member = loadCircleMember(circleId, memberAccountHolderId);
 
         List<CircleMemberHistoryItemResponse> historyItems = new ArrayList<>();
-        for (CircleContribution contribution : circleContributionRepository.findByCycle_Circle_IdAndMember_IdOrderByDueDateDesc(circleId, member.getId())) {
-            OffsetDateTime occurredAt = contribution.getPaidAt() != null
-                    ? contribution.getPaidAt()
-                    : OffsetDateTime.of(contribution.getDueDate(), LocalTime.MIDNIGHT, ZoneOffset.UTC);
+        for (Loan loan : loanRepository.findByAccountHolderIdAndCircleIdOrderByCreatedAtDesc(memberAccountHolderId, circleId)) {
             historyItems.add(new CircleMemberHistoryItemResponse(
-                    "CONTRIBUTION",
-                    "CONTRIBUTION_" + contribution.getStatus().name(),
-                    contribution.getStatus().name(),
-                    "Contribution amount " + contribution.getAmount(),
-                    contribution.getAmount(),
-                    occurredAt,
-                    contribution.getId()
+                    "LOAN",
+                    "LOAN_SUBMITTED",
+                    loan.getStatus().name(),
+                    "Loan request for amount " + loan.getAmount(),
+                    loan.getAmount(),
+                    loan.getCreatedAt(),
+                    loan.getId()
             ));
-        }
 
-        List<CircleLoan> loans = circleLoanRepository.findMemberLoansByCircleOrderByTimelineDesc(circleId, member.getId());
-        for (CircleLoan loan : loans) {
-            OffsetDateTime occurredAt = loan.getDisbursedAt() != null ? loan.getDisbursedAt() : loan.getApprovedAt();
-            if (occurredAt != null) {
+            if (loan.getApprovedAt() != null) {
                 historyItems.add(new CircleMemberHistoryItemResponse(
                         "LOAN",
-                        "LOAN_" + loan.getStatus().name(),
+                        "LOAN_APPROVED",
                         loan.getStatus().name(),
-                        "Loan event for amount " + loan.getAmount(),
+                        "Loan approved for amount " + loan.getAmount(),
                         loan.getAmount(),
-                        occurredAt,
+                        loan.getApprovedAt(),
                         loan.getId()
                 ));
             }
-            for (CircleRepayment repayment : circleRepaymentRepository.findByLoan_IdOrderByDueDateAsc(loan.getId())) {
-                OffsetDateTime repaymentAt = repayment.getPaidAt() != null
-                        ? repayment.getPaidAt()
-                        : OffsetDateTime.of(repayment.getDueDate(), LocalTime.MIDNIGHT, ZoneOffset.UTC);
+
+            if (loan.getDisbursedAt() != null) {
+                historyItems.add(new CircleMemberHistoryItemResponse(
+                        "LOAN",
+                        "LOAN_DISBURSED",
+                        loan.getStatus().name(),
+                        "Loan disbursed for amount " + loan.getAmount(),
+                        loan.getAmount(),
+                        loan.getDisbursedAt(),
+                        loan.getId()
+                ));
+            }
+
+            for (LoanRepayment repayment : loanRepaymentRepository.findByLoan_IdOrderByPaidAtAsc(loan.getId())) {
                 historyItems.add(new CircleMemberHistoryItemResponse(
                         "REPAYMENT",
-                        "REPAYMENT_" + repayment.getStatus().name(),
-                        repayment.getStatus().name(),
+                        "REPAYMENT_RECORDED",
+                        "PAID",
                         "Repayment amount " + repayment.getAmount(),
                         repayment.getAmount(),
-                        repaymentAt,
+                        repayment.getPaidAt(),
                         repayment.getId()
                 ));
             }
@@ -295,6 +295,25 @@ public class CircleMobileQueryService {
     private CircleMember loadCircleMember(UUID circleId, UUID memberAccountHolderId) {
         return circleMemberRepository.findByCircle_IdAndAccountHolderId(circleId, memberAccountHolderId)
                 .orElseThrow(() -> new NotFoundException("Circle member not found"));
+    }
+
+    private Loan findLatestCanonicalLoan(UUID memberAccountHolderId, UUID circleId) {
+        return loanRepository.findByAccountHolderIdAndCircleIdOrderByCreatedAtDesc(memberAccountHolderId, circleId).stream()
+                .findFirst()
+                .orElse(null);
+    }
+
+    private BigDecimal calculateTotalDue(Loan loan, List<RepaymentSchedule> schedules) {
+        if (schedules != null && !schedules.isEmpty()) {
+            return schedules.stream()
+                    .map(RepaymentSchedule::getAmountDue)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+        }
+        return loan.getAmount().add(
+                loan.getAmount()
+                        .multiply(loan.getInterestRate())
+                        .divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP)
+        );
     }
 
     private String displayName(String firstName, String lastName) {

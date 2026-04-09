@@ -13,16 +13,19 @@ public interface CircleMemberRepository extends JpaRepository<CircleMember, UUID
 
     boolean existsByCircle_IdAndAccountHolderId(UUID circleId, UUID accountHolderId);
 
+    @Deprecated(since = "2026-04", forRemoval = false)
     boolean existsByCircle_IdAndAccountHolderIdAndFinancialMemberTrue(UUID circleId, UUID accountHolderId);
 
     Optional<CircleMember> findByCircle_IdAndAccountHolderId(UUID circleId, UUID accountHolderId);
 
     long countByCircle_Id(UUID circleId);
 
+    @Deprecated(since = "2026-04", forRemoval = false)
     long countByCircle_IdAndFinancialMemberTrue(UUID circleId);
 
     List<CircleMember> findByCircle_IdOrderByJoinedAtAsc(UUID circleId);
 
+    @Deprecated(since = "2026-04", forRemoval = false)
     List<CircleMember> findByCircle_IdAndFinancialMemberTrueOrderByJoinedAtAsc(UUID circleId);
 
     Optional<CircleMember> findByCircle_IdAndRole(UUID circleId, CircleMemberRole role);

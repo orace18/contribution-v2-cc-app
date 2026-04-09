@@ -19,6 +19,7 @@ import java.util.UUID;
         @Index(name = "idx_circle_contributions_cycle_status", columnList = "cycle_id, status"),
         @Index(name = "idx_circle_contributions_member_status", columnList = "member_id, status")
 })
+@Deprecated(since = "2026-04", forRemoval = false)
 public class CircleContribution {
 
     @Id

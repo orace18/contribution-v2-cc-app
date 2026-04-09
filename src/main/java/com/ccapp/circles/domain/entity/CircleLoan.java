@@ -18,6 +18,7 @@ import java.util.UUID;
         @Index(name = "idx_circle_loans_cycle_status", columnList = "cycle_id, status"),
         @Index(name = "idx_circle_loans_borrower_status", columnList = "borrower_id, status")
 })
+@Deprecated(since = "2026-04", forRemoval = false)
 public class CircleLoan {
 
     @Id
