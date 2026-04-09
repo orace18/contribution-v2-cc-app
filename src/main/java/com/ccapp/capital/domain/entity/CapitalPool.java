@@ -18,6 +18,7 @@ import java.util.UUID;
 }, uniqueConstraints = {
         @UniqueConstraint(name = "uk_capital_pools_fund_circle", columnNames = {"fund_id", "circle_id"})
 })
+@Deprecated(since = "2026-04", forRemoval = false)
 public class CapitalPool {
 
     @Id

@@ -17,6 +17,7 @@ import java.util.UUID;
 @Table(name = "funds", indexes = {
         @Index(name = "idx_funds_provider", columnList = "provider")
 })
+@Deprecated(since = "2026-04", forRemoval = false)
 public class Fund {
 
     @Id

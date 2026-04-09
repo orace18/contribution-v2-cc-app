@@ -8,6 +8,7 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
+@Deprecated(since = "2026-04", forRemoval = false)
 public interface FundRepository extends JpaRepository<Fund, UUID> {
 
     List<Fund> findByCurrencyOrderByCreatedAtDesc(String currency);

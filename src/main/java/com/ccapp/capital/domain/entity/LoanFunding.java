@@ -19,6 +19,7 @@ import java.util.UUID;
 }, uniqueConstraints = {
         @UniqueConstraint(name = "uk_loan_funding_loan_id", columnNames = "loan_id")
 })
+@Deprecated(since = "2026-04", forRemoval = false)
 public class LoanFunding {
 
     @Id
