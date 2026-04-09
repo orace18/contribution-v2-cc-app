@@ -56,7 +56,6 @@ public interface CircleRepository extends JpaRepository<Circle, UUID> {
                      SELECT COUNT(*)
                      FROM circle_members cm2
                      WHERE cm2.circle_id = c.id
-                       AND cm2.is_financial_member = true
                    ) AS membersCount,
                    cm.role AS role,
                    COALESCE((

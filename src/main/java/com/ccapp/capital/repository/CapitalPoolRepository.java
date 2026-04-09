@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+@Deprecated(since = "2026-04", forRemoval = false)
 public interface CapitalPoolRepository extends JpaRepository<CapitalPool, UUID> {
 
     Optional<CapitalPool> findByFund_IdAndCircleIdAndCountryCode(UUID fundId, UUID circleId, String countryCode);

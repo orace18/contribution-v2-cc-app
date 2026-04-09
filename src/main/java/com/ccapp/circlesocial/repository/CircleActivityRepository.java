@@ -5,6 +5,7 @@ import com.ccapp.circlesocial.domain.enums.ActivityType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -15,6 +16,8 @@ public interface CircleActivityRepository extends JpaRepository<CircleActivity, 
     long countByCircleId(UUID circleId);
 
     long countByCircleIdAndActivityType(UUID circleId, ActivityType activityType);
+
+    long countByCircleIdAndCreatedAtAfter(UUID circleId, OffsetDateTime createdAt);
 
     @Query("""
             select count(distinct ca.actorUserId)

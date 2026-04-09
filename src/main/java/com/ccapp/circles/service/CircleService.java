@@ -1,75 +1,68 @@
 package com.ccapp.circles.service;
 
+import com.ccapp.chat.service.ChatConversationService;
 import com.ccapp.circles.domain.entity.Circle;
 import com.ccapp.circles.domain.entity.CircleMember;
+import com.ccapp.circles.domain.enums.CircleMemberRole;
+import com.ccapp.circles.domain.enums.CircleStatus;
+import com.ccapp.circles.dto.CircleMemberResponse;
+import com.ccapp.circles.dto.CircleParticipantsResponse;
+import com.ccapp.circles.dto.CircleResponse;
+import com.ccapp.circles.dto.CreateAssistedMemberRequest;
+import com.ccapp.circles.dto.CreateCircleRequest;
+import com.ccapp.circles.dto.JoinCircleRequest;
+import com.ccapp.circles.dto.MyCircleResponse;
+import com.ccapp.circles.repository.CircleMemberRepository;
+import com.ccapp.circles.repository.CircleRepository;
+import com.ccapp.circlesocial.domain.enums.ActivityType;
+import com.ccapp.circlesocial.event.CircleActivityRequestedEvent;
+import com.ccapp.common.events.DomainEventPublisher;
+import com.ccapp.common.exception.BusinessException;
+import com.ccapp.common.exception.ConflictException;
+import com.ccapp.common.exception.NotFoundException;
 import com.ccapp.country.config.domain.enums.CountryConfigType;
 import com.ccapp.country.config.service.CountryConfigResolver;
 import com.ccapp.country.dto.CountryContext;
 import com.ccapp.country.service.CountryContextService;
-import com.ccapp.circlesocial.domain.enums.ActivityType;
-import com.ccapp.circlesocial.event.CircleActivityRequestedEvent;
-import com.ccapp.circles.domain.enums.CircleMemberRole;
-import com.ccapp.circles.domain.enums.CircleStatus;
-import com.ccapp.circles.dto.*;
-import com.ccapp.common.events.DomainEventPublisher;
-import com.ccapp.circles.repository.CircleMemberRepository;
-import com.ccapp.circles.repository.CircleRepository;
-import com.ccapp.common.exception.BusinessException;
-import com.ccapp.common.exception.ConflictException;
-import com.ccapp.common.exception.NotFoundException;
 import com.ccapp.credit.domain.enums.LoanStatus;
 import com.ccapp.credit.repository.LoanRepository;
 import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
-import com.ccapp.identity.account_holder.domain.enums.AccountCreatedVia;
 import com.ccapp.identity.account_holder.domain.enums.AccountType;
 import com.ccapp.identity.account_holder.repository.AccountHolderRepository;
 import com.ccapp.identity.app_user.domain.entity.AppUser;
 import com.ccapp.identity.app_user.repository.AppUserRepository;
-import com.ccapp.identity.domain.entity.UserProfile;
-import com.ccapp.identity.repository.UserProfileRepository;
-import com.ccapp.identity.delegation.domain.enums.DelegatedActionType;
-import com.ccapp.identity.delegation.service.DelegatedActionService;
 import com.ccapp.identity.delegation.service.DelegationService;
 import com.ccapp.identity.domain.entity.User;
+import com.ccapp.identity.domain.entity.UserProfile;
 import com.ccapp.identity.domain.enums.AccountStatus;
-import com.ccapp.identity.domain.enums.KycStatus;
+import com.ccapp.identity.repository.UserProfileRepository;
 import com.ccapp.identity.repository.UserRepository;
-import com.ccapp.identity.verification.service.PhoneVerificationService;
-import com.ccapp.mlm.domain.entity.MlmRelationship;
 import com.ccapp.mlm.repository.MlmRelationshipRepository;
-import com.ccapp.chat.service.ChatConversationService;
-import com.ccapp.progress.event.AccountHolderCreatedEvent;
 import com.ccapp.progress.event.CircleJoinedEvent;
+import com.ccapp.seedcapital.readiness.service.CircleCoachAssignmentService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Comparator;
 import java.util.EnumSet;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 public class CircleService {
 
-    private static final long DEFAULT_MAX_FINANCIAL_MEMBERS_PER_CIRCLE = 5;
+    private static final long DEFAULT_MAX_MEMBERS_PER_CIRCLE = 6;
     private static final long DEFAULT_MAX_ASSISTED_MEMBERS_PER_CIRCLE = 2;
     private static final String CROSS_COUNTRY_CIRCLE_NOT_ALLOWED = "CROSS_COUNTRY_CIRCLE_NOT_ALLOWED";
-    private static final String TOO_MANY_ASSISTED_MEMBERS = "TOO_MANY_ASSISTED_MEMBERS";
     private static final String MEMBER_NOT_ACTIVE = "MEMBER_NOT_ACTIVE";
-    private static final String SPONSOR_NOT_FOUND = "SPONSOR_NOT_FOUND";
     private static final String ASSISTED_MEMBERS_DISABLED_FOR_MVP = "ASSISTED_MEMBERS_DISABLED_FOR_MVP";
     private static final String CIRCLE_LOCKED_BY_ACTIVE_LOAN = "CIRCLE_LOCKED_BY_ACTIVE_LOAN";
     private static final EnumSet<LoanStatus> CIRCLE_LOCKING_LOAN_STATUSES = EnumSet.of(
@@ -88,20 +81,16 @@ public class CircleService {
     private final UserRepository userRepository;
     private final MlmRelationshipRepository mlmRelationshipRepository;
     private final DelegationService delegationService;
-    private final DelegatedActionService delegatedActionService;
-    private final PhoneVerificationService phoneVerificationService;
     private final CountryConfigResolver countryConfigResolver;
     private final ObjectMapper objectMapper;
     private final ChatConversationService chatConversationService;
     private final UserProfileRepository userProfileRepository;
-
-    @Value("${circles.assisted-member.require-phone-verification:false}")
-    private boolean requirePhoneVerification;
+    private final CircleCoachAssignmentService circleCoachAssignmentService;
 
     @Transactional
     public CircleResponse createCircle(UUID accountHolderId, CreateCircleRequest request) {
-        // TODO: MLM hierarchy resolution disabled temporarily — to be re-enabled once MLM tree is set up
-        // MlmHierarchy hierarchy = resolveMlmHierarchy(accountHolderId);
+        ensureCreatorCanCreateCircle(accountHolderId);
+
         String accountHolderCountry = resolveAccountHolderCountry(accountHolderId);
         CircleConfigLimits limits = resolveCircleConfigLimits(accountHolderCountry);
         if (circleRepository.existsActiveCircleForUser(accountHolderId)) {
@@ -110,6 +99,8 @@ public class CircleService {
 
         Circle circle = circleRepository.save(Circle.builder()
                 .name(request.name().trim())
+                // Legacy compatibility only. This stores the circle owner/manager reference
+                // until coach assignment moves to a dedicated aggregate.
                 .coachId(accountHolderId)
                 .countryCode(accountHolderCountry)
                 .configSnapshot(buildCircleConfigSnapshot(accountHolderCountry, limits.resolvedConfig()))
@@ -118,42 +109,27 @@ public class CircleService {
                 .build());
 
         OffsetDateTime now = OffsetDateTime.now();
-        List<CircleMember> toInsert = new ArrayList<>();
-        Set<UUID> insertedAccountHolders = new HashSet<>();
+        // Legacy creatorRole input remains accepted for wire compatibility, but the creator
+        // is always treated as a circle member. Circle core no longer assigns a coach here.
+        CircleMember creatorMembership = circleMemberRepository.save(buildCircleMember(
+                circle,
+                accountHolderId,
+                CircleMemberRole.MEMBER,
+                null,
+                now
+        ));
 
-        // TODO: MLM participants disabled temporarily — to be re-enabled once MLM tree is set up
-        // addParticipant(toInsert, insertedAccountHolders, circle, hierarchy.coachAccountHolderId(), CircleMemberRole.COACH, false, now);
-        // addParticipant(toInsert, insertedAccountHolders, circle, hierarchy.advisorGeneration1AccountHolderId(), CircleMemberRole.ADVISOR_G1, false, now);
-        // addParticipant(toInsert, insertedAccountHolders, circle, hierarchy.advisorGeneration2AccountHolderId(), CircleMemberRole.ADVISOR_G2, false, now);
-
-        if (request.creatorRole() == CircleCreatorRole.MEMBER) {
-            addParticipant(toInsert, insertedAccountHolders, circle, accountHolderId, CircleMemberRole.MEMBER, true, now);
-        }
-
-        List<CircleMember> savedParticipants = circleMemberRepository.saveAll(toInsert);
-        CircleMember activityMember = savedParticipants.stream()
-                .filter(member -> Objects.equals(member.getAccountHolderId(), accountHolderId))
-                .findFirst()
-                .orElseGet(() -> savedParticipants.stream()
-                        .filter(member -> member.getRole() == CircleMemberRole.COACH)
-                        .findFirst()
-                        .orElse(null));
-
-        if (activityMember != null) {
-            domainEventPublisher.publish(CircleActivityRequestedEvent.create(
-                    circle.getId(),
-                    accountHolderId,
-                    ActivityType.MEMBER_JOINED,
-                    activityMember.getId(),
-                    "Circle created with MLM participants"
-            ));
-        }
-        if (request.creatorRole() == CircleCreatorRole.MEMBER) {
-            domainEventPublisher.publish(CircleJoinedEvent.create(accountHolderId, circle.getId()));
-        }
+        domainEventPublisher.publish(CircleActivityRequestedEvent.create(
+                circle.getId(),
+                accountHolderId,
+                ActivityType.MEMBER_JOINED,
+                creatorMembership.getId(),
+                "Circle created"
+        ));
+        domainEventPublisher.publish(CircleJoinedEvent.create(accountHolderId, circle.getId()));
 
         UUID conversationId = chatConversationService.getOrCreateCircleConversationId(circle.getId());
-        int membersCount = Math.toIntExact(circleMemberRepository.countByCircle_IdAndFinancialMemberTrue(circle.getId()));
+        int membersCount = Math.toIntExact(circleMemberRepository.countByCircle_Id(circle.getId()));
         return toCircleResponse(circle, conversationId, membersCount);
     }
 
@@ -176,21 +152,18 @@ public class CircleService {
 
         ensureCircleUnlocked(circleId);
         CircleConfigLimits limits = resolveCircleConfigLimits(circle.getCountryCode());
-        long membersCount = circleMemberRepository.countByCircle_IdAndFinancialMemberTrue(circleId);
-        if (membersCount >= limits.maxFinancialMembers()) {
+        long membersCount = circleMemberRepository.countByCircle_Id(circleId);
+        if (membersCount >= limits.maxMembers()) {
             throw new BusinessException("Circle reached maximum members");
         }
 
-        CircleMember member = circleMemberRepository.save(CircleMember.builder()
-                .circle(circle)
-                .accountHolderId(accountHolderId)
-                .role(CircleMemberRole.MEMBER)
-                .financialMember(true)
-                .businessActivity(request.businessActivity())
-                .loanStatus(request.loanStatus())
-                .repaymentProgress(request.repaymentProgress())
-                .joinedAt(OffsetDateTime.now())
-                .build());
+        CircleMember member = circleMemberRepository.save(buildCircleMember(
+                circle,
+                accountHolderId,
+                CircleMemberRole.MEMBER,
+                request.businessActivity(),
+                OffsetDateTime.now()
+        ));
 
         domainEventPublisher.publish(CircleActivityRequestedEvent.create(
                 circle.getId(),
@@ -208,11 +181,11 @@ public class CircleService {
         Circle circle = circleRepository.findByIdAndStatus(circleId, CircleStatus.ACTIVE)
                 .orElseThrow(() -> new NotFoundException("Active circle not found"));
 
-        if (!Objects.equals(circle.getCoachId(), requesterAccountHolderId)) {
-            throw new BusinessException("Only the circle creator can remove members");
+        if (!Objects.equals(legacyCircleManagerAccountHolderId(circle), requesterAccountHolderId)) {
+            throw new BusinessException("Only the circle owner can remove members");
         }
         if (Objects.equals(targetAccountHolderId, requesterAccountHolderId)) {
-            throw new BusinessException("Creator cannot remove themselves from the circle");
+            throw new BusinessException("Circle owner cannot remove themselves from the circle");
         }
 
         CircleMember member = circleMemberRepository
@@ -251,7 +224,7 @@ public class CircleService {
         return new MyCircleResponse(
                 circle.getId(),
                 circle.getName(),
-                circle.getCoachId(),
+                resolvedCoachAccountHolderId(circle),
                 circle.getStatus(),
                 circle.getCreatedAt(),
                 conversationId,
@@ -282,6 +255,7 @@ public class CircleService {
         CircleMemberResponse coach = participants.stream()
                 .filter(member -> member.role() == CircleMemberRole.COACH)
                 .findFirst()
+                .or(() -> resolveAssignedCoachParticipant(circleId, participants))
                 .orElse(null);
         List<CircleMemberResponse> advisors = participants.stream()
                 .filter(member -> isAdvisorRole(member.role()))
@@ -320,43 +294,27 @@ public class CircleService {
         }
     }
 
-    private MlmHierarchy resolveMlmHierarchy(UUID accountHolderId) {
-        List<MlmRelationship> ancestors = mlmRelationshipRepository.findAncestors(accountHolderId);
-        UUID coachAccountHolderId = ancestorForLevel(ancestors, 1)
-                .orElseThrow(() -> new BusinessException(SPONSOR_NOT_FOUND));
-        UUID advisorGeneration1 = ancestorForLevel(ancestors, 2).orElse(null);
-        UUID advisorGeneration2 = ancestorForLevel(ancestors, 3).orElse(null);
-        return new MlmHierarchy(coachAccountHolderId, advisorGeneration1, advisorGeneration2);
-    }
-
-    private Optional<UUID> ancestorForLevel(List<MlmRelationship> ancestors, int level) {
-        return ancestors.stream()
-                .filter(ancestor -> ancestor.getLevel() == level)
-                .map(MlmRelationship::getAncestorId)
-                .findFirst();
-    }
-
     private boolean isActiveUser(User user) {
         return user.getAccountStatus() == AccountStatus.ACTIVE;
     }
 
-    private void addParticipant(List<CircleMember> target,
-                                Set<UUID> insertedAccountHolders,
-                                Circle circle,
-                                UUID accountHolderId,
-                                CircleMemberRole role,
-                                boolean isFinancialMember,
-                                OffsetDateTime joinedAt) {
-        if (accountHolderId == null || !insertedAccountHolders.add(accountHolderId)) {
-            return;
-        }
-        target.add(CircleMember.builder()
+    private CircleMember buildCircleMember(Circle circle,
+                                           UUID accountHolderId,
+                                           CircleMemberRole role,
+                                           String businessActivity,
+                                           OffsetDateTime joinedAt) {
+        return CircleMember.builder()
                 .circle(circle)
                 .accountHolderId(accountHolderId)
                 .role(role)
-                .financialMember(isFinancialMember)
+                // Legacy compatibility only. Circle core no longer uses this flag as
+                // a source of financial truth, but older read paths still depend on it.
+                .financialMember(true)
+                .businessActivity(normalizeOptionalText(businessActivity))
+                .loanStatus(null)
+                .repaymentProgress(null)
                 .joinedAt(joinedAt)
-                .build());
+                .build();
     }
 
     private boolean isAdvisorRole(CircleMemberRole role) {
@@ -379,7 +337,7 @@ public class CircleService {
         return new CircleResponse(
                 circle.getId(),
                 circle.getName(),
-                circle.getCoachId(),
+                resolvedCoachAccountHolderId(circle),
                 circle.getStatus(),
                 circle.getCreatedAt(),
                 conversationId,
@@ -438,22 +396,70 @@ public class CircleService {
         return combined.isEmpty() ? "Unknown" : combined;
     }
 
-    private String normalizePhone(String phoneNumber) {
-        return phoneNumber.trim();
+    private Optional<CircleMemberResponse> resolveAssignedCoachParticipant(UUID circleId,
+                                                                           List<CircleMemberResponse> participants) {
+        return circleCoachAssignmentService.findAssignedCoachAccountHolderId(circleId)
+                .map(assignedCoachId -> participants.stream()
+                        .filter(member -> Objects.equals(member.accountHolderId(), assignedCoachId))
+                        .findFirst()
+                        .map(this::copyAsCoach)
+                        .orElseGet(() -> buildSyntheticCoachResponse(assignedCoachId)));
     }
 
-    private NameParts splitFullName(String fullName) {
-        String normalized = Arrays.stream(fullName.trim().split("\\s+"))
-                .filter(token -> !token.isBlank())
-                .reduce((left, right) -> left + " " + right)
-                .orElseThrow(() -> new BusinessException("fullName is required"));
-        String[] parts = normalized.split(" ");
-        if (parts.length == 1) {
-            return new NameParts(parts[0], parts[0]);
+    private CircleMemberResponse copyAsCoach(CircleMemberResponse member) {
+        return new CircleMemberResponse(
+                member.id(),
+                member.accountHolderId(),
+                CircleMemberRole.COACH,
+                member.name(),
+                member.profilePhotoMediaId(),
+                member.activity(),
+                member.memberType(),
+                member.managerName(),
+                member.businessActivity(),
+                member.loanStatus(),
+                member.repaymentProgress(),
+                member.joinedAt()
+        );
+    }
+
+    private CircleMemberResponse buildSyntheticCoachResponse(UUID coachAccountHolderId) {
+        AccountHolder accountHolder = accountHolderRepository.findById(coachAccountHolderId)
+                .orElseThrow(() -> new NotFoundException("Coach account holder not found"));
+        UserProfile profile = userProfileRepository.findByUserId(coachAccountHolderId).orElse(null);
+        String coachName = resolveDisplayName(accountHolder, profile);
+        UUID profilePhotoMediaId = profile != null ? profile.getProfilePhotoMediaId() : null;
+        return new CircleMemberResponse(
+                null,
+                coachAccountHolderId,
+                CircleMemberRole.COACH,
+                coachName,
+                profilePhotoMediaId,
+                null,
+                accountHolder.getAccountType().name(),
+                null,
+                null,
+                null,
+                null,
+                null
+        );
+    }
+
+    private UUID legacyCircleManagerAccountHolderId(Circle circle) {
+        return circle.getCoachId();
+    }
+
+    private UUID resolvedCoachAccountHolderId(Circle circle) {
+        return circleCoachAssignmentService.findAssignedCoachAccountHolderId(circle.getId())
+                .orElseGet(() -> legacyCircleManagerAccountHolderId(circle));
+    }
+
+    private String normalizeOptionalText(String value) {
+        if (value == null) {
+            return null;
         }
-        String firstName = parts[0];
-        String lastName = normalized.substring(firstName.length()).trim();
-        return new NameParts(firstName, lastName);
+        String normalized = value.trim();
+        return normalized.isBlank() ? null : normalized;
     }
 
     private CircleConfigLimits resolveCircleConfigLimits(String countryCode) {
@@ -465,9 +471,9 @@ public class CircleService {
         ObjectNode circlePayload = payload.has("circle") && payload.get("circle").isObject()
                 ? (ObjectNode) payload.get("circle")
                 : payload;
-        long maxFinancialMembers = longField(circlePayload, "maxMembers", DEFAULT_MAX_FINANCIAL_MEMBERS_PER_CIRCLE);
+        long maxMembers = longField(circlePayload, "maxMembers", DEFAULT_MAX_MEMBERS_PER_CIRCLE);
         long maxAssistedMembers = longField(circlePayload, "maxAssistedMembers", DEFAULT_MAX_ASSISTED_MEMBERS_PER_CIRCLE);
-        return new CircleConfigLimits(maxFinancialMembers, maxAssistedMembers, resolved);
+        return new CircleConfigLimits(maxMembers, maxAssistedMembers, resolved);
     }
 
     private long longField(ObjectNode payload, String fieldName, long defaultValue) {
@@ -493,16 +499,8 @@ public class CircleService {
         }
     }
 
-    private record CircleConfigLimits(long maxFinancialMembers,
+    private record CircleConfigLimits(long maxMembers,
                                       long maxAssistedMembers,
                                       CountryConfigResolver.ResolvedConfig resolvedConfig) {
-    }
-
-    private record NameParts(String firstName, String lastName) {
-    }
-
-    private record MlmHierarchy(UUID coachAccountHolderId,
-                                UUID advisorGeneration1AccountHolderId,
-                                UUID advisorGeneration2AccountHolderId) {
     }
 }

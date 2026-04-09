@@ -11,6 +11,7 @@ import com.ccapp.capital.service.FundService;
 import com.ccapp.common.api.CommonResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -20,6 +21,8 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/admin/capital")
 @RequiredArgsConstructor
+@Slf4j
+@Deprecated(since = "2026-04", forRemoval = false)
 public class AdminCapitalController {
 
     private final FundService fundService;
@@ -27,30 +30,57 @@ public class AdminCapitalController {
     private final AdminAuditService adminAuditService;
 
     @GetMapping("/funds")
+    @Deprecated
     public ResponseEntity<CommonResponse<List<FundResponse>>> listFunds(@RequestParam(required = false) String currency) {
+        UUID adminUserId = AdminSecurityUtils.currentAdminUserId();
+        log.warn("legacy_endpoint_invoked endpointId={} adminUserId={} currencyFilterPresent={}",
+                "admin-capital.list-funds",
+                adminUserId,
+                currency != null && !currency.isBlank());
         List<FundResponse> response = fundService.listFunds(currency);
-        adminAuditService.logAction(AdminSecurityUtils.currentAdminUserId(), "LIST_FUNDS", "FUND", null, "count=" + response.size());
+        adminAuditService.logAction(adminUserId, "LIST_FUNDS", "FUND", null, "count=" + response.size());
         return ResponseEntity.ok(CommonResponse.success("Funds", response));
     }
 
     @PostMapping("/funds")
+    @Deprecated
     public ResponseEntity<CommonResponse<FundResponse>> createFund(@Valid @RequestBody CreateFundRequest request) {
+        UUID adminUserId = AdminSecurityUtils.currentAdminUserId();
+        log.warn("legacy_endpoint_invoked endpointId={} adminUserId={} currency={} provider={}",
+                "admin-capital.create-fund",
+                adminUserId,
+                request.currency(),
+                request.provider());
         FundResponse response = fundService.createFund(request);
-        adminAuditService.logAction(AdminSecurityUtils.currentAdminUserId(), "CREATE_FUND", "FUND", response.id().toString(), request);
+        adminAuditService.logAction(adminUserId, "CREATE_FUND", "FUND", response.id().toString(), request);
         return ResponseEntity.ok(CommonResponse.success("Fund created", response));
     }
 
     @GetMapping("/pools")
+    @Deprecated
     public ResponseEntity<CommonResponse<List<CapitalPoolResponse>>> listPools(@RequestParam(required = false) UUID circleId) {
+        UUID adminUserId = AdminSecurityUtils.currentAdminUserId();
+        log.warn("legacy_endpoint_invoked endpointId={} adminUserId={} circleId={}",
+                "admin-capital.list-pools",
+                adminUserId,
+                circleId);
         List<CapitalPoolResponse> response = capitalPoolService.listPools(circleId);
-        adminAuditService.logAction(AdminSecurityUtils.currentAdminUserId(), "LIST_CAPITAL_POOLS", "CAPITAL_POOL", null, "count=" + response.size());
+        adminAuditService.logAction(adminUserId, "LIST_CAPITAL_POOLS", "CAPITAL_POOL", null, "count=" + response.size());
         return ResponseEntity.ok(CommonResponse.success("Capital pools", response));
     }
 
     @PostMapping("/pools/allocate")
+    @Deprecated
     public ResponseEntity<CommonResponse<CapitalPoolResponse>> allocate(@Valid @RequestBody AllocateCapitalPoolRequest request) {
+        UUID adminUserId = AdminSecurityUtils.currentAdminUserId();
+        log.warn("legacy_endpoint_invoked endpointId={} adminUserId={} circleId={} fundId={} hasAmount={}",
+                "admin-capital.allocate-pool",
+                adminUserId,
+                request.circleId(),
+                request.fundId(),
+                request.allocatedAmount() != null);
         CapitalPoolResponse response = capitalPoolService.allocatePool(request);
-        adminAuditService.logAction(AdminSecurityUtils.currentAdminUserId(), "ALLOCATE_CAPITAL_POOL", "CAPITAL_POOL", response.id().toString(), request);
+        adminAuditService.logAction(adminUserId, "ALLOCATE_CAPITAL_POOL", "CAPITAL_POOL", response.id().toString(), request);
         return ResponseEntity.ok(CommonResponse.success("Capital pool allocated", response));
     }
 }

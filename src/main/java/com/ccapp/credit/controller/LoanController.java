@@ -18,6 +18,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -29,13 +30,19 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Tag(name = "Loans", description = "Gestion des prets et remboursements")
 @SecurityRequirement(name = "bearerAuth")
+@Slf4j
 public class LoanController {
 
     private final LoanService loanService;
     private final RepaymentService repaymentService;
 
     @PostMapping
-    @Operation(summary = "Creer une demande de pret")
+    @Operation(
+            summary = "Creer une demande de pret",
+            description = "Legacy direct loan creation path kept temporarily for compatibility. Canonical seed capital application flow now starts with /credit-applications/seed-capital.",
+            deprecated = true
+    )
+    @Deprecated
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Succes", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
             @ApiResponse(responseCode = "400", description = "Validation ou regle metier invalide", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
@@ -47,6 +54,12 @@ public class LoanController {
         UUID actorUserId = SecurityUtils.currentPrincipal().userId() != null
                 ? SecurityUtils.currentPrincipal().userId()
                 : accountHolderId;
+        log.warn("legacy_endpoint_invoked endpointId={} actorUserId={} accountHolderId={} circleId={} amount={}",
+                "loans.create-direct",
+                actorUserId,
+                accountHolderId,
+                request.circleId(),
+                request.amount());
 
         return ResponseEntity.ok(CommonResponse.success(
                 "Loan created (pending funding)",

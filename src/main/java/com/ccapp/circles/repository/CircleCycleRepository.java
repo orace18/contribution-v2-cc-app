@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+@Deprecated(since = "2026-04", forRemoval = false)
 public interface CircleCycleRepository extends JpaRepository<CircleCycle, UUID> {
 
     Optional<CircleCycle> findByCircle_IdAndStatus(UUID circleId, CircleCycleStatus status);

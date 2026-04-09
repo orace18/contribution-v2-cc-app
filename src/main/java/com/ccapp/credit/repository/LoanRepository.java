@@ -14,6 +14,8 @@ public interface LoanRepository extends JpaRepository<Loan, UUID> {
 
     List<Loan> findByAccountHolderIdOrderByCreatedAtDesc(UUID accountHolderId);
 
+    List<Loan> findByAccountHolderIdAndCircleIdOrderByCreatedAtDesc(UUID accountHolderId, UUID circleId);
+
     Page<Loan> findByAccountHolderIdAndStatusIn(UUID accountHolderId, Collection<LoanStatus> statuses, Pageable pageable);
 
     List<Loan> findAllByOrderByCreatedAtDesc();

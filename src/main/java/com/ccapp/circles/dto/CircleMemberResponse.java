@@ -16,7 +16,9 @@ public record CircleMemberResponse(
         String memberType,
         String managerName,
         String businessActivity,
+        @Deprecated(since = "2026-04", forRemoval = false)
         String loanStatus,
+        @Deprecated(since = "2026-04", forRemoval = false)
         BigDecimal repaymentProgress,
         OffsetDateTime joinedAt
 ) {

@@ -9,6 +9,7 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
+@Deprecated(since = "2026-04", forRemoval = false)
 public interface CircleRepaymentRepository extends JpaRepository<CircleRepayment, UUID> {
 
     List<CircleRepayment> findByLoan_IdOrderByDueDateAsc(UUID loanId);

@@ -38,6 +38,7 @@ public class AdminDashboardService {
                 LoanStatus.ACTIVE
         ));
 
+        // Legacy inventory metric kept for admin observability while the capital module is being retired.
         BigDecimal capitalAvailable = fundRepository.sumAvailableCapital();
         if (capitalAvailable == null) {
             capitalAvailable = BigDecimal.ZERO;

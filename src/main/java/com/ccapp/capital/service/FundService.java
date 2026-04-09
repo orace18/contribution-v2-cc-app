@@ -4,6 +4,7 @@ import com.ccapp.capital.domain.entity.Fund;
 import com.ccapp.capital.dto.CreateFundRequest;
 import com.ccapp.capital.dto.FundResponse;
 import com.ccapp.capital.repository.FundRepository;
+import com.ccapp.common.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,21 +14,16 @@ import java.util.Locale;
 
 @Service
 @RequiredArgsConstructor
+@Deprecated(since = "2026-04", forRemoval = false)
 public class FundService {
+
+    private static final String LEGACY_CAPITAL_MODULE_DISABLED = "LEGACY_CAPITAL_MODULE_DISABLED";
 
     private final FundRepository fundRepository;
 
     @Transactional
     public FundResponse createFund(CreateFundRequest request) {
-        Fund saved = fundRepository.save(Fund.builder()
-                .name(request.name().trim())
-                .provider(request.provider())
-                .totalCapital(request.totalCapital())
-                .availableCapital(request.totalCapital())
-                .currency(request.currency().toUpperCase(Locale.ROOT))
-                .build());
-
-        return toResponse(saved);
+        throw new BusinessException(LEGACY_CAPITAL_MODULE_DISABLED);
     }
 
     @Transactional(readOnly = true)

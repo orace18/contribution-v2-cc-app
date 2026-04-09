@@ -1,23 +1,19 @@
 package com.ccapp.wallet.service;
 
 import com.ccapp.common.exception.BusinessException;
-import com.ccapp.identity.dto.OnboardingStatusResponse;
-import com.ccapp.identity.service.IdentityOnboardingService;
+import com.ccapp.financial.access.domain.FinancialAccessUseCase;
+import com.ccapp.financial.access.service.FinancialAccessPolicy;
 import com.ccapp.identity.verification.domain.enums.PhoneVerificationStatus;
 import com.ccapp.identity.verification.repository.PhoneVerificationRepository;
 import com.ccapp.identity.wallet.domain.entity.Wallet;
 import com.ccapp.identity.wallet.repository.WalletRepository;
 import com.ccapp.identity.wallet.service.WalletService;
 import com.ccapp.mobile.onboarding.service.MobileOnboardingJourneyService;
-import com.ccapp.payments.subscription.domain.entity.Membership;
-import com.ccapp.payments.subscription.domain.enums.MembershipStatus;
-import com.ccapp.payments.subscription.service.MembershipService;
 import com.ccapp.wallet.domain.enums.WalletType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.OffsetDateTime;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -25,18 +21,15 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class WalletActivationService {
 
-    private final IdentityOnboardingService identityOnboardingService;
+    private final FinancialAccessPolicy financialAccessPolicy;
     private final PhoneVerificationRepository phoneVerificationRepository;
     private final WalletRepository walletRepository;
     private final WalletService walletService;
     private final MobileOnboardingJourneyService mobileOnboardingJourneyService;
-    private final MembershipService membershipService;
 
     @Transactional
     public Wallet activate(UUID accountHolderId) {
-        if (!isWalletActivationReady(accountHolderId)) {
-            throw new BusinessException("Membership activation incomplete");
-        }
+        financialAccessPolicy.assertAllowed(accountHolderId, FinancialAccessUseCase.WALLET_ACTIVATION);
 
         String verifiedPhoneNumber = findVerifiedPhoneNumber(accountHolderId)
                 .orElseThrow(() -> new BusinessException("Phone verification required"));
@@ -46,7 +39,7 @@ public class WalletActivationService {
 
     @Transactional
     public Optional<Wallet> activateIfEligible(UUID accountHolderId) {
-        if (!isWalletActivationReady(accountHolderId)) {
+        if (!financialAccessPolicy.isAllowed(accountHolderId, FinancialAccessUseCase.WALLET_ACTIVATION)) {
             return Optional.empty();
         }
 
@@ -85,21 +78,6 @@ public class WalletActivationService {
 
         mobileOnboardingJourneyService.markWalletActivated(accountHolderId);
         return resolvedWallet;
-    }
-
-    private boolean isWalletActivationReady(UUID accountHolderId) {
-        Membership latestMembership = membershipService.findLatestMembership(accountHolderId).orElse(null);
-        if (latestMembership != null && isMembershipActive(latestMembership)) {
-            return true;
-        }
-
-        OnboardingStatusResponse identityStatus = identityOnboardingService.getOnboardingStatus(accountHolderId);
-        return identityStatus != null && identityStatus.onboardingCompleted();
-    }
-
-    private boolean isMembershipActive(Membership membership) {
-        return membership.getStatus() == MembershipStatus.ACTIVE
-                && (membership.getExpiresAt() == null || membership.getExpiresAt().isAfter(OffsetDateTime.now()));
     }
 
     private Optional<String> findVerifiedPhoneNumber(UUID accountHolderId) {

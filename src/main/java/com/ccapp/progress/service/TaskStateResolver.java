@@ -2,8 +2,6 @@ package com.ccapp.progress.service;
 
 import com.ccapp.common.exception.NotFoundException;
 import com.ccapp.circles.domain.entity.Circle;
-import com.ccapp.circles.domain.enums.CircleContributionStatus;
-import com.ccapp.circles.repository.CircleContributionRepository;
 import com.ccapp.circles.repository.CircleInviteRepository;
 import com.ccapp.circles.repository.CircleRepository;
 import com.ccapp.country.config.domain.enums.CountryConfigType;
@@ -52,7 +50,6 @@ public class TaskStateResolver {
     private final AccountHolderRepository accountHolderRepository;
     private final PhoneVerificationRepository phoneVerificationRepository;
     private final CircleRepository circleRepository;
-    private final CircleContributionRepository circleContributionRepository;
     private final CircleInviteRepository circleInviteRepository;
     private final LoanRepository loanRepository;
     private final RepaymentScheduleRepository repaymentScheduleRepository;
@@ -95,10 +92,9 @@ public class TaskStateResolver {
                 OperationStatus.CONFIRMED
         ).isPresent();
 
-        boolean madeFirstContribution = circleContributionRepository.countCompletedByAccountHolderId(
-                accountHolderId,
-                List.of(CircleContributionStatus.PAID, CircleContributionStatus.LATE)
-        ) > 0;
+        // Legacy circle contributions are no longer a canonical financial path.
+        // Keep this task satisfied until a future IMF-backed savings milestone replaces it.
+        boolean madeFirstContribution = true;
 
         boolean appliedLoan = loanRepository.countByAccountHolderIdAndStatusIn(
                 accountHolderId,

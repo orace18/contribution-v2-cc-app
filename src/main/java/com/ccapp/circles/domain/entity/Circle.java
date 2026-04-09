@@ -16,6 +16,10 @@ import java.util.UUID;
 @Table(name = "circles", indexes = {
         @Index(name = "idx_circles_coach_status", columnList = "coach_id, status")
 })
+/**
+ * Core social circle aggregate.
+ * Financial truth and coach assignment live outside of this entity.
+ */
 public class Circle extends AuditableEntity {
 
     @Id
@@ -25,6 +29,11 @@ public class Circle extends AuditableEntity {
     @Column(name = "name", nullable = false, length = 128)
     private String name;
 
+    /**
+     * Legacy compatibility field kept until explicit coach assignment is introduced.
+     * It currently stores the circle owner/manager account holder id, not a canonical coach assignment.
+     */
+    @Deprecated(since = "2026-04", forRemoval = false)
     @Column(name = "coach_id", nullable = false)
     private UUID coachId;
 

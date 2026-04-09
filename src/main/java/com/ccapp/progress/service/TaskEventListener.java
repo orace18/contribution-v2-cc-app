@@ -1,6 +1,5 @@
 package com.ccapp.progress.service;
 
-import com.ccapp.circlesocial.event.CircleContributionEvent;
 import com.ccapp.common.events.DomainEvent;
 import com.ccapp.common.events.IdempotentEventListenerExecutor;
 import com.ccapp.credit.event.LoanRepaidEvent;
@@ -78,14 +77,6 @@ public class TaskEventListener {
     public void on(CircleJoinedEvent event) {
         safely("progress.circle-joined", event, () -> {
             taskEngineService.completeActiveTaskByType(event.accountHolderId(), TaskType.JOIN_CIRCLE, false);
-            taskEngineService.synchronizeTaskGraph(event.accountHolderId(), true);
-        });
-    }
-
-    @EventListener
-    public void on(CircleContributionEvent event) {
-        safely("progress.contribution-received", event, () -> {
-            taskEngineService.completeActiveTaskByType(event.accountHolderId(), TaskType.MAKE_FIRST_CONTRIBUTION, false);
             taskEngineService.synchronizeTaskGraph(event.accountHolderId(), true);
         });
     }

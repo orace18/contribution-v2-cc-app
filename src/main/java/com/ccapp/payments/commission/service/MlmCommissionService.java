@@ -5,6 +5,8 @@ import com.ccapp.common.exception.BusinessException;
 import com.ccapp.country.config.domain.enums.CountryConfigType;
 import com.ccapp.country.config.service.CountryConfigResolver;
 import com.ccapp.financial.audit.service.FinancialAuditService;
+import com.ccapp.financial.access.domain.FinancialAccessUseCase;
+import com.ccapp.financial.access.service.FinancialAccessPolicy;
 import com.ccapp.mlm.domain.entity.MlmRelationship;
 import com.ccapp.mlm.repository.MlmRelationshipRepository;
 import com.ccapp.observability.PlatformMonitoringHooks;
@@ -59,6 +61,7 @@ public class MlmCommissionService {
     private final SubscriptionPlanRepository subscriptionPlanRepository;
     private final CountryConfigResolver countryConfigResolver;
     private final GlobalMlmConfigService globalMlmConfigService;
+    private final FinancialAccessPolicy financialAccessPolicy;
 
     @Value("${mlm.monitoring.commission-spike.threshold:10000}")
     private BigDecimal commissionSpikeThreshold;
@@ -114,6 +117,10 @@ public class MlmCommissionService {
                     ancestor.getAncestorId(),
                     generation
             )) {
+                continue;
+            }
+
+            if (!financialAccessPolicy.isAllowed(ancestor.getAncestorId(), FinancialAccessUseCase.NETWORK_REWARDED_ACCESS)) {
                 continue;
             }
 

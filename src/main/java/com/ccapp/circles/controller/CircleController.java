@@ -8,6 +8,7 @@ import com.ccapp.circlesocial.service.CircleActivityService;
 import com.ccapp.circlesocial.service.CircleProgressService;
 import com.ccapp.circlesocial.service.CircleScoreService;
 import com.ccapp.circles.domain.enums.CircleStatus;
+import com.ccapp.circles.service.CircleMeetingPolicyService;
 import com.ccapp.circles.service.CircleMobileQueryService;
 import com.ccapp.circles.service.CircleService;
 import com.ccapp.common.api.CommonResponse;
@@ -39,6 +40,7 @@ public class CircleController {
 
     private final CircleService circleService;
     private final CircleMobileQueryService circleMobileQueryService;
+    private final CircleMeetingPolicyService circleMeetingPolicyService;
     private final CircleActivityService circleActivityService;
     private final CircleProgressService circleProgressService;
     private final CircleScoreService circleScoreService;
@@ -47,7 +49,7 @@ public class CircleController {
     @Operation(summary = "Creer un cercle")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Succes - cercle cree", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
-            @ApiResponse(responseCode = "400", description = "Regle metier invalide (MEMBER_NOT_ACTIVE, SPONSOR_NOT_FOUND, cercle complet)", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Regle metier invalide (MEMBER_NOT_ACTIVE, cercle complet)", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
             @ApiResponse(responseCode = "401", description = "Non authentifie", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
             @ApiResponse(responseCode = "404", description = "Utilisateur introuvable", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
             @ApiResponse(responseCode = "409", description = "Utilisateur deja dans un cercle actif", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
@@ -98,6 +100,16 @@ public class CircleController {
         return ResponseEntity.ok(CommonResponse.success("My active circle", circleService.getMyCircle(accountHolderId)));
     }
 
+    @GetMapping("/{circleId}")
+    @Operation(summary = "Recuperer le detail canonique d'un cercle pour mobile")
+    public ResponseEntity<CommonResponse<CircleDetailResponse>> circleDetail(@PathVariable UUID circleId) {
+        UUID requesterAccountHolderId = SecurityUtils.currentAccountHolderId();
+        return ResponseEntity.ok(CommonResponse.success(
+                "Circle detail",
+                circleMobileQueryService.getCircleDetail(requesterAccountHolderId, circleId)
+        ));
+    }
+
     @GetMapping("/{circleId}/members")
     @Operation(summary = "Lister les membres d'un cercle")
     @ApiResponses(value = {
@@ -109,11 +121,22 @@ public class CircleController {
         return ResponseEntity.ok(CommonResponse.success("Circle members", circleService.listMembers(circleId)));
     }
 
+    @PatchMapping("/{circleId}/meeting-policy")
+    @Operation(summary = "Mettre a jour la cadence canonique des reunions du cercle")
+    public ResponseEntity<CommonResponse<CircleMeetingPolicyResponse>> updateMeetingPolicy(@PathVariable UUID circleId,
+                                                                                           @Valid @RequestBody UpdateCircleMeetingPolicyRequest request) {
+        UUID requesterAccountHolderId = SecurityUtils.currentAccountHolderId();
+        return ResponseEntity.ok(CommonResponse.success(
+                "Circle meeting policy updated",
+                circleMeetingPolicyService.updatePolicy(requesterAccountHolderId, circleId, request)
+        ));
+    }
+
     @DeleteMapping("/{circleId}/members/{memberAccountHolderId}")
-    @Operation(summary = "Retirer un membre du cercle (createur uniquement)")
+    @Operation(summary = "Retirer un membre du cercle (proprietaire legacy uniquement)")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Membre retire"),
-            @ApiResponse(responseCode = "400", description = "Regle metier invalide (CIRCLE_LOCKED_BY_ACTIVE_LOAN, creator cannot remove themselves)"),
+            @ApiResponse(responseCode = "400", description = "Regle metier invalide (CIRCLE_LOCKED_BY_ACTIVE_LOAN, circle owner cannot remove themselves)"),
             @ApiResponse(responseCode = "403", description = "Acces refuse — pas le createur du cercle"),
             @ApiResponse(responseCode = "404", description = "Cercle ou membre introuvable")
     })

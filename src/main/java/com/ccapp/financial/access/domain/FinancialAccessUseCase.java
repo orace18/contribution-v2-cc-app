@@ -1,0 +1,10 @@
+package com.ccapp.financial.access.domain;
+
+public enum FinancialAccessUseCase {
+    WALLET_ACTIVATION,
+    CREDIT_APPLICATION,
+    SEED_CAPITAL_ACCESS,
+    CIRCLE_FINANCIAL_PARTICIPATION,
+    NETWORK_REWARDED_ACCESS,
+    NETWORK_SPONSOR_ELIGIBILITY
+}
