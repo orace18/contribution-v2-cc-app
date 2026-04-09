@@ -89,7 +89,7 @@ class FinancialPartnerAdminServiceIntegrationTest {
         PageResponse<FinancialPartnerResponse> page = financialPartnerAdminService.listPartners(
                 FinancialPartnerStatus.ACTIVE,
                 FinancialPartnerType.FUND,
-                "BJ",
+                "bj",
                 "seed",
                 0,
                 20
