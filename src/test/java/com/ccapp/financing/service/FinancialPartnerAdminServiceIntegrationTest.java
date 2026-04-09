@@ -26,6 +26,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @DataJpaTest(properties = {
         "spring.profiles.active=test",
@@ -46,26 +47,7 @@ class FinancialPartnerAdminServiceIntegrationTest {
 
     @Test
     void createListUpdateAndGetPartner_shouldWorkWithPaginationAndFilters() {
-        countryRepository.save(Country.builder()
-                .id(UUID.randomUUID())
-                .code("BJ")
-                .name("Benin")
-                .currency("XOF")
-                .active(true)
-                .configured(true)
-                .fallback(false)
-                .build());
-        countryChartAccountRepository.save(CountryChartAccount.builder()
-                .countryCode("BJ")
-                .accountCode("471100")
-                .accountNumber("471100")
-                .accountName("PSP Clearing BJ")
-                .accountGroup(CountryAccountGroup.PSP_CLEARING)
-                .accountType(CountryChartAccountType.ASSET)
-                .currency("XOF")
-                .openingBalance(BigDecimal.ZERO)
-                .status(CountryChartAccountStatus.ACTIVE)
-                .build());
+        seedCountryAndSettlementAccount();
 
         FinancialPartnerResponse created = financialPartnerAdminService.createPartner(new CreateFinancialPartnerRequest(
                 "Seed Finance",
@@ -128,6 +110,55 @@ class FinancialPartnerAdminServiceIntegrationTest {
     }
 
     @Test
+    void listPartners_shouldHandleNullBlankAndTextSearchSafely() {
+        seedCountryAndSettlementAccount();
+        createPartner("Alpha Finance", "BJ");
+        createPartner("Seed Support", "BJ");
+
+        PageResponse<FinancialPartnerResponse> nullSearchPage = financialPartnerAdminService.listPartners(
+                null,
+                null,
+                null,
+                null,
+                0,
+                20
+        );
+        assertEquals(2, nullSearchPage.items().size());
+
+        PageResponse<FinancialPartnerResponse> blankSearchPage = financialPartnerAdminService.listPartners(
+                null,
+                null,
+                null,
+                "   ",
+                0,
+                20
+        );
+        assertEquals(2, blankSearchPage.items().size());
+
+        PageResponse<FinancialPartnerResponse> textSearchPage = financialPartnerAdminService.listPartners(
+                null,
+                null,
+                null,
+                "seed",
+                0,
+                20
+        );
+        assertEquals(1, textSearchPage.items().size());
+        assertEquals("Seed Support", textSearchPage.items().getFirst().name());
+
+        PageResponse<FinancialPartnerResponse> countryAndNullSearchPage = financialPartnerAdminService.listPartners(
+                null,
+                null,
+                "bj",
+                null,
+                0,
+                20
+        );
+        assertEquals(2, countryAndNullSearchPage.items().size());
+        assertTrue(countryAndNullSearchPage.items().stream().allMatch(item -> "BJ".equals(item.countryCode())));
+    }
+
+    @Test
     void listPartners_shouldTolerateLegacySupportedProductsValues() {
         financialPartnerRepository.save(com.ccapp.financing.domain.entity.FinancialPartner.builder()
                 .name("Legacy Partner")
@@ -151,5 +182,44 @@ class FinancialPartnerAdminServiceIntegrationTest {
 
         assertEquals(1, page.items().size());
         assertEquals(List.of(FinancialProductType.CREDIT), page.items().getFirst().supportedProducts());
+    }
+
+    private void seedCountryAndSettlementAccount() {
+        countryRepository.save(Country.builder()
+                .id(UUID.randomUUID())
+                .code("BJ")
+                .name("Benin")
+                .currency("XOF")
+                .active(true)
+                .configured(true)
+                .fallback(false)
+                .build());
+        countryChartAccountRepository.save(CountryChartAccount.builder()
+                .countryCode("BJ")
+                .accountCode("471100")
+                .accountNumber("471100")
+                .accountName("PSP Clearing BJ")
+                .accountGroup(CountryAccountGroup.PSP_CLEARING)
+                .accountType(CountryChartAccountType.ASSET)
+                .currency("XOF")
+                .openingBalance(BigDecimal.ZERO)
+                .status(CountryChartAccountStatus.ACTIVE)
+                .build());
+    }
+
+    private FinancialPartnerResponse createPartner(String name, String countryCode) {
+        return financialPartnerAdminService.createPartner(new CreateFinancialPartnerRequest(
+                name,
+                FinancialPartnerType.IMF,
+                countryCode,
+                "XOF",
+                null,
+                null,
+                FinancialPartnerStatus.ACTIVE,
+                List.of(FinancialProductType.CREDIT),
+                PartnerApiIntegrationType.MANUAL,
+                "471100",
+                null
+        ));
     }
 }

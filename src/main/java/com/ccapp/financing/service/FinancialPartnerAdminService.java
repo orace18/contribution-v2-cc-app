@@ -14,14 +14,17 @@ import com.ccapp.financing.dto.CreateFinancialPartnerRequest;
 import com.ccapp.financing.dto.FinancialPartnerResponse;
 import com.ccapp.financing.dto.UpdateFinancialPartnerRequest;
 import com.ccapp.financing.repository.FinancialPartnerRepository;
+import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -50,12 +53,9 @@ public class FinancialPartnerAdminService {
                                                                Integer size) {
         Pageable pageable = normalizePageable(page, size);
         String normalizedCountryCode = normalizeNullableCountry(countryCode);
-        String normalizedSearch = normalizeSearch(search);
-        Page<FinancialPartnerResponse> responsePage = financialPartnerRepository.search(
-                status,
-                type,
-                normalizedCountryCode,
-                normalizedSearch,
+        String normalizedSearchPattern = normalizeSearchPattern(search);
+        Page<FinancialPartnerResponse> responsePage = financialPartnerRepository.findAll(
+                buildPartnerSearchSpecification(status, type, normalizedCountryCode, normalizedSearchPattern),
                 pageable
         ).map(this::toResponse);
         return PageResponse.from(responsePage);
@@ -162,12 +162,40 @@ public class FinancialPartnerAdminService {
         return PageRequest.of(normalizedPage, normalizedSize);
     }
 
-    private String normalizeSearch(String search) {
+    private String normalizeSearchPattern(String search) {
         if (search == null) {
             return null;
         }
         String normalized = search.trim();
-        return normalized.isEmpty() ? null : normalized.toLowerCase(Locale.ROOT);
+        return normalized.isEmpty() ? null : "%" + normalized.toLowerCase(Locale.ROOT) + "%";
+    }
+
+    private Specification<FinancialPartner> buildPartnerSearchSpecification(FinancialPartnerStatus status,
+                                                                            FinancialPartnerType type,
+                                                                            String countryCode,
+                                                                            String searchPattern) {
+        return (root, query, criteriaBuilder) -> {
+            List<Predicate> predicates = new ArrayList<>();
+
+            if (status != null) {
+                predicates.add(criteriaBuilder.equal(root.get("status"), status));
+            }
+            if (type != null) {
+                predicates.add(criteriaBuilder.equal(root.get("type"), type));
+            }
+            if (countryCode != null) {
+                predicates.add(criteriaBuilder.equal(root.get("countryCode"), countryCode));
+            }
+            if (searchPattern != null) {
+                predicates.add(criteriaBuilder.like(
+                        criteriaBuilder.lower(root.get("name")),
+                        searchPattern
+                ));
+            }
+
+            query.orderBy(criteriaBuilder.desc(root.get("createdAt")));
+            return criteriaBuilder.and(predicates.toArray(Predicate[]::new));
+        };
     }
 
     private String normalizeName(String name) {
