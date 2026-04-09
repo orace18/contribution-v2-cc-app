@@ -217,6 +217,7 @@ public class FinancingOfferAdminService {
 
     private void syncCountryConfiguration(FinancingOffer offer) {
         offerCountryConfigRepository.deleteByOfferId(offer.getId());
+        offerCountryConfigRepository.flush();
         OfferCountryConfig config = OfferCountryConfig.builder()
                 .offerId(offer.getId())
                 .countryCode(offer.getCountryCode())
