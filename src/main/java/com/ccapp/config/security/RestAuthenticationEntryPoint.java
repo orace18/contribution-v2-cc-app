@@ -35,7 +35,7 @@ public class RestAuthenticationEntryPoint implements AuthenticationEntryPoint {
 
     private String messageFor(HttpServletRequest request) {
         String path = request.getServletPath();
-        if (path.startsWith("/api/admin/") || path.startsWith("/admin/")) {
+        if (path.startsWith("/api/admin/") || path.startsWith("/admin/") || path.startsWith("/dev-tools/")) {
             return "Unauthorized admin access";
         }
         return "Unauthorized";

@@ -56,6 +56,13 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.PUT, "/dev-media/**").permitAll()
                         .requestMatchers("/api/admin/auth/**").permitAll()
                         .requestMatchers("/admin/auth/**").permitAll()
+                        .requestMatchers("/dev-tools/**").hasAnyAuthority(
+                                "ROLE_SUPER_ADMIN",
+                                "ROLE_COUNTRY_ADMIN",
+                                "ROLE_IMF_ADMIN",
+                                "ROLE_OPERATIONS",
+                                "ROLE_SUPPORT"
+                        )
                         .requestMatchers(HttpMethod.GET, "/public/countries").permitAll()
                         .requestMatchers(HttpMethod.GET, "/public/activity-sectors").permitAll()
                         .requestMatchers(HttpMethod.GET, "/public/income-brackets").permitAll()
@@ -100,7 +107,8 @@ public class SecurityConfig {
                 "Origin",
                 "X-Requested-With",
                 "Content-Length",
-                "X-Media-Content-Type"
+                "X-Media-Content-Type",
+                "X-DEV-TOOLS"
         ));
         configuration.setExposedHeaders(List.of("Authorization"));
         configuration.setMaxAge(3600L);

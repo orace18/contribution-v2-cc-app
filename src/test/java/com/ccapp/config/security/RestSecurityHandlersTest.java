@@ -50,4 +50,20 @@ class RestSecurityHandlersTest {
         assertEquals(false, payload.get("success"));
         assertEquals("Forbidden admin access", payload.get("message"));
     }
+
+    @Test
+    void restAccessDeniedHandler_shouldReturnAdminMessageForDevToolsRoute() throws Exception {
+        RestAccessDeniedHandler handler = new RestAccessDeniedHandler(objectMapper);
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/dev-tools/delete-user");
+        request.setServletPath("/dev-tools/delete-user");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        handler.handle(request, response, new AccessDeniedException("Denied"));
+
+        Map<String, Object> payload = objectMapper.readValue(response.getContentAsString(), MAP_TYPE);
+        assertEquals(403, response.getStatus());
+        assertEquals("application/json", response.getContentType());
+        assertEquals(false, payload.get("success"));
+        assertEquals("Forbidden admin access", payload.get("message"));
+    }
 }

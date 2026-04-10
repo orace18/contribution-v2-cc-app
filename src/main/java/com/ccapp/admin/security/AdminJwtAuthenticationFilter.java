@@ -39,7 +39,9 @@ public class AdminJwtAuthenticationFilter extends OncePerRequestFilter {
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
         String path = request.getServletPath();
-        boolean adminRoute = path.startsWith("/api/admin/") || path.startsWith("/admin/");
+        boolean adminRoute = path.startsWith("/api/admin/")
+                || path.startsWith("/admin/")
+                || path.startsWith("/dev-tools/");
         boolean sharedEventRoute = path.startsWith("/api/events");
         boolean adminAuthRoute = path.startsWith("/api/admin/auth/") || path.startsWith("/admin/auth/");
         if ((!adminRoute && !sharedEventRoute) || adminAuthRoute) {
