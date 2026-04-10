@@ -3,6 +3,7 @@ package com.ccapp.config.security;
 import com.ccapp.common.security.AuthenticatedPrincipal;
 import com.ccapp.identity.app_user.domain.entity.AppUser;
 import com.ccapp.identity.app_user.repository.AppUserRepository;
+import com.ccapp.identity.domain.enums.UserRole;
 import com.ccapp.identity.repository.UserRepository;
 import com.ccapp.identity.service.FirebaseTokenVerifier;
 import com.ccapp.identity.service.FirebaseUserClaims;
@@ -96,7 +97,18 @@ public class FirebaseAuthenticationFilter extends OncePerRequestFilter {
         AppUser appUser = appUserRepository.findByFirebaseUid(claims.uid()).orElse(null);
         UUID legacyUserId = userRepository.findByFirebaseUid(claims.uid()).map(user -> user.getId()).orElse(null);
         if (appUser == null && legacyUserId == null) {
-            log.warn("Firebase auth accepted but no local user mapping uid={}", claims.uid());
+            log.warn("No local user mapping → creating user uid={}", claims.uid());
+
+            UUID userId = UUID.randomUUID();
+
+            AppUser newUser = AppUser.builder()
+                    .id(userId)
+                    .firebaseUid(claims.uid())
+                    .accountHolderId(userId)
+                    .role(UserRole.USER)
+                    .build();
+
+            appUser = appUserRepository.save(newUser);
         }
 
         AuthenticatedPrincipal principal = AuthenticatedPrincipal.builder()
