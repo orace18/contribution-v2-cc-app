@@ -30,6 +30,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -215,6 +216,7 @@ class WalletWithdrawalServiceTest {
                 .phoneNumber("22501234567")
                 .countryCode("CI")
                 .serviceCountryCode("CI")
+                .phoneVerifiedAt(OffsetDateTime.now())
                 .kycStatus(KycStatus.VERIFIED)
                 .kycLevel(KycLevel.LEVEL_0_UNVERIFIED)
                 .build();
@@ -230,12 +232,35 @@ class WalletWithdrawalServiceTest {
         verify(walletGuardService, never()).requireActiveWallet(any());
     }
 
+    @Test
+    void withdraw_rejectsWhenPhoneIsNotVerified() {
+        AccountHolder holder = AccountHolder.builder()
+                .id(ACCOUNT_HOLDER_ID)
+                .phoneNumber("22501234567")
+                .countryCode("CI")
+                .serviceCountryCode("CI")
+                .kycStatus(KycStatus.VERIFIED)
+                .kycLevel(KycLevel.LEVEL_1_BASIC)
+                .build();
+        when(accountHolderRepository.findById(ACCOUNT_HOLDER_ID)).thenReturn(Optional.of(holder));
+
+        BusinessException thrown = assertThrows(BusinessException.class, () -> service.withdraw(
+                ACCOUNT_HOLDER_ID,
+                ACTOR_USER_ID,
+                new WalletWithdrawRequest(new BigDecimal("2500.00"), "XOF", "idem-withdraw", "1234", null, null)
+        ));
+
+        assertThat(thrown.getMessage()).isEqualTo("Phone verification is required for withdrawal");
+        verify(walletGuardService, never()).requireActiveWallet(any());
+    }
+
     private AccountHolder verifiedHolder() {
         return AccountHolder.builder()
                 .id(ACCOUNT_HOLDER_ID)
                 .phoneNumber("22501234567")
                 .countryCode("CI")
                 .serviceCountryCode("CI")
+                .phoneVerifiedAt(OffsetDateTime.now())
                 .kycStatus(KycStatus.VERIFIED)
                 .kycLevel(KycLevel.LEVEL_1_BASIC)
                 .build();

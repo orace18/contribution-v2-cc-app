@@ -55,6 +55,9 @@ public class WalletWithdrawalService {
     public WalletWithdrawResponse withdraw(UUID accountHolderId, UUID actorUserId,
                                            WalletWithdrawRequest request) {
         AccountHolder holder = resolveHolder(accountHolderId);
+        if (holder.getPhoneVerifiedAt() == null) {
+            throw new BusinessException("Phone verification is required for withdrawal");
+        }
         if (holder.getKycStatus() != KycStatus.VERIFIED
                 || !holder.resolveKycLevel().isAtLeast(KycLevel.LEVEL_1_BASIC)) {
             throw new BusinessException(
