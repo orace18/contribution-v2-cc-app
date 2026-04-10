@@ -25,6 +25,7 @@ import com.ccapp.identity.account_holder.repository.AccountHolderRepository;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Component
@@ -106,6 +107,8 @@ public class FirebaseAuthenticationFilter extends OncePerRequestFilter {
 
                 AccountHolder accountHolder = AccountHolder.builder()
                         .id(id)
+                        .firstName("UNKNOWN")
+                        .lastName("UNKNOWN")
                         .build();
 
                 accountHolderRepository.save(accountHolder);
