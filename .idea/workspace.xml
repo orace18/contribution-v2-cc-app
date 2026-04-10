@@ -4,9 +4,8 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="fix(auth): création correcte de accountHolder avant AppUser">
+    <list default="true" id="b353ea51-7e7b-473f-9dc0-91faa829de30" name="Changes" comment="fix bug">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/ccapp/config/security/FirebaseAuthenticationFilter.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/ccapp/config/security/FirebaseAuthenticationFilter.java" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -144,14 +143,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1772553173766</updated>
-    </task>
-    <task id="LOCAL-00106" summary="Check nom dans cercle">
-      <option name="closed" value="true" />
-      <created>1775075926931</created>
-      <option name="number" value="00106" />
-      <option name="presentableId" value="LOCAL-00106" />
-      <option name="project" value="LOCAL" />
-      <updated>1775075926931</updated>
     </task>
     <task id="LOCAL-00107" summary="Check nom dans cercle">
       <option name="closed" value="true" />
@@ -537,7 +528,15 @@
       <option name="project" value="LOCAL" />
       <updated>1775811895927</updated>
     </task>
-    <option name="localTasksCounter" value="155" />
+    <task id="LOCAL-00155" summary="fix bug">
+      <option name="closed" value="true" />
+      <created>1775814555409</created>
+      <option name="number" value="00155" />
+      <option name="presentableId" value="LOCAL-00155" />
+      <option name="project" value="LOCAL" />
+      <updated>1775814555409</updated>
+    </task>
+    <option name="localTasksCounter" value="156" />
     <servers />
   </component>
   <component name="UnknownFeatures">
@@ -572,7 +571,6 @@
     <MESSAGE value="configuration des cles jawupay" />
     <MESSAGE value="Rebuild" />
     <MESSAGE value="revue du application-dev.properties" />
-    <MESSAGE value="fix bug" />
     <MESSAGE value="review ttl" />
     <MESSAGE value="rebuild" />
     <MESSAGE value="fix: JawuPay valide la signature avec servletPath" />
@@ -593,7 +591,8 @@
     <MESSAGE value="fix: rebuild" />
     <MESSAGE value="fix : création automatique d’un utilisateur en cas d’absence de mappage Firebase" />
     <MESSAGE value="fix(auth): création correcte de accountHolder avant AppUser" />
-    <option name="LAST_COMMIT_MESSAGE" value="fix(auth): création correcte de accountHolder avant AppUser" />
+    <MESSAGE value="fix bug" />
+    <option name="LAST_COMMIT_MESSAGE" value="fix bug" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />

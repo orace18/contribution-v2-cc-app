@@ -2,8 +2,11 @@ package com.ccapp.config.security;
 
 import com.ccapp.common.security.AuthenticatedPrincipal;
 import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
+import com.ccapp.identity.account_holder.domain.enums.AccountCreatedVia;
+import com.ccapp.identity.account_holder.domain.enums.AccountType;
 import com.ccapp.identity.app_user.domain.entity.AppUser;
 import com.ccapp.identity.app_user.repository.AppUserRepository;
+import com.ccapp.identity.domain.enums.KycStatus;
 import com.ccapp.identity.domain.enums.UserRole;
 import com.ccapp.identity.repository.UserRepository;
 import com.ccapp.identity.service.FirebaseTokenVerifier;
@@ -105,11 +108,16 @@ public class FirebaseAuthenticationFilter extends OncePerRequestFilter {
 
                 UUID id = UUID.randomUUID();
 
-                AccountHolder accountHolder = AccountHolder.builder()
-                        .id(id)
-                        .firstName("UNKNOWN")
-                        .lastName("UNKNOWN")
-                        .build();
+            AccountHolder accountHolder = AccountHolder.builder()
+                    .id(id)
+                    .firstName("UNKNOWN")
+                    .lastName("UNKNOWN")
+                    .countryCode("UNK")
+                    .serviceCountryCode("UNK") // 🔥 OBLIGATOIRE
+                    .accountType(AccountType.STANDARD)
+                    .createdVia(AccountCreatedVia.SELF)
+                    .kycStatus(KycStatus.NOT_STARTED)
+                    .build();
 
                 accountHolderRepository.save(accountHolder);
 
