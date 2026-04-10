@@ -142,14 +142,6 @@
       <option name="presentableId" value="Default" />
       <updated>1772553173766</updated>
     </task>
-    <task id="LOCAL-00109" summary="Check nom dans cercle">
-      <option name="closed" value="true" />
-      <created>1775077731577</created>
-      <option name="number" value="00109" />
-      <option name="presentableId" value="LOCAL-00109" />
-      <option name="project" value="LOCAL" />
-      <updated>1775077731577</updated>
-    </task>
     <task id="LOCAL-00110" summary="View cercle">
       <option name="closed" value="true" />
       <created>1775078927683</created>
@@ -534,7 +526,15 @@
       <option name="project" value="LOCAL" />
       <updated>1775815542102</updated>
     </task>
-    <option name="localTasksCounter" value="158" />
+    <task id="LOCAL-00158" summary="fix bug">
+      <option name="closed" value="true" />
+      <created>1775816103492</created>
+      <option name="number" value="00158" />
+      <option name="presentableId" value="LOCAL-00158" />
+      <option name="project" value="LOCAL" />
+      <updated>1775816103493</updated>
+    </task>
+    <option name="localTasksCounter" value="159" />
     <servers />
   </component>
   <component name="UnknownFeatures">
