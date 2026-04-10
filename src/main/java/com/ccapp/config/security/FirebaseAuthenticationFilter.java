@@ -113,7 +113,7 @@ public class FirebaseAuthenticationFilter extends OncePerRequestFilter {
                     .firstName("UNKNOWN")
                     .lastName("UNKNOWN")
                     .countryCode("UNK")
-                    .serviceCountryCode("UNK") // 🔥 OBLIGATOIRE
+                    .serviceCountryCode("BJ")
                     .accountType(AccountType.STANDARD)
                     .createdVia(AccountCreatedVia.SELF)
                     .kycStatus(KycStatus.NOT_STARTED)
