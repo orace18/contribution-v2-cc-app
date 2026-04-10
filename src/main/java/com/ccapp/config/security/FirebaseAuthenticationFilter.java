@@ -1,13 +1,9 @@
 package com.ccapp.config.security;
 
+import com.ccapp.identity.service.UserProvisioningService;
 import com.ccapp.common.security.AuthenticatedPrincipal;
-import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
-import com.ccapp.identity.account_holder.domain.enums.AccountCreatedVia;
-import com.ccapp.identity.account_holder.domain.enums.AccountType;
 import com.ccapp.identity.app_user.domain.entity.AppUser;
 import com.ccapp.identity.app_user.repository.AppUserRepository;
-import com.ccapp.identity.domain.enums.KycStatus;
-import com.ccapp.identity.domain.enums.UserRole;
 import com.ccapp.identity.repository.UserRepository;
 import com.ccapp.identity.service.FirebaseTokenVerifier;
 import com.ccapp.identity.service.FirebaseUserClaims;
@@ -28,7 +24,6 @@ import com.ccapp.identity.account_holder.repository.AccountHolderRepository;
 
 import java.io.IOException;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 @Component
@@ -40,6 +35,7 @@ public class FirebaseAuthenticationFilter extends OncePerRequestFilter {
     private final AppUserRepository appUserRepository;
     private final UserRepository userRepository;
     private final AccountHolderRepository accountHolderRepository;
+    private final UserProvisioningService userProvisioningService;
 
     @Value("${firebase.auth.enabled:false}")
     private boolean firebaseAuthEnabled;
@@ -101,42 +97,25 @@ public class FirebaseAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
 
-        AppUser appUser = appUserRepository.findByFirebaseUid(claims.uid()).orElse(null);
-        UUID legacyUserId = userRepository.findByFirebaseUid(claims.uid()).map(user -> user.getId()).orElse(null);
-        if (appUser == null && legacyUserId == null) {
-                log.warn("No local user mapping → creating user uid={}", claims.uid());
-
-                UUID id = UUID.randomUUID();
-
-            AccountHolder accountHolder = AccountHolder.builder()
-                    .id(id)
-                    .firstName("UNKNOWN")
-                    .lastName("UNKNOWN")
-                    .countryCode("BJ")
-                    .serviceCountryCode("BJ")
-                    .accountType(AccountType.STANDARD)
-                    .createdVia(AccountCreatedVia.SELF)
-                    .kycStatus(KycStatus.NOT_STARTED)
-                    .build();
-
-                accountHolderRepository.save(accountHolder);
-
-                AppUser newUser = AppUser.builder()
-                        .id(id)
-                        .firebaseUid(claims.uid())
-                        .accountHolderId(accountHolder.getId())
-                        .role(UserRole.USER)
-                        .build();
-
-                appUser = appUserRepository.save(newUser);
-
+        AppUser appUser = appUserRepository
+                .findByFirebaseUid(claims.uid())
+                .orElse(null);
+        UUID legacyUserId = userRepository.findByFirebaseUid(claims.uid())
+                .map(user -> user.getId())
+                .orElse(null);
+        if (appUser == null) {
+            if (legacyUserId != null && accountHolderRepository.existsById(legacyUserId)) {
+                appUser = userProvisioningService.provisionFromLegacy(legacyUserId, claims);
+            } else {
+                appUser = userProvisioningService.provisionNew(claims);
+            }
         }
 
         AuthenticatedPrincipal principal = AuthenticatedPrincipal.builder()
                 .firebaseUid(claims.uid())
                 .email(claims.email())
-                .userId(appUser != null ? appUser.getId() : legacyUserId)
-                .accountHolderId(appUser != null ? appUser.getAccountHolderId() : legacyUserId)
+                .userId(appUser.getId())
+                .accountHolderId(appUser.getAccountHolderId())
                 .internal(false)
                 .build();
 
