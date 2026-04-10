@@ -3,6 +3,8 @@ package com.ccapp.seedcapital.savings.service;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.country.config.domain.enums.CountryAccountGroup;
 import com.ccapp.country.config.service.CountryChartOfAccountsService;
+import com.ccapp.identity.domain.enums.KycStatus;
+import com.ccapp.identity.service.KycStatusConsistencyService;
 import com.ccapp.identity.wallet.domain.entity.Wallet;
 import com.ccapp.payments.operation.domain.enums.OperationType;
 import com.ccapp.seedcapital.readiness.service.CircleReadinessAccessService;
@@ -35,6 +37,7 @@ public class SavingsContributionPaymentIntentService {
     private final CountryChartOfAccountsService countryChartOfAccountsService;
     private final WalletGuardService walletGuardService;
     private final WalletDebitFacade walletDebitFacade;
+    private final KycStatusConsistencyService kycStatusConsistencyService;
 
     @Transactional
     public SavingsContributionPaymentIntentResponse createMyPaymentIntent(UUID actorUserId,
@@ -43,6 +46,7 @@ public class SavingsContributionPaymentIntentService {
                                                                          UUID cycleId,
                                                                          CreateSavingsContributionPaymentIntentRequest request) {
         circleReadinessAccessService.assertCircleMember(requesterAccountHolderId, circleId);
+        assertKycVerified(requesterAccountHolderId);
         SavingsCycle cycle = savingsCycleService.refreshCycleStatus(savingsCycleService.requireCycle(circleId, cycleId));
         validateCycleState(cycle);
         imfSavingsChannelService.requireReadyChannel(requesterAccountHolderId, cycle.getCountryCode());
@@ -129,6 +133,12 @@ public class SavingsContributionPaymentIntentService {
     private void validateProvider(SavingsContributionPaymentProvider provider) {
         if (provider != SavingsContributionPaymentProvider.WALLET) {
             throw new BusinessException("Only WALLET provider is currently supported for savings contribution payment intents");
+        }
+    }
+
+    private void assertKycVerified(UUID requesterAccountHolderId) {
+        if (kycStatusConsistencyService.reconcileAccountHolderStatus(requesterAccountHolderId) != KycStatus.VERIFIED) {
+            throw new BusinessException("KYC_NOT_VERIFIED");
         }
     }
 

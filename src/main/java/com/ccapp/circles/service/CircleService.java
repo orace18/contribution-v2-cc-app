@@ -37,7 +37,9 @@ import com.ccapp.identity.domain.entity.UserProfile;
 import com.ccapp.identity.domain.enums.AccountStatus;
 import com.ccapp.identity.repository.UserProfileRepository;
 import com.ccapp.identity.repository.UserRepository;
-import com.ccapp.mlm.repository.MlmRelationshipRepository;
+import com.ccapp.payments.subscription.domain.entity.Membership;
+import com.ccapp.payments.subscription.domain.enums.MembershipStatus;
+import com.ccapp.payments.subscription.repository.MembershipRepository;
 import com.ccapp.progress.event.CircleJoinedEvent;
 import com.ccapp.seedcapital.readiness.service.CircleCoachAssignmentService;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -63,6 +65,8 @@ public class CircleService {
     private static final long DEFAULT_MAX_ASSISTED_MEMBERS_PER_CIRCLE = 2;
     private static final String CROSS_COUNTRY_CIRCLE_NOT_ALLOWED = "CROSS_COUNTRY_CIRCLE_NOT_ALLOWED";
     private static final String MEMBER_NOT_ACTIVE = "MEMBER_NOT_ACTIVE";
+    private static final String PHONE_NOT_VERIFIED = "PHONE_NOT_VERIFIED";
+    private static final String MEMBERSHIP_INACTIVE = "MEMBERSHIP_INACTIVE";
     private static final String ASSISTED_MEMBERS_DISABLED_FOR_MVP = "ASSISTED_MEMBERS_DISABLED_FOR_MVP";
     private static final String CIRCLE_LOCKED_BY_ACTIVE_LOAN = "CIRCLE_LOCKED_BY_ACTIVE_LOAN";
     private static final EnumSet<LoanStatus> CIRCLE_LOCKING_LOAN_STATUSES = EnumSet.of(
@@ -79,7 +83,7 @@ public class CircleService {
     private final LoanRepository loanRepository;
     private final AppUserRepository appUserRepository;
     private final UserRepository userRepository;
-    private final MlmRelationshipRepository mlmRelationshipRepository;
+    private final MembershipRepository membershipRepository;
     private final DelegationService delegationService;
     private final CountryConfigResolver countryConfigResolver;
     private final ObjectMapper objectMapper;
@@ -89,7 +93,7 @@ public class CircleService {
 
     @Transactional
     public CircleResponse createCircle(UUID accountHolderId, CreateCircleRequest request) {
-        ensureCreatorCanCreateCircle(accountHolderId);
+        ensureMemberCanAccessCircle(accountHolderId);
 
         String accountHolderCountry = resolveAccountHolderCountry(accountHolderId);
         CircleConfigLimits limits = resolveCircleConfigLimits(accountHolderCountry);
@@ -135,6 +139,8 @@ public class CircleService {
 
     @Transactional
     public CircleMemberResponse joinCircle(UUID accountHolderId, UUID circleId, JoinCircleRequest request) {
+        ensureMemberCanAccessCircle(accountHolderId);
+
         String accountHolderCountry = resolveAccountHolderCountry(accountHolderId);
         Circle circle = circleRepository.findByIdAndStatus(circleId, CircleStatus.ACTIVE)
                 .orElseThrow(() -> new NotFoundException("Active circle not found"));
@@ -278,7 +284,7 @@ public class CircleService {
         return context.serviceCountryCode();
     }
 
-    private void ensureCreatorCanCreateCircle(UUID accountHolderId) {
+    private void ensureMemberCanAccessCircle(UUID accountHolderId) {
         boolean activeAppMember = appUserRepository.findByAccountHolderId(accountHolderId).stream()
                 .map(AppUser::getId)
                 .map(userRepository::findById)
@@ -288,14 +294,34 @@ public class CircleService {
             throw new BusinessException(MEMBER_NOT_ACTIVE);
         }
 
-        boolean hasActiveMlmMembership = mlmRelationshipRepository.countByDescendantIdAndLevelGreaterThan(accountHolderId, 0) > 0;
-        if (!hasActiveMlmMembership) {
-            throw new BusinessException(MEMBER_NOT_ACTIVE);
+        AccountHolder accountHolder = accountHolderRepository.findById(accountHolderId)
+                .orElseThrow(() -> new NotFoundException("Account holder not found"));
+        if (accountHolder.getPhoneVerifiedAt() == null) {
+            throw new BusinessException(PHONE_NOT_VERIFIED);
+        }
+
+        if (!hasActiveMembership(accountHolderId)) {
+            throw new BusinessException(MEMBERSHIP_INACTIVE);
         }
     }
 
     private boolean isActiveUser(User user) {
         return user.getAccountStatus() == AccountStatus.ACTIVE;
+    }
+
+    private boolean hasActiveMembership(UUID accountHolderId) {
+        OffsetDateTime now = OffsetDateTime.now();
+        return membershipRepository.findFirstByAccountHolderIdAndStatusOrderByActivatedAtDesc(
+                        accountHolderId,
+                        MembershipStatus.ACTIVE
+                )
+                .filter(this::isMembershipCurrentlyActive)
+                .map(membership -> membership.getExpiresAt() == null || membership.getExpiresAt().isAfter(now))
+                .orElse(false);
+    }
+
+    private boolean isMembershipCurrentlyActive(Membership membership) {
+        return membership.getStatus() == MembershipStatus.ACTIVE;
     }
 
     private CircleMember buildCircleMember(Circle circle,

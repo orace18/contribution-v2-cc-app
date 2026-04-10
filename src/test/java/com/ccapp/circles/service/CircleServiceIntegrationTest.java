@@ -1,11 +1,10 @@
 package com.ccapp.circles.service;
 
-import com.ccapp.circles.domain.entity.CircleMember;
-import com.ccapp.circles.domain.enums.CircleMemberRole;
-import com.ccapp.circles.dto.CircleCreatorRole;
-import com.ccapp.circles.dto.CircleParticipantsResponse;
+import com.ccapp.circles.domain.enums.CircleStatus;
 import com.ccapp.circles.dto.CircleResponse;
+import com.ccapp.circles.dto.CircleCreatorRole;
 import com.ccapp.circles.dto.CreateCircleRequest;
+import com.ccapp.circles.dto.JoinCircleRequest;
 import com.ccapp.circles.repository.CircleMemberRepository;
 import com.ccapp.circles.repository.CircleRepository;
 import com.ccapp.common.events.DomainEventPublisher;
@@ -19,16 +18,15 @@ import com.ccapp.identity.account_holder.domain.enums.AccountType;
 import com.ccapp.identity.account_holder.repository.AccountHolderRepository;
 import com.ccapp.identity.app_user.domain.entity.AppUser;
 import com.ccapp.identity.app_user.repository.AppUserRepository;
-import com.ccapp.identity.delegation.service.DelegatedActionService;
 import com.ccapp.identity.delegation.service.DelegationService;
 import com.ccapp.identity.domain.entity.User;
 import com.ccapp.identity.domain.enums.AccountStatus;
 import com.ccapp.identity.domain.enums.KycStatus;
 import com.ccapp.identity.domain.enums.UserRole;
 import com.ccapp.identity.repository.UserRepository;
-import com.ccapp.identity.verification.service.PhoneVerificationService;
-import com.ccapp.mlm.domain.entity.MlmRelationship;
-import com.ccapp.mlm.repository.MlmRelationshipRepository;
+import com.ccapp.payments.subscription.domain.entity.Membership;
+import com.ccapp.payments.subscription.domain.enums.MembershipStatus;
+import com.ccapp.payments.subscription.repository.MembershipRepository;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -37,11 +35,12 @@ import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 
-import java.util.List;
+import java.math.BigDecimal;
+import java.time.OffsetDateTime;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -69,7 +68,7 @@ class CircleServiceIntegrationTest {
     @Autowired
     private UserRepository userRepository;
     @Autowired
-    private MlmRelationshipRepository mlmRelationshipRepository;
+    private MembershipRepository membershipRepository;
 
     @MockBean
     private DomainEventPublisher domainEventPublisher;
@@ -78,11 +77,15 @@ class CircleServiceIntegrationTest {
     @MockBean
     private DelegationService delegationService;
     @MockBean
-    private DelegatedActionService delegatedActionService;
-    @MockBean
-    private PhoneVerificationService phoneVerificationService;
-    @MockBean
     private CountryConfigResolver countryConfigResolver;
+    @MockBean
+    private com.ccapp.chat.service.ChatConversationService chatConversationService;
+    @MockBean
+    private com.ccapp.credit.repository.LoanRepository loanRepository;
+    @MockBean
+    private com.ccapp.identity.repository.UserProfileRepository userProfileRepository;
+    @MockBean
+    private com.ccapp.seedcapital.readiness.service.CircleCoachAssignmentService circleCoachAssignmentService;
 
     @BeforeEach
     void setUp() {
@@ -96,20 +99,42 @@ class CircleServiceIntegrationTest {
         ));
         when(countryConfigResolver.payloadAsObjectNode(any(CountryConfigResolver.ResolvedConfig.class)))
                 .thenReturn(JsonNodeFactory.instance.objectNode());
+        when(chatConversationService.getOrCreateCircleConversationId(any())).thenReturn(UUID.randomUUID());
+        when(circleCoachAssignmentService.findAssignedCoachAccountHolderId(any())).thenReturn(Optional.empty());
     }
 
     @Test
-    void createCircle_shouldAttachCoachAndAdvisorsFromMlmHierarchy() {
-        UUID creatorId = createAccountHolder("Creator", "Member");
-        UUID sponsorId = createAccountHolder("Sponsor", "Coach");
-        UUID sponsorOfSponsorId = createAccountHolder("Sponsor", "AdvisorOne");
-        UUID sponsorOfSponsorOfSponsorId = createAccountHolder("Sponsor", "AdvisorTwo");
+    void createCircle_shouldRejectWhenPhoneIsNotVerified() {
+        UUID creatorId = createAccountHolder("Creator", "NoPhone", false);
+        createUserMapping(creatorId, AccountStatus.ACTIVE);
+        createActiveMembership(creatorId);
+
+        BusinessException ex = assertThrows(
+                BusinessException.class,
+                () -> circleService.createCircle(creatorId, new CreateCircleRequest("Circle verrouille", CircleCreatorRole.MEMBER))
+        );
+
+        assertEquals("PHONE_NOT_VERIFIED", ex.getMessage());
+    }
+
+    @Test
+    void createCircle_shouldRejectWhenMembershipIsInactive() {
+        UUID creatorId = createAccountHolder("Creator", "NoMembership", true);
         createUserMapping(creatorId, AccountStatus.ACTIVE);
 
-        seedRelationship(creatorId, creatorId, 0);
-        seedRelationship(sponsorId, creatorId, 1);
-        seedRelationship(sponsorOfSponsorId, creatorId, 2);
-        seedRelationship(sponsorOfSponsorOfSponsorId, creatorId, 3);
+        BusinessException ex = assertThrows(
+                BusinessException.class,
+                () -> circleService.createCircle(creatorId, new CreateCircleRequest("Circle verrouille", CircleCreatorRole.MEMBER))
+        );
+
+        assertEquals("MEMBERSHIP_INACTIVE", ex.getMessage());
+    }
+
+    @Test
+    void createCircle_shouldSucceedWhenPhoneVerifiedAndMembershipActive() {
+        UUID creatorId = createAccountHolder("Creator", "Eligible", true);
+        createUserMapping(creatorId, AccountStatus.ACTIVE);
+        createActiveMembership(creatorId);
 
         CircleResponse response = circleService.createCircle(
                 creatorId,
@@ -117,72 +142,38 @@ class CircleServiceIntegrationTest {
         );
 
         assertNotNull(response.id());
-        assertEquals(sponsorId, response.coachId());
+        assertEquals(CircleStatus.ACTIVE, response.status());
         assertEquals(1, response.membersCount());
-
-        List<CircleMember> participants = circleMemberRepository.findByCircle_IdOrderByJoinedAtAsc(response.id());
-        assertEquals(4, participants.size());
-
-        CircleMember creatorMember = participants.stream()
-                .filter(member -> member.getAccountHolderId().equals(creatorId))
-                .findFirst()
-                .orElseThrow();
-        assertEquals(CircleMemberRole.MEMBER, creatorMember.getRole());
-        assertTrue(creatorMember.isFinancialMember());
-
-        CircleMember coach = participants.stream()
-                .filter(member -> member.getAccountHolderId().equals(sponsorId))
-                .findFirst()
-                .orElseThrow();
-        assertEquals(CircleMemberRole.COACH, coach.getRole());
-        assertFalse(coach.isFinancialMember());
-
-        CircleParticipantsResponse grouped = circleService.getParticipants(response.id());
-        assertEquals(1, grouped.members().size());
-        assertNotNull(grouped.coach());
-        assertEquals(sponsorId, grouped.coach().accountHolderId());
-        assertEquals(2, grouped.advisors().size());
-
-        var persistedCircle = circleRepository.findById(response.id()).orElseThrow();
-        assertNotNull(persistedCircle.getConfigSnapshot());
-        assertEquals(1, persistedCircle.getConfigVersion());
+        assertTrue(circleRepository.existsActiveCircleForUser(creatorId));
+        assertEquals(1, circleMemberRepository.countByCircle_Id(response.id()));
     }
 
     @Test
-    void createCircle_shouldRejectWhenCreatorIsNotActive() {
-        UUID creatorId = createAccountHolder("Creator", "Inactive");
-        UUID sponsorId = createAccountHolder("Sponsor", "Coach");
-        createUserMapping(creatorId, AccountStatus.SUSPENDED);
-
-        seedRelationship(creatorId, creatorId, 0);
-        seedRelationship(sponsorId, creatorId, 1);
-
-        BusinessException ex = assertThrows(
-                BusinessException.class,
-                () -> circleService.createCircle(creatorId, new CreateCircleRequest("Inactive Circle", CircleCreatorRole.MEMBER))
-        );
-
-        assertEquals("MEMBER_NOT_ACTIVE", ex.getMessage());
-    }
-
-    @Test
-    void createCircle_shouldRejectWhenSponsorLevelOneIsMissing() {
-        UUID creatorId = createAccountHolder("Creator", "NoSponsor");
-        UUID orphanAncestorId = createAccountHolder("Orphan", "Ancestor");
+    void joinCircle_shouldRejectWhenMembershipIsInactive() {
+        UUID creatorId = createAccountHolder("Creator", "Owner", true);
         createUserMapping(creatorId, AccountStatus.ACTIVE);
+        createActiveMembership(creatorId);
+        CircleResponse circle = circleService.createCircle(
+                creatorId,
+                new CreateCircleRequest("Circle pour test join", CircleCreatorRole.MEMBER)
+        );
 
-        seedRelationship(creatorId, creatorId, 0);
-        seedRelationship(orphanAncestorId, creatorId, 2);
+        UUID joinerId = createAccountHolder("Joiner", "Blocked", true);
+        createUserMapping(joinerId, AccountStatus.ACTIVE);
 
         BusinessException ex = assertThrows(
                 BusinessException.class,
-                () -> circleService.createCircle(creatorId, new CreateCircleRequest("No Sponsor Circle", CircleCreatorRole.MEMBER))
+                () -> circleService.joinCircle(
+                        joinerId,
+                        circle.id(),
+                        new JoinCircleRequest("Commerce", "UNKNOWN", new BigDecimal("100.00"))
+                )
         );
 
-        assertEquals("SPONSOR_NOT_FOUND", ex.getMessage());
+        assertEquals("MEMBERSHIP_INACTIVE", ex.getMessage());
     }
 
-    private UUID createAccountHolder(String firstName, String lastName) {
+    private UUID createAccountHolder(String firstName, String lastName, boolean phoneVerified) {
         return accountHolderRepository.save(AccountHolder.builder()
                 .id(UUID.randomUUID())
                 .firstName(firstName)
@@ -191,6 +182,7 @@ class CircleServiceIntegrationTest {
                 .countryCode("BJ")
                 .serviceCountryCode("BJ")
                 .accountType(AccountType.STANDARD)
+                .phoneVerifiedAt(phoneVerified ? OffsetDateTime.now().minusDays(1) : null)
                 .build()).getId();
     }
 
@@ -210,11 +202,17 @@ class CircleServiceIntegrationTest {
                 .build());
     }
 
-    private void seedRelationship(UUID ancestorId, UUID descendantId, int level) {
-        mlmRelationshipRepository.save(MlmRelationship.builder()
-                .ancestorId(ancestorId)
-                .descendantId(descendantId)
-                .level(level)
+    private void createActiveMembership(UUID accountHolderId) {
+        membershipRepository.save(Membership.builder()
+                .operationId(UUID.randomUUID())
+                .accountHolderId(accountHolderId)
+                .planCode("CLUB_PLUS")
+                .countryCode("BJ")
+                .currency("XOF")
+                .amount(BigDecimal.ZERO.setScale(4))
+                .status(MembershipStatus.ACTIVE)
+                .activatedAt(OffsetDateTime.now().minusDays(1))
+                .expiresAt(OffsetDateTime.now().plusDays(30))
                 .build());
     }
 }

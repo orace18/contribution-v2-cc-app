@@ -3,6 +3,8 @@ package com.ccapp.seedcapital.savings.service;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.country.config.domain.entity.CountryChartAccount;
 import com.ccapp.country.config.service.CountryChartOfAccountsService;
+import com.ccapp.identity.domain.enums.KycStatus;
+import com.ccapp.identity.service.KycStatusConsistencyService;
 import com.ccapp.identity.wallet.domain.entity.Wallet;
 import com.ccapp.seedcapital.readiness.service.CircleReadinessAccessService;
 import com.ccapp.seedcapital.savings.domain.entity.ImfSavingsChannel;
@@ -54,6 +56,8 @@ class SavingsContributionPaymentIntentServiceTest {
     private WalletGuardService walletGuardService;
     @Mock
     private WalletDebitFacade walletDebitFacade;
+    @Mock
+    private KycStatusConsistencyService kycStatusConsistencyService;
 
     @InjectMocks
     private SavingsContributionPaymentIntentService savingsContributionPaymentIntentService;
@@ -96,6 +100,7 @@ class SavingsContributionPaymentIntentServiceTest {
                 .build();
 
         doNothing().when(circleReadinessAccessService).assertCircleMember(accountHolderId, circleId);
+        when(kycStatusConsistencyService.reconcileAccountHolderStatus(accountHolderId)).thenReturn(KycStatus.VERIFIED);
         when(savingsCycleService.requireCycle(circleId, cycleId)).thenReturn(cycle);
         when(savingsCycleService.refreshCycleStatus(cycle)).thenReturn(cycle);
         when(imfSavingsChannelService.requireReadyChannel(accountHolderId, "BJ")).thenReturn(ImfSavingsChannel.builder()
@@ -178,6 +183,7 @@ class SavingsContributionPaymentIntentServiceTest {
                 .build();
 
         doNothing().when(circleReadinessAccessService).assertCircleMember(accountHolderId, circleId);
+        when(kycStatusConsistencyService.reconcileAccountHolderStatus(accountHolderId)).thenReturn(KycStatus.VERIFIED);
         when(savingsCycleService.requireCycle(circleId, cycleId)).thenReturn(cycle);
         when(savingsCycleService.refreshCycleStatus(cycle)).thenReturn(cycle);
         when(imfSavingsChannelService.requireReadyChannel(accountHolderId, "BJ")).thenReturn(ImfSavingsChannel.builder()
@@ -202,6 +208,40 @@ class SavingsContributionPaymentIntentServiceTest {
         );
 
         assertEquals("Requested payment amount exceeds the outstanding savings contribution", exception.getMessage());
+        verify(walletDebitFacade, never()).executeSecureDebit(any());
+    }
+
+    @Test
+    void createMyPaymentIntent_shouldRejectWhenKycIsNotVerified() {
+        UUID actorUserId = UUID.randomUUID();
+        UUID accountHolderId = UUID.randomUUID();
+        UUID circleId = UUID.randomUUID();
+        UUID cycleId = UUID.randomUUID();
+        CreateSavingsContributionPaymentIntentRequest request = new CreateSavingsContributionPaymentIntentRequest(
+                new BigDecimal("5000.0000"),
+                "XOF",
+                SavingsContributionPaymentProvider.WALLET,
+                "sav-cycle-kyc-blocked",
+                "12345",
+                null,
+                null
+        );
+
+        doNothing().when(circleReadinessAccessService).assertCircleMember(accountHolderId, circleId);
+        when(kycStatusConsistencyService.reconcileAccountHolderStatus(accountHolderId)).thenReturn(KycStatus.PENDING);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> savingsContributionPaymentIntentService.createMyPaymentIntent(
+                        actorUserId,
+                        accountHolderId,
+                        circleId,
+                        cycleId,
+                        request
+                )
+        );
+
+        assertEquals("KYC_NOT_VERIFIED", exception.getMessage());
         verify(walletDebitFacade, never()).executeSecureDebit(any());
     }
 }
