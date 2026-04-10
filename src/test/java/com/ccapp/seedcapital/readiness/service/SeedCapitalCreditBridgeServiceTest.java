@@ -8,7 +8,9 @@ import com.ccapp.financial.access.domain.FinancialAccessState;
 import com.ccapp.financial.access.domain.FinancialAccessUseCase;
 import com.ccapp.financial.access.domain.MemberFinancialProfile;
 import com.ccapp.financial.access.service.FinancialAccessPolicy;
+import com.ccapp.identity.domain.enums.KycStatus;
 import com.ccapp.identity.domain.enums.AccountStatus;
+import com.ccapp.identity.service.KycStatusConsistencyService;
 import com.ccapp.payments.subscription.domain.enums.MembershipStatus;
 import com.ccapp.seedcapital.readiness.domain.enums.SeedCapitalBlockingReason;
 import com.ccapp.seedcapital.readiness.domain.enums.SeedCapitalCreditBridgeState;
@@ -45,6 +47,8 @@ class SeedCapitalCreditBridgeServiceTest {
     private SeedCapitalEligibilityService seedCapitalEligibilityService;
     @Mock
     private CreditScoringService creditScoringService;
+    @Mock
+    private KycStatusConsistencyService kycStatusConsistencyService;
 
     @InjectMocks
     private SeedCapitalCreditBridgeService seedCapitalCreditBridgeService;
@@ -54,6 +58,7 @@ class SeedCapitalCreditBridgeServiceTest {
         UUID accountHolderId = UUID.randomUUID();
         UUID circleId = UUID.randomUUID();
         doNothing().when(circleReadinessAccessService).assertCircleMember(accountHolderId, circleId);
+        when(kycStatusConsistencyService.reconcileAccountHolderStatus(accountHolderId)).thenReturn(KycStatus.VERIFIED);
         when(financialAccessPolicy.evaluate(accountHolderId, FinancialAccessUseCase.CREDIT_APPLICATION)).thenReturn(
                 new FinancialAccessDecision(
                         accountHolderId,
@@ -134,6 +139,7 @@ class SeedCapitalCreditBridgeServiceTest {
         UUID accountHolderId = UUID.randomUUID();
         UUID circleId = UUID.randomUUID();
         doNothing().when(circleReadinessAccessService).assertCircleMember(accountHolderId, circleId);
+        when(kycStatusConsistencyService.reconcileAccountHolderStatus(accountHolderId)).thenReturn(KycStatus.VERIFIED);
         when(financialAccessPolicy.evaluate(accountHolderId, FinancialAccessUseCase.CREDIT_APPLICATION)).thenReturn(
                 new FinancialAccessDecision(
                         accountHolderId,
@@ -273,5 +279,79 @@ class SeedCapitalCreditBridgeServiceTest {
         assertFalse(response.candidate());
         assertEquals(SeedCapitalCreditBridgeState.BLOCKED_BY_MEMBER_ACCESS, response.state());
         assertEquals(List.of(FinancialAccessReasonCode.MEMBERSHIP_EXPIRED), response.memberAccessReasonCodes());
+    }
+
+    @Test
+    void getCandidate_shouldBlockWhenKycIsNotVerifiedEvenIfOtherChecksPass() {
+        UUID accountHolderId = UUID.randomUUID();
+        UUID circleId = UUID.randomUUID();
+        doNothing().when(circleReadinessAccessService).assertCircleMember(accountHolderId, circleId);
+        when(kycStatusConsistencyService.reconcileAccountHolderStatus(accountHolderId)).thenReturn(KycStatus.NOT_STARTED);
+        when(financialAccessPolicy.evaluate(accountHolderId, FinancialAccessUseCase.CREDIT_APPLICATION)).thenReturn(
+                new FinancialAccessDecision(
+                        accountHolderId,
+                        FinancialAccessUseCase.CREDIT_APPLICATION,
+                        FinancialAccessState.FINANCIAL_ALLOWED,
+                        true,
+                        List.of(),
+                        List.of(),
+                        new MemberFinancialProfile(
+                                accountHolderId,
+                                AccountStatus.ACTIVE,
+                                null,
+                                MembershipStatus.ACTIVE,
+                                OffsetDateTime.now().plusDays(30),
+                                true,
+                                "ACTIVE",
+                                true,
+                                false,
+                                FinancialAccessState.FINANCIAL_ALLOWED,
+                                false,
+                                "NOT_CONFIGURED",
+                                List.of()
+                        )
+                )
+        );
+        when(seedCapitalEligibilityService.getEligibility(accountHolderId, circleId)).thenReturn(
+                new SeedCapitalEligibilityResponse(
+                        circleId,
+                        true,
+                        SeedCapitalEligibilityState.ELIGIBLE,
+                        new BigDecimal("91.00"),
+                        true,
+                        true,
+                        true,
+                        true,
+                        true,
+                        true,
+                        true,
+                        ImfSavingsGateState.READY,
+                        3,
+                        3,
+                        2,
+                        2,
+                        List.of(),
+                        List.of(),
+                        List.of(),
+                        OffsetDateTime.now()
+                )
+        );
+        when(creditScoringService.evaluateEligibility(accountHolderId, circleId)).thenReturn(
+                new CreditEligibilityResponse(
+                        accountHolderId,
+                        circleId,
+                        new BigDecimal("78.00"),
+                        new BigDecimal("81.00"),
+                        new BigDecimal("80.00"),
+                        new BigDecimal("800000.0000"),
+                        OffsetDateTime.now()
+                )
+        );
+
+        SeedCapitalCreditCandidateResponse response = seedCapitalCreditBridgeService.getCandidate(accountHolderId, circleId);
+
+        assertFalse(response.candidate());
+        assertEquals(SeedCapitalCreditBridgeState.BLOCKED_BY_MEMBER_ACCESS, response.state());
+        assertEquals(List.of(FinancialAccessReasonCode.KYC_NOT_VERIFIED), response.memberAccessReasonCodes());
     }
 }

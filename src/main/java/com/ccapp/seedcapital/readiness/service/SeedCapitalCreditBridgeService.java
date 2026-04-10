@@ -4,8 +4,12 @@ import com.ccapp.common.exception.BusinessException;
 import com.ccapp.credit.dto.CreditEligibilityResponse;
 import com.ccapp.credit.service.CreditScoringService;
 import com.ccapp.financial.access.domain.FinancialAccessDecision;
+import com.ccapp.financial.access.domain.FinancialAccessReasonCode;
+import com.ccapp.financial.access.domain.FinancialAccessState;
 import com.ccapp.financial.access.domain.FinancialAccessUseCase;
 import com.ccapp.financial.access.service.FinancialAccessPolicy;
+import com.ccapp.identity.domain.enums.KycStatus;
+import com.ccapp.identity.service.KycStatusConsistencyService;
 import com.ccapp.seedcapital.readiness.domain.enums.SeedCapitalCreditBridgeState;
 import com.ccapp.seedcapital.readiness.dto.SeedCapitalCreditCandidateResponse;
 import com.ccapp.seedcapital.readiness.dto.SeedCapitalEligibilityResponse;
@@ -15,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -27,14 +32,18 @@ public class SeedCapitalCreditBridgeService {
     private final FinancialAccessPolicy financialAccessPolicy;
     private final SeedCapitalEligibilityService seedCapitalEligibilityService;
     private final CreditScoringService creditScoringService;
+    private final KycStatusConsistencyService kycStatusConsistencyService;
 
     @Transactional
     public SeedCapitalCreditCandidateResponse getCandidate(UUID requesterAccountHolderId, UUID circleId) {
         circleReadinessAccessService.assertCircleMember(requesterAccountHolderId, circleId);
 
-        FinancialAccessDecision memberAccessDecision = financialAccessPolicy.evaluate(
+        FinancialAccessDecision memberAccessDecision = applyKycRequirement(
                 requesterAccountHolderId,
-                FinancialAccessUseCase.CREDIT_APPLICATION
+                financialAccessPolicy.evaluate(
+                        requesterAccountHolderId,
+                        FinancialAccessUseCase.CREDIT_APPLICATION
+                )
         );
         SeedCapitalEligibilityResponse readiness = seedCapitalEligibilityService.getEligibility(requesterAccountHolderId, circleId);
         CreditEligibilityResponse creditEligibility = creditScoringService.evaluateEligibility(requesterAccountHolderId, circleId);
@@ -71,6 +80,24 @@ public class SeedCapitalCreditBridgeService {
             throw new BusinessException(blockingMessage(candidate));
         }
         return candidate;
+    }
+
+    private FinancialAccessDecision applyKycRequirement(UUID requesterAccountHolderId,
+                                                        FinancialAccessDecision currentDecision) {
+        if (!currentDecision.allowed()
+                || kycStatusConsistencyService.reconcileAccountHolderStatus(requesterAccountHolderId) == KycStatus.VERIFIED) {
+            return currentDecision;
+        }
+
+        return new FinancialAccessDecision(
+                requesterAccountHolderId,
+                currentDecision.useCase(),
+                FinancialAccessState.FINANCIAL_DENIED,
+                false,
+                List.of(FinancialAccessReasonCode.KYC_NOT_VERIFIED),
+                List.of("KYC must be verified for credit application"),
+                currentDecision.profile()
+        );
     }
 
     private SeedCapitalCreditBridgeState resolveState(FinancialAccessDecision memberAccessDecision,
