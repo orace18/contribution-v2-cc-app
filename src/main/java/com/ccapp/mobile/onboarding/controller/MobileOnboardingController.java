@@ -40,7 +40,8 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/mobile/onboarding")
 @RequiredArgsConstructor
-@lombok.extern.slf4j.Slf4j`n@Tag(name = "Mobile Onboarding", description = "Mobile onboarding APIs")
+@lombok.extern.slf4j.Slf4j
+@Tag(name = "Mobile Onboarding", description = "Mobile onboarding APIs")
 public class MobileOnboardingController {
 
     private final MobileOnboardingService mobileOnboardingService;
