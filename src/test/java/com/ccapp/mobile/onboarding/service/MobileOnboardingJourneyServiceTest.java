@@ -4,6 +4,12 @@ import com.ccapp.common.events.DomainEvent;
 import com.ccapp.common.events.DomainEventPublisher;
 import com.ccapp.country.dto.CountryContext;
 import com.ccapp.country.service.CountryContextService;
+import com.ccapp.financial.access.domain.FinancialAccessReasonCode;
+import com.ccapp.financial.access.domain.FinancialAccessState;
+import com.ccapp.financial.access.domain.FinancialAccessUseCase;
+import com.ccapp.financial.access.domain.MemberFinancialProfile;
+import com.ccapp.financial.access.service.FinancialAccessPolicy;
+import com.ccapp.financial.access.service.MemberFinancialProfileService;
 import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
 import com.ccapp.identity.account_holder.service.AccountHolderService;
 import com.ccapp.identity.domain.enums.OnboardingStep;
@@ -48,6 +54,7 @@ import com.ccapp.payments.subscription.repository.SubscriptionPlanRepository;
 import com.ccapp.payments.subscription.service.MembershipService;
 import com.ccapp.payments.subscription.service.SubscriptionService;
 import com.ccapp.wallet.domain.enums.WalletType;
+import com.ccapp.wallet.service.WalletStatusService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -128,11 +135,17 @@ class MobileOnboardingJourneyServiceTest {
     @Mock
     private IdentityOnboardingService identityOnboardingService;
     @Mock
+    private FinancialAccessPolicy financialAccessPolicy;
+    @Mock
+    private MemberFinancialProfileService memberFinancialProfileService;
+    @Mock
     private PhoneVerificationRepository phoneVerificationRepository;
     @Mock
     private WalletRepository walletRepository;
     @Mock
     private WalletService walletService;
+    @Mock
+    private WalletStatusService walletStatusService;
 
     @InjectMocks
     private MobileOnboardingJourneyService mobileOnboardingJourneyService;
@@ -162,10 +175,23 @@ class MobileOnboardingJourneyServiceTest {
                 ACCOUNT_ID,
                 PhoneVerificationStatus.VERIFIED
         )).thenReturn(Optional.empty());
+        when(financialAccessPolicy.isAllowed(ACCOUNT_ID, FinancialAccessUseCase.WALLET_ACTIVATION)).thenReturn(false);
+        when(memberFinancialProfileService.getProfile(ACCOUNT_ID))
+                .thenReturn(financialProfile(false, MembershipStatus.PENDING, false, null, List.of(
+                        FinancialAccessReasonCode.MEMBERSHIP_NOT_ACTIVE
+                )));
         when(walletRepository.save(any(Wallet.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(walletRepository.findFirstByAccountHolderIdAndStatusOrderByCreatedAtDesc(ACCOUNT_ID, "ACTIVE"))
                 .thenReturn(Optional.empty());
         when(walletRepository.findByMobileMoneyNumber(any())).thenReturn(Optional.empty());
+        when(walletStatusService.resolveStatus(ACCOUNT_ID, false))
+                .thenReturn(walletStatusSnapshot(
+                        WalletStatusService.WalletState.VERIFY_PHONE,
+                        false,
+                        false,
+                        "Verify your phone to activate your wallet",
+                        List.of(FinancialAccessReasonCode.MEMBERSHIP_NOT_ACTIVE)
+                ));
         when(operationService.findByIdempotencyKey(any())).thenReturn(Optional.empty());
         when(operationRepository.findFirstByAccountHolderIdAndTypeAndPlanIdAndStatusInOrderByCreatedAtDesc(
                 any(), any(), any(), any())).thenReturn(Optional.empty());
@@ -194,6 +220,8 @@ class MobileOnboardingJourneyServiceTest {
                         .status(MembershipStatus.ACTIVE)
                         .expiresAt(OffsetDateTime.now().plusDays(30))
                         .build());
+        when(memberFinancialProfileService.getProfile(ACCOUNT_ID))
+                .thenReturn(financialProfile(true, MembershipStatus.ACTIVE, false, null, List.of()));
         when(mlmRelationshipRepository.existsByDescendantId(ACCOUNT_ID)).thenReturn(false, true);
 
         var response = mobileOnboardingJourneyService.activateFreePlan(ACTOR_ID, ACCOUNT_ID);
@@ -304,6 +332,7 @@ class MobileOnboardingJourneyServiceTest {
                 .expiresAt(OffsetDateTime.now().plusMinutes(5))
                 .verifiedAt(OffsetDateTime.now())
                 .build()));
+        when(financialAccessPolicy.isAllowed(ACCOUNT_ID, FinancialAccessUseCase.WALLET_ACTIVATION)).thenReturn(true);
 
         mobileOnboardingJourneyService.onPhoneVerified(ACCOUNT_ID, "22961000000");
 
@@ -587,7 +616,7 @@ class MobileOnboardingJourneyServiceTest {
     }
 
     @Test
-    void getStatus_shouldExposePhoneVerifiedWithoutPlanSelectionWhenIdentityIsCompleted() {
+    void getStatus_shouldKeepBlockingJourneyStepWhenPhoneIsVerifiedBeforePlanSelection() {
         MobileOnboardingJourney journey = journey(MobileOnboardingJourneyStatus.COUNTRY_SELECTED, false, null, null);
         when(journeyRepository.findByAccountHolderId(ACCOUNT_ID)).thenReturn(Optional.of(journey));
         when(accountHolderService.getById(ACCOUNT_ID)).thenReturn(AccountHolder.builder()
@@ -614,7 +643,46 @@ class MobileOnboardingJourneyServiceTest {
                 .expiresAt(OffsetDateTime.now().plusMinutes(5))
                 .verifiedAt(OffsetDateTime.now())
                 .build()));
-        when(membershipService.findLatestMembership(ACCOUNT_ID)).thenReturn(Optional.empty());
+        when(memberFinancialProfileService.getProfile(ACCOUNT_ID))
+                .thenReturn(financialProfile(false, null, false, null, List.of(FinancialAccessReasonCode.MEMBERSHIP_MISSING)));
+        when(walletStatusService.resolveStatus(ACCOUNT_ID, false))
+                .thenReturn(walletStatusSnapshot(
+                        WalletStatusService.WalletState.WAIT_MEMBERSHIP_ACTIVATION,
+                        true,
+                        false,
+                        "Active membership required for wallet activation",
+                        List.of(FinancialAccessReasonCode.MEMBERSHIP_MISSING)
+                ));
+        when(mlmRelationshipRepository.existsByDescendantId(ACCOUNT_ID)).thenReturn(false);
+
+        MobileOnboardingStatusResponse response = mobileOnboardingJourneyService.getStatus(ACCOUNT_ID);
+
+        assertEquals("COUNTRY_SELECTED", response.currentStatus());
+        assertNotNull(response.nextStep());
+        assertEquals("SELECT_PLAN", response.nextStep().code());
+        assertFalse(response.isActive());
+        assertTrue(response.completedSteps().contains("PHONE_VERIFIED"));
+    }
+
+    @Test
+    void getStatus_shouldAlignWithWalletStatusWhenWalletActivationIsPending() {
+        MobileOnboardingJourney journey = journey(MobileOnboardingJourneyStatus.ACTIVE_MEMBER, false, null, PLAN_ID);
+        when(journeyRepository.findByAccountHolderId(ACCOUNT_ID)).thenReturn(Optional.of(journey));
+        when(accountHolderService.getById(ACCOUNT_ID)).thenReturn(AccountHolder.builder()
+                .id(ACCOUNT_ID)
+                .countryCode("BJ")
+                .serviceCountryCode("BJ")
+                .build());
+        when(memberFinancialProfileService.getProfile(ACCOUNT_ID))
+                .thenReturn(financialProfile(true, MembershipStatus.ACTIVE, false, null, List.of()));
+        when(walletStatusService.resolveStatus(ACCOUNT_ID, false))
+                .thenReturn(walletStatusSnapshot(
+                        WalletStatusService.WalletState.WAIT_WALLET_ACTIVATION,
+                        true,
+                        false,
+                        "Wallet activation is in progress",
+                        List.of()
+                ));
         when(mlmRelationshipRepository.existsByDescendantId(ACCOUNT_ID)).thenReturn(false);
 
         MobileOnboardingStatusResponse response = mobileOnboardingJourneyService.getStatus(ACCOUNT_ID);
@@ -622,7 +690,9 @@ class MobileOnboardingJourneyServiceTest {
         assertEquals("PHONE_VERIFIED", response.currentStatus());
         assertNotNull(response.nextStep());
         assertEquals("WAIT_WALLET_ACTIVATION", response.nextStep().code());
-        assertFalse(response.isActive());
+        assertEquals("/wallet/status", response.nextStep().endpoint());
+        assertEquals("Wallet activation is in progress", response.nextStep().description());
+        assertTrue(response.isActive());
     }
 
     private MobileOnboardingJourney journey(MobileOnboardingJourneyStatus status,
@@ -679,6 +749,46 @@ class MobileOnboardingJourneyServiceTest {
                 true,
                 OffsetDateTime.now(),
                 null
+        );
+    }
+
+    private MemberFinancialProfile financialProfile(boolean membershipActive,
+                                                    MembershipStatus membershipStatus,
+                                                    boolean walletActive,
+                                                    String walletStatus,
+                                                    List<FinancialAccessReasonCode> blockingReasons) {
+        return new MemberFinancialProfile(
+                ACCOUNT_ID,
+                null,
+                null,
+                membershipStatus,
+                membershipActive ? OffsetDateTime.now().plusDays(30) : null,
+                membershipActive,
+                walletStatus,
+                walletActive,
+                false,
+                blockingReasons.isEmpty() ? FinancialAccessState.FINANCIAL_ALLOWED : FinancialAccessState.FINANCIAL_DENIED,
+                false,
+                "NOT_CONFIGURED",
+                blockingReasons
+        );
+    }
+
+    private WalletStatusService.WalletStatusSnapshot walletStatusSnapshot(
+            WalletStatusService.WalletState state,
+            boolean phoneVerified,
+            boolean active,
+            String message,
+            List<FinancialAccessReasonCode> blockingReasons) {
+        return new WalletStatusService.WalletStatusSnapshot(
+                active ? UUID.randomUUID() : null,
+                active,
+                false,
+                state,
+                message,
+                phoneVerified,
+                state == WalletStatusService.WalletState.WAIT_WALLET_ACTIVATION || state == WalletStatusService.WalletState.WALLET_ACTIVE,
+                blockingReasons
         );
     }
 }

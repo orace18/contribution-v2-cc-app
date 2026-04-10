@@ -1,6 +1,7 @@
 package com.ccapp.wallet.service;
 
 import com.ccapp.common.exception.BusinessException;
+import com.ccapp.financial.access.domain.FinancialAccessDecision;
 import com.ccapp.financial.access.domain.FinancialAccessUseCase;
 import com.ccapp.financial.access.service.FinancialAccessPolicy;
 import com.ccapp.identity.verification.domain.enums.PhoneVerificationStatus;
@@ -11,6 +12,7 @@ import com.ccapp.identity.wallet.service.WalletService;
 import com.ccapp.mobile.onboarding.service.MobileOnboardingJourneyService;
 import com.ccapp.wallet.domain.enums.WalletType;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,6 +21,7 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class WalletActivationService {
 
     private final FinancialAccessPolicy financialAccessPolicy;
@@ -39,12 +42,23 @@ public class WalletActivationService {
 
     @Transactional
     public Optional<Wallet> activateIfEligible(UUID accountHolderId) {
-        if (!financialAccessPolicy.isAllowed(accountHolderId, FinancialAccessUseCase.WALLET_ACTIVATION)) {
+        FinancialAccessDecision decision = financialAccessPolicy.evaluate(accountHolderId, FinancialAccessUseCase.WALLET_ACTIVATION);
+        if (!decision.allowed()) {
+            log.info("wallet_activation_skipped accountHolderId={} reason=financial_access_denied reasonCodes={} message={}",
+                    accountHolderId,
+                    decision.reasonCodes(),
+                    decision.primaryMessage());
             return Optional.empty();
         }
 
-        return findVerifiedPhoneNumber(accountHolderId)
-                .map(verifiedPhoneNumber -> activateWithVerifiedPhone(accountHolderId, verifiedPhoneNumber));
+        Optional<String> verifiedPhoneNumber = findVerifiedPhoneNumber(accountHolderId);
+        if (verifiedPhoneNumber.isEmpty()) {
+            log.info("wallet_activation_skipped accountHolderId={} reason=phone_not_verified", accountHolderId);
+            return Optional.empty();
+        }
+
+        return verifiedPhoneNumber
+                .map(phoneNumber -> activateWithVerifiedPhone(accountHolderId, phoneNumber));
     }
 
     private Wallet activateWithVerifiedPhone(UUID accountHolderId, String verifiedPhoneNumber) {
@@ -66,6 +80,10 @@ public class WalletActivationService {
                     || !resolvedWallet.getMobileMoneyNumber().trim().equals(normalizedPhone)) {
                 resolvedWallet.setMobileMoneyNumber(normalizedPhone);
                 resolvedWallet = walletRepository.save(resolvedWallet);
+                log.info("wallet_activation_bound_phone accountHolderId={} walletId={} phone={}",
+                        accountHolderId,
+                        resolvedWallet.getId(),
+                        normalizedPhone);
             }
         } else {
             if (walletByPhone != null) {
@@ -74,9 +92,16 @@ public class WalletActivationService {
             resolvedWallet = walletService.createWallet(accountHolderId, "MOBILE", normalizedPhone, "ACTIVE");
             resolvedWallet.setWalletType(WalletType.USER);
             resolvedWallet = walletRepository.save(resolvedWallet);
+            log.info("wallet_activation_created accountHolderId={} walletId={} phone={}",
+                    accountHolderId,
+                    resolvedWallet.getId(),
+                    normalizedPhone);
         }
 
         mobileOnboardingJourneyService.markWalletActivated(accountHolderId);
+        log.info("wallet_activation_completed accountHolderId={} walletId={}",
+                accountHolderId,
+                resolvedWallet.getId());
         return resolvedWallet;
     }
 

@@ -53,6 +53,7 @@ import com.ccapp.payments.subscription.repository.SubscriptionPlanRepository;
 import com.ccapp.payments.subscription.service.MembershipService;
 import com.ccapp.payments.subscription.service.SubscriptionService;
 import com.ccapp.wallet.domain.enums.WalletType;
+import com.ccapp.wallet.service.WalletStatusService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import lombok.RequiredArgsConstructor;
@@ -103,6 +104,7 @@ public class MobileOnboardingJourneyService {
     private final PhoneVerificationRepository phoneVerificationRepository;
     private final WalletRepository walletRepository;
     private final WalletService walletService;
+    private final WalletStatusService walletStatusService;
 
     @Transactional
     public MobileOnboardingJourney markAuthenticated(UUID accountHolderId) {
@@ -415,14 +417,15 @@ public class MobileOnboardingJourneyService {
 
     @Transactional(readOnly = true)
     public MobileOnboardingStatusResponse getStatus(UUID accountHolderId) {
-        MobileOnboardingJourney journey = resolveDerivedJourneySnapshot(accountHolderId);
         MemberFinancialProfile financialProfile = memberFinancialProfileService.getProfile(accountHolderId);
+        WalletStatusService.WalletStatusSnapshot walletStatus = walletStatusService.resolveStatus(accountHolderId, false);
+        MobileOnboardingJourney journey = resolveDerivedJourneySnapshot(accountHolderId, financialProfile, walletStatus);
         boolean active = financialProfile.membershipActive();
         boolean networkReady = journey.isNetworkLinked() && mlmGraphSyncService.isNetworkReady(accountHolderId);
         return new MobileOnboardingStatusResponse(
                 journey.getStatus().name(),
-                completedSteps(journey),
-                nextStep(journey, active),
+                completedSteps(journey, walletStatus),
+                nextStep(journey, active, walletStatus),
                 null,
                 active,
                 networkReady,
@@ -436,7 +439,9 @@ public class MobileOnboardingJourneyService {
         return getOrCreate(accountHolderId);
     }
 
-    private MobileOnboardingJourney resolveDerivedJourneySnapshot(UUID accountHolderId) {
+    private MobileOnboardingJourney resolveDerivedJourneySnapshot(UUID accountHolderId,
+                                                                  MemberFinancialProfile financialProfile,
+                                                                  WalletStatusService.WalletStatusSnapshot walletStatus) {
         MobileOnboardingJourney base = journeyRepository.findByAccountHolderId(accountHolderId)
                 .orElseGet(() -> MobileOnboardingJourney.builder()
                         .accountHolderId(accountHolderId)
@@ -474,20 +479,16 @@ public class MobileOnboardingJourneyService {
             }
         }
 
-        MemberFinancialProfile financialProfile = memberFinancialProfileService.getProfile(accountHolderId);
         if (financialProfile.membershipActive()) {
             promoteStatus(copy, MobileOnboardingJourneyStatus.ACTIVE_MEMBER);
         }
 
-        boolean walletActivationReady = financialAccessPolicy.isAllowed(accountHolderId, FinancialAccessUseCase.WALLET_ACTIVATION);
-        String verifiedPhoneNumber = findVerifiedPhoneNumber(accountHolderId);
-        if (verifiedPhoneNumber != null) {
+        if (walletStatus.phoneVerified()
+                && copy.getStatus().ordinal() >= MobileOnboardingJourneyStatus.ACTIVE_MEMBER.ordinal()) {
             promoteStatus(copy, MobileOnboardingJourneyStatus.PHONE_VERIFIED);
         }
 
-        if (walletActivationReady
-                && verifiedPhoneNumber != null
-                && walletRepository.findFirstByAccountHolderIdAndStatusOrderByCreatedAtDesc(accountHolderId, "ACTIVE").isPresent()) {
+        if (walletStatus.active()) {
             promoteStatus(copy, MobileOnboardingJourneyStatus.WALLET_ACTIVATED);
         }
 
@@ -943,7 +944,8 @@ public class MobileOnboardingJourneyService {
                         .build()));
     }
 
-    private List<String> completedSteps(MobileOnboardingJourney journey) {
+    private List<String> completedSteps(MobileOnboardingJourney journey,
+                                        WalletStatusService.WalletStatusSnapshot walletStatus) {
         List<String> steps = new ArrayList<>();
         steps.add(MobileOnboardingJourneyStatus.REGISTERED.name());
         if (journey.getStatus().ordinal() >= MobileOnboardingJourneyStatus.AUTHENTICATED.ordinal()) {
@@ -968,7 +970,8 @@ public class MobileOnboardingJourneyService {
         if (journey.getStatus().ordinal() >= MobileOnboardingJourneyStatus.ACTIVE_MEMBER.ordinal()) {
             steps.add(MobileOnboardingJourneyStatus.ACTIVE_MEMBER.name());
         }
-        if (journey.getStatus().ordinal() >= MobileOnboardingJourneyStatus.PHONE_VERIFIED.ordinal()) {
+        if (walletStatus.phoneVerified()
+                || journey.getStatus().ordinal() >= MobileOnboardingJourneyStatus.PHONE_VERIFIED.ordinal()) {
             steps.add(MobileOnboardingJourneyStatus.PHONE_VERIFIED.name());
         }
         if (journey.getStatus().ordinal() >= MobileOnboardingJourneyStatus.WALLET_ACTIVATED.ordinal()) {
@@ -984,7 +987,9 @@ public class MobileOnboardingJourneyService {
         return List.copyOf(steps);
     }
 
-    private MobileOnboardingStatusResponse.NextStep nextStep(MobileOnboardingJourney journey, boolean activeMembership) {
+    private MobileOnboardingStatusResponse.NextStep nextStep(MobileOnboardingJourney journey,
+                                                             boolean activeMembership,
+                                                             WalletStatusService.WalletStatusSnapshot walletStatus) {
         if (journey.getStatus() == MobileOnboardingJourneyStatus.ONBOARDING_COMPLETED) {
             return null;
         }
@@ -1026,25 +1031,7 @@ public class MobileOnboardingJourneyService {
                     "/api/mobile/onboarding/status",
                     "Wait for PSP confirmation callback"
             );
-            case PAYMENT_CONFIRMED, ACTIVE_MEMBER -> findVerifiedPhoneNumber(journey.getAccountHolderId()) != null
-                    ? new MobileOnboardingStatusResponse.NextStep(
-                    "WAIT_WALLET_ACTIVATION",
-                    "GET",
-                    "/wallet/status",
-                    "Wallet activation is in progress"
-            )
-                    : new MobileOnboardingStatusResponse.NextStep(
-                    "VERIFY_PHONE",
-                    "POST",
-                    "/api/mobile/phone-verifications/start",
-                    "Verify your phone to activate your wallet"
-            );
-            case PHONE_VERIFIED, WALLET_ACTIVATED -> new MobileOnboardingStatusResponse.NextStep(
-                    "WAIT_WALLET_ACTIVATION",
-                    "GET",
-                    "/wallet/status",
-                    "Wallet activation is in progress"
-            );
+            case PAYMENT_CONFIRMED, ACTIVE_MEMBER, PHONE_VERIFIED, WALLET_ACTIVATED -> walletActivationNextStep(walletStatus);
             case NETWORK_LINKED -> activeMembership
                     ? null
                     : new MobileOnboardingStatusResponse.NextStep(
@@ -1054,6 +1041,37 @@ public class MobileOnboardingJourneyService {
                     "Verify your phone to complete onboarding"
             );
             case ONBOARDING_COMPLETED -> null;
+        };
+    }
+
+    private MobileOnboardingStatusResponse.NextStep walletActivationNextStep(
+            WalletStatusService.WalletStatusSnapshot walletStatus) {
+        return switch (walletStatus.state()) {
+            case VERIFY_PHONE -> new MobileOnboardingStatusResponse.NextStep(
+                    "VERIFY_PHONE",
+                    "POST",
+                    "/api/mobile/phone-verifications/start",
+                    walletStatus.message()
+            );
+            case WAIT_MEMBERSHIP_ACTIVATION -> new MobileOnboardingStatusResponse.NextStep(
+                    "WAIT_MEMBERSHIP_ACTIVATION",
+                    "GET",
+                    "/api/mobile/onboarding/status",
+                    walletStatus.message()
+            );
+            case WAIT_WALLET_ACTIVATION -> new MobileOnboardingStatusResponse.NextStep(
+                    "WAIT_WALLET_ACTIVATION",
+                    "GET",
+                    "/wallet/status",
+                    walletStatus.message()
+            );
+            case WALLET_ACTIVATION_BLOCKED -> new MobileOnboardingStatusResponse.NextStep(
+                    "WALLET_ACTIVATION_BLOCKED",
+                    "GET",
+                    "/wallet/status",
+                    walletStatus.message()
+            );
+            case WALLET_ACTIVE -> null;
         };
     }
 

@@ -20,6 +20,7 @@ import com.ccapp.wallet.service.WalletDepositService;
 import com.ccapp.wallet.service.WalletPaymentService;
 import com.ccapp.wallet.service.WalletReservationService;
 import com.ccapp.wallet.service.WalletSecurityService;
+import com.ccapp.wallet.service.WalletStatusService;
 import com.ccapp.wallet.service.WalletWithdrawalService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -50,6 +51,7 @@ public class WalletController {
     private final WalletWithdrawalService walletWithdrawalService;
     private final WalletReservationService walletReservationService;
     private final WalletSecurityService walletSecurityService;
+    private final WalletStatusService walletStatusService;
 
     @GetMapping("/status")
     @Operation(summary = "Vérifier si le wallet du user connecté est actif")
@@ -60,14 +62,8 @@ public class WalletController {
     })
     public ResponseEntity<CommonResponse<WalletStatusResponse>> status() {
         UUID accountHolderId = SecurityUtils.currentAccountHolderId();
-        walletActivationService.activateIfEligible(accountHolderId);
-        return walletBalanceService.findActiveWallet(accountHolderId)
-                .map(wallet -> ResponseEntity.ok(CommonResponse.success(
-                        "Wallet status",
-                        new WalletStatusResponse(wallet.getId(), true, wallet.getPinHash() != null))))
-                .orElseGet(() -> ResponseEntity.ok(CommonResponse.success(
-                        "Wallet status",
-                        new WalletStatusResponse(null, false, false))));
+        WalletStatusService.WalletStatusSnapshot snapshot = walletStatusService.resolveStatus(accountHolderId, true);
+        return ResponseEntity.ok(CommonResponse.success("Wallet status", toResponse(snapshot)));
     }
 
     @PostMapping("/activate")
@@ -79,10 +75,11 @@ public class WalletController {
     })
     public ResponseEntity<CommonResponse<WalletStatusResponse>> activate() {
         UUID accountHolderId = SecurityUtils.currentAccountHolderId();
-        var wallet = walletActivationService.activate(accountHolderId);
+        walletActivationService.activate(accountHolderId);
+        WalletStatusService.WalletStatusSnapshot snapshot = walletStatusService.resolveStatus(accountHolderId, false);
         return ResponseEntity.ok(CommonResponse.success(
                 "Wallet activated",
-                new WalletStatusResponse(wallet.getId(), true, wallet.getPinHash() != null)
+                toResponse(snapshot)
         ));
     }
 
@@ -225,5 +222,15 @@ public class WalletController {
             @PathVariable UUID reservationId) {
         walletReservationService.release(reservationId, SecurityUtils.currentAccountHolderId());
         return ResponseEntity.ok(CommonResponse.success("Reservation released"));
+    }
+
+    private WalletStatusResponse toResponse(WalletStatusService.WalletStatusSnapshot snapshot) {
+        return new WalletStatusResponse(
+                snapshot.walletId(),
+                snapshot.active(),
+                snapshot.hasPin(),
+                snapshot.state().name(),
+                snapshot.message()
+        );
     }
 }
