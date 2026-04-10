@@ -293,10 +293,15 @@ public class MobileNetworkService {
         assertViewAccess(actorUserId, accountHolderId);
         AccountHolder accountHolder = accountHolderService.getById(accountHolderId);
 
-        // 1. Sponsor
-        boolean hasSponsor = onboardingJourneyRepository.findByAccountHolderId(accountHolderId)
-                .map(MobileOnboardingJourney::isSponsorSet)
-                .orElse(false);
+        // 1. Sponsor / parent must be a real resolved sponsor, not only a stale
+        // onboarding flag. Fall back to the onboarding journey only when the MLM
+        // member link is not created yet.
+        UUID sponsorAccountHolderId = mlmMemberLinkRepository.findById(accountHolderId)
+                .map(link -> link.getSponsorAccountHolderId())
+                .or(() -> onboardingJourneyRepository.findByAccountHolderId(accountHolderId)
+                        .map(MobileOnboardingJourney::getSponsorAccountHolderId))
+                .orElse(null);
+        boolean hasSponsor = sponsorAccountHolderId != null;
 
         // 2. Phone verified
         boolean phoneVerified = accountHolder.getPhoneVerifiedAt() != null;

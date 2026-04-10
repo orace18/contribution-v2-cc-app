@@ -11,6 +11,12 @@ import com.ccapp.mobile.network.dto.MobileNetworkTodayActivityResponse;
 import com.ccapp.mobile.network.dto.MobileNetworkTreeResponse;
 import com.ccapp.mobile.network.dto.MobileNetworkTreeView;
 import com.ccapp.mobile.network.service.MobileNetworkService;
+import com.ccapp.mobile.onboarding.dto.MobilePlanSelectionResponse;
+import com.ccapp.mobile.onboarding.dto.MobileSponsorSelectionResponse;
+import com.ccapp.mobile.onboarding.dto.SelectMobilePlanRequest;
+import com.ccapp.mobile.onboarding.dto.SetMobileSponsorRequest;
+import com.ccapp.mobile.onboarding.service.MobileOnboardingJourneyService;
+import com.ccapp.mobile.onboarding.service.MobileOnboardingService;
 import org.springframework.web.bind.annotation.PathVariable;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -22,9 +28,12 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import jakarta.validation.Valid;
 
 import java.util.List;
 import java.util.UUID;
@@ -37,6 +46,8 @@ import java.util.UUID;
 public class MobileNetworkController {
 
     private final MobileNetworkService mobileNetworkService;
+    private final MobileOnboardingJourneyService mobileOnboardingJourneyService;
+    private final MobileOnboardingService mobileOnboardingService;
 
     @GetMapping("/eligibility")
     @Operation(summary = "Check if the current user is eligible to access the MLM network dashboard")
@@ -45,6 +56,33 @@ public class MobileNetworkController {
         return ResponseEntity.ok(ApiEnvelope.success(
                 "Network eligibility",
                 mobileNetworkService.getEligibility(resolveActorUserId(), accountHolderId)
+        ));
+    }
+
+    @PostMapping("/parent")
+    @Operation(summary = "Set or update the post-onboarding network parent for the current user")
+    public ResponseEntity<ApiEnvelope<MobileSponsorSelectionResponse>> setParent(
+            @RequestBody(required = false) SetMobileSponsorRequest request) {
+        UUID accountHolderId = SecurityUtils.currentAccountHolderId();
+        UUID sponsorAccountHolderId = request == null ? null : request.sponsorAccountHolderId();
+        return ResponseEntity.ok(ApiEnvelope.success(
+                "Network parent saved",
+                mobileOnboardingJourneyService.setSponsor(
+                        resolveActorUserId(),
+                        accountHolderId,
+                        sponsorAccountHolderId
+                )
+        ));
+    }
+
+    @PostMapping("/membership/select-plan")
+    @Operation(summary = "Store the post-onboarding membership plan used for network access")
+    public ResponseEntity<ApiEnvelope<MobilePlanSelectionResponse>> selectMembershipPlan(
+            @Valid @RequestBody SelectMobilePlanRequest request) {
+        UUID accountHolderId = SecurityUtils.currentAccountHolderId();
+        return ResponseEntity.ok(ApiEnvelope.success(
+                "Network membership plan selected",
+                mobileOnboardingService.selectPlan(resolveActorUserId(), accountHolderId, request)
         ));
     }
 

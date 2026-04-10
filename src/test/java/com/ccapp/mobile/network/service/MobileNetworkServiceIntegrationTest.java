@@ -17,6 +17,9 @@ import com.ccapp.identity.repository.UserProfileRepository;
 import com.ccapp.identity.repository.UserRepository;
 import com.ccapp.mlm.domain.entity.MlmMemberLink;
 import com.ccapp.mlm.repository.MlmMemberLinkRepository;
+import com.ccapp.mobile.onboarding.domain.entity.MobileOnboardingJourney;
+import com.ccapp.mobile.onboarding.domain.enums.MobileOnboardingJourneyStatus;
+import com.ccapp.mobile.onboarding.repository.MobileOnboardingJourneyRepository;
 import com.ccapp.mobile.network.dto.MobileNetworkMembersResponse;
 import com.ccapp.mobile.network.dto.MobileNetworkMembershipStatus;
 import com.ccapp.mobile.network.dto.MobileNetworkTeamStatsResponse;
@@ -58,6 +61,8 @@ class MobileNetworkServiceIntegrationTest {
     private MlmMemberLinkRepository mlmMemberLinkRepository;
     @Autowired
     private MembershipRepository membershipRepository;
+    @Autowired
+    private MobileOnboardingJourneyRepository mobileOnboardingJourneyRepository;
     @Autowired
     private UserRepository userRepository;
     @Autowired
@@ -144,7 +149,49 @@ class MobileNetworkServiceIntegrationTest {
         assertTrue(blankSearch.members().isEmpty());
     }
 
+    @Test
+    void shouldRequireAReturnedSponsorIdBeforeUnlockingParentStep() {
+        UUID actorUserId = UUID.randomUUID();
+        UUID accountHolderId = createAccountHolder(
+                "Samuel",
+                "KIKI",
+                "+22997000077",
+                true
+        );
+
+        mobileOnboardingJourneyRepository.save(MobileOnboardingJourney.builder()
+                .accountHolderId(accountHolderId)
+                .status(MobileOnboardingJourneyStatus.SPONSOR_SET)
+                .countryCode("BJ")
+                .sponsorSet(true)
+                .sponsorAccountHolderId(null)
+                .networkLinked(false)
+                .onboardingCompleted(true)
+                .build());
+
+        createMembership(
+                accountHolderId,
+                MembershipStatus.ACTIVE,
+                OffsetDateTime.now().minusDays(10),
+                OffsetDateTime.now().plusDays(20)
+        );
+
+        var eligibility = mobileNetworkService.getEligibility(actorUserId, accountHolderId);
+
+        assertEquals(false, eligibility.hasSponsor());
+        assertEquals(true, eligibility.phoneVerified());
+        assertEquals(true, eligibility.hasPaidMembership());
+        assertEquals(false, eligibility.isEligible());
+    }
+
     private UUID createAccountHolder(String firstName, String lastName, String phoneNumber) {
+        return createAccountHolder(firstName, lastName, phoneNumber, false);
+    }
+
+    private UUID createAccountHolder(String firstName,
+                                     String lastName,
+                                     String phoneNumber,
+                                     boolean phoneVerified) {
         return accountHolderRepository.save(AccountHolder.builder()
                 .id(UUID.randomUUID())
                 .firstName(firstName)
@@ -152,6 +199,7 @@ class MobileNetworkServiceIntegrationTest {
                 .phoneNumber(phoneNumber)
                 .countryCode("BJ")
                 .serviceCountryCode("BJ")
+                .phoneVerifiedAt(phoneVerified ? OffsetDateTime.now().minusDays(1) : null)
                 .accountType(AccountType.STANDARD)
                 .build()).getId();
     }
@@ -185,10 +233,9 @@ class MobileNetworkServiceIntegrationTest {
     }
 
     private void createAvatar(UUID accountHolderId, UUID mediaId) {
-        UUID userId = UUID.randomUUID();
+        UUID firebaseRef = UUID.randomUUID();
         User user = userRepository.save(User.builder()
-                .id(userId)
-                .firebaseUid("firebase-" + userId)
+                .firebaseUid("firebase-" + firebaseRef)
                 .role(UserRole.USER)
                 .accountStatus(AccountStatus.ACTIVE)
                 .kycStatus(KycStatus.NOT_STARTED)
