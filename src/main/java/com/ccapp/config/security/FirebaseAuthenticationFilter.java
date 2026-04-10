@@ -1,6 +1,7 @@
 package com.ccapp.config.security;
 
 import com.ccapp.common.security.AuthenticatedPrincipal;
+import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
 import com.ccapp.identity.app_user.domain.entity.AppUser;
 import com.ccapp.identity.app_user.repository.AppUserRepository;
 import com.ccapp.identity.domain.enums.UserRole;
@@ -20,6 +21,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
+import com.ccapp.identity.account_holder.repository.AccountHolderRepository;
 
 import java.io.IOException;
 import java.util.List;
@@ -33,6 +35,7 @@ public class FirebaseAuthenticationFilter extends OncePerRequestFilter {
     private final FirebaseTokenVerifier tokenVerifier;
     private final AppUserRepository appUserRepository;
     private final UserRepository userRepository;
+    private final AccountHolderRepository accountHolderRepository;
 
     @Value("${firebase.auth.enabled:false}")
     private boolean firebaseAuthEnabled;
@@ -97,18 +100,25 @@ public class FirebaseAuthenticationFilter extends OncePerRequestFilter {
         AppUser appUser = appUserRepository.findByFirebaseUid(claims.uid()).orElse(null);
         UUID legacyUserId = userRepository.findByFirebaseUid(claims.uid()).map(user -> user.getId()).orElse(null);
         if (appUser == null && legacyUserId == null) {
-            log.warn("No local user mapping → creating user uid={}", claims.uid());
+                log.warn("No local user mapping → creating user uid={}", claims.uid());
 
-            UUID userId = UUID.randomUUID();
+                UUID id = UUID.randomUUID();
 
-            AppUser newUser = AppUser.builder()
-                    .id(userId)
-                    .firebaseUid(claims.uid())
-                    .accountHolderId(userId)
-                    .role(UserRole.USER)
-                    .build();
+                AccountHolder accountHolder = AccountHolder.builder()
+                        .id(id)
+                        .build();
 
-            appUser = appUserRepository.save(newUser);
+                accountHolderRepository.save(accountHolder);
+
+                AppUser newUser = AppUser.builder()
+                        .id(id)
+                        .firebaseUid(claims.uid())
+                        .accountHolderId(accountHolder.getId())
+                        .role(UserRole.USER)
+                        .build();
+
+                appUser = appUserRepository.save(newUser);
+
         }
 
         AuthenticatedPrincipal principal = AuthenticatedPrincipal.builder()
