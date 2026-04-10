@@ -148,8 +148,7 @@ public class MlmGraphSyncService {
         if (!graphGateway.isAvailable()) {
             return true;
         }
-        Map<UUID, GraphLinkSnapshot> snapshots = readGraphRelationshipSnapshot();
-        GraphLinkSnapshot snapshot = snapshots.get(userId);
+        GraphLinkSnapshot snapshot = readUserGraphLinkSnapshot(userId);
         if (snapshot == null || snapshot.placementId() == null) {
             return false;
         }
@@ -262,6 +261,32 @@ public class MlmGraphSyncService {
             ));
         }
         return byUserId;
+    }
+
+    private GraphLinkSnapshot readUserGraphLinkSnapshot(UUID targetUserId) {
+        if (targetUserId == null) return null;
+        String query = """
+                MATCH (u:User {id: $userId})
+                OPTIONAL MATCH (u)-[:SPONSORED_BY]->(s:User)
+                OPTIONAL MATCH (u)-[:PLACED_UNDER]->(p:User)
+                RETURN u.id AS userId, s.id AS sponsorId, p.id AS placementId
+                """;
+        List<Map<String, Object>> rows = executeWithRetry("read_user_graph_relationship", targetUserId, false, () ->
+                graphGateway.read(query, Map.of("userId", targetUserId.toString()))
+        );
+        if (rows.isEmpty()) {
+            return null;
+        }
+        Map<String, Object> row = rows.getFirst();
+        UUID userId = asUuid(row.get("userId"));
+        if (userId == null) {
+            return null;
+        }
+        return new GraphLinkSnapshot(
+                userId,
+                asUuid(row.get("sponsorId")),
+                asUuid(row.get("placementId"))
+        );
     }
 
     private long countInconsistentLinks(Map<UUID, MlmMemberLink> linksByUserId) {

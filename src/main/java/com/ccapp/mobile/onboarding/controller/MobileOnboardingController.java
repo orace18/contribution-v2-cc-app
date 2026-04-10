@@ -40,7 +40,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/mobile/onboarding")
 @RequiredArgsConstructor
-@Tag(name = "Mobile Onboarding", description = "Mobile onboarding APIs")
+@lombok.extern.slf4j.Slf4j`n@Tag(name = "Mobile Onboarding", description = "Mobile onboarding APIs")
 public class MobileOnboardingController {
 
     private final MobileOnboardingService mobileOnboardingService;
@@ -136,9 +136,12 @@ public class MobileOnboardingController {
                 principal.accountHolderId() != null ? principal.accountHolderId() : SecurityUtils.currentAccountHolderId(),
                 requestedAccountHolderId
         );
+        log.info("mobile_onboarding_status_check_started actorUserId={} accountHolderId={}", actorUserId, accountHolderId);
+        MobileOnboardingStatusResponse response = mobileOnboardingStatusService.getStatus(actorUserId, accountHolderId);
+        log.info("mobile_onboarding_status_check_completed actorUserId={} accountHolderId={} status={}", actorUserId, accountHolderId, response.currentStatus());
         return ResponseEntity.ok(ApiEnvelope.success(
                 "Onboarding status",
-                mobileOnboardingStatusService.getStatus(actorUserId, accountHolderId)
+                response
         ));
     }
 
