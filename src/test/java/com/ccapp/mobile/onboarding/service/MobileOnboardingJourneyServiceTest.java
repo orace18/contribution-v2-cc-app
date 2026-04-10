@@ -54,6 +54,9 @@ import com.ccapp.payments.subscription.repository.SubscriptionPlanRepository;
 import com.ccapp.payments.subscription.service.MembershipService;
 import com.ccapp.payments.subscription.service.SubscriptionService;
 import com.ccapp.wallet.domain.enums.WalletType;
+import com.ccapp.wallet.service.WalletLifecycleService;
+import com.ccapp.wallet.service.WalletState;
+import com.ccapp.wallet.service.WalletStatusSnapshot;
 import com.ccapp.wallet.service.WalletStatusService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -145,6 +148,8 @@ class MobileOnboardingJourneyServiceTest {
     @Mock
     private WalletService walletService;
     @Mock
+    private WalletLifecycleService walletLifecycleService;
+    @Mock
     private WalletStatusService walletStatusService;
 
     @InjectMocks
@@ -171,39 +176,23 @@ class MobileOnboardingJourneyServiceTest {
         when(mlmGraphSyncService.isNetworkReady(ACCOUNT_ID)).thenReturn(true);
         when(mlmMemberLinkRepository.existsById(ACCOUNT_ID)).thenReturn(false);
         when(mlmMemberLinkRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
-        when(phoneVerificationRepository.findTopByRequesterAccountHolderIdAndStatusOrderByVerifiedAtDescCreatedAtDesc(
-                ACCOUNT_ID,
-                PhoneVerificationStatus.VERIFIED
-        )).thenReturn(Optional.empty());
-        when(financialAccessPolicy.isAllowed(ACCOUNT_ID, FinancialAccessUseCase.WALLET_ACTIVATION)).thenReturn(false);
         when(memberFinancialProfileService.getProfile(ACCOUNT_ID))
                 .thenReturn(financialProfile(false, MembershipStatus.PENDING, false, null, List.of(
                         FinancialAccessReasonCode.MEMBERSHIP_NOT_ACTIVE
                 )));
-        when(walletRepository.save(any(Wallet.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        when(walletRepository.findFirstByAccountHolderIdAndStatusOrderByCreatedAtDesc(ACCOUNT_ID, "ACTIVE"))
-                .thenReturn(Optional.empty());
-        when(walletRepository.findByMobileMoneyNumber(any())).thenReturn(Optional.empty());
-        when(walletStatusService.resolveStatus(ACCOUNT_ID, false))
+        when(walletLifecycleService.resolveStatus(ACCOUNT_ID))
                 .thenReturn(walletStatusSnapshot(
-                        WalletStatusService.WalletState.VERIFY_PHONE,
+                        WalletState.VERIFY_PHONE,
                         false,
                         false,
                         "Verify your phone to activate your wallet",
                         List.of(FinancialAccessReasonCode.MEMBERSHIP_NOT_ACTIVE)
                 ));
+        when(walletLifecycleService.activateIfEligible(eq(ACCOUNT_ID), any()))
+                .thenReturn(Optional.empty());
         when(operationService.findByIdempotencyKey(any())).thenReturn(Optional.empty());
         when(operationRepository.findFirstByAccountHolderIdAndTypeAndPlanIdAndStatusInOrderByCreatedAtDesc(
                 any(), any(), any(), any())).thenReturn(Optional.empty());
-        when(walletService.createWallet(eq(ACCOUNT_ID), eq("MOBILE"), any(), eq("ACTIVE")))
-                .thenAnswer(invocation -> Wallet.builder()
-                        .id(UUID.randomUUID())
-                        .accountHolderId(ACCOUNT_ID)
-                        .provider("MOBILE")
-                        .mobileMoneyNumber(invocation.getArgument(2))
-                        .status("ACTIVE")
-                        .walletType(WalletType.USER)
-                        .build());
     }
 
     @Test
@@ -311,28 +300,15 @@ class MobileOnboardingJourneyServiceTest {
         mobileOnboardingJourneyService.onPaidPaymentConfirmed(confirmed);
 
         assertEquals(MobileOnboardingJourneyStatus.ACTIVE_MEMBER, journey.getStatus());
-        verify(walletService, never()).createWallet(any(), any(), any(), any());
-
-        when(phoneVerificationRepository.findTopByRequesterAccountHolderIdAndStatusOrderByVerifiedAtDescCreatedAtDesc(
-                ACCOUNT_ID,
-                PhoneVerificationStatus.VERIFIED
-        )).thenReturn(Optional.of(PhoneVerification.builder()
-                .id(UUID.randomUUID())
-                .requesterAccountHolderId(ACCOUNT_ID)
-                .phoneNumber("22961000000")
-                .channel(PhoneVerificationChannel.SMS)
-                .status(PhoneVerificationStatus.VERIFIED)
-                .codeHash("hash")
-                .attemptCount(0)
-                .maxAttempts(5)
-                .sendCount(1)
-                .maxSendCount(3)
-                .lastSentAt(OffsetDateTime.now())
-                .resendAvailableAt(OffsetDateTime.now())
-                .expiresAt(OffsetDateTime.now().plusMinutes(5))
-                .verifiedAt(OffsetDateTime.now())
-                .build()));
-        when(financialAccessPolicy.isAllowed(ACCOUNT_ID, FinancialAccessUseCase.WALLET_ACTIVATION)).thenReturn(true);
+        when(walletLifecycleService.activateIfEligible(ACCOUNT_ID, "22961000000"))
+                .thenReturn(Optional.of(Wallet.builder()
+                        .id(UUID.randomUUID())
+                        .accountHolderId(ACCOUNT_ID)
+                        .provider("MOBILE")
+                        .mobileMoneyNumber("22961000000")
+                        .status("ACTIVE")
+                        .walletType(WalletType.USER)
+                        .build()));
 
         mobileOnboardingJourneyService.onPhoneVerified(ACCOUNT_ID, "22961000000");
 
@@ -645,9 +621,9 @@ class MobileOnboardingJourneyServiceTest {
                 .build()));
         when(memberFinancialProfileService.getProfile(ACCOUNT_ID))
                 .thenReturn(financialProfile(false, null, false, null, List.of(FinancialAccessReasonCode.MEMBERSHIP_MISSING)));
-        when(walletStatusService.resolveStatus(ACCOUNT_ID, false))
+        when(walletLifecycleService.resolveStatus(ACCOUNT_ID))
                 .thenReturn(walletStatusSnapshot(
-                        WalletStatusService.WalletState.WAIT_MEMBERSHIP_ACTIVATION,
+                        WalletState.WAIT_MEMBERSHIP_ACTIVATION,
                         true,
                         false,
                         "Active membership required for wallet activation",
@@ -675,9 +651,9 @@ class MobileOnboardingJourneyServiceTest {
                 .build());
         when(memberFinancialProfileService.getProfile(ACCOUNT_ID))
                 .thenReturn(financialProfile(true, MembershipStatus.ACTIVE, false, null, List.of()));
-        when(walletStatusService.resolveStatus(ACCOUNT_ID, false))
+        when(walletLifecycleService.resolveStatus(ACCOUNT_ID))
                 .thenReturn(walletStatusSnapshot(
-                        WalletStatusService.WalletState.WAIT_WALLET_ACTIVATION,
+                        WalletState.WAIT_WALLET_ACTIVATION,
                         true,
                         false,
                         "Wallet activation is in progress",
@@ -774,20 +750,20 @@ class MobileOnboardingJourneyServiceTest {
         );
     }
 
-    private WalletStatusService.WalletStatusSnapshot walletStatusSnapshot(
-            WalletStatusService.WalletState state,
+    private WalletStatusSnapshot walletStatusSnapshot(
+            WalletState state,
             boolean phoneVerified,
             boolean active,
             String message,
             List<FinancialAccessReasonCode> blockingReasons) {
-        return new WalletStatusService.WalletStatusSnapshot(
+        return new WalletStatusSnapshot(
                 active ? UUID.randomUUID() : null,
                 active,
                 false,
                 state,
                 message,
                 phoneVerified,
-                state == WalletStatusService.WalletState.WAIT_WALLET_ACTIVATION || state == WalletStatusService.WalletState.WALLET_ACTIVE,
+                state == WalletState.WAIT_WALLET_ACTIVATION || state == WalletState.WALLET_ACTIVE,
                 blockingReasons
         );
     }

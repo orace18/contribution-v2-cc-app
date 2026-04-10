@@ -21,6 +21,7 @@ import com.ccapp.wallet.service.WalletPaymentService;
 import com.ccapp.wallet.service.WalletReservationService;
 import com.ccapp.wallet.service.WalletSecurityService;
 import com.ccapp.wallet.service.WalletStatusService;
+import com.ccapp.wallet.service.WalletStatusSnapshot;
 import com.ccapp.wallet.service.WalletWithdrawalService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -62,7 +63,7 @@ public class WalletController {
     })
     public ResponseEntity<CommonResponse<WalletStatusResponse>> status() {
         UUID accountHolderId = SecurityUtils.currentAccountHolderId();
-        WalletStatusService.WalletStatusSnapshot snapshot = walletStatusService.resolveStatus(accountHolderId, true);
+        WalletStatusSnapshot snapshot = walletStatusService.resolveStatus(accountHolderId, true);
         return ResponseEntity.ok(CommonResponse.success("Wallet status", toResponse(snapshot)));
     }
 
@@ -76,7 +77,7 @@ public class WalletController {
     public ResponseEntity<CommonResponse<WalletStatusResponse>> activate() {
         UUID accountHolderId = SecurityUtils.currentAccountHolderId();
         walletActivationService.activate(accountHolderId);
-        WalletStatusService.WalletStatusSnapshot snapshot = walletStatusService.resolveStatus(accountHolderId, false);
+        WalletStatusSnapshot snapshot = walletStatusService.resolveStatus(accountHolderId, false);
         return ResponseEntity.ok(CommonResponse.success(
                 "Wallet activated",
                 toResponse(snapshot)
@@ -224,7 +225,7 @@ public class WalletController {
         return ResponseEntity.ok(CommonResponse.success("Reservation released"));
     }
 
-    private WalletStatusResponse toResponse(WalletStatusService.WalletStatusSnapshot snapshot) {
+    private WalletStatusResponse toResponse(WalletStatusSnapshot snapshot) {
         return new WalletStatusResponse(
                 snapshot.walletId(),
                 snapshot.active(),
