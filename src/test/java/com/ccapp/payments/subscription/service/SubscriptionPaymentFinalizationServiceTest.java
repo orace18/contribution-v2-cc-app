@@ -8,6 +8,7 @@ import com.ccapp.payments.operation.domain.entity.Operation;
 import com.ccapp.payments.operation.domain.enums.OperationStatus;
 import com.ccapp.payments.operation.domain.enums.OperationType;
 import com.ccapp.payments.operation.service.OperationService;
+import com.ccapp.payments.subscription.domain.entity.Membership;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -55,8 +56,19 @@ class SubscriptionPaymentFinalizationServiceTest {
                 .amount(new BigDecimal("65000.0000"))
                 .currency("XOF")
                 .build();
+        Membership membership = Membership.builder()
+                .id(UUID.randomUUID())
+                .operationId(operationId)
+                .accountHolderId(operation.getAccountHolderId())
+                .planId(operation.getPlanId())
+                .planCode("CLASSIC_12M")
+                .countryCode("BJ")
+                .currency("XOF")
+                .amount(new BigDecimal("65000.0000"))
+                .build();
 
         when(operationService.getById(operationId)).thenReturn(operation);
+        when(membershipService.activateForConfirmedOperation(operation)).thenReturn(membership);
         doThrow(new BusinessException("Missing subscription allocation percentage for commissionPool"))
                 .when(accountingPostingService).postConfirmedOperation(operationId);
         when(mlmCommissionService.calculateForOperation(operation))

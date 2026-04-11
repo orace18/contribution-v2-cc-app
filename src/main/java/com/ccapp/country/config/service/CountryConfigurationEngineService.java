@@ -61,6 +61,13 @@ public class CountryConfigurationEngineService {
     private static final String COUNTRY_CONFIG_ENTITY_TYPE = "COUNTRY_CONFIG";
     private static final String JAWUPAY_PROVIDER = "JAWUPAY";
     private static final String JAWUPAY_METHOD_SOURCE = "JAWUPAY_DYNAMIC";
+    private static final List<AllocationField> REQUIRED_SUBSCRIPTION_ALLOCATION_FIELDS = List.of(
+            new AllocationField("commissionPool", new String[]{"commissionPool", "commission_pool"}),
+            new AllocationField("guaranteeFund", new String[]{"guaranteeFund", "guarantee_fund"}),
+            new AllocationField("platformFee", new String[]{"platformFee", "platform_fee"}),
+            new AllocationField("administration", new String[]{"administration", "administrationFee"}),
+            new AllocationField("socialFund", new String[]{"socialFund", "social_fund"})
+    );
     private static final List<CountryConfigType> SETUP_VALIDATION_TYPES = List.of(
             CountryConfigType.GENERAL,
             CountryConfigType.ACCOUNTING,
@@ -297,11 +304,12 @@ public class CountryConfigurationEngineService {
                 .orElseThrow(() -> new BusinessException("Version not found for selected config type"));
 
         OffsetDateTime activationDate = request.effectiveDate() == null ? OffsetDateTime.now() : request.effectiveDate();
-        validateCrossDomainRules(normalizedCountryCode, configType, readPayload(targetVersion.getPayload()), activationDate);
+        JsonNode sanitizedPayload = validatePayload(configType, readPayload(targetVersion.getPayload()), false);
+        validateCrossDomainRules(normalizedCountryCode, configType, sanitizedPayload, activationDate);
         CountryConfigVersion saved = saveNewVersion(
                 normalizedCountryCode,
                 configType,
-                targetVersion.getPayload(),
+                writePayload(sanitizedPayload),
                 activationDate,
                 actorAdminUserId
         );
@@ -340,39 +348,13 @@ public class CountryConfigurationEngineService {
         SetupValidationResult validationResult = evaluateSetupValidation(normalizedCountryCode, sanitizedPayloads);
         errors.addAll(validationResult.errors());
 
-        boolean valid = errors.isEmpty();
-        // Business rule: validation is the single source of truth for configured status.
-        // If validation passes, mark the country as configured unconditionally.
-        if (valid) {
-            persistConfiguredByValidation(normalizedCountryCode);
-            ensureConfiguredInvariant(normalizedCountryCode);
-        }
-        return new CountryConfigValidationResponse(valid, errors);
+        return new CountryConfigValidationResponse(errors.isEmpty(), errors);
     }
+    /*
+     * Draft setup validation stays side-effect free.
 
-    /**
-     * Marks the country as configured after a successful validation call.
      * Validation is the authoritative source of truth for configured status —
-     * this write must happen regardless of the runtime readiness score.
      */
-    private void persistConfiguredByValidation(String countryCode) {
-        Country country = countryRepository.findByCode(countryCode)
-                .orElseThrow(() -> new BusinessException("Country not found"));
-        boolean changed = false;
-        if (!country.isConfigured()) {
-            country.setConfigured(true);
-            log.info("[VALIDATION] country={} marked configured=true (validation passed)", countryCode);
-            changed = true;
-        }
-        if (!country.isActive()) {
-            country.setActive(true);
-            changed = true;
-        }
-        if (changed) {
-            countryRepository.save(country);
-        }
-    }
-
     @Transactional
     public boolean refreshCountryConfiguredState(String countryCode) {
         String normalizedCountryCode = normalizeCountryCode(countryCode);
@@ -490,15 +472,6 @@ public class CountryConfigurationEngineService {
             countryRepository.save(country);
         }
         return configured;
-    }
-
-    private void ensureConfiguredInvariant(String countryCode) {
-        Country country = countryRepository.findByCode(countryCode)
-                .orElseThrow(() -> new BusinessException("Country not found"));
-        if (!country.isConfigured()) {
-            country.setConfigured(true);
-            countryRepository.save(country);
-        }
     }
 
     @Transactional(readOnly = true)
@@ -720,6 +693,8 @@ public class CountryConfigurationEngineService {
                 throw new BusinessException("general.walletSecurity.otpTtlSeconds must be >= 30");
             }
         }
+
+        validateSubscriptionAllocations(payload);
     }
 
     private void validateMembershipConfig(ObjectNode payload) {
@@ -1006,6 +981,52 @@ public class CountryConfigurationEngineService {
             throw new BusinessException(errorPrefix + " must be between 0 and 100");
         }
         return value;
+    }
+
+    private void validateSubscriptionAllocations(ObjectNode payload) {
+        ObjectNode percentages = resolveSubscriptionAllocationsNode(payload);
+        if (percentages.isEmpty()) {
+            throw new BusinessException("general.subscriptionAllocations is required");
+        }
+
+        BigDecimal total = BigDecimal.ZERO;
+        for (AllocationField field : REQUIRED_SUBSCRIPTION_ALLOCATION_FIELDS) {
+            BigDecimal value = requiredAllocationPercentage(percentages, field);
+            total = total.add(value);
+        }
+
+        if (total.setScale(4, RoundingMode.HALF_UP).compareTo(ONE_HUNDRED.setScale(4, RoundingMode.HALF_UP)) != 0) {
+            throw new BusinessException("general.subscriptionAllocations total must equal 100");
+        }
+    }
+
+    private ObjectNode resolveSubscriptionAllocationsNode(ObjectNode payload) {
+        JsonNode percentagesNode = payload.get("percentages");
+        if (percentagesNode == null || percentagesNode.isNull()) {
+            return payload;
+        }
+        if (!percentagesNode.isObject()) {
+            throw new BusinessException("general.percentages must be an object");
+        }
+        return (ObjectNode) percentagesNode;
+    }
+
+    private BigDecimal requiredAllocationPercentage(ObjectNode payload, AllocationField field) {
+        for (String alias : field.aliases()) {
+            JsonNode value = payload.get(alias);
+            if (value == null || value.isNull()) {
+                continue;
+            }
+            if (!value.isNumber()) {
+                throw new BusinessException("general.subscriptionAllocations." + field.label() + " must be numeric");
+            }
+            BigDecimal decimalValue = value.decimalValue();
+            if (decimalValue.compareTo(BigDecimal.ZERO) < 0 || decimalValue.compareTo(ONE_HUNDRED) > 0) {
+                throw new BusinessException("general.subscriptionAllocations." + field.label() + " must be between 0 and 100");
+            }
+            return decimalValue;
+        }
+        throw new BusinessException("general.subscriptionAllocations." + field.label() + " is required");
     }
 
     private String resolveValidationField(String message) {
@@ -1335,5 +1356,8 @@ public class CountryConfigurationEngineService {
             boolean valid,
             List<CountryConfigValidationErrorResponse> errors
     ) {
+    }
+
+    private record AllocationField(String label, String[] aliases) {
     }
 }

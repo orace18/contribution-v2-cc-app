@@ -97,7 +97,7 @@ class CountryConfigResolverIntegrationTest {
 
     @Test
     void resolveActiveConfig_shouldInvalidateCacheOnCountryConfigUpdate() {
-        ObjectNode v1 = objectMapper.createObjectNode().put("maxMembers", 4);
+        ObjectNode v1 = generalOverridePayload("maxMembers", 4);
         countryConfigurationEngineService.upsertCountryConfiguration(
                 "BJ",
                 CountryConfigType.GENERAL,
@@ -107,7 +107,7 @@ class CountryConfigResolverIntegrationTest {
         CountryConfigResolver.ResolvedConfig first = countryConfigResolver.resolveActiveConfig("BJ", CountryConfigType.GENERAL);
         assertEquals(4, countryConfigResolver.payloadAsObjectNode(first).get("maxMembers").asInt());
 
-        ObjectNode v2 = objectMapper.createObjectNode().put("maxMembers", 3);
+        ObjectNode v2 = generalOverridePayload("maxMembers", 3);
         countryConfigurationEngineService.upsertCountryConfiguration(
                 "BJ",
                 CountryConfigType.GENERAL,
@@ -158,8 +158,7 @@ class CountryConfigResolverIntegrationTest {
                 UUID.randomUUID()
         );
 
-        ObjectNode countryGeneralOverride = objectMapper.createObjectNode();
-        countryGeneralOverride.put("taxRate", 20);
+        ObjectNode countryGeneralOverride = generalOverridePayload("taxRate", 20);
         countryConfigurationEngineService.upsertCountryConfiguration(
                 "BJ",
                 CountryConfigType.GENERAL,
@@ -199,5 +198,17 @@ class CountryConfigResolverIntegrationTest {
         assertEquals(10, payload.path("percentages").path("platformFee").asInt());
         assertEquals(10, payload.path("percentages").path("administration").asInt());
         assertEquals(5, payload.path("percentages").path("socialFund").asInt());
+    }
+
+    private ObjectNode generalOverridePayload(String fieldName, int value) {
+        ObjectNode payload = objectMapper.createObjectNode();
+        payload.put(fieldName, value);
+        ObjectNode percentages = payload.putObject("percentages");
+        percentages.put("commissionPool", 60);
+        percentages.put("guaranteeFund", 15);
+        percentages.put("platformFee", 10);
+        percentages.put("administration", 10);
+        percentages.put("socialFund", 5);
+        return payload;
     }
 }

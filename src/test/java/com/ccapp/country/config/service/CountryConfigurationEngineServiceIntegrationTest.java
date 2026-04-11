@@ -17,6 +17,7 @@ import com.ccapp.country.config.dto.UpsertCountryConfigRequest;
 import com.ccapp.country.config.repository.CountryChartAccountRepository;
 import com.ccapp.country.domain.entity.Country;
 import com.ccapp.country.repository.CountryRepository;
+import com.ccapp.payments.subscription.service.SubscriptionPlanCatalogService;
 import com.ccapp.payments.subscription.service.SubscriptionService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -56,9 +57,13 @@ class CountryConfigurationEngineServiceIntegrationTest {
     @Autowired
     private CountryConfigurationEngineService countryConfigurationEngineService;
     @Autowired
+    private CountryChartOfAccountsService countryChartOfAccountsService;
+    @Autowired
     private CountryRepository countryRepository;
     @Autowired
     private CountryChartAccountRepository countryChartAccountRepository;
+    @MockBean
+    private SubscriptionPlanCatalogService subscriptionPlanCatalogService;
     @MockBean
     private SubscriptionService subscriptionService;
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -66,6 +71,7 @@ class CountryConfigurationEngineServiceIntegrationTest {
     @Test
     void upsertAndSnapshot_shouldVersionGuaranteeConfigByEffectiveDate() {
         saveCountry("BJ", "Benin");
+        countryChartOfAccountsService.autoGenerateRequiredAccounts("BJ");
 
         ObjectNode firstPayload = objectMapper.createObjectNode()
                 .put("globalMaxExposure", 1000);
@@ -124,6 +130,24 @@ class CountryConfigurationEngineServiceIntegrationTest {
                 new UpsertCountryConfigRequest(invalidGeneral, OffsetDateTime.now()),
                 UUID.randomUUID()
         ));
+    }
+
+    @Test
+    void upsertGeneral_shouldRejectMissingSubscriptionAllocations() {
+        saveCountry("BJ", "Benin");
+
+        ObjectNode invalidGeneral = objectMapper.createObjectNode();
+        invalidGeneral.put("taxRate", 18);
+        invalidGeneral.put("marketplaceDefaultCommission", 5);
+
+        BusinessException exception = assertThrows(BusinessException.class, () -> countryConfigurationEngineService.upsertCountryConfiguration(
+                "BJ",
+                CountryConfigType.GENERAL,
+                new UpsertCountryConfigRequest(invalidGeneral, OffsetDateTime.now()),
+                UUID.randomUUID()
+        ));
+
+        assertTrue(exception.getMessage().contains("general.subscriptionAllocations"));
     }
 
     @Test
@@ -213,6 +237,7 @@ class CountryConfigurationEngineServiceIntegrationTest {
     @Test
     void fullConfig_shouldReturnAggregatedPayloadsByDomain() {
         saveCountry("TG", "Togo");
+        countryChartOfAccountsService.autoGenerateRequiredAccounts("TG");
 
         ObjectNode accountingPayload = objectMapper.createObjectNode();
         accountingPayload.put("mode", "AUTO_GENERATED");
@@ -281,6 +306,7 @@ class CountryConfigurationEngineServiceIntegrationTest {
         features.put("financingEnabled", true);
         features.put("loanEnabled", true);
         generalPayload.set("features", features);
+        generalPayload.set("percentages", buildSubscriptionAllocationPayload());
 
         ObjectNode accountingPayload = objectMapper.createObjectNode();
         accountingPayload.put("mode", "AUTO_GENERATED");
@@ -361,7 +387,7 @@ class CountryConfigurationEngineServiceIntegrationTest {
     }
 
     @Test
-    void validateCountrySetup_shouldMarkBjAndIntConfiguredWithoutFinancing() {
+    void validateCountrySetup_shouldValidateDraftPayloadWithoutMutatingPersistedReadiness() {
         for (String countryCode : List.of("BJ", "INT")) {
             saveCountry(countryCode, countryCode.equals("BJ") ? "Benin" : "Integration Test");
             countryConfigurationEngineService.initializeCountryConfiguration(countryCode, UUID.randomUUID());
@@ -372,7 +398,7 @@ class CountryConfigurationEngineServiceIntegrationTest {
             var response = countryConfigurationEngineService.validateCountrySetup(
                     countryCode,
                     Map.of(
-                            CountryConfigType.GENERAL, objectMapper.createObjectNode(),
+                            CountryConfigType.GENERAL, buildGeneralPayload(),
                             CountryConfigType.ACCOUNTING, buildAccountingPayload(),
                             CountryConfigType.MEMBERSHIP, buildCompleteMembershipPayload(),
                             CountryConfigType.MLM_LIMITS, buildMlmPayload(),
@@ -383,12 +409,12 @@ class CountryConfigurationEngineServiceIntegrationTest {
 
             assertTrue(response.valid());
             assertTrue(response.errors().isEmpty());
-            assertTrue(countryConfigurationEngineService.getCountryReadiness(countryCode).configured());
+            assertFalse(countryConfigurationEngineService.getCountryReadiness(countryCode).configured());
             assertEquals(
-                    com.ccapp.country.config.dto.CountryConfigReadinessStatus.CONFIGURED,
+                    com.ccapp.country.config.dto.CountryConfigReadinessStatus.NOT_CONFIGURED,
                     countryConfigurationEngineService.getCountryReadiness(countryCode).status()
             );
-            assertTrue(countryRepository.findByCode(countryCode).orElseThrow().isConfigured());
+            assertFalse(countryRepository.findByCode(countryCode).orElseThrow().isConfigured());
         }
     }
 
@@ -476,6 +502,35 @@ class CountryConfigurationEngineServiceIntegrationTest {
                 .add(buildTierCap("GOLD", 20000))
                 .add(buildTierCap("DIAMOND", 30000)));
         return mlmPayload;
+    }
+
+    private ObjectNode buildGeneralPayload() {
+        ObjectNode generalPayload = objectMapper.createObjectNode();
+        generalPayload.put("taxRate", 18);
+        generalPayload.put("marketplaceDefaultCommission", 5);
+        ObjectNode circle = objectMapper.createObjectNode();
+        circle.put("minMembers", 5);
+        circle.put("maxMembers", 50);
+        circle.put("maxAssistedMembers", 10);
+        generalPayload.set("circle", circle);
+        ObjectNode features = objectMapper.createObjectNode();
+        features.put("chatEnabled", true);
+        features.put("marketplaceEnabled", true);
+        features.put("financingEnabled", true);
+        features.put("loanEnabled", true);
+        generalPayload.set("features", features);
+        generalPayload.set("percentages", buildSubscriptionAllocationPayload());
+        return generalPayload;
+    }
+
+    private ObjectNode buildSubscriptionAllocationPayload() {
+        ObjectNode percentages = objectMapper.createObjectNode();
+        percentages.put("commissionPool", 60);
+        percentages.put("guaranteeFund", 15);
+        percentages.put("platformFee", 10);
+        percentages.put("administration", 10);
+        percentages.put("socialFund", 5);
+        return percentages;
     }
 
     private ObjectNode buildGuaranteePayload() {

@@ -7,6 +7,7 @@ import com.ccapp.payments.operation.domain.entity.Operation;
 import com.ccapp.payments.operation.domain.enums.OperationStatus;
 import com.ccapp.payments.operation.domain.enums.OperationType;
 import com.ccapp.payments.operation.service.OperationService;
+import com.ccapp.payments.subscription.domain.entity.Membership;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -44,19 +45,50 @@ public class SubscriptionPaymentFinalizationService {
                 operation.getPlanId(),
                 operation.getCurrency(),
                 operation.getAmount());
-        membershipService.activateForConfirmedOperation(operation);
-        postAccountingSafely(operation);
-        calculateCommissionSafely(operation);
-        mobileOnboardingJourneyService.onPaidPaymentConfirmed(operation);
-        log.info("subscription_finalization_completed operationId={} accountHolderId={} planId={}",
+        Membership membership = membershipService.activateForConfirmedOperation(operation);
+        String paymentMethod = resolvePaymentMethod(operation);
+        log.info("subscription_activated operationId={} accountHolderId={} membershipId={} planId={} planCode={} countryCode={} amount={} currency={} paymentMethod={} expiresAt={}",
                 operation.getId(),
                 operation.getAccountHolderId(),
-                operation.getPlanId());
+                membership.getId(),
+                operation.getPlanId(),
+                membership.getPlanCode(),
+                membership.getCountryCode(),
+                operation.getAmount(),
+                operation.getCurrency(),
+                paymentMethod,
+                membership.getExpiresAt());
+        postAccountingSafely(operation, membership, paymentMethod);
+        calculateCommissionSafely(operation, membership, paymentMethod);
+        mobileOnboardingJourneyService.onPaidPaymentConfirmed(operation);
+        log.info("payment_confirmed_event_applied operationId={} accountHolderId={} planId={} countryCode={} amount={} currency={} paymentMethod={}",
+                operation.getId(),
+                operation.getAccountHolderId(),
+                operation.getPlanId(),
+                membership.getCountryCode(),
+                operation.getAmount(),
+                operation.getCurrency(),
+                paymentMethod);
+        log.info("subscription_finalization_completed operationId={} accountHolderId={} planId={} countryCode={} paymentMethod={}",
+                operation.getId(),
+                operation.getAccountHolderId(),
+                operation.getPlanId(),
+                membership.getCountryCode(),
+                paymentMethod);
     }
 
-    private void postAccountingSafely(Operation operation) {
+    private void postAccountingSafely(Operation operation, Membership membership, String paymentMethod) {
         try {
-            accountingPostingService.postConfirmedOperation(operation.getId());
+            var accountingEvent = accountingPostingService.postConfirmedOperation(operation.getId());
+            log.info("accounting_posting_created operationId={} accountHolderId={} planId={} countryCode={} amount={} currency={} paymentMethod={} accountingEventId={}",
+                    operation.getId(),
+                    operation.getAccountHolderId(),
+                    operation.getPlanId(),
+                    membership.getCountryCode(),
+                    operation.getAmount(),
+                    operation.getCurrency(),
+                    paymentMethod,
+                    accountingEvent.getId());
         } catch (Exception ex) {
             log.error("subscription_accounting_posting_failed operationId={} accountHolderId={} planId={} retryable=true message={}",
                     operation.getId(),
@@ -67,9 +99,18 @@ public class SubscriptionPaymentFinalizationService {
         }
     }
 
-    private void calculateCommissionSafely(Operation operation) {
+    private void calculateCommissionSafely(Operation operation, Membership membership, String paymentMethod) {
         try {
-            mlmCommissionService.calculateForOperation(operation);
+            boolean commissionCreated = mlmCommissionService.calculateForOperation(operation).isPresent();
+            log.info("distribution_applied operationId={} accountHolderId={} planId={} countryCode={} amount={} currency={} paymentMethod={} commissionCreated={}",
+                    operation.getId(),
+                    operation.getAccountHolderId(),
+                    operation.getPlanId(),
+                    membership.getCountryCode(),
+                    operation.getAmount(),
+                    operation.getCurrency(),
+                    paymentMethod,
+                    commissionCreated);
         } catch (Exception ex) {
             log.error("subscription_commission_generation_failed operationId={} accountHolderId={} planId={} retryable=true message={}",
                     operation.getId(),
@@ -78,5 +119,11 @@ public class SubscriptionPaymentFinalizationService {
                     ex.getMessage(),
                     ex);
         }
+    }
+
+    private String resolvePaymentMethod(Operation operation) {
+        return operation.getPspReference() == null || operation.getPspReference().isBlank()
+                ? "WALLET"
+                : "PSP";
     }
 }

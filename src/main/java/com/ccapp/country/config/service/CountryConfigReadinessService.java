@@ -23,6 +23,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.EnumMap;
@@ -36,8 +37,16 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class CountryConfigReadinessService {
 
+    private static final BigDecimal ONE_HUNDRED = new BigDecimal("100");
     private static final Set<Integer> REQUIRED_PAID_DURATIONS = Set.of(1, 3, 12);
     private static final Set<String> REQUIRED_PAID_FORMULAS = Set.of("CLASSIC", "GOLD", "DIAMOND");
+    private static final List<AllocationField> REQUIRED_SUBSCRIPTION_ALLOCATION_FIELDS = List.of(
+            new AllocationField("commissionPool", new String[]{"commissionPool", "commission_pool"}),
+            new AllocationField("guaranteeFund", new String[]{"guaranteeFund", "guarantee_fund"}),
+            new AllocationField("platformFee", new String[]{"platformFee", "platform_fee"}),
+            new AllocationField("administration", new String[]{"administration", "administrationFee"}),
+            new AllocationField("socialFund", new String[]{"socialFund", "social_fund"})
+    );
 
     private final CountryRepository countryRepository;
     private final CountryConfigVersionRepository countryConfigVersionRepository;
@@ -65,6 +74,7 @@ public class CountryConfigReadinessService {
     private CountryConfigReadinessResponse evaluateReadiness(Country country,
                                                              String normalizedCountryCode,
                                                              Map<CountryConfigType, ObjectNode> payloadByType) {
+        ObjectNode generalPayload = resolvedPayload(payloadByType, CountryConfigType.GENERAL);
         ObjectNode accountingPayload = resolvedPayload(payloadByType, CountryConfigType.ACCOUNTING);
         ObjectNode membershipPayload = resolvedPayload(payloadByType, CountryConfigType.MEMBERSHIP);
         ObjectNode mlmLimitsPayload = resolvedPayload(payloadByType, CountryConfigType.MLM_LIMITS);
@@ -73,7 +83,7 @@ public class CountryConfigReadinessService {
 
         // Core country configuration does not depend on financing.
         List<SectionAccumulator> configSections = new ArrayList<>();
-        configSections.add(evaluateGeneralSection(country));
+        configSections.add(evaluateGeneralSection(country, generalPayload));
         configSections.add(evaluateAccountingSection(normalizedCountryCode, accountingPayload));
         configSections.add(evaluateMembershipSection(membershipPayload, mlmLimitsPayload));
         configSections.add(evaluateMlmSection(mlmLimitsPayload));
@@ -126,15 +136,19 @@ public class CountryConfigReadinessService {
         return readiness;
     }
 
-    private SectionAccumulator evaluateGeneralSection(Country country) {
-        SectionAccumulator section = new SectionAccumulator("general", 2);
+    private SectionAccumulator evaluateGeneralSection(Country country, ObjectNode general) {
+        SectionAccumulator section = new SectionAccumulator("general", 3);
         if (country == null) {
             section.miss("general.country_exists");
             section.miss("general.currency");
+            section.miss("general.subscription_allocations");
             return section;
         }
         if (country.getCurrency() == null || country.getCurrency().isBlank() || country.getCurrency().trim().length() != 3) {
             section.miss("general.currency");
+        }
+        if (!hasValidSubscriptionAllocation(general)) {
+            section.miss("general.subscription_allocations");
         }
         return section;
     }
@@ -490,6 +504,46 @@ public class CountryConfigReadinessService {
         return node.decimalValue();
     }
 
+    private boolean hasValidSubscriptionAllocation(ObjectNode generalPayload) {
+        if (generalPayload == null) {
+            return false;
+        }
+
+        JsonNode percentagesNode = generalPayload.has("percentages")
+                ? generalPayload.get("percentages")
+                : generalPayload;
+        if (percentagesNode == null || !percentagesNode.isObject()) {
+            return false;
+        }
+
+        ObjectNode percentages = (ObjectNode) percentagesNode;
+        BigDecimal total = BigDecimal.ZERO;
+        for (AllocationField field : REQUIRED_SUBSCRIPTION_ALLOCATION_FIELDS) {
+            BigDecimal value = readPercentage(percentages, field);
+            if (!isPercentage(value)) {
+                return false;
+            }
+            total = total.add(value);
+        }
+
+        return total.setScale(4, RoundingMode.HALF_UP)
+                .compareTo(ONE_HUNDRED.setScale(4, RoundingMode.HALF_UP)) == 0;
+    }
+
+    private BigDecimal readPercentage(ObjectNode payload, AllocationField field) {
+        for (String alias : field.aliases()) {
+            JsonNode node = payload.get(alias);
+            if (node == null || node.isNull()) {
+                continue;
+            }
+            if (!node.isNumber()) {
+                return null;
+            }
+            return node.decimalValue();
+        }
+        return null;
+    }
+
     private boolean isPercentage(BigDecimal value) {
         return value != null
                 && value.compareTo(BigDecimal.ZERO) >= 0
@@ -550,5 +604,8 @@ public class CountryConfigReadinessService {
         private List<String> missing() {
             return missing;
         }
+    }
+
+    private record AllocationField(String label, String[] aliases) {
     }
 }

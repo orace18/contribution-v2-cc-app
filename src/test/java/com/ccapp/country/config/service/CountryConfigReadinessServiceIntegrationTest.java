@@ -15,8 +15,8 @@ import com.ccapp.country.config.dto.UpsertCountryConfigRequest;
 import com.ccapp.country.config.repository.CountryChartAccountRepository;
 import com.ccapp.country.domain.entity.Country;
 import com.ccapp.country.repository.CountryRepository;
+import com.ccapp.payments.subscription.service.SubscriptionPlanCatalogService;
 import com.ccapp.payments.subscription.service.SubscriptionService;
-import com.ccapp.platform.config.service.PlatformConfigurationService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -44,7 +44,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
         CountryConfigReadinessService.class,
         CountryConfigResolver.class,
         CountryConfigurationEngineService.class,
-        PlatformConfigurationService.class,
         ConfigAuditMetadataService.class,
         TestJacksonAndCachingConfig.class
 })
@@ -60,6 +59,8 @@ class CountryConfigReadinessServiceIntegrationTest {
     private CountryConfigurationEngineService countryConfigurationEngineService;
     @Autowired
     private CountryConfigReadinessService countryConfigReadinessService;
+    @MockBean
+    private SubscriptionPlanCatalogService subscriptionPlanCatalogService;
     @MockBean
     private SubscriptionService subscriptionService;
 
@@ -85,6 +86,12 @@ class CountryConfigReadinessServiceIntegrationTest {
         countryConfigurationEngineService.initializeCountryConfiguration("CI", UUID.randomUUID());
         saveCountryAdmin(country);
 
+        countryConfigurationEngineService.upsertCountryConfiguration(
+                "CI",
+                CountryConfigType.GENERAL,
+                new UpsertCountryConfigRequest(buildGeneralPayload(), OffsetDateTime.now()),
+                UUID.randomUUID()
+        );
         countryConfigurationEngineService.upsertCountryConfiguration(
                 "CI",
                 CountryConfigType.MEMBERSHIP,
@@ -116,6 +123,43 @@ class CountryConfigReadinessServiceIntegrationTest {
         assertEquals(100, readiness.score());
         assertFalse(readiness.missing().contains("financing.seed_capital_offer"));
         assertFalse(readiness.missing().contains("mlm.commission_rates"));
+    }
+
+    @Test
+    void evaluateReadiness_shouldFlagSubscriptionAllocationsWhenGeneralConfigIsMissing() {
+        Country country = saveCountry("BJ", "Benin");
+        countryConfigurationEngineService.initializeCountryConfiguration("BJ", UUID.randomUUID());
+        saveCountryAdmin(country);
+
+        countryConfigurationEngineService.upsertCountryConfiguration(
+                "BJ",
+                CountryConfigType.MEMBERSHIP,
+                new UpsertCountryConfigRequest(buildMembershipPayload(), OffsetDateTime.now()),
+                UUID.randomUUID()
+        );
+        countryConfigurationEngineService.upsertCountryConfiguration(
+                "BJ",
+                CountryConfigType.MLM_LIMITS,
+                new UpsertCountryConfigRequest(buildMlmPayload(), OffsetDateTime.now()),
+                UUID.randomUUID()
+        );
+        countryConfigurationEngineService.upsertCountryConfiguration(
+                "BJ",
+                CountryConfigType.GUARANTEE,
+                new UpsertCountryConfigRequest(buildGuaranteePayload(), OffsetDateTime.now()),
+                UUID.randomUUID()
+        );
+        countryConfigurationEngineService.upsertCountryConfiguration(
+                "BJ",
+                CountryConfigType.ACCOUNTING,
+                new UpsertCountryConfigRequest(buildAccountingPayload(), OffsetDateTime.now()),
+                UUID.randomUUID()
+        );
+
+        CountryConfigReadinessResponse readiness = countryConfigReadinessService.evaluateReadiness("BJ");
+
+        assertFalse(readiness.configured());
+        assertTrue(readiness.missing().contains("general.subscription_allocations"));
     }
 
     private Country saveCountry(String code, String name) {
@@ -264,6 +308,19 @@ class CountryConfigReadinessServiceIntegrationTest {
         requiredSystemTags.add("INTEREST_REVENUE");
         requiredSystemTags.add("PSP_CLEARING");
         payload.set("requiredSystemTags", requiredSystemTags);
+        return payload;
+    }
+
+    private ObjectNode buildGeneralPayload() {
+        ObjectNode payload = objectMapper.createObjectNode();
+        payload.put("taxRate", 18);
+        payload.put("marketplaceDefaultCommission", 5);
+        ObjectNode percentages = payload.putObject("percentages");
+        percentages.put("commissionPool", 60);
+        percentages.put("guaranteeFund", 15);
+        percentages.put("platformFee", 10);
+        percentages.put("administration", 10);
+        percentages.put("socialFund", 5);
         return payload;
     }
 }
