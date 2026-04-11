@@ -21,12 +21,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
+import java.util.Locale;
 import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class AccountHolderService {
+
+    private static final String PROVISIONAL_COUNTRY_CODE = "INT";
 
     private final AccountHolderRepository accountHolderRepository;
     private final CountryService countryService;
@@ -85,10 +88,11 @@ public class AccountHolderService {
         AccountHolder accountHolder = getById(accountHolderId);
         String selectedCountryCode = countryService.resolveSelectedCountryOrThrow(requestedCountryCode).getCode();
         String serviceCountryCode = countryService.resolveServiceCountryForSelection(selectedCountryCode).getCode();
+        String currentCountryCode = normalizeCountryCode(accountHolder.getCountryCode());
 
-        if (accountHolder.getCountryCode() != null && !accountHolder.getCountryCode().equalsIgnoreCase(selectedCountryCode)) {
+        if (isImmutableCountrySelection(currentCountryCode, selectedCountryCode)) {
             log.warn("AccountHolderService selectCountry denied immutable country accountHolderId={} currentCountry={} requestedCountry={}",
-                    accountHolderId, accountHolder.getCountryCode(), selectedCountryCode);
+                    accountHolderId, currentCountryCode, selectedCountryCode);
             throw new BusinessException("Account holder country is immutable");
         }
 
@@ -159,10 +163,11 @@ public class AccountHolderService {
         String selectedCountryCode = countryService.resolveSelectedCountryOrThrow(requestedCountryCode).getCode();
         String serviceCountryCode = countryService.resolveServiceCountryForSelection(selectedCountryCode).getCode();
         String normalizedPhone = phoneNumber == null ? null : phoneNumber.trim();
+        String currentCountryCode = normalizeCountryCode(accountHolder.getCountryCode());
 
-        if (accountHolder.getCountryCode() != null && !accountHolder.getCountryCode().equalsIgnoreCase(selectedCountryCode)) {
+        if (isImmutableCountrySelection(currentCountryCode, selectedCountryCode)) {
             log.warn("Identity account-holder updateProfile denied immutable country accountHolderId={} currentCountry={} requestedCountry={}",
-                    accountHolderId, accountHolder.getCountryCode(), selectedCountryCode);
+                    accountHolderId, currentCountryCode, selectedCountryCode);
             throw new BusinessException("Account holder country is immutable");
         }
         if (normalizedPhone != null
@@ -204,5 +209,19 @@ public class AccountHolderService {
             throw new BusinessException("Phone number is required");
         }
         return normalized;
+    }
+
+    private boolean isImmutableCountrySelection(String currentCountryCode, String selectedCountryCode) {
+        if (currentCountryCode == null || currentCountryCode.equals(selectedCountryCode)) {
+            return false;
+        }
+        return !PROVISIONAL_COUNTRY_CODE.equals(currentCountryCode);
+    }
+
+    private String normalizeCountryCode(String countryCode) {
+        if (countryCode == null || countryCode.isBlank()) {
+            return null;
+        }
+        return countryCode.trim().toUpperCase(Locale.ROOT);
     }
 }
