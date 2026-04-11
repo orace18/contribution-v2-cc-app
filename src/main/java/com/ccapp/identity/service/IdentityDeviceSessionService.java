@@ -63,14 +63,7 @@ public class IdentityDeviceSessionService {
         ClientRequestMetadata metadata = identitySecurityService.currentRequestMetadata();
         log.info("Identity sync start firebaseUid={} platform={} deviceIdentifier={}",
                 claims.uid(), request.platform(), request.deviceIdentifier());
-        User user = userRepository.findByFirebaseUid(claims.uid()).orElseGet(() -> userRepository.save(User.builder()
-                .firebaseUid(claims.uid())
-                .email(claims.email())
-                .role(UserRole.USER)
-                .accountStatus(AccountStatus.ACTIVE)
-                .kycStatus(KycStatus.NOT_STARTED)
-                .build()));
-        syncUserClaims(user, claims);
+        User user = ensureUser(claims.uid(), claims.email());
 
         ensureDelegatedIdentityModel(user);
         user.setKycStatus(kycStatusConsistencyService.reconcileAccountHolderStatus(user.getId()));
@@ -104,6 +97,20 @@ public class IdentityDeviceSessionService {
                 sessionCreation.session().getId(),
                 sessionCreation.rawRefreshToken()
         );
+    }
+
+    @Transactional
+    public User ensureUser(String firebaseUid, String email) {
+        User user = userRepository.findByFirebaseUid(firebaseUid)
+                .orElseGet(() -> userRepository.save(User.builder()
+                        .firebaseUid(firebaseUid)
+                        .email(normalizeOptional(email))
+                        .role(UserRole.USER)
+                        .accountStatus(AccountStatus.ACTIVE)
+                        .kycStatus(KycStatus.NOT_STARTED)
+                        .build()));
+        syncUserClaims(user, new FirebaseUserClaims(firebaseUid, email, null));
+        return user;
     }
 
     @Transactional

@@ -40,6 +40,16 @@ public class IdentityService {
     }
 
     @Transactional
+    public User ensureUser(String firebaseUid) {
+        return identityDeviceSessionService.ensureUser(firebaseUid, null);
+    }
+
+    @Transactional
+    public User ensureUser(String firebaseUid, String email) {
+        return identityDeviceSessionService.ensureUser(firebaseUid, email);
+    }
+
+    @Transactional
     public void selectCountry(UUID userId, String countryCode) {
         identityOnboardingService.selectCountry(userId, countryCode);
     }

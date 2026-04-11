@@ -5,6 +5,7 @@ import com.ccapp.common.security.AuthenticatedPrincipal;
 import com.ccapp.common.security.SecurityUtils;
 import com.ccapp.identity.dto.*;
 import com.ccapp.identity.dto.UpdateNameRequest;
+import com.ccapp.identity.domain.entity.User;
 import com.ccapp.identity.service.FirebaseUserClaims;
 import com.ccapp.identity.service.IdentityService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -84,9 +85,11 @@ public class IdentityController {
             @ApiResponse(responseCode = "404", description = "Utilisateur introuvable", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
     })
     public ResponseEntity<CommonResponse<OnboardingStatusResponse>> onboardingStatus() {
-        UUID userId = SecurityUtils.currentUserId();
-        log.debug("IdentityController onboardingStatus userId={}", userId);
-        return ResponseEntity.ok(CommonResponse.success("Onboarding status", identityService.getOnboardingStatus(userId)));
+        AuthenticatedPrincipal principal = SecurityUtils.currentPrincipal();
+        User user = identityService.ensureUser(principal.firebaseUid(), principal.email());
+        log.debug("IdentityController onboardingStatus principalUserId={} resolvedUserId={} firebaseUid={}",
+                principal.userId(), user.getId(), principal.firebaseUid());
+        return ResponseEntity.ok(CommonResponse.success("Onboarding status", identityService.getOnboardingStatus(user.getId())));
     }
 
     @PatchMapping("/onboarding/step-1")
