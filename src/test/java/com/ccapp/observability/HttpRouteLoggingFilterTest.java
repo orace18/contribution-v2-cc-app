@@ -12,6 +12,7 @@ import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @ExtendWith(OutputCaptureExtension.class)
 class HttpRouteLoggingFilterTest {
@@ -48,8 +49,8 @@ class HttpRouteLoggingFilterTest {
 
         String logs = output.getOut();
         assertThat(logs).contains("route=/psp/jawupay/webhook");
-        assertThat(logs).contains("authorization=present");
-        assertThat(logs).contains("xApiKey=present");
+        assertThat(logs).contains("authorization=Bearer [REDACTED]");
+        assertThat(logs).contains("xApiKey=[REDACTED]");
         assertThat(logs).contains("requestBytes=");
         assertThat(logs).contains("responseBytes=");
         assertThat(logs).doesNotContain("secret-token-12345");
@@ -57,5 +58,31 @@ class HttpRouteLoggingFilterTest {
         assertThat(logs).doesNotContain("22501234567");
         assertThat(logs).doesNotContain("\"provider\":\"JAWUPAY\"");
         assertThat(logs).doesNotContain("\"paymentId\":\"PAY-123\"");
+    }
+
+    @Test
+    void doFilter_redactsSensitiveQueryParamsAndExceptionMessages(CapturedOutput output) {
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/wallet/payments");
+        request.setRemoteAddr("10.1.1.6");
+        request.setQueryString("pin=1234&refreshToken=refresh-secret&country=BJ");
+        request.addHeader("Authorization", "Bearer bearer-secret");
+        request.addHeader("X-API-KEY", "api-key-secret");
+
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        FilterChain chain = (req, res) -> {
+            throw new IllegalArgumentException("Authorization=Bearer bearer-secret pin=1234 refreshToken=refresh-secret");
+        };
+
+        assertThatThrownBy(() -> filter.doFilter(request, response, chain))
+                .isInstanceOf(IllegalArgumentException.class);
+
+        String logs = output.getOut();
+        assertThat(logs).contains("route=/wallet/payments?pin=[REDACTED]&refreshToken=[REDACTED]&country=BJ");
+        assertThat(logs).contains("authorization=Bearer [REDACTED]");
+        assertThat(logs).contains("xApiKey=[REDACTED]");
+        assertThat(logs).contains("error=IllegalArgumentException:Authorization=Bearer [REDACTED] pin=[REDACTED] refreshToken=[REDACTED]");
+        assertThat(logs).doesNotContain("bearer-secret");
+        assertThat(logs).doesNotContain("refresh-secret");
+        assertThat(logs).doesNotContain("pin=1234");
     }
 }

@@ -1,5 +1,6 @@
 package com.ccapp.wallet.dto;
 
+import com.ccapp.common.security.SensitiveDataRedactor;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -26,4 +27,15 @@ public record WalletWithdrawRequest(
         @Pattern(regexp = "\\d{4,8}", message = "OTP code must be 4 to 8 digits")
         String otpCode
 ) {
+    @Override
+    public String toString() {
+        return "WalletWithdrawRequest[" +
+                "amount=" + amount +
+                ", currency=" + currency +
+                ", idempotencyKey=" + idempotencyKey +
+                ", pin=" + SensitiveDataRedactor.REDACTED +
+                ", otpChallengeId=" + otpChallengeId +
+                ", otpCode=" + SensitiveDataRedactor.REDACTED +
+                "]";
+    }
 }

@@ -1,5 +1,6 @@
 package com.ccapp.cpass.otp;
 
+import com.ccapp.common.security.SensitiveDataRedactor;
 import com.ccapp.cpass.client.CPassAuthClient;
 import com.ccapp.cpass.client.CPassException;
 import com.ccapp.identity.verification.domain.enums.PhoneVerificationChannel;
@@ -53,12 +54,12 @@ public class CPassOtpGateway {
             return response;
         } catch (RestClientResponseException ex) {
             log.error("cpass: otp send failed channel={} status={} body={}",
-                    effectiveChannel, ex.getStatusCode().value(), ex.getResponseBodyAsString());
+                    effectiveChannel, ex.getStatusCode().value(), SensitiveDataRedactor.redactMessage(ex.getResponseBodyAsString()));
             throw new CPassException("CPASS_OTP_SEND_FAILED");
         } catch (CPassException ex) {
             throw ex;
         } catch (RuntimeException ex) {
-            log.error("cpass: otp send error channel={} reason={}", effectiveChannel, ex.getMessage());
+            log.error("cpass: otp send error channel={} reason={}", effectiveChannel, SensitiveDataRedactor.redactMessage(ex.getMessage()));
             throw new CPassException("CPASS_OTP_SEND_FAILED");
         }
     }
@@ -87,12 +88,12 @@ public class CPassOtpGateway {
             return response;
         } catch (RestClientResponseException ex) {
             log.error("cpass: otp verify failed status={} body={}",
-                    ex.getStatusCode().value(), ex.getResponseBodyAsString());
+                    ex.getStatusCode().value(), SensitiveDataRedactor.redactMessage(ex.getResponseBodyAsString()));
             throw new CPassException("CPASS_OTP_VERIFY_FAILED");
         } catch (CPassException ex) {
             throw ex;
         } catch (RuntimeException ex) {
-            log.error("cpass: otp verify error reason={}", ex.getMessage());
+            log.error("cpass: otp verify error reason={}", SensitiveDataRedactor.redactMessage(ex.getMessage()));
             throw new CPassException("CPASS_OTP_VERIFY_FAILED");
         }
     }

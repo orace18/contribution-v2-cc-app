@@ -1,6 +1,7 @@
 package com.ccapp.common.exception;
 
 import com.ccapp.common.api.CommonResponse;
+import com.ccapp.common.security.SensitiveDataRedactor;
 import com.ccapp.prayer.exception.PrayerPhase1NotImplementedException;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.http.HttpStatus;
@@ -20,32 +21,32 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(NotFoundException.class)
     public ResponseEntity<CommonResponse<Void>> handleNotFound(NotFoundException ex) {
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(CommonResponse.error(ex.getMessage()));
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(CommonResponse.error(sanitize(ex.getMessage())));
     }
 
     @ExceptionHandler(UnauthorizedException.class)
     public ResponseEntity<CommonResponse<Void>> handleUnauthorized(UnauthorizedException ex) {
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(CommonResponse.error(ex.getMessage()));
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(CommonResponse.error(sanitize(ex.getMessage())));
     }
 
     @ExceptionHandler(TooManyRequestsException.class)
     public ResponseEntity<CommonResponse<Void>> handleTooManyRequests(TooManyRequestsException ex) {
-        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(CommonResponse.error(ex.getMessage()));
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(CommonResponse.error(sanitize(ex.getMessage())));
     }
 
     @ExceptionHandler(ConflictException.class)
     public ResponseEntity<CommonResponse<Void>> handleConflict(ConflictException ex) {
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(CommonResponse.error(ex.getMessage()));
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(CommonResponse.error(sanitize(ex.getMessage())));
     }
 
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<CommonResponse<Void>> handleBusiness(BusinessException ex) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(CommonResponse.error(ex.getMessage()));
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(CommonResponse.error(sanitize(ex.getMessage())));
     }
 
     @ExceptionHandler(PrayerPhase1NotImplementedException.class)
     public ResponseEntity<CommonResponse<Void>> handlePrayerPhase1NotImplemented(PrayerPhase1NotImplementedException ex) {
-        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).body(CommonResponse.error(ex.getMessage()));
+        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).body(CommonResponse.error(sanitize(ex.getMessage())));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -53,12 +54,12 @@ public class GlobalExceptionHandler {
         String message = ex.getBindingResult().getFieldErrors().stream()
                 .map(FieldError::getDefaultMessage)
                 .collect(Collectors.joining(", "));
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(CommonResponse.error(message));
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(CommonResponse.error(sanitize(message)));
     }
 
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<CommonResponse<Void>> handleConstraint(ConstraintViolationException ex) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(CommonResponse.error(ex.getMessage()));
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(CommonResponse.error(sanitize(ex.getMessage())));
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
@@ -71,7 +72,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<CommonResponse<Void>> handleAccessDenied(AccessDeniedException ex) {
         String message = (ex.getMessage() == null || ex.getMessage().isBlank())
                 ? "Access denied"
-                : ex.getMessage();
+                : sanitize(ex.getMessage());
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(CommonResponse.error(message));
     }
 
@@ -84,5 +85,9 @@ public class GlobalExceptionHandler {
     public ResponseEntity<CommonResponse<Void>> handleUnexpected(Exception ex) {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(CommonResponse.error("Internal server error"));
+    }
+
+    private String sanitize(String value) {
+        return SensitiveDataRedactor.redactMessage(value);
     }
 }

@@ -1,7 +1,9 @@
 package com.ccapp.wallet.service;
 
 import com.ccapp.common.events.DomainEventPublisher;
+import com.ccapp.country.config.domain.entity.CountryChartAccount;
 import com.ccapp.country.config.service.CountryChartOfAccountsService;
+import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
 import com.ccapp.identity.account_holder.repository.AccountHolderRepository;
 import com.ccapp.identity.wallet.domain.entity.Wallet;
 import com.ccapp.identity.wallet.repository.WalletRepository;
@@ -40,6 +42,8 @@ class WalletPaymentServiceTest {
     @Mock
     private WalletLimitService walletLimitService;
     @Mock
+    private WalletDebitFacade walletDebitFacade;
+    @Mock
     private OperationService operationService;
     @Mock
     private AccountingPostingService accountingPostingService;
@@ -59,6 +63,8 @@ class WalletPaymentServiceTest {
     void payShouldReturnOtpRequiredWithoutPostingLedger() {
         UUID senderId = UUID.randomUUID();
         UUID destinationId = UUID.randomUUID();
+        UUID actorUserId = UUID.randomUUID();
+        UUID otpChallengeId = UUID.randomUUID();
 
         Wallet senderWallet = Wallet.builder()
                 .id(UUID.randomUUID())
@@ -76,15 +82,12 @@ class WalletPaymentServiceTest {
                 .provider("MTN")
                 .pinFailedAttempts(0)
                 .build();
-        Operation operation = Operation.builder()
-                .id(UUID.randomUUID())
-                .accountHolderId(senderId)
-                .actorUserId(UUID.randomUUID())
-                .type(OperationType.WALLET_PAYMENT)
-                .status(OperationStatus.INITIATED)
-                .amount(new BigDecimal("15000"))
-                .currency("XOF")
-                .idempotencyKey("idem-1")
+        AccountHolder destinationHolder = AccountHolder.builder()
+                .id(destinationId)
+                .countryCode("BJ")
+                .build();
+        CountryChartAccount destinationWalletAccount = CountryChartAccount.builder()
+                .accountCode("471100")
                 .build();
 
         WalletPayRequest request = new WalletPayRequest(
@@ -100,36 +103,21 @@ class WalletPaymentServiceTest {
 
         when(walletGuardService.requireActiveWallet(senderId)).thenReturn(senderWallet);
         when(walletRepository.findByMobileMoneyNumber("22962000000")).thenReturn(Optional.of(destinationWallet));
-        when(operationService.createInitiatedOperation(
-                senderId,
-                operation.getActorUserId(),
-                OperationType.WALLET_PAYMENT,
-                new BigDecimal("15000"),
-                "XOF",
-                "idem-1",
-                "payment"
-        )).thenReturn(operation);
-        when(walletSecurityService.authorizeDebit(
-                senderWallet,
-                senderId,
-                operation,
-                "1234",
-                null,
-                null,
-                "wallet-payment|15000|XOF|22962000000"
-        )).thenReturn(new WalletSecurityService.WalletAuthorizationResult(
-                false,
-                true,
-                UUID.randomUUID(),
-                OffsetDateTime.now().plusMinutes(2)
-        ));
+        when(accountHolderRepository.findById(destinationId)).thenReturn(Optional.of(destinationHolder));
+        when(countryChartOfAccountsService.findOrCreateWallet(destinationHolder)).thenReturn(destinationWalletAccount);
+        when(walletDebitFacade.executeSecureDebit(any())).thenReturn(
+                WalletDebitFacade.WalletDebitExecutionResult.challengeRequired(
+                        UUID.randomUUID(),
+                        otpChallengeId,
+                        OffsetDateTime.now().plusMinutes(2)
+                )
+        );
 
-        WalletPayResponse response = walletPaymentService.pay(senderId, operation.getActorUserId(), request);
+        WalletPayResponse response = walletPaymentService.pay(senderId, actorUserId, request);
 
         assertTrue(response.otpRequired());
         assertEquals("OTP_REQUIRED", response.status());
-        verify(operationService, never()).confirmOperation(any());
-        verify(accountingPostingService, never()).postWalletPayment(any(), any(), any());
-        verify(eventPublisher, never()).publish(any());
+        assertEquals(otpChallengeId, response.otpChallengeId());
+        verify(walletDebitFacade).executeSecureDebit(any());
     }
 }

@@ -2,6 +2,7 @@ package com.ccapp.wallet.service;
 
 import com.ccapp.common.events.DomainEventPublisher;
 import com.ccapp.common.exception.BusinessException;
+import com.ccapp.common.security.SensitiveDataRedactor;
 import com.ccapp.country.config.service.CountryChartOfAccountsService;
 import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
 import com.ccapp.identity.account_holder.repository.AccountHolderRepository;
@@ -244,6 +245,37 @@ public class WalletDebitFacade {
                 throw new BusinessException("Secure debit country is required");
             }
             return countryCode.trim();
+        }
+
+        @Override
+        public String toString() {
+            return "SecureDebitRequest[" +
+                    "operationAccountHolderId=" + operationAccountHolderId +
+                    ", sourceAccountHolderId=" + sourceAccountHolderId +
+                    ", actorUserId=" + actorUserId +
+                    ", sourceWallet=" + sourceWallet +
+                    ", operationType=" + operationType +
+                    ", amount=" + amount +
+                    ", currency=" + currency +
+                    ", idempotencyKey=" + idempotencyKey +
+                    ", description=" + description +
+                    ", fingerprint=" + SensitiveDataRedactor.REDACTED +
+                    ", destinationAccountCode=" + destinationAccountCode +
+                    ", destinationAccountHolderId=" + destinationAccountHolderId +
+                    ", destinationWalletId=" + destinationWalletId +
+                    ", destinationPhone=" + destinationPhone +
+                    ", pin=" + SensitiveDataRedactor.REDACTED +
+                    ", otpChallengeId=" + otpChallengeId +
+                    ", otpCode=" + SensitiveDataRedactor.REDACTED +
+                    ", systemAuthorized=" + systemAuthorized +
+                    ", autoDebitAuthorized=" + autoDebitAuthorized +
+                    ", debitDescription=" + debitDescription +
+                    ", creditDescription=" + creditDescription +
+                    ", creditedWalletId=" + creditedWalletId +
+                    ", creditedAccountHolderId=" + creditedAccountHolderId +
+                    ", postingMode=" + postingMode +
+                    ", countryCode=" + countryCode +
+                    "]";
         }
     }
 

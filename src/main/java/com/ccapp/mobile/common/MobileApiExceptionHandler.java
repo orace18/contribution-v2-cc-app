@@ -1,6 +1,7 @@
 package com.ccapp.mobile.common;
 
 import com.ccapp.common.api.ApiEnvelope;
+import com.ccapp.common.security.SensitiveDataRedactor;
 import com.ccapp.common.exception.BusinessException;
 import com.ccapp.common.exception.ConflictException;
 import com.ccapp.common.exception.NotFoundException;
@@ -26,22 +27,22 @@ public class MobileApiExceptionHandler {
 
     @ExceptionHandler(NotFoundException.class)
     public ResponseEntity<ApiEnvelope<Void>> handleNotFound(NotFoundException ex) {
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiEnvelope.error(ex.getMessage()));
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiEnvelope.error(sanitize(ex.getMessage())));
     }
 
     @ExceptionHandler(UnauthorizedException.class)
     public ResponseEntity<ApiEnvelope<Void>> handleUnauthorized(UnauthorizedException ex) {
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiEnvelope.error(ex.getMessage()));
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiEnvelope.error(sanitize(ex.getMessage())));
     }
 
     @ExceptionHandler(ConflictException.class)
     public ResponseEntity<ApiEnvelope<Void>> handleConflict(ConflictException ex) {
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiEnvelope.error(ex.getMessage()));
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiEnvelope.error(sanitize(ex.getMessage())));
     }
 
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ApiEnvelope<Void>> handleBusiness(BusinessException ex) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiEnvelope.error(ex.getMessage()));
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiEnvelope.error(sanitize(ex.getMessage())));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -49,12 +50,12 @@ public class MobileApiExceptionHandler {
         String message = ex.getBindingResult().getFieldErrors().stream()
                 .map(FieldError::getDefaultMessage)
                 .collect(Collectors.joining(", "));
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiEnvelope.error(message));
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiEnvelope.error(sanitize(message)));
     }
 
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<ApiEnvelope<Void>> handleConstraint(ConstraintViolationException ex) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiEnvelope.error(ex.getMessage()));
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiEnvelope.error(sanitize(ex.getMessage())));
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
@@ -78,5 +79,9 @@ public class MobileApiExceptionHandler {
     public ResponseEntity<ApiEnvelope<Void>> handleUnexpected(Exception ex) {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ApiEnvelope.error("Internal server error"));
+    }
+
+    private String sanitize(String value) {
+        return SensitiveDataRedactor.redactMessage(value);
     }
 }

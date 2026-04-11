@@ -1,5 +1,6 @@
 package com.ccapp.observability;
 
+import com.ccapp.common.security.SensitiveDataRedactor;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -28,9 +29,6 @@ public class HttpRouteLoggingFilter extends OncePerRequestFilter {
 
     @Value("${observability.http.trace.max-payload-length:4000}")
     private int maxPayloadLength;
-
-    @Value("${observability.http.trace.log-authorization-token:false}")
-    private boolean logAuthorizationToken;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -76,11 +74,9 @@ public class HttpRouteLoggingFilter extends OncePerRequestFilter {
                              Exception chainError) {
         long durationMs = System.currentTimeMillis() - startedAt;
         String route = formatRoute(request);
-        String authorization = logAuthorizationToken
-                ? safeValue(request.getHeader("Authorization"))
-                : formatCredentialPresence(request.getHeader("Authorization"));
-        String apiKey = formatCredentialPresence(request.getHeader("X-API-KEY"));
-        String error = chainError == null ? NO_VALUE : chainError.getClass().getSimpleName() + ":" + chainError.getMessage();
+        String authorization = SensitiveDataRedactor.redactAuthorizationHeader(request.getHeader("Authorization"));
+        String apiKey = SensitiveDataRedactor.redactSecretValue(request.getHeader("X-API-KEY"));
+        String error = chainError == null ? NO_VALUE : SensitiveDataRedactor.redactThrowable(chainError);
         int status = response.getStatus();
         if (chainError != null && status < 400) {
             status = HttpServletResponse.SC_INTERNAL_SERVER_ERROR;
@@ -104,15 +100,7 @@ public class HttpRouteLoggingFilter extends OncePerRequestFilter {
     }
 
     private String formatRoute(HttpServletRequest request) {
-        String queryString = request.getQueryString();
-        if (!StringUtils.hasText(queryString)) {
-            return request.getRequestURI();
-        }
-        return request.getRequestURI() + "?" + queryString;
-    }
-
-    private String formatCredentialPresence(String value) {
-        return StringUtils.hasText(value) ? "present" : NO_VALUE;
+        return SensitiveDataRedactor.redactRoute(request.getRequestURI(), request.getQueryString());
     }
 
     private String safeValue(String value) {

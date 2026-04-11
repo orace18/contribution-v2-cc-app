@@ -1,5 +1,6 @@
 package com.ccapp.mobile.payments.dto;
 
+import com.ccapp.common.security.SensitiveDataRedactor;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
@@ -32,4 +33,17 @@ public record MobilePaymentInitiateRequest(
         @Pattern(regexp = "\\d{4,8}", message = "PIN must be 4 to 8 digits")
         String pin
 ) {
+    @Override
+    public String toString() {
+        return "MobilePaymentInitiateRequest[" +
+                "idempotencyKey=" + idempotencyKey +
+                ", country=" + country +
+                ", paymentMethodId=" + paymentMethodId +
+                ", msisdn=" + msisdn +
+                ", operatorHint=" + operatorHint +
+                ", paymentType=" + paymentType +
+                ", planId=" + planId +
+                ", pin=" + SensitiveDataRedactor.REDACTED +
+                "]";
+    }
 }

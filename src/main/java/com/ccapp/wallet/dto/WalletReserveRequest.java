@@ -1,5 +1,6 @@
 package com.ccapp.wallet.dto;
 
+import com.ccapp.common.security.SensitiveDataRedactor;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -24,4 +25,14 @@ public record WalletReserveRequest(
         @Pattern(regexp = "\\d{4,8}", message = "PIN must be 4 to 8 digits")
         String pin
 ) {
+    @Override
+    public String toString() {
+        return "WalletReserveRequest[" +
+                "amount=" + amount +
+                ", currency=" + currency +
+                ", reason=" + reason +
+                ", expiryDate=" + expiryDate +
+                ", pin=" + SensitiveDataRedactor.REDACTED +
+                "]";
+    }
 }
