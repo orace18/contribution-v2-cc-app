@@ -8,7 +8,6 @@ import com.ccapp.country.config.domain.enums.CountryAccountSystemTag;
 import com.ccapp.country.config.domain.enums.CountryConfigType;
 import com.ccapp.country.config.dto.ActivateCountryConfigVersionRequest;
 import com.ccapp.country.config.dto.CountryConfigReadinessResponse;
-import com.ccapp.country.config.dto.UpsertCountryConfigRequest;
 import com.ccapp.country.config.repository.CountryAccountSystemMappingRepository;
 import com.ccapp.country.config.repository.CountryConfigVersionRepository;
 import com.ccapp.country.domain.entity.Country;
@@ -114,7 +113,7 @@ class BjActiveSubscriptionPostingSafetyRepairIntegrationTest {
         countryConfigurationEngineService.initializeCountryConfiguration("BJ", UUID.randomUUID());
         seedConfiguredBjSupportingSections();
         seedPlatformGeneralDefaults();
-        saveInvalidActiveBjGeneralVersion(2, OffsetDateTime.now().minusMinutes(1));
+        saveInvalidActiveBjGeneralVersion(2, currentActiveEffectiveDate(CountryConfigType.GENERAL));
         countryAccountSystemMappingRepository.findByCountryCodeAndSystemTag("BJ", CountryAccountSystemTag.MLM_POOL)
                 .ifPresent(countryAccountSystemMappingRepository::delete);
 
@@ -150,7 +149,7 @@ class BjActiveSubscriptionPostingSafetyRepairIntegrationTest {
         assertNotNull(countryChartOfAccountsService.resolveSystemAccountCode("BJ", CountryAccountSystemTag.PLATFORM_REVENUE));
 
         CountryConfigReadinessResponse readiness = countryConfigurationEngineService.getCountryReadiness("BJ");
-        assertTrue(readiness.configured());
+        assertTrue(readiness.configured(), readiness.missing().toString());
         assertFalse(readiness.missing().contains("general.subscription_allocations"));
         assertFalse(readiness.missing().contains("accounting.system_accounts"));
 
@@ -189,7 +188,7 @@ class BjActiveSubscriptionPostingSafetyRepairIntegrationTest {
         countryConfigurationEngineService.initializeCountryConfiguration("BJ", UUID.randomUUID());
         seedConfiguredBjSupportingSections();
         seedPlatformGeneralDefaults();
-        saveInvalidActiveBjGeneralVersion(2, OffsetDateTime.now().minusMinutes(1));
+        saveInvalidActiveBjGeneralVersion(2, currentActiveEffectiveDate(CountryConfigType.GENERAL));
         countryAccountSystemMappingRepository.findByCountryCodeAndSystemTag("BJ", CountryAccountSystemTag.MLM_POOL)
                 .ifPresent(countryAccountSystemMappingRepository::delete);
 
@@ -232,43 +231,23 @@ class BjActiveSubscriptionPostingSafetyRepairIntegrationTest {
     }
 
     private void saveCountry(String code, String name) {
-        countryRepository.saveAndFlush(Country.builder()
+        Country country = countryRepository.findByCode(code).orElseGet(() -> Country.builder()
                 .id(UUID.randomUUID())
                 .code(code)
-                .name(name)
-                .currency("XOF")
-                .active(true)
-                .configured(false)
-                .fallback(false)
                 .build());
+        country.setName(name);
+        country.setCurrency("XOF");
+        country.setActive(true);
+        country.setConfigured(false);
+        country.setFallback(false);
+        countryRepository.saveAndFlush(country);
     }
 
     private void seedConfiguredBjSupportingSections() {
-        UUID actorId = UUID.randomUUID();
-        countryConfigurationEngineService.upsertCountryConfiguration(
-                "BJ",
-                CountryConfigType.ACCOUNTING,
-                new UpsertCountryConfigRequest(buildAccountingPayload(), OffsetDateTime.now().minusMinutes(5)),
-                actorId
-        );
-        countryConfigurationEngineService.upsertCountryConfiguration(
-                "BJ",
-                CountryConfigType.MEMBERSHIP,
-                new UpsertCountryConfigRequest(buildMembershipPayload(), OffsetDateTime.now().minusMinutes(4)),
-                actorId
-        );
-        countryConfigurationEngineService.upsertCountryConfiguration(
-                "BJ",
-                CountryConfigType.MLM_LIMITS,
-                new UpsertCountryConfigRequest(buildMlmPayload(), OffsetDateTime.now().minusMinutes(3)),
-                actorId
-        );
-        countryConfigurationEngineService.upsertCountryConfiguration(
-                "BJ",
-                CountryConfigType.GUARANTEE,
-                new UpsertCountryConfigRequest(buildGuaranteePayload(), OffsetDateTime.now().minusMinutes(2)),
-                actorId
-        );
+        saveActiveCountryConfigVersion(CountryConfigType.ACCOUNTING, buildAccountingPayload());
+        saveActiveCountryConfigVersion(CountryConfigType.MEMBERSHIP, buildMembershipPayload());
+        saveActiveCountryConfigVersion(CountryConfigType.MLM_LIMITS, buildMlmPayload());
+        saveActiveCountryConfigVersion(CountryConfigType.GUARANTEE, buildGuaranteePayload());
     }
 
     private void seedPlatformGeneralDefaults() {
@@ -298,6 +277,31 @@ class BjActiveSubscriptionPostingSafetyRepairIntegrationTest {
                 .effectiveDate(effectiveDate)
                 .payload(payload.toString())
                 .build());
+    }
+
+    private void saveActiveCountryConfigVersion(CountryConfigType configType, ObjectNode payload) {
+        int nextVersion = countryConfigVersionRepository
+                .findFirstByCountryCodeAndConfigTypeOrderByVersionDesc("BJ", configType)
+                .map(existing -> existing.getVersion() + 1)
+                .orElse(1);
+        countryConfigVersionRepository.saveAndFlush(CountryConfigVersion.builder()
+                .countryCode("BJ")
+                .configType(configType)
+                .version(nextVersion)
+                .effectiveDate(currentActiveEffectiveDate(configType))
+                .payload(payload.toString())
+                .build());
+    }
+
+    private OffsetDateTime currentActiveEffectiveDate(CountryConfigType configType) {
+        return countryConfigVersionRepository
+                .findFirstByCountryCodeAndConfigTypeAndEffectiveDateLessThanEqualOrderByEffectiveDateDescVersionDesc(
+                        "BJ",
+                        configType,
+                        OffsetDateTime.now()
+                )
+                .map(CountryConfigVersion::getEffectiveDate)
+                .orElseGet(OffsetDateTime::now);
     }
 
     private ObjectNode buildAccountingPayload() {
