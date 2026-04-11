@@ -153,6 +153,8 @@ public class WalletDebitFacade {
                     request.creditDescription()
             );
             case OPERATION_POSTING -> accountingPostingService.postConfirmedOperation(operation.getId());
+            case CONFIRM_ONLY -> {
+            }
             case MARKETPLACE_PAYMENT -> accountingPostingService.postMarketplaceWalletPayment(
                     operation,
                     request.sourceAccountHolderId(),
@@ -275,6 +277,7 @@ public class WalletDebitFacade {
     public enum SecureDebitPostingMode {
         STANDARD,
         OPERATION_POSTING,
+        CONFIRM_ONLY,
         MARKETPLACE_PAYMENT,
         NONE
     }

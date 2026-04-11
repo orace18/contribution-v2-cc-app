@@ -155,7 +155,7 @@ public class MobilePaymentService {
                             "Subscription revenue recognition",
                             null,
                             null,
-                            WalletDebitFacade.SecureDebitPostingMode.OPERATION_POSTING,
+                            WalletDebitFacade.SecureDebitPostingMode.CONFIRM_ONLY,
                             context.countryCode()
                     )
             );

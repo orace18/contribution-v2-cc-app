@@ -31,3 +31,52 @@
   - Update public/internal contract docs so subscription renewals point to `POST /api/mobile/payments/initiate`.
   - Refresh Postman examples and any QA scripts that still exercise `/subscriptions/initiate`.
   - Remove the legacy endpoint entirely once telemetry confirms no remaining non-documentation consumers.
+
+## 2026-04-11 - Wallet security policy must be configurable by country and operation type
+
+- Domain:
+  - `wallet / payments / security / country configuration`
+- Description:
+  - La politique de securite wallet ne doit pas reposer sur une regle globale unique de type `otpThreshold = X`.
+  - Le systeme doit distinguer au minimum :
+    - les paiements internes
+    - les payouts / cashout / retraits
+  - Et appliquer des regles variables selon :
+    - le pays
+    - le type d operation
+    - le canal de paiement
+  - Exemples d operations a distinguer :
+    - `SUBSCRIPTION_PAYMENT`
+    - `INTERNAL_PAYMENT`
+    - `CIRCLE_CONTRIBUTION`
+    - `SHOP_PAYMENT`
+    - `WITHDRAWAL`
+    - `PAYOUT`
+    - `CASHOUT`
+  - Exemples de parametres a rendre configurables :
+    - `enabled`
+    - `pinRequired`
+    - `otpRequiredAbove`
+    - `kycLevelRequired`
+    - `minAmount`
+    - `maxAmount`
+    - `dailyLimit`
+    - `monthlyLimit`
+    - `allowedChannels`
+- Impact:
+  - `high`
+- Why not fixed now:
+  - Le focus actuel est la stabilisation QA et la mise en production du wallet, des abonnements et des flux de paiement existants.
+  - La structuration complete d une policy wallet configurable par pays et type d operation depasse le perimetre de correction immediate.
+- Suggested fix:
+  - Introduire un modele de politique explicite, par exemple `WalletOperationPolicy`, pilote par :
+    - `countryCode`
+    - `operationType`
+    - `channel`
+  - Puis faire appliquer cette policy par le moteur de securite wallet avant execution.
+  - Priorite de mise en oeuvre recommandee :
+    - `SUBSCRIPTION_PAYMENT`
+    - `WITHDRAWAL`
+    - autres paiements internes
+- Discovered in session:
+  - `Wallet / subscription payment hardening and production-readiness review`

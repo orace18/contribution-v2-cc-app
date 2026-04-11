@@ -201,7 +201,7 @@ class SubscriptionServiceTest {
         WalletDebitFacade.SecureDebitRequest debitRequest = captor.getValue();
         assertEquals(OperationType.SUBSCRIPTION, debitRequest.operationType());
         assertEquals("12345", debitRequest.pin());
-        assertEquals(WalletDebitFacade.SecureDebitPostingMode.OPERATION_POSTING, debitRequest.postingMode());
+        assertEquals(WalletDebitFacade.SecureDebitPostingMode.CONFIRM_ONLY, debitRequest.postingMode());
         assertEquals("BJ", debitRequest.requiredCountryCode());
 
         verify(membershipService).createPendingMembership(OPERATION_ID, ACCOUNT_HOLDER_ID, plan);
