@@ -44,7 +44,8 @@ public class SubscriptionController {
     }
 
     @PostMapping("/subscriptions/initiate")
-    @Operation(summary = "Initier un abonnement")
+    @Deprecated(forRemoval = false)
+    @Operation(summary = "Legacy wallet subscription initiation endpoint (deprecated; use /api/mobile/payments/initiate)")
     @SecurityRequirement(name = "bearerAuth")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Succes", content = @Content(schema = @Schema(implementation = CommonResponse.class))),

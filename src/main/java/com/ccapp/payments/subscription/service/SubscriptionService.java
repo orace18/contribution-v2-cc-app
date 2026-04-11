@@ -9,10 +9,6 @@ import com.ccapp.country.repository.CountryRepository;
 import com.ccapp.country.service.CountryContextService;
 import com.ccapp.identity.delegation.domain.enums.PermissionLevel;
 import com.ccapp.identity.delegation.service.AccessControlService;
-import com.ccapp.payments.commission.service.MlmCommissionService;
-import com.ccapp.payments.operation.domain.entity.Operation;
-import com.ccapp.payments.operation.domain.enums.OperationType;
-import com.ccapp.payments.operation.service.OperationService;
 import com.ccapp.payments.subscription.domain.entity.SubscriptionPlan;
 import com.ccapp.payments.subscription.domain.enums.SubscriptionGrade;
 import com.ccapp.payments.subscription.dto.InitiateSubscriptionRequest;
@@ -20,7 +16,6 @@ import com.ccapp.payments.subscription.dto.InitiateSubscriptionResponse;
 import com.ccapp.payments.subscription.dto.SubscriptionPlanResponse;
 import com.ccapp.payments.subscription.mapper.SubscriptionPlanMapper;
 import com.ccapp.payments.subscription.repository.SubscriptionPlanRepository;
-import com.ccapp.wallet.service.WalletDebitFacade;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,17 +33,15 @@ public class SubscriptionService {
 
     private static final String FALLBACK_COUNTRY_CODE = "INT";
     private static final Set<Integer> REQUIRED_PAID_DURATIONS = Set.of(1, 3, 12);
+    static final String LEGACY_INITIATE_BLOCK_MESSAGE =
+            "Use /api/mobile/payments/initiate for subscription payments";
 
     private final SubscriptionPlanRepository subscriptionPlanRepository;
     private final SubscriptionPlanMapper subscriptionPlanMapper;
     private final CountryContextService countryContextService;
     private final CountryRepository countryRepository;
     private final AccessControlService accessControlService;
-    private final OperationService operationService;
-    private final MembershipService membershipService;
-    private final WalletDebitFacade walletDebitFacade;
     private final CountryChartOfAccountsService countryChartOfAccountsService;
-    private final MlmCommissionService mlmCommissionService;
 
     @Transactional(readOnly = true)
     public List<SubscriptionPlanResponse> getPlans(UUID accountHolderId) {
@@ -117,10 +110,11 @@ public class SubscriptionService {
                 .orElse(FALLBACK_COUNTRY_CODE);
     }
 
-    @Transactional
-    public InitiateSubscriptionResponse initiate(UUID accountHolderId,
-                                                 UUID actorUserId,
-                                                 InitiateSubscriptionRequest request) {
+    @Transactional(readOnly = true)
+    public SubscriptionPurchaseContext preparePurchaseContext(UUID accountHolderId,
+                                                              UUID actorUserId,
+                                                              UUID planId,
+                                                              String requestedIdempotencyKey) {
         if (actorUserId == null) {
             throw new BusinessException("Actor user is required");
         }
@@ -128,77 +122,45 @@ public class SubscriptionService {
 
         String serviceCountryCode = countryContextService.resolve(accountHolderId).serviceCountryCode();
         String expectedCatalogCountryCode = resolveCatalogCountryCode(serviceCountryCode);
-        SubscriptionPlan plan = subscriptionPlanRepository.findByIdAndActiveTrue(request.planId())
+        SubscriptionPlan plan = subscriptionPlanRepository.findByIdAndActiveTrue(planId)
                 .orElseThrow(() -> new NotFoundException("Subscription plan not found"));
         if (!plan.getCountry().equalsIgnoreCase(expectedCatalogCountryCode)) {
             throw new BusinessException("Selected plan is not available for the requested country catalog");
         }
 
-        String idempotencyKey = request.idempotencyKey() == null || request.idempotencyKey().isBlank()
+        String idempotencyKey = requestedIdempotencyKey == null || requestedIdempotencyKey.isBlank()
                 ? "sub:" + UUID.randomUUID()
-                : request.idempotencyKey();
+                : requestedIdempotencyKey;
         String destinationAccountCode = countryChartOfAccountsService.findOrCreate(
                 expectedCatalogCountryCode,
                 CountryAccountGroup.MEMBERSHIP_FEES,
                 "750001 Cotisations des membres"
         ).getAccountCode();
 
-        WalletDebitFacade.WalletDebitExecutionResult result = walletDebitFacade.executeSecureDebit(
-                new WalletDebitFacade.SecureDebitRequest(
-                        accountHolderId,
-                        accountHolderId,
-                        actorUserId,
-                        null,
-                        OperationType.SUBSCRIPTION,
-                        plan.getPrice(),
-                        plan.getCurrency(),
-                        idempotencyKey,
-                        "Subscription " + plan.getCode(),
-                        buildOtpFingerprint(plan),
-                        destinationAccountCode,
-                        null,
-                        null,
-                        null,
-                        request.pin(),
-                        request.otpChallengeId(),
-                        request.otpCode(),
-                        false,
-                        false,
-                        "Subscription wallet debit",
-                        "Subscription revenue recognition",
-                        null,
-                        null,
-                        WalletDebitFacade.SecureDebitPostingMode.OPERATION_POSTING,
-                        expectedCatalogCountryCode
-                )
+        return new SubscriptionPurchaseContext(
+                accountHolderId,
+                actorUserId,
+                plan,
+                idempotencyKey,
+                destinationAccountCode,
+                "Subscription " + plan.getCode(),
+                buildPaymentFingerprint(plan),
+                expectedCatalogCountryCode
         );
+    }
 
-        membershipService.createPendingMembership(result.operationId(), accountHolderId, plan);
-        if (result.otpRequired()) {
-            return new InitiateSubscriptionResponse(
-                    result.operationId(),
-                    null,
-                    null,
-                    "OTP_REQUIRED",
-                    true,
-                    result.otpChallengeId(),
-                    result.otpExpiresAt()
-            );
-        }
-
-        Operation operation = operationService.getById(result.operationId());
-        membershipService.activateForConfirmedOperation(operation);
-        mlmCommissionService.calculateForOperation(operation);
-
-        return new InitiateSubscriptionResponse(
-                operation.getId(),
-                null,
-                null,
-                operation.getStatus().name(),
-                false,
-                null,
-                null
+    @Transactional
+    @Deprecated(forRemoval = false)
+    public InitiateSubscriptionResponse initiate(UUID accountHolderId,
+                                                 UUID actorUserId,
+                                                 InitiateSubscriptionRequest request) {
+        preparePurchaseContext(
+                accountHolderId,
+                actorUserId,
+                request.planId(),
+                request.idempotencyKey()
         );
+        throw new BusinessException(LEGACY_INITIATE_BLOCK_MESSAGE);
     }
 
     @Transactional
@@ -210,10 +172,22 @@ public class SubscriptionService {
         return countryCode.trim().toUpperCase(Locale.ROOT);
     }
 
-    private String buildOtpFingerprint(SubscriptionPlan plan) {
+    private String buildPaymentFingerprint(SubscriptionPlan plan) {
         return "subscription|"
                 + plan.getId()
                 + "|" + plan.getPrice().stripTrailingZeros().toPlainString()
                 + "|" + plan.getCurrency().trim().toUpperCase(Locale.ROOT);
+    }
+
+    public record SubscriptionPurchaseContext(
+            UUID accountHolderId,
+            UUID actorUserId,
+            SubscriptionPlan plan,
+            String idempotencyKey,
+            String destinationAccountCode,
+            String description,
+            String fingerprint,
+            String countryCode
+    ) {
     }
 }

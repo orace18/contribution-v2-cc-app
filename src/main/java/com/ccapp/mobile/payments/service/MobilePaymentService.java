@@ -8,12 +8,17 @@ import com.ccapp.mobile.payments.dto.MobilePaymentInitiateResponse;
 import com.ccapp.mobile.payments.dto.MobilePaymentMethodResponse;
 import com.ccapp.mobile.payments.dto.MobilePaymentMethodsResponse;
 import com.ccapp.mobile.payments.dto.MobilePaymentStatusResponse;
+import com.ccapp.payments.subscription.service.MembershipService;
+import com.ccapp.payments.subscription.service.SubscriptionPaymentFinalizationService;
+import com.ccapp.payments.subscription.service.SubscriptionService;
 import com.ccapp.payments.operation.domain.entity.Operation;
 import com.ccapp.payments.operation.domain.enums.OperationStatus;
+import com.ccapp.payments.operation.domain.enums.OperationType;
 import com.ccapp.payments.operation.repository.OperationRepository;
 import com.ccapp.payments.psp.client.JawuPayPspException;
 import com.ccapp.payments.psp.client.JawuPayPspClient;
 import com.ccapp.payments.psp.dto.JawuPayPaymentMethod;
+import com.ccapp.wallet.service.WalletDebitFacade;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -28,22 +33,35 @@ import java.util.UUID;
 @Slf4j
 public class MobilePaymentService {
 
+    private static final String WALLET_PAYMENT_METHOD_ID = "CC_WALLET";
+    private static final String MEMBERSHIP_PAYMENT_TYPE = "MEMBERSHIP";
+
     private final MobileOnboardingJourneyService mobileOnboardingJourneyService;
     private final OperationRepository operationRepository;
     private final JawuPayPspClient jawuPayPspClient;
+    private final SubscriptionService subscriptionService;
+    private final WalletDebitFacade walletDebitFacade;
+    private final MembershipService membershipService;
+    private final SubscriptionPaymentFinalizationService subscriptionPaymentFinalizationService;
 
     @Transactional(noRollbackFor = JawuPayPspException.class)
     public MobilePaymentInitiateResponse initiate(UUID actorUserId,
                                                   UUID accountHolderId,
                                                   MobilePaymentInitiateRequest request) {
+        if (request == null) {
+            throw new BusinessException("Payment request is required");
+        }
+        if (isWalletMembershipPayment(request)) {
+            return initiateWalletMembershipPayment(actorUserId, accountHolderId, request);
+        }
         return mobileOnboardingJourneyService.initiatePaidPlanPayment(
                 actorUserId,
                 accountHolderId,
-                request == null ? null : request.idempotencyKey(),
-                request == null ? null : request.country(),
-                request == null ? null : request.paymentMethodId(),
-                request == null ? null : request.msisdn(),
-                request == null ? null : request.operatorHint()
+                request.idempotencyKey(),
+                request.country(),
+                request.paymentMethodId(),
+                request.msisdn(),
+                request.operatorHint()
         );
     }
 
@@ -90,6 +108,74 @@ public class MobilePaymentService {
         String operator = resolveOperator(id, label);
         String name = label.isBlank() ? id : label;
         return new MobilePaymentMethodResponse(id, name, operator);
+    }
+
+    private MobilePaymentInitiateResponse initiateWalletMembershipPayment(UUID actorUserId,
+                                                                          UUID accountHolderId,
+                                                                          MobilePaymentInitiateRequest request) {
+        if (request.planId() == null) {
+            throw new BusinessException("planId is required");
+        }
+        String pin = request.pin() == null ? "" : request.pin().trim();
+        if (pin.isBlank()) {
+            throw new BusinessException("INVALID_PIN");
+        }
+
+        SubscriptionService.SubscriptionPurchaseContext context = subscriptionService.preparePurchaseContext(
+                accountHolderId,
+                actorUserId,
+                request.planId(),
+                request.idempotencyKey()
+        );
+
+        WalletDebitFacade.WalletDebitExecutionResult result;
+        try {
+            result = walletDebitFacade.executeSecureDebit(
+                    new WalletDebitFacade.SecureDebitRequest(
+                            context.accountHolderId(),
+                            context.accountHolderId(),
+                            context.actorUserId(),
+                            null,
+                            OperationType.SUBSCRIPTION,
+                            context.plan().getPrice(),
+                            context.plan().getCurrency(),
+                            context.idempotencyKey(),
+                            context.description(),
+                            context.fingerprint(),
+                            context.destinationAccountCode(),
+                            null,
+                            null,
+                            null,
+                            pin,
+                            null,
+                            null,
+                            false,
+                            false,
+                            "Subscription wallet debit",
+                            "Subscription revenue recognition",
+                            null,
+                            null,
+                            WalletDebitFacade.SecureDebitPostingMode.OPERATION_POSTING,
+                            context.countryCode()
+                    )
+            );
+        } catch (BusinessException ex) {
+            throw remapWalletPaymentError(ex);
+        }
+
+        if (result.otpRequired()) {
+            throw new BusinessException("WALLET_OTP_REQUIRED");
+        }
+
+        membershipService.createPendingMembership(result.operationId(), accountHolderId, context.plan());
+        subscriptionPaymentFinalizationService.finalizeConfirmedOperation(result.operationId());
+
+        return new MobilePaymentInitiateResponse(
+                result.operationId(),
+                result.status(),
+                null,
+                null
+        );
     }
 
     private String toMobileStatus(OperationStatus status) {
@@ -151,6 +237,29 @@ public class MobilePaymentService {
             throw new BusinessException("country must be ISO code length 2 or 3");
         }
         return normalized;
+    }
+
+    private boolean isWalletMembershipPayment(MobilePaymentInitiateRequest request) {
+        return request.paymentMethodId() != null
+                && WALLET_PAYMENT_METHOD_ID.equalsIgnoreCase(request.paymentMethodId().trim())
+                && (request.paymentType() == null
+                || request.paymentType().isBlank()
+                || MEMBERSHIP_PAYMENT_TYPE.equalsIgnoreCase(request.paymentType().trim()));
+    }
+
+    private BusinessException remapWalletPaymentError(BusinessException ex) {
+        String message = ex.getMessage() == null ? "" : ex.getMessage().trim();
+        if (message.startsWith("Insufficient available balance")) {
+            return new BusinessException("INSUFFICIENT_BALANCE");
+        }
+        if (message.startsWith("No active wallet found for account holder")
+                || message.startsWith("Wallet is not active:")) {
+            return new BusinessException("WALLET_NOT_ACTIVE");
+        }
+        if (message.startsWith("WALLET_PIN_")) {
+            return new BusinessException("INVALID_PIN");
+        }
+        return ex;
     }
 
     private String firstNonBlank(String... values) {
