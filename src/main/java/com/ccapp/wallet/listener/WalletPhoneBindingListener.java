@@ -12,9 +12,9 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Tries wallet activation when a phone verification succeeds.
  *
- * <p>Wallet activation is now gated by completed identity onboarding plus a
- * verified phone number, so the listener simply re-checks eligibility when the
- * phone-verification event arrives.
+ * <p>Wallet activation is gated by a verified phone number only, so the
+ * listener simply re-checks eligibility when the phone-verification event
+ * arrives.
  */
 @Component
 @RequiredArgsConstructor

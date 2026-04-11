@@ -1,11 +1,7 @@
 package com.ccapp.wallet.service;
 
-import com.ccapp.financial.access.domain.FinancialAccessDecision;
+import com.ccapp.common.exception.BusinessException;
 import com.ccapp.financial.access.domain.FinancialAccessReasonCode;
-import com.ccapp.financial.access.domain.FinancialAccessState;
-import com.ccapp.financial.access.domain.FinancialAccessUseCase;
-import com.ccapp.financial.access.domain.MemberFinancialProfile;
-import com.ccapp.financial.access.service.FinancialAccessPolicy;
 import com.ccapp.identity.verification.domain.entity.PhoneVerification;
 import com.ccapp.identity.verification.domain.enums.PhoneVerificationChannel;
 import com.ccapp.identity.verification.domain.enums.PhoneVerificationStatus;
@@ -13,12 +9,11 @@ import com.ccapp.identity.verification.repository.PhoneVerificationRepository;
 import com.ccapp.identity.wallet.domain.entity.Wallet;
 import com.ccapp.identity.wallet.repository.WalletRepository;
 import com.ccapp.identity.wallet.service.WalletService;
-import com.ccapp.payments.subscription.domain.enums.MembershipStatus;
 import com.ccapp.wallet.domain.enums.WalletType;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.InjectMocks;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.OffsetDateTime;
@@ -29,6 +24,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -42,8 +38,6 @@ class WalletLifecycleServiceTest {
     private static final UUID WALLET_ID = UUID.fromString("cccccccc-cccc-cccc-cccc-cccccccccccc");
 
     @Mock
-    private FinancialAccessPolicy financialAccessPolicy;
-    @Mock
     private PhoneVerificationRepository phoneVerificationRepository;
     @Mock
     private WalletRepository walletRepository;
@@ -54,52 +48,47 @@ class WalletLifecycleServiceTest {
     private WalletLifecycleService walletLifecycleService;
 
     @Test
-    void resolveStatus_shouldExplainAbsentWalletWhenActivationNeedsMembership() {
+    void resolveStatus_shouldExplainMissingPhoneVerificationWhenWalletIsAbsent() {
         when(walletRepository.findFirstByAccountHolderIdAndStatusOrderByCreatedAtDesc(ACCOUNT_ID, "ACTIVE"))
                 .thenReturn(Optional.empty());
         when(phoneVerificationRepository.findTopByRequesterAccountHolderIdAndStatusOrderByVerifiedAtDescCreatedAtDesc(
                 ACCOUNT_ID,
                 PhoneVerificationStatus.VERIFIED
-        )).thenReturn(Optional.of(verifiedPhone()));
-        when(financialAccessPolicy.evaluate(ACCOUNT_ID, FinancialAccessUseCase.WALLET_ACTIVATION))
-                .thenReturn(decision(
-                        false,
-                        List.of(FinancialAccessReasonCode.MEMBERSHIP_NOT_ACTIVE),
-                        "Membership is not active for wallet activation"
-                ));
+        )).thenReturn(Optional.empty());
 
         WalletStatusSnapshot snapshot = walletLifecycleService.resolveStatus(ACCOUNT_ID);
 
         assertNull(snapshot.walletId());
         assertFalse(snapshot.active());
-        assertEquals(WalletState.WAIT_MEMBERSHIP_ACTIVATION, snapshot.state());
-        assertEquals("Membership is not active for wallet activation", snapshot.message());
+        assertFalse(snapshot.phoneVerified());
+        assertFalse(snapshot.activationEligible());
+        assertEquals(WalletState.PHONE_NOT_VERIFIED, snapshot.state());
+        assertEquals("Phone verification required for wallet activation", snapshot.message());
+        assertEquals(List.of(FinancialAccessReasonCode.PHONE_NOT_VERIFIED), snapshot.blockingReasons());
     }
 
     @Test
-    void resolveStatus_shouldReportWalletActivationPendingWhenEligibleAndWalletMissing() {
+    void resolveStatus_shouldReportWalletReadyForCreationWhenPhoneIsVerifiedAndWalletMissing() {
         when(walletRepository.findFirstByAccountHolderIdAndStatusOrderByCreatedAtDesc(ACCOUNT_ID, "ACTIVE"))
                 .thenReturn(Optional.empty());
         when(phoneVerificationRepository.findTopByRequesterAccountHolderIdAndStatusOrderByVerifiedAtDescCreatedAtDesc(
                 ACCOUNT_ID,
                 PhoneVerificationStatus.VERIFIED
         )).thenReturn(Optional.of(verifiedPhone()));
-        when(financialAccessPolicy.evaluate(ACCOUNT_ID, FinancialAccessUseCase.WALLET_ACTIVATION))
-                .thenReturn(decision(true, List.of(), "Wallet activation is allowed"));
 
         WalletStatusSnapshot snapshot = walletLifecycleService.resolveStatus(ACCOUNT_ID);
 
         assertNull(snapshot.walletId());
         assertFalse(snapshot.active());
         assertTrue(snapshot.phoneVerified());
-        assertEquals(WalletState.WAIT_WALLET_ACTIVATION, snapshot.state());
-        assertEquals("Wallet activation is in progress", snapshot.message());
+        assertTrue(snapshot.activationEligible());
+        assertEquals(WalletState.READY_FOR_WALLET_CREATION, snapshot.state());
+        assertEquals("Wallet is ready for creation", snapshot.message());
+        assertTrue(snapshot.blockingReasons().isEmpty());
     }
 
     @Test
     void activateIfEligible_shouldCreateWalletForVerifiedPhone() {
-        when(financialAccessPolicy.evaluate(ACCOUNT_ID, FinancialAccessUseCase.WALLET_ACTIVATION))
-                .thenReturn(decision(true, List.of(), "Wallet activation is allowed"));
         when(phoneVerificationRepository.findTopByRequesterAccountHolderIdAndStatusOrderByVerifiedAtDescCreatedAtDesc(
                 ACCOUNT_ID,
                 PhoneVerificationStatus.VERIFIED
@@ -127,8 +116,6 @@ class WalletLifecycleServiceTest {
 
     @Test
     void activateIfEligible_shouldSkipWhenPhoneIsMissing() {
-        when(financialAccessPolicy.evaluate(ACCOUNT_ID, FinancialAccessUseCase.WALLET_ACTIVATION))
-                .thenReturn(decision(true, List.of(), "Wallet activation is allowed"));
         when(phoneVerificationRepository.findTopByRequesterAccountHolderIdAndStatusOrderByVerifiedAtDescCreatedAtDesc(
                 ACCOUNT_ID,
                 PhoneVerificationStatus.VERIFIED
@@ -137,6 +124,19 @@ class WalletLifecycleServiceTest {
         Optional<Wallet> wallet = walletLifecycleService.activateIfEligible(ACCOUNT_ID);
 
         assertTrue(wallet.isEmpty());
+    }
+
+    @Test
+    void activate_shouldRejectWhenPhoneIsNotVerified() {
+        when(phoneVerificationRepository.findTopByRequesterAccountHolderIdAndStatusOrderByVerifiedAtDescCreatedAtDesc(
+                ACCOUNT_ID,
+                PhoneVerificationStatus.VERIFIED
+        )).thenReturn(Optional.empty());
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> walletLifecycleService.activate(ACCOUNT_ID));
+
+        assertEquals(FinancialAccessReasonCode.PHONE_NOT_VERIFIED.name(), exception.getMessage());
     }
 
     private PhoneVerification verifiedPhone() {
@@ -158,31 +158,4 @@ class WalletLifecycleServiceTest {
                 .build();
     }
 
-    private FinancialAccessDecision decision(boolean allowed,
-                                             List<FinancialAccessReasonCode> reasonCodes,
-                                             String message) {
-        return new FinancialAccessDecision(
-                ACCOUNT_ID,
-                FinancialAccessUseCase.WALLET_ACTIVATION,
-                allowed ? FinancialAccessState.FINANCIAL_ALLOWED : FinancialAccessState.FINANCIAL_DENIED,
-                allowed,
-                reasonCodes,
-                List.of(message),
-                new MemberFinancialProfile(
-                        ACCOUNT_ID,
-                        null,
-                        null,
-                        allowed ? MembershipStatus.ACTIVE : MembershipStatus.PENDING,
-                        allowed ? OffsetDateTime.now().plusDays(30) : null,
-                        allowed,
-                        null,
-                        false,
-                        false,
-                        allowed ? FinancialAccessState.FINANCIAL_ALLOWED : FinancialAccessState.FINANCIAL_DENIED,
-                        false,
-                        "NOT_CONFIGURED",
-                        reasonCodes
-                )
-        );
-    }
 }

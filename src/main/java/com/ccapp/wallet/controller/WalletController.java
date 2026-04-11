@@ -63,15 +63,15 @@ public class WalletController {
     })
     public ResponseEntity<CommonResponse<WalletStatusResponse>> status() {
         UUID accountHolderId = SecurityUtils.currentAccountHolderId();
-        WalletStatusSnapshot snapshot = walletStatusService.resolveStatus(accountHolderId, true);
+        WalletStatusSnapshot snapshot = walletStatusService.resolveStatus(accountHolderId, false);
         return ResponseEntity.ok(CommonResponse.success("Wallet status", toResponse(snapshot)));
     }
 
     @PostMapping("/activate")
-    @Operation(summary = "Activate the wallet when identity onboarding and phone verification are complete")
+    @Operation(summary = "Activate the wallet when phone verification is complete")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Wallet activated"),
-            @ApiResponse(responseCode = "400", description = "Identity onboarding incomplete or phone not verified"),
+            @ApiResponse(responseCode = "400", description = "Phone not verified"),
             @ApiResponse(responseCode = "401", description = "Unauthenticated")
     })
     public ResponseEntity<CommonResponse<WalletStatusResponse>> activate() {

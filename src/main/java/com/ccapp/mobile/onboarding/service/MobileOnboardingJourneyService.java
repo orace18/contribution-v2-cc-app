@@ -1004,31 +1004,19 @@ public class MobileOnboardingJourneyService {
     private MobileOnboardingStatusResponse.NextStep walletActivationNextStep(
             WalletStatusSnapshot walletStatus) {
         return switch (walletStatus.state()) {
-            case VERIFY_PHONE -> new MobileOnboardingStatusResponse.NextStep(
+            case PHONE_NOT_VERIFIED -> new MobileOnboardingStatusResponse.NextStep(
                     "VERIFY_PHONE",
                     "POST",
                     "/api/mobile/phone-verifications/start",
                     walletStatus.message()
             );
-            case WAIT_MEMBERSHIP_ACTIVATION -> new MobileOnboardingStatusResponse.NextStep(
-                    "WAIT_MEMBERSHIP_ACTIVATION",
-                    "GET",
-                    "/api/mobile/onboarding/status",
+            case READY_FOR_WALLET_CREATION -> new MobileOnboardingStatusResponse.NextStep(
+                    "ACTIVATE_WALLET",
+                    "POST",
+                    "/wallet/activate",
                     walletStatus.message()
             );
-            case WAIT_WALLET_ACTIVATION -> new MobileOnboardingStatusResponse.NextStep(
-                    "WAIT_WALLET_ACTIVATION",
-                    "GET",
-                    "/wallet/status",
-                    walletStatus.message()
-            );
-            case WALLET_ACTIVATION_BLOCKED -> new MobileOnboardingStatusResponse.NextStep(
-                    "WALLET_ACTIVATION_BLOCKED",
-                    "GET",
-                    "/wallet/status",
-                    walletStatus.message()
-            );
-            case WALLET_ACTIVE -> null;
+            case ACTIVE -> null;
         };
     }
 

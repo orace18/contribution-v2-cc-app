@@ -182,11 +182,11 @@ class MobileOnboardingJourneyServiceTest {
                 )));
         when(walletLifecycleService.resolveStatus(ACCOUNT_ID))
                 .thenReturn(walletStatusSnapshot(
-                        WalletState.VERIFY_PHONE,
+                        WalletState.PHONE_NOT_VERIFIED,
                         false,
                         false,
-                        "Verify your phone to activate your wallet",
-                        List.of(FinancialAccessReasonCode.MEMBERSHIP_NOT_ACTIVE)
+                        "Phone verification required for wallet activation",
+                        List.of(FinancialAccessReasonCode.PHONE_NOT_VERIFIED)
                 ));
         when(walletLifecycleService.activateIfEligible(eq(ACCOUNT_ID), any()))
                 .thenReturn(Optional.empty());
@@ -623,11 +623,11 @@ class MobileOnboardingJourneyServiceTest {
                 .thenReturn(financialProfile(false, null, false, null, List.of(FinancialAccessReasonCode.MEMBERSHIP_MISSING)));
         when(walletLifecycleService.resolveStatus(ACCOUNT_ID))
                 .thenReturn(walletStatusSnapshot(
-                        WalletState.WAIT_MEMBERSHIP_ACTIVATION,
+                        WalletState.PHONE_NOT_VERIFIED,
                         true,
                         false,
-                        "Active membership required for wallet activation",
-                        List.of(FinancialAccessReasonCode.MEMBERSHIP_MISSING)
+                        "Phone verification required for wallet activation",
+                        List.of(FinancialAccessReasonCode.PHONE_NOT_VERIFIED)
                 ));
         when(mlmRelationshipRepository.existsByDescendantId(ACCOUNT_ID)).thenReturn(false);
 
@@ -653,10 +653,10 @@ class MobileOnboardingJourneyServiceTest {
                 .thenReturn(financialProfile(true, MembershipStatus.ACTIVE, false, null, List.of()));
         when(walletLifecycleService.resolveStatus(ACCOUNT_ID))
                 .thenReturn(walletStatusSnapshot(
-                        WalletState.WAIT_WALLET_ACTIVATION,
+                        WalletState.READY_FOR_WALLET_CREATION,
                         true,
                         false,
-                        "Wallet activation is in progress",
+                        "Wallet is ready for creation",
                         List.of()
                 ));
         when(mlmRelationshipRepository.existsByDescendantId(ACCOUNT_ID)).thenReturn(false);
@@ -665,9 +665,9 @@ class MobileOnboardingJourneyServiceTest {
 
         assertEquals("PHONE_VERIFIED", response.currentStatus());
         assertNotNull(response.nextStep());
-        assertEquals("WAIT_WALLET_ACTIVATION", response.nextStep().code());
-        assertEquals("/wallet/status", response.nextStep().endpoint());
-        assertEquals("Wallet activation is in progress", response.nextStep().description());
+        assertEquals("ACTIVATE_WALLET", response.nextStep().code());
+        assertEquals("/wallet/activate", response.nextStep().endpoint());
+        assertEquals("Wallet is ready for creation", response.nextStep().description());
         assertTrue(response.isActive());
     }
 
@@ -763,7 +763,7 @@ class MobileOnboardingJourneyServiceTest {
                 state,
                 message,
                 phoneVerified,
-                state == WalletState.WAIT_WALLET_ACTIVATION || state == WalletState.WALLET_ACTIVE,
+                state == WalletState.READY_FOR_WALLET_CREATION || state == WalletState.ACTIVE,
                 blockingReasons
         );
     }

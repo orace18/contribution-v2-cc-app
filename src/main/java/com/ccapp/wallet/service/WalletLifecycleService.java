@@ -1,10 +1,7 @@
 package com.ccapp.wallet.service;
 
 import com.ccapp.common.exception.BusinessException;
-import com.ccapp.financial.access.domain.FinancialAccessDecision;
 import com.ccapp.financial.access.domain.FinancialAccessReasonCode;
-import com.ccapp.financial.access.domain.FinancialAccessUseCase;
-import com.ccapp.financial.access.service.FinancialAccessPolicy;
 import com.ccapp.identity.verification.domain.enums.PhoneVerificationStatus;
 import com.ccapp.identity.verification.repository.PhoneVerificationRepository;
 import com.ccapp.identity.wallet.domain.entity.Wallet;
@@ -16,7 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.EnumSet;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -25,13 +22,9 @@ import java.util.UUID;
 @Slf4j
 public class WalletLifecycleService {
 
-    private static final EnumSet<FinancialAccessReasonCode> MEMBERSHIP_BLOCKERS = EnumSet.of(
-            FinancialAccessReasonCode.MEMBERSHIP_MISSING,
-            FinancialAccessReasonCode.MEMBERSHIP_NOT_ACTIVE,
-            FinancialAccessReasonCode.MEMBERSHIP_EXPIRED
-    );
+    private static final List<FinancialAccessReasonCode> PHONE_NOT_VERIFIED_REASON =
+            List.of(FinancialAccessReasonCode.PHONE_NOT_VERIFIED);
 
-    private final FinancialAccessPolicy financialAccessPolicy;
     private final PhoneVerificationRepository phoneVerificationRepository;
     private final WalletRepository walletRepository;
     private final WalletService walletService;
@@ -41,8 +34,6 @@ public class WalletLifecycleService {
         Wallet activeWallet = walletRepository.findFirstByAccountHolderIdAndStatusOrderByCreatedAtDesc(accountHolderId, "ACTIVE")
                 .orElse(null);
         boolean phoneVerified = findVerifiedPhoneNumber(accountHolderId).isPresent();
-        FinancialAccessDecision activationDecision =
-                financialAccessPolicy.evaluate(accountHolderId, FinancialAccessUseCase.WALLET_ACTIVATION);
 
         WalletStatusSnapshot snapshot;
         if (activeWallet != null) {
@@ -50,23 +41,23 @@ public class WalletLifecycleService {
                     activeWallet.getId(),
                     true,
                     activeWallet.getPinHash() != null,
-                    WalletState.WALLET_ACTIVE,
+                    WalletState.ACTIVE,
                     "Wallet is active",
                     phoneVerified,
-                    activationDecision.allowed(),
-                    activationDecision.reasonCodes()
+                    true,
+                    List.of()
             );
         } else {
-            WalletState state = resolveState(phoneVerified, activationDecision);
+            WalletState state = resolveState(phoneVerified);
             snapshot = new WalletStatusSnapshot(
                     null,
                     false,
                     false,
                     state,
-                    resolveMessage(state, activationDecision),
+                    resolveMessage(state),
                     phoneVerified,
-                    activationDecision.allowed(),
-                    activationDecision.reasonCodes()
+                    phoneVerified,
+                    phoneVerified ? List.of() : PHONE_NOT_VERIFIED_REASON
             );
         }
 
@@ -82,10 +73,8 @@ public class WalletLifecycleService {
 
     @Transactional
     public Wallet activate(UUID accountHolderId) {
-        financialAccessPolicy.assertAllowed(accountHolderId, FinancialAccessUseCase.WALLET_ACTIVATION);
-
         String verifiedPhoneNumber = findVerifiedPhoneNumber(accountHolderId)
-                .orElseThrow(() -> new BusinessException("Phone verification required"));
+                .orElseThrow(() -> new BusinessException(FinancialAccessReasonCode.PHONE_NOT_VERIFIED.name()));
 
         return activateWithVerifiedPhone(accountHolderId, verifiedPhoneNumber);
     }
@@ -97,18 +86,11 @@ public class WalletLifecycleService {
 
     @Transactional
     public Optional<Wallet> activateIfEligible(UUID accountHolderId, String preferredVerifiedPhoneNumber) {
-        FinancialAccessDecision decision = financialAccessPolicy.evaluate(accountHolderId, FinancialAccessUseCase.WALLET_ACTIVATION);
-        if (!decision.allowed()) {
-            log.info("wallet_activation_skipped accountHolderId={} reason=financial_access_denied reasonCodes={} message={}",
-                    accountHolderId,
-                    decision.reasonCodes(),
-                    decision.primaryMessage());
-            return Optional.empty();
-        }
-
         Optional<String> verifiedPhoneNumber = resolveVerifiedPhoneNumber(accountHolderId, preferredVerifiedPhoneNumber);
         if (verifiedPhoneNumber.isEmpty()) {
-            log.info("wallet_activation_skipped accountHolderId={} reason=phone_not_verified", accountHolderId);
+            log.info("wallet_activation_skipped accountHolderId={} reason={}",
+                    accountHolderId,
+                    FinancialAccessReasonCode.PHONE_NOT_VERIFIED.name());
             return Optional.empty();
         }
 
@@ -176,25 +158,18 @@ public class WalletLifecycleService {
                 .filter(phoneNumber -> phoneNumber != null && !phoneNumber.isBlank());
     }
 
-    private WalletState resolveState(boolean phoneVerified, FinancialAccessDecision activationDecision) {
+    private WalletState resolveState(boolean phoneVerified) {
         if (!phoneVerified) {
-            return WalletState.VERIFY_PHONE;
+            return WalletState.PHONE_NOT_VERIFIED;
         }
-        if (activationDecision.allowed()) {
-            return WalletState.WAIT_WALLET_ACTIVATION;
-        }
-        if (activationDecision.reasonCodes().stream().anyMatch(MEMBERSHIP_BLOCKERS::contains)) {
-            return WalletState.WAIT_MEMBERSHIP_ACTIVATION;
-        }
-        return WalletState.WALLET_ACTIVATION_BLOCKED;
+        return WalletState.READY_FOR_WALLET_CREATION;
     }
 
-    private String resolveMessage(WalletState state, FinancialAccessDecision activationDecision) {
+    private String resolveMessage(WalletState state) {
         return switch (state) {
-            case VERIFY_PHONE -> "Verify your phone to activate your wallet";
-            case WAIT_MEMBERSHIP_ACTIVATION, WALLET_ACTIVATION_BLOCKED -> activationDecision.primaryMessage();
-            case WAIT_WALLET_ACTIVATION -> "Wallet activation is in progress";
-            case WALLET_ACTIVE -> "Wallet is active";
+            case PHONE_NOT_VERIFIED -> "Phone verification required for wallet activation";
+            case READY_FOR_WALLET_CREATION -> "Wallet is ready for creation";
+            case ACTIVE -> "Wallet is active";
         };
     }
 

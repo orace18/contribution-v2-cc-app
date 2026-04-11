@@ -80,6 +80,7 @@ public class FinancialAccessPolicy {
             case ACCOUNT_SUSPENDED -> "Account is suspended";
             case ACCOUNT_BLOCKED -> "Account is blocked";
             case KYC_NOT_VERIFIED -> "KYC must be verified for " + labelFor(useCase);
+            case PHONE_NOT_VERIFIED -> "Phone verification required for " + labelFor(useCase);
             case MEMBERSHIP_MISSING -> "Active membership required for " + labelFor(useCase);
             case MEMBERSHIP_NOT_ACTIVE -> "Membership is not active for " + labelFor(useCase);
             case MEMBERSHIP_EXPIRED -> "Membership has expired for " + labelFor(useCase);

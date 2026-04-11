@@ -1,9 +1,7 @@
 package com.ccapp.wallet.service;
 
 public enum WalletState {
-    VERIFY_PHONE,
-    WAIT_MEMBERSHIP_ACTIVATION,
-    WAIT_WALLET_ACTIVATION,
-    WALLET_ACTIVE,
-    WALLET_ACTIVATION_BLOCKED
+    PHONE_NOT_VERIFIED,
+    READY_FOR_WALLET_CREATION,
+    ACTIVE
 }
