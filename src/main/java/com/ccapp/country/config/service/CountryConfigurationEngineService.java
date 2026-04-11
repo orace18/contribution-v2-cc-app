@@ -25,6 +25,7 @@ import com.ccapp.country.config.repository.CountryConfigVersionRepository;
 import com.ccapp.country.repository.CountryRepository;
 import com.ccapp.payments.subscription.service.SubscriptionPlanCatalogService;
 import com.ccapp.payments.subscription.service.SubscriptionService;
+import com.ccapp.platform.config.domain.enums.PlatformConfigType;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -82,6 +83,7 @@ public class CountryConfigurationEngineService {
     private final CountryRepository countryRepository;
     private final CountryChartOfAccountsService countryChartOfAccountsService;
     private final CountryConfigReadinessService countryConfigReadinessService;
+    private final CountryConfigResolver countryConfigResolver;
     private final SubscriptionPlanCatalogService subscriptionPlanCatalogService;
     private final SubscriptionService subscriptionService;
     private final ConfigAuditMetadataService configAuditMetadataService;
@@ -349,6 +351,101 @@ public class CountryConfigurationEngineService {
         errors.addAll(validationResult.errors());
 
         return new CountryConfigValidationResponse(errors.isEmpty(), errors);
+    }
+
+    @Transactional
+    @CacheEvict(cacheNames = CountryConfigResolver.COUNTRY_CONFIG_CACHE, allEntries = true)
+    public ActiveSubscriptionPostingRepairResult repairActiveSubscriptionPostingSafety(String countryCode,
+                                                                                       UUID actorAdminUserId) {
+        String normalizedCountryCode = normalizeCountryCode(countryCode);
+        assertCountryExists(normalizedCountryCode);
+
+        OffsetDateTime now = OffsetDateTime.now();
+        CountryConfigVersion activeCountryGeneralBefore = countryConfigVersionRepository
+                .findFirstByCountryCodeAndConfigTypeAndEffectiveDateLessThanEqualOrderByEffectiveDateDescVersionDesc(
+                        normalizedCountryCode,
+                        CountryConfigType.GENERAL,
+                        now
+                )
+                .orElse(null);
+        CountryConfigResolver.ResolvedConfig runtimeGeneralBefore = countryConfigResolver.resolveActiveConfig(
+                normalizedCountryCode,
+                CountryConfigType.GENERAL
+        );
+        ObjectNode runtimeGeneralPayloadBefore = countryConfigResolver.payloadAsObjectNode(runtimeGeneralBefore);
+        ObjectNode activeCountryGeneralPayloadBefore = activeCountryGeneralBefore == null
+                ? objectMapper.createObjectNode()
+                : toObjectNode(readPayload(activeCountryGeneralBefore.getPayload()));
+        String defect = activeCountryGeneralBefore == null
+                ? "general.active_version_missing"
+                : subscriptionAllocationDefect(activeCountryGeneralPayloadBefore);
+
+        if (activeCountryGeneralBefore == null
+                && !countryConfigVersionRepository.existsByCountryCode(normalizedCountryCode)) {
+            log.info("country_subscription_posting_repair_skipped countryCode={} reason=no_country_config_versions",
+                    normalizedCountryCode);
+            return new ActiveSubscriptionPostingRepairResult(
+                    normalizedCountryCode,
+                    null,
+                    null,
+                    runtimeGeneralBefore.source(),
+                    runtimeGeneralBefore.version(),
+                    runtimeGeneralBefore.payload(),
+                    defect,
+                    false,
+                    null,
+                    null,
+                    countryChartOfAccountsService.hasRequiredSystemMappings(normalizedCountryCode)
+            );
+        }
+
+        countryChartOfAccountsService.autoGenerateRequiredAccounts(normalizedCountryCode);
+        countryChartOfAccountsService.assertCriticalSystemMappingsExist(normalizedCountryCode);
+
+        CountryConfigVersion activeCountryGeneralAfter = activeCountryGeneralBefore;
+        boolean patched = false;
+        if (activeCountryGeneralBefore == null || defect != null) {
+            ObjectNode repairedPayload = activeCountryGeneralPayloadBefore.deepCopy();
+            repairedPayload.set("percentages", resolveRepairSubscriptionAllocations(runtimeGeneralPayloadBefore));
+            JsonNode sanitizedPayload = validatePayload(CountryConfigType.GENERAL, repairedPayload, false);
+            activeCountryGeneralAfter = saveNewVersion(
+                    normalizedCountryCode,
+                    CountryConfigType.GENERAL,
+                    writePayload(sanitizedPayload),
+                    now,
+                    actorAdminUserId
+            );
+            patched = true;
+            log.warn("country_subscription_posting_repaired countryCode={} previousVersion={} newVersion={} runtimeSource={} defect={}",
+                    normalizedCountryCode,
+                    activeCountryGeneralBefore == null ? null : activeCountryGeneralBefore.getVersion(),
+                    activeCountryGeneralAfter.getVersion(),
+                    runtimeGeneralBefore.source(),
+                    defect);
+        }
+
+        boolean configured = synchronizeCountryConfiguredState(normalizedCountryCode, false);
+        log.info("country_subscription_posting_verified countryCode={} patched={} activeGeneralVersion={} runtimeSourceBefore={} configured={} requiredSystemMappings={}",
+                normalizedCountryCode,
+                patched,
+                activeCountryGeneralAfter == null ? null : activeCountryGeneralAfter.getVersion(),
+                runtimeGeneralBefore.source(),
+                configured,
+                countryChartOfAccountsService.hasRequiredSystemMappings(normalizedCountryCode));
+
+        return new ActiveSubscriptionPostingRepairResult(
+                normalizedCountryCode,
+                activeCountryGeneralBefore == null ? null : activeCountryGeneralBefore.getVersion(),
+                activeCountryGeneralBefore == null ? null : activeCountryGeneralBefore.getPayload(),
+                runtimeGeneralBefore.source(),
+                runtimeGeneralBefore.version(),
+                runtimeGeneralBefore.payload(),
+                defect,
+                patched,
+                activeCountryGeneralAfter == null ? null : activeCountryGeneralAfter.getVersion(),
+                activeCountryGeneralAfter == null ? null : activeCountryGeneralAfter.getPayload(),
+                countryChartOfAccountsService.hasRequiredSystemMappings(normalizedCountryCode)
+        );
     }
     /*
      * Draft setup validation stays side-effect free.
@@ -1029,6 +1126,63 @@ public class CountryConfigurationEngineService {
         throw new BusinessException("general.subscriptionAllocations." + field.label() + " is required");
     }
 
+    private String subscriptionAllocationDefect(ObjectNode payload) {
+        try {
+            validateSubscriptionAllocations(payload);
+            return null;
+        } catch (BusinessException ex) {
+            return ex.getMessage();
+        }
+    }
+
+    private ObjectNode resolveRepairSubscriptionAllocations(ObjectNode runtimeGeneralPayloadBefore) {
+        ObjectNode runtimeAllocations = normalizedSubscriptionAllocations(runtimeGeneralPayloadBefore);
+        if (runtimeAllocations != null) {
+            return runtimeAllocations;
+        }
+
+        var platformAllocation = countryConfigResolver.resolveActivePlatformConfig(PlatformConfigType.GLOBAL_ALLOCATION);
+        ObjectNode platformAllocationPayload = countryConfigResolver.payloadAsObjectNode(platformAllocation);
+        ObjectNode platformAllocations = normalizedSubscriptionAllocations(platformAllocationPayload);
+        if (platformAllocations != null) {
+            return platformAllocations;
+        }
+
+        return buildDefaultSubscriptionAllocations();
+    }
+
+    private ObjectNode normalizedSubscriptionAllocations(ObjectNode payload) {
+        if (payload == null || payload.isEmpty()) {
+            return null;
+        }
+        try {
+            ObjectNode source = resolveSubscriptionAllocationsNode(payload);
+            ObjectNode normalized = objectMapper.createObjectNode();
+            BigDecimal total = BigDecimal.ZERO;
+            for (AllocationField field : REQUIRED_SUBSCRIPTION_ALLOCATION_FIELDS) {
+                BigDecimal value = requiredAllocationPercentage(source, field);
+                normalized.put(field.label(), value);
+                total = total.add(value);
+            }
+            if (total.setScale(4, RoundingMode.HALF_UP).compareTo(ONE_HUNDRED.setScale(4, RoundingMode.HALF_UP)) != 0) {
+                return null;
+            }
+            return normalized;
+        } catch (BusinessException ex) {
+            return null;
+        }
+    }
+
+    private ObjectNode buildDefaultSubscriptionAllocations() {
+        ObjectNode percentages = objectMapper.createObjectNode();
+        percentages.put("commissionPool", 60);
+        percentages.put("guaranteeFund", 15);
+        percentages.put("platformFee", 10);
+        percentages.put("administration", 10);
+        percentages.put("socialFund", 5);
+        return percentages;
+    }
+
     private String resolveValidationField(String message) {
         if (message == null || message.isBlank()) {
             return "setup";
@@ -1355,6 +1509,21 @@ public class CountryConfigurationEngineService {
     private record SetupValidationResult(
             boolean valid,
             List<CountryConfigValidationErrorResponse> errors
+    ) {
+    }
+
+    public record ActiveSubscriptionPostingRepairResult(
+            String countryCode,
+            Integer activeGeneralVersionBefore,
+            String activeCountryGeneralPayloadBefore,
+            CountryConfigResolver.ConfigSource runtimeGeneralSourceBefore,
+            Integer runtimeGeneralVersionBefore,
+            String runtimeGeneralPayloadBefore,
+            String defect,
+            boolean patched,
+            Integer activeGeneralVersionAfter,
+            String activeCountryGeneralPayloadAfter,
+            boolean requiredSystemMappingsPresent
     ) {
     }
 

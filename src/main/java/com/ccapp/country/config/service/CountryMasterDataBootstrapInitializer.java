@@ -13,11 +13,23 @@ import org.springframework.transaction.annotation.Transactional;
 public class CountryMasterDataBootstrapInitializer implements ApplicationRunner {
 
     private final CountrySetupBootstrapService countrySetupBootstrapService;
+    private final CountryConfigurationEngineService countryConfigurationEngineService;
 
     @Override
     @Transactional
     public void run(ApplicationArguments args) {
         countrySetupBootstrapService.ensureMasterCountriesSeededIfEmpty();
+        try {
+            var bjRepair = countryConfigurationEngineService.repairActiveSubscriptionPostingSafety("BJ", null);
+            log.info("Country runtime safety repair completed: countryCode={}, patched={}, defect={}, activeGeneralVersionBefore={}, activeGeneralVersionAfter={}",
+                    bjRepair.countryCode(),
+                    bjRepair.patched(),
+                    bjRepair.defect(),
+                    bjRepair.activeGeneralVersionBefore(),
+                    bjRepair.activeGeneralVersionAfter());
+        } catch (Exception ex) {
+            log.error("Country runtime safety repair failed for BJ: {}", ex.getMessage(), ex);
+        }
         int configuredCount = countrySetupBootstrapService.listConfiguredCountries().size();
         int unconfiguredCount = countrySetupBootstrapService.listUnconfiguredCountries().size();
         log.info(

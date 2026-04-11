@@ -13,6 +13,8 @@ import java.util.UUID;
 
 public interface CountryConfigVersionRepository extends JpaRepository<CountryConfigVersion, UUID> {
 
+    boolean existsByCountryCode(String countryCode);
+
     Optional<CountryConfigVersion> findFirstByCountryCodeAndConfigTypeOrderByVersionDesc(String countryCode,
                                                                                           CountryConfigType configType);
 
