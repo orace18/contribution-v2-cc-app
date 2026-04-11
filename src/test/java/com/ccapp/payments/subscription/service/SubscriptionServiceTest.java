@@ -292,6 +292,28 @@ class SubscriptionServiceTest {
     }
 
     @Test
+    void mobilePaymentService_getStatusShouldFinalizeConfirmedSubscriptionOperation() {
+        Operation confirmedOperation = Operation.builder()
+                .id(OPERATION_ID)
+                .accountHolderId(ACCOUNT_HOLDER_ID)
+                .actorUserId(ACTOR_USER_ID)
+                .type(OperationType.SUBSCRIPTION)
+                .status(OperationStatus.CONFIRMED)
+                .amount(new BigDecimal("5000.00"))
+                .currency("XOF")
+                .paymentMethod("CC_WALLET")
+                .build();
+        when(operationRepository.findByIdAndAccountHolderId(OPERATION_ID, ACCOUNT_HOLDER_ID))
+                .thenReturn(Optional.of(confirmedOperation));
+
+        var response = mobilePaymentService.getStatus(ACCOUNT_HOLDER_ID, OPERATION_ID);
+
+        assertEquals(OPERATION_ID, response.operationId());
+        assertEquals("SUCCESS", response.status());
+        verify(subscriptionPaymentFinalizationService).finalizeConfirmedOperation(OPERATION_ID);
+    }
+
+    @Test
     void mobilePaymentService_keepsPspDelegationUnchangedForMoovAndMtn() {
         MobilePaymentInitiateRequest request = new MobilePaymentInitiateRequest(
                 "membership:test",

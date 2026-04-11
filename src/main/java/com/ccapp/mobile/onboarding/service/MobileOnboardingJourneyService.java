@@ -44,6 +44,7 @@ import com.ccapp.payments.subscription.domain.enums.MembershipStatus;
 import com.ccapp.payments.subscription.domain.enums.SubscriptionGrade;
 import com.ccapp.payments.subscription.repository.SubscriptionPlanRepository;
 import com.ccapp.payments.subscription.service.MembershipService;
+import com.ccapp.payments.subscription.service.SubscriptionPaymentFinalizationService;
 import com.ccapp.payments.subscription.service.SubscriptionService;
 import com.ccapp.wallet.service.WalletLifecycleService;
 import com.ccapp.wallet.service.WalletStatusSnapshot;
@@ -86,6 +87,7 @@ public class MobileOnboardingJourneyService {
     private final MembershipService membershipService;
     private final JawuPayPaymentOrchestrationService jawuPayPaymentOrchestrationService;
     private final ObjectProvider<JawuPayWebhookService> jawuPayWebhookServiceProvider;
+    private final ObjectProvider<SubscriptionPaymentFinalizationService> subscriptionPaymentFinalizationServiceProvider;
     private final MLMPlacementService mlmPlacementService;
     private final MlmRelationshipRepository mlmRelationshipRepository;
     private final MlmMemberLinkRepository mlmMemberLinkRepository;
@@ -344,8 +346,7 @@ public class MobileOnboardingJourneyService {
         membershipService.createPendingMembership(paymentOperation.getId(), accountHolderId, plan);
 
         if (paymentOperation.getStatus() == OperationStatus.CONFIRMED) {
-            transitionAfterMembershipActivated(journey, actorUserId, paymentOperation, false);
-            journeyRepository.save(journey);
+            subscriptionPaymentFinalizationServiceProvider.getObject().finalizeConfirmedOperation(paymentOperation.getId());
             return new MobilePaymentInitiateResponse(
                     paymentOperation.getId(),
                     paymentOperation.getStatus().name(),
@@ -758,7 +759,10 @@ public class MobileOnboardingJourneyService {
                                                                         SubscriptionPlan plan,
                                                                         Operation operation,
                                                                         String message) {
-        if (operation != null && isSubscriptionOperationInFlight(operation.getStatus())) {
+        if (operation != null && operation.getStatus() == OperationStatus.CONFIRMED) {
+            membershipService.createPendingMembership(operation.getId(), accountHolderId, plan);
+            subscriptionPaymentFinalizationServiceProvider.getObject().finalizeConfirmedOperation(operation.getId());
+        } else if (operation != null && isSubscriptionOperationInFlight(operation.getStatus())) {
             membershipService.createPendingMembership(operation.getId(), accountHolderId, plan);
             updatePaymentPending(journey, operation.getId(), operation.getPspReference(), true);
             journeyRepository.save(journey);

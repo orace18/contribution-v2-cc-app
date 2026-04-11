@@ -65,10 +65,13 @@ public class MobilePaymentService {
         );
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public MobilePaymentStatusResponse getStatus(UUID accountHolderId, UUID operationId) {
         Operation operation = operationRepository.findByIdAndAccountHolderId(operationId, accountHolderId)
                 .orElseThrow(() -> new NotFoundException("Payment operation not found"));
+        if (operation.getType() == OperationType.SUBSCRIPTION && operation.getStatus() == OperationStatus.CONFIRMED) {
+            subscriptionPaymentFinalizationService.finalizeConfirmedOperation(operation.getId());
+        }
 
         String mobileStatus = toMobileStatus(operation.getStatus());
         log.info("Mobile payment status response operationId={} accountHolderId={} operationStatus={} pspStatus={} mobileStatus={} paymentId={} providerReference={} pspReference={}",

@@ -52,6 +52,7 @@ import com.ccapp.payments.subscription.domain.enums.MembershipStatus;
 import com.ccapp.payments.subscription.domain.enums.SubscriptionGrade;
 import com.ccapp.payments.subscription.repository.SubscriptionPlanRepository;
 import com.ccapp.payments.subscription.service.MembershipService;
+import com.ccapp.payments.subscription.service.SubscriptionPaymentFinalizationService;
 import com.ccapp.payments.subscription.service.SubscriptionService;
 import com.ccapp.wallet.domain.enums.WalletType;
 import com.ccapp.wallet.service.WalletLifecycleService;
@@ -62,7 +63,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -124,6 +124,10 @@ class MobileOnboardingJourneyServiceTest {
     @Mock
     private JawuPayWebhookService jawuPayWebhookService;
     @Mock
+    private ObjectProvider<SubscriptionPaymentFinalizationService> subscriptionPaymentFinalizationServiceProvider;
+    @Mock
+    private SubscriptionPaymentFinalizationService subscriptionPaymentFinalizationService;
+    @Mock
     private MLMPlacementService mlmPlacementService;
     @Mock
     private MlmRelationshipRepository mlmRelationshipRepository;
@@ -152,12 +156,34 @@ class MobileOnboardingJourneyServiceTest {
     @Mock
     private WalletStatusService walletStatusService;
 
-    @InjectMocks
     private MobileOnboardingJourneyService mobileOnboardingJourneyService;
 
     @BeforeEach
     void setUp() {
+        mobileOnboardingJourneyService = new MobileOnboardingJourneyService(
+                journeyRepository,
+                mobilePlanSelectionRepository,
+                accessControlService,
+                accountHolderService,
+                subscriptionPlanRepository,
+                subscriptionService,
+                operationService,
+                operationRepository,
+                membershipService,
+                jawuPayPaymentOrchestrationService,
+                jawuPayWebhookServiceProvider,
+                subscriptionPaymentFinalizationServiceProvider,
+                mlmPlacementService,
+                mlmRelationshipRepository,
+                mlmMemberLinkRepository,
+                mlmGraphSyncService,
+                domainEventPublisher,
+                countryContextService,
+                memberFinancialProfileService,
+                walletLifecycleService
+        );
         when(jawuPayWebhookServiceProvider.getObject()).thenReturn(jawuPayWebhookService);
+        when(subscriptionPaymentFinalizationServiceProvider.getObject()).thenReturn(subscriptionPaymentFinalizationService);
         doNothing().when(accessControlService).assertCanActOnAccountHolder(any(), any(), any());
         when(journeyRepository.save(any(MobileOnboardingJourney.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -399,6 +425,46 @@ class MobileOnboardingJourneyServiceTest {
         verify(jawuPayPaymentOrchestrationService, never())
                 .initiatePayment(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
         verify(jawuPayWebhookService, never()).checkAndApplyPaymentStatus(any());
+        verify(membershipService).createPendingMembership(OPERATION_ID, ACCOUNT_ID, paidPlan);
+        verify(subscriptionPaymentFinalizationService).finalizeConfirmedOperation(OPERATION_ID);
+    }
+
+    @Test
+    void paidPlanFlow_immediateConfirmedOperation_shouldFinalizeBeforeReturningSuccess() {
+        MobileOnboardingJourney journey = journey(MobileOnboardingJourneyStatus.PLAN_SELECTED, true, SPONSOR_ID, PLAN_ID);
+        when(journeyRepository.findByAccountHolderId(ACCOUNT_ID)).thenReturn(Optional.of(journey));
+        SubscriptionPlan paidPlan = plan(SubscriptionGrade.CLASSIC, new BigDecimal("15000.0000"));
+        when(subscriptionPlanRepository.findByIdAndActiveTrue(PLAN_ID)).thenReturn(Optional.of(paidPlan));
+
+        Operation confirmed = Operation.builder()
+                .id(OPERATION_ID)
+                .accountHolderId(ACCOUNT_ID)
+                .actorUserId(ACTOR_ID)
+                .type(OperationType.SUBSCRIPTION)
+                .status(OperationStatus.CONFIRMED)
+                .amount(new BigDecimal("15000.0000"))
+                .currency("XOF")
+                .pspReference("PSP-REF-INSTANT")
+                .redirectUrl("https://checkout/instant")
+                .planId(PLAN_ID)
+                .build();
+        when(jawuPayPaymentOrchestrationService.initiatePayment(
+                eq(ACCOUNT_ID), eq(ACTOR_ID),
+                eq(new BigDecimal("15000.0000")), eq("XOF"), eq("BJ"),
+                eq("MOBILE_MONEY_MTN"), eq("22961000000"), eq("MTN"),
+                any(), any(), eq(OperationType.SUBSCRIPTION), eq(PLAN_ID)
+        )).thenReturn(new JawuPayPaymentOrchestrationService.InitiatePaymentResult(OPERATION_ID, "https://checkout/instant"));
+        when(operationService.getById(OPERATION_ID)).thenReturn(confirmed);
+        when(membershipService.createPendingMembership(OPERATION_ID, ACCOUNT_ID, paidPlan))
+                .thenReturn(Membership.builder().status(MembershipStatus.PENDING).build());
+
+        MobilePaymentInitiateResponse response = mobileOnboardingJourneyService.initiatePaidPlanPayment(
+                ACTOR_ID, ACCOUNT_ID, "idem-confirmed", "BJ", "MOBILE_MONEY_MTN", "22961000000", "MTN"
+        );
+
+        assertEquals("CONFIRMED", response.status());
+        verify(membershipService).createPendingMembership(OPERATION_ID, ACCOUNT_ID, paidPlan);
+        verify(subscriptionPaymentFinalizationService).finalizeConfirmedOperation(OPERATION_ID);
     }
 
     @Test

@@ -60,14 +60,38 @@ public class MembershipService {
             throw new BusinessException("Membership activation requires a confirmed operation");
         }
         SubscriptionPlan plan = resolvePlanForOperation(operation, membership);
-        int durationDays = durationDays(plan);
-
         CountryConfigResolver.ResolvedConfig membershipConfig = countryConfigResolver.resolveActiveConfig(
                 membership.getCountryCode(),
                 CountryConfigType.MEMBERSHIP
         );
-
         OffsetDateTime now = OffsetDateTime.now();
+        if (isAlreadyActivatedForConfirmedOperation(membership, now)) {
+            boolean changed = false;
+            if (membership.getPlanId() == null) {
+                membership.setPlanId(plan.getId());
+                changed = true;
+            }
+            if (membership.getPlanCode() == null) {
+                membership.setPlanCode(plan.getCode());
+                changed = true;
+            }
+            if (membership.getPlanGrade() == null) {
+                membership.setPlanGrade(plan.getGrade());
+                changed = true;
+            }
+            if (membership.getDurationMonths() == null) {
+                membership.setDurationMonths(plan.getDurationMonths());
+                changed = true;
+            }
+            if (membership.getConfigSnapshot() == null || membership.getConfigVersion() == null) {
+                membership.setConfigSnapshot(writeSnapshot(membershipConfig, operation));
+                membership.setConfigVersion(membershipConfig.version());
+                changed = true;
+            }
+            return changed ? membershipRepository.save(membership) : membership;
+        }
+
+        int durationDays = durationDays(plan);
         Membership existingActiveMembership = membershipRepository
                 .findFirstByAccountHolderIdAndStatusAndExpiresAtAfterOrderByExpiresAtDesc(
                         membership.getAccountHolderId(),
@@ -102,6 +126,13 @@ public class MembershipService {
         membership.setConfigVersion(membershipConfig.version());
 
         return membershipRepository.save(membership);
+    }
+
+    private boolean isAlreadyActivatedForConfirmedOperation(Membership membership, OffsetDateTime now) {
+        return membership.getStatus() == MembershipStatus.ACTIVE
+                && membership.getActivatedAt() != null
+                && membership.getExpiresAt() != null
+                && membership.getExpiresAt().isAfter(now);
     }
 
     @Transactional

@@ -20,6 +20,7 @@ import com.ccapp.payments.subscription.domain.enums.MembershipStatus;
 import com.ccapp.payments.subscription.domain.enums.SubscriptionGrade;
 import com.ccapp.payments.subscription.repository.MembershipRepository;
 import com.ccapp.payments.subscription.repository.SubscriptionPlanRepository;
+import com.ccapp.platform.config.service.GlobalMlmConfigService;
 import com.ccapp.platform.config.service.PlatformConfigurationService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -67,8 +68,14 @@ class MembershipServiceIntegrationTest {
     private CountryRepository countryRepository;
     @Autowired
     private CountryConfigurationEngineService countryConfigurationEngineService;
+    @Autowired
+    private CountryChartOfAccountsService countryChartOfAccountsService;
     @MockBean
     private SubscriptionService subscriptionService;
+    @MockBean
+    private SubscriptionPlanCatalogService subscriptionPlanCatalogService;
+    @MockBean
+    private GlobalMlmConfigService globalMlmConfigService;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -83,6 +90,7 @@ class MembershipServiceIntegrationTest {
                 .configured(true)
                 .fallback(false)
                 .build());
+        countryChartOfAccountsService.autoGenerateRequiredAccounts("BJ");
 
         ObjectNode membershipPayload = objectMapper.createObjectNode();
         ArrayNode plans = objectMapper.createArrayNode();
@@ -106,7 +114,7 @@ class MembershipServiceIntegrationTest {
     }
 
     @Test
-    void activateForConfirmedOperation_shouldStoreSnapshotAndVersion() {
+    void activateForConfirmedOperation_shouldStoreSnapshotAndVersion() throws Exception {
         UUID accountHolderId = UUID.randomUUID();
         SubscriptionPlan plan = subscriptionPlanRepository.save(SubscriptionPlan.builder()
                 .code("BASIC")
@@ -139,10 +147,53 @@ class MembershipServiceIntegrationTest {
         assertEquals(90L, java.time.Duration.between(activated.getActivatedAt(), activated.getExpiresAt()).toDays());
         assertNotNull(activated.getConfigSnapshot());
         assertEquals(1, activated.getConfigVersion());
-        org.junit.jupiter.api.Assertions.assertTrue(activated.getConfigSnapshot().contains("JAWUPAY"));
+        assertEquals("WALLET", objectMapper.readTree(activated.getConfigSnapshot()).path("paymentProvider").asText());
 
         Membership persisted = membershipRepository.findByOperationId(operation.getId()).orElseThrow();
         assertEquals(MembershipStatus.ACTIVE, persisted.getStatus());
         assertNotNull(persisted.getConfigSnapshot());
+    }
+
+    @Test
+    void activateForConfirmedOperation_shouldBeIdempotentForAlreadyActiveMembership() {
+        UUID accountHolderId = UUID.randomUUID();
+        SubscriptionPlan plan = subscriptionPlanRepository.save(SubscriptionPlan.builder()
+                .code("CLASSIC_12M")
+                .name("Classic 12 months")
+                .grade(SubscriptionGrade.CLASSIC)
+                .durationMonths(12)
+                .country("BJ")
+                .currency("XOF")
+                .price(new BigDecimal("19000"))
+                .active(true)
+                .build());
+
+        Operation operation = operationRepository.save(Operation.builder()
+                .accountHolderId(accountHolderId)
+                .actorUserId(accountHolderId)
+                .type(OperationType.SUBSCRIPTION)
+                .status(OperationStatus.CONFIRMED)
+                .amount(new BigDecimal("19000"))
+                .currency("XOF")
+                .idempotencyKey("membership-idempotent:" + UUID.randomUUID())
+                .description("Subscription CLASSIC_12M")
+                .build());
+
+        membershipService.createPendingMembership(operation.getId(), accountHolderId, plan);
+        Membership firstActivation = membershipService.activateForConfirmedOperation(operation);
+        OffsetDateTime firstActivatedAt = firstActivation.getActivatedAt();
+        OffsetDateTime firstExpiresAt = firstActivation.getExpiresAt();
+        String firstSnapshot = firstActivation.getConfigSnapshot();
+        Integer firstVersion = firstActivation.getConfigVersion();
+
+        Membership secondActivation = membershipService.activateForConfirmedOperation(operation);
+
+        assertEquals(firstActivation.getId(), secondActivation.getId());
+        assertEquals(MembershipStatus.ACTIVE, secondActivation.getStatus());
+        assertEquals(firstActivatedAt, secondActivation.getActivatedAt());
+        assertEquals(firstExpiresAt, secondActivation.getExpiresAt());
+        assertEquals(firstSnapshot, secondActivation.getConfigSnapshot());
+        assertEquals(firstVersion, secondActivation.getConfigVersion());
+        assertEquals(1L, membershipRepository.count());
     }
 }
