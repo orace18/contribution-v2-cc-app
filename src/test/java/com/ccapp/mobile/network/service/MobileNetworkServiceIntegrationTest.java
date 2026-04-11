@@ -41,6 +41,7 @@ import java.util.Comparator;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -160,7 +161,80 @@ class MobileNetworkServiceIntegrationTest {
     }
 
     @Test
-    void shouldRequireAReturnedSponsorIdBeforeUnlockingParentStep() {
+    void sponsorPendingShouldBlockEligibilityUntilDecisionIsMade() {
+        UUID actorUserId = UUID.randomUUID();
+        UUID accountHolderId = createAccountHolder(
+                "Samuel",
+                "KIKI",
+                "+22997000076",
+                true
+        );
+
+        mobileOnboardingJourneyRepository.save(MobileOnboardingJourney.builder()
+                .accountHolderId(accountHolderId)
+                .status(MobileOnboardingJourneyStatus.COUNTRY_SELECTED)
+                .countryCode("BJ")
+                .sponsorSet(false)
+                .sponsorAccountHolderId(null)
+                .networkLinked(false)
+                .onboardingCompleted(false)
+                .build());
+
+        createMembership(
+                accountHolderId,
+                MembershipStatus.ACTIVE,
+                OffsetDateTime.now().minusDays(10),
+                OffsetDateTime.now().plusDays(20)
+        );
+
+        var eligibility = mobileNetworkService.getEligibility(actorUserId, accountHolderId);
+
+        assertFalse(eligibility.hasSponsor());
+        assertFalse(eligibility.sponsorResolved());
+        assertTrue(eligibility.phoneVerified());
+        assertTrue(eligibility.hasPaidMembership());
+        assertEquals("SPONSOR_PENDING", eligibility.sponsorDecision());
+        assertFalse(eligibility.isEligible());
+    }
+
+    @Test
+    void sponsorSelectedShouldSatisfySponsorRequirement() {
+        UUID actorUserId = UUID.randomUUID();
+        UUID sponsorId = createAccountHolder("Parent", "Reseau", "+22997000078", true);
+        UUID accountHolderId = createAccountHolder(
+                "Samuel",
+                "KIKI",
+                "+22997000079",
+                true
+        );
+
+        mobileOnboardingJourneyRepository.save(MobileOnboardingJourney.builder()
+                .accountHolderId(accountHolderId)
+                .status(MobileOnboardingJourneyStatus.SPONSOR_SET)
+                .countryCode("BJ")
+                .sponsorSet(true)
+                .sponsorAccountHolderId(sponsorId)
+                .networkLinked(false)
+                .onboardingCompleted(true)
+                .build());
+
+        createMembership(
+                accountHolderId,
+                MembershipStatus.ACTIVE,
+                OffsetDateTime.now().minusDays(10),
+                OffsetDateTime.now().plusDays(20)
+        );
+
+        var eligibility = mobileNetworkService.getEligibility(actorUserId, accountHolderId);
+
+        assertTrue(eligibility.hasSponsor());
+        assertTrue(eligibility.sponsorResolved());
+        assertEquals("SPONSOR_SELECTED", eligibility.sponsorDecision());
+        assertFalse(eligibility.isEligible());
+    }
+
+    @Test
+    void sponsorDeclinedShouldSatisfySponsorRequirementWithoutClaimingSponsorPresence() {
         UUID actorUserId = UUID.randomUUID();
         UUID accountHolderId = createAccountHolder(
                 "Samuel",
@@ -188,12 +262,13 @@ class MobileNetworkServiceIntegrationTest {
 
         var eligibility = mobileNetworkService.getEligibility(actorUserId, accountHolderId);
 
-        assertEquals(false, eligibility.hasSponsor());
-        assertEquals(true, eligibility.phoneVerified());
-        assertEquals(true, eligibility.hasPaidMembership());
+        assertFalse(eligibility.hasSponsor());
+        assertTrue(eligibility.sponsorResolved());
+        assertTrue(eligibility.phoneVerified());
+        assertTrue(eligibility.hasPaidMembership());
         assertEquals("SPONSOR_DECLINED", eligibility.sponsorDecision());
         assertEquals("PENDING_PLACEMENT", eligibility.placementStatus());
-        assertEquals(false, eligibility.isEligible());
+        assertFalse(eligibility.isEligible());
     }
 
     private UUID createAccountHolder(String firstName, String lastName, String phoneNumber) {

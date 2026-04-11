@@ -2,6 +2,7 @@ package com.ccapp.mobile.network.dto;
 
 public record MobileNetworkEligibilityResponse(
         boolean hasSponsor,
+        boolean sponsorResolved,
         boolean phoneVerified,
         boolean hasPaidMembership,
         String membershipGrade,

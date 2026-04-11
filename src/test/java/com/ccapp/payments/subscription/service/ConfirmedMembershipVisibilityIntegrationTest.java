@@ -265,6 +265,7 @@ class ConfirmedMembershipVisibilityIntegrationTest {
 
         MobileNetworkEligibilityResponse eligibility = mobileNetworkService.getEligibility(accountHolderId, accountHolderId);
         assertFalse(eligibility.hasSponsor());
+        assertTrue(eligibility.sponsorResolved());
         assertTrue(eligibility.phoneVerified());
         assertTrue(eligibility.hasPaidMembership());
         assertEquals("CLASSIC", eligibility.membershipGrade());
@@ -329,6 +330,7 @@ class ConfirmedMembershipVisibilityIntegrationTest {
         Membership reconciledMembership = membershipRepository.findByOperationId(operation.getId()).orElseThrow();
         assertEquals(MembershipStatus.ACTIVE, reconciledMembership.getStatus());
         assertTrue(memberFinancialProfileService.getProfile(accountHolderId).membershipActive());
+        assertTrue(eligibility.sponsorResolved());
         assertTrue(eligibility.hasPaidMembership());
         assertEquals("CLASSIC", eligibility.membershipGrade());
         assertEquals("SPONSOR_DECLINED", eligibility.sponsorDecision());

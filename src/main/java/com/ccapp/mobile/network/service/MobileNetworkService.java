@@ -308,6 +308,8 @@ public class MobileNetworkService {
                         .map(MobileOnboardingJourney::getSponsorAccountHolderId))
                 .orElse(null);
         boolean hasSponsor = sponsorAccountHolderId != null;
+        MobileSponsorDecision sponsorDecision = sponsorDecision(onboardingJourney, sponsorAccountHolderId);
+        boolean sponsorResolved = sponsorDecision != MobileSponsorDecision.SPONSOR_PENDING;
 
         // 2. Phone verified
         boolean phoneVerified = accountHolder.getPhoneVerifiedAt() != null;
@@ -327,12 +329,12 @@ public class MobileNetworkService {
         boolean hasNetworkPosition = mlmRelationshipRepository
                 .countByDescendantIdAndLevelGreaterThan(accountHolderId, 0) > 0;
 
-        boolean isEligible = hasSponsor && phoneVerified && hasPaidMembership && hasNetworkPosition;
-        MobileSponsorDecision sponsorDecision = sponsorDecision(onboardingJourney, sponsorAccountHolderId);
+        boolean isEligible = sponsorResolved && phoneVerified && hasPaidMembership && hasNetworkPosition;
         MobilePlacementStatus placementStatus = placementStatus(hasPaidMembership, hasNetworkPosition);
 
         return new MobileNetworkEligibilityResponse(
                 hasSponsor,
+                sponsorResolved,
                 phoneVerified,
                 hasPaidMembership,
                 membershipGrade,
