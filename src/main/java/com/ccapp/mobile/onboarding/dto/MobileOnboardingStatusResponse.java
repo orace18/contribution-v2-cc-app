@@ -12,7 +12,9 @@ public record MobileOnboardingStatusResponse(
         boolean isActive,
         boolean isNetworkReady,
         UUID paymentOperationId,
-        String paymentReference
+        String paymentReference,
+        String sponsorDecision,
+        String placementStatus
 ) {
     public record NextStep(
             String code,

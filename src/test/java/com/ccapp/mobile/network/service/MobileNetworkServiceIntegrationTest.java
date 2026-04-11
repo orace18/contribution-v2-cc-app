@@ -28,6 +28,7 @@ import com.ccapp.payments.subscription.domain.entity.Membership;
 import com.ccapp.payments.subscription.domain.enums.MembershipStatus;
 import com.ccapp.payments.subscription.domain.enums.SubscriptionGrade;
 import com.ccapp.payments.subscription.repository.MembershipRepository;
+import com.ccapp.payments.subscription.service.MembershipReconciliationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,6 +37,7 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 
 import java.time.OffsetDateTime;
+import java.util.Comparator;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -74,6 +76,8 @@ class MobileNetworkServiceIntegrationTest {
     private AccessControlService accessControlService;
     @MockBean
     private AccountHolderService accountHolderService;
+    @MockBean
+    private MembershipReconciliationService membershipReconciliationService;
 
     @BeforeEach
     void setUp() {
@@ -112,12 +116,15 @@ class MobileNetworkServiceIntegrationTest {
 
         MobileNetworkMembersResponse directs = mobileNetworkService.getDirectMembers(actorUserId, leaderId);
         assertEquals(2, directs.members().size());
-        assertEquals("Thomas", directs.members().get(0).firstName());
-        assertEquals(1L, directs.members().get(0).downlineCount());
-        assertEquals(MobileNetworkMembershipStatus.ACTIVE, directs.members().get(0).membershipStatus());
-        assertNotNull(directs.members().get(0).avatar());
-        assertEquals("Fatou", directs.members().get(1).firstName());
-        assertEquals(MobileNetworkMembershipStatus.TO_FOLLOW_UP, directs.members().get(1).membershipStatus());
+        var directByName = directs.members().stream()
+                .sorted(Comparator.comparing(member -> member.firstName() == null ? "" : member.firstName()))
+                .toList();
+        assertEquals("Fatou", directByName.get(0).firstName());
+        assertEquals(MobileNetworkMembershipStatus.TO_FOLLOW_UP, directByName.get(0).membershipStatus());
+        assertEquals("Thomas", directByName.get(1).firstName());
+        assertEquals(1L, directByName.get(1).downlineCount());
+        assertEquals(MobileNetworkMembershipStatus.ACTIVE, directByName.get(1).membershipStatus());
+        assertNotNull(directByName.get(1).avatar());
 
         var activity = mobileNetworkService.getTodayActivity(actorUserId, leaderId);
         assertEquals(3L, activity.newMembers());
@@ -131,9 +138,12 @@ class MobileNetworkServiceIntegrationTest {
         var genealogy = mobileNetworkService.getTree(actorUserId, leaderId, MobileNetworkTreeView.GENEALOGY);
         assertEquals(3L, genealogy.totalMembers());
         assertEquals(2, genealogy.root().children().size());
-        assertEquals("Thomas SANKARA", genealogy.root().children().get(0).name());
-        assertEquals("Fatou DIALLO", genealogy.root().children().get(1).name());
-        assertEquals(1, genealogy.root().children().get(0).children().size());
+        var genealogyChildren = genealogy.root().children().stream()
+                .sorted(Comparator.comparing(child -> child.name() == null ? "" : child.name()))
+                .toList();
+        assertEquals("Fatou DIALLO", genealogyChildren.get(0).name());
+        assertEquals("Thomas SANKARA", genealogyChildren.get(1).name());
+        assertEquals(1, genealogyChildren.get(1).children().size());
 
         var placement = mobileNetworkService.getTree(actorUserId, leaderId, MobileNetworkTreeView.PLACEMENT);
         assertEquals(1, placement.root().children().size());
@@ -181,6 +191,8 @@ class MobileNetworkServiceIntegrationTest {
         assertEquals(false, eligibility.hasSponsor());
         assertEquals(true, eligibility.phoneVerified());
         assertEquals(true, eligibility.hasPaidMembership());
+        assertEquals("SPONSOR_DECLINED", eligibility.sponsorDecision());
+        assertEquals("PENDING_PLACEMENT", eligibility.placementStatus());
         assertEquals(false, eligibility.isEligible());
     }
 

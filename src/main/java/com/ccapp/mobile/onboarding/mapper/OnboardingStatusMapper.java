@@ -49,7 +49,9 @@ public class OnboardingStatusMapper {
                 source != null && source.isActive(),
                 source != null && source.isNetworkReady(),
                 source == null ? null : source.paymentOperationId(),
-                source == null ? null : source.paymentReference()
+                source == null ? null : source.paymentReference(),
+                source == null ? null : source.sponsorDecision(),
+                source == null ? null : source.placementStatus()
         );
     }
 

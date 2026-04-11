@@ -14,6 +14,8 @@ import com.ccapp.mlm.repository.MlmRelationshipRepository;
 import com.ccapp.mlm.repository.projection.MlmTreeMemberProjection;
 import com.ccapp.mobile.network.dto.MobileNetworkEligibilityResponse;
 import com.ccapp.mobile.onboarding.domain.entity.MobileOnboardingJourney;
+import com.ccapp.mobile.onboarding.domain.enums.MobilePlacementStatus;
+import com.ccapp.mobile.onboarding.domain.enums.MobileSponsorDecision;
 import com.ccapp.mobile.onboarding.repository.MobileOnboardingJourneyRepository;
 import com.ccapp.payments.subscription.domain.enums.SubscriptionGrade;
 import com.ccapp.mobile.network.dto.MobileNetworkFollowUpResponse;
@@ -28,6 +30,7 @@ import com.ccapp.mobile.network.dto.MobileNetworkTreeResponse;
 import com.ccapp.mobile.network.dto.MobileNetworkTreeView;
 import com.ccapp.payments.subscription.domain.entity.Membership;
 import com.ccapp.payments.subscription.domain.enums.MembershipStatus;
+import com.ccapp.payments.subscription.service.MembershipReconciliationService;
 import com.ccapp.payments.subscription.repository.MembershipRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -62,6 +65,7 @@ public class MobileNetworkService {
     private final MobileOnboardingJourneyRepository onboardingJourneyRepository;
     private final AppUserRepository appUserRepository;
     private final UserProfileRepository userProfileRepository;
+    private final MembershipReconciliationService membershipReconciliationService;
 
     @Value("${mobile.network.zone:Africa/Porto-Novo}")
     private String networkZone;
@@ -291,14 +295,16 @@ public class MobileNetworkService {
     @Transactional(readOnly = true)
     public MobileNetworkEligibilityResponse getEligibility(UUID actorUserId, UUID accountHolderId) {
         assertViewAccess(actorUserId, accountHolderId);
+        membershipReconciliationService.reconcileAccountHolder(accountHolderId);
         AccountHolder accountHolder = accountHolderService.getById(accountHolderId);
+        MobileOnboardingJourney onboardingJourney = onboardingJourneyRepository.findByAccountHolderId(accountHolderId).orElse(null);
 
         // 1. Sponsor / parent must be a real resolved sponsor, not only a stale
         // onboarding flag. Fall back to the onboarding journey only when the MLM
         // member link is not created yet.
         UUID sponsorAccountHolderId = mlmMemberLinkRepository.findById(accountHolderId)
                 .map(link -> link.getSponsorAccountHolderId())
-                .or(() -> onboardingJourneyRepository.findByAccountHolderId(accountHolderId)
+                .or(() -> java.util.Optional.ofNullable(onboardingJourney)
                         .map(MobileOnboardingJourney::getSponsorAccountHolderId))
                 .orElse(null);
         boolean hasSponsor = sponsorAccountHolderId != null;
@@ -322,6 +328,8 @@ public class MobileNetworkService {
                 .countByDescendantIdAndLevelGreaterThan(accountHolderId, 0) > 0;
 
         boolean isEligible = hasSponsor && phoneVerified && hasPaidMembership && hasNetworkPosition;
+        MobileSponsorDecision sponsorDecision = sponsorDecision(onboardingJourney, sponsorAccountHolderId);
+        MobilePlacementStatus placementStatus = placementStatus(hasPaidMembership, hasNetworkPosition);
 
         return new MobileNetworkEligibilityResponse(
                 hasSponsor,
@@ -329,8 +337,27 @@ public class MobileNetworkService {
                 hasPaidMembership,
                 membershipGrade,
                 hasNetworkPosition,
-                isEligible
+                isEligible,
+                sponsorDecision.name(),
+                placementStatus.name()
         );
+    }
+
+    private MobileSponsorDecision sponsorDecision(MobileOnboardingJourney onboardingJourney, UUID sponsorAccountHolderId) {
+        if (sponsorAccountHolderId != null) {
+            return MobileSponsorDecision.SPONSOR_SELECTED;
+        }
+        if (onboardingJourney == null || !onboardingJourney.isSponsorSet()) {
+            return MobileSponsorDecision.SPONSOR_PENDING;
+        }
+        return MobileSponsorDecision.SPONSOR_DECLINED;
+    }
+
+    private MobilePlacementStatus placementStatus(boolean hasPaidMembership, boolean hasNetworkPosition) {
+        if (!hasPaidMembership) {
+            return MobilePlacementStatus.NOT_APPLICABLE;
+        }
+        return hasNetworkPosition ? MobilePlacementStatus.PLACED : MobilePlacementStatus.PENDING_PLACEMENT;
     }
 
     private void assertViewAccess(UUID actorUserId, UUID accountHolderId) {

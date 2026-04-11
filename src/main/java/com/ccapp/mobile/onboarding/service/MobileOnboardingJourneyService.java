@@ -19,8 +19,10 @@ import com.ccapp.mlm.graph.MlmGraphSyncService;
 import com.ccapp.mlm.service.MLMPlacementService;
 import com.ccapp.mobile.onboarding.domain.entity.MobileOnboardingJourney;
 import com.ccapp.mobile.onboarding.domain.entity.MobilePlanSelection;
+import com.ccapp.mobile.onboarding.domain.enums.MobilePlacementStatus;
 import com.ccapp.mobile.onboarding.domain.enums.MobileOnboardingJourneyStatus;
 import com.ccapp.mobile.onboarding.domain.enums.MobilePlanSelectionStatus;
+import com.ccapp.mobile.onboarding.domain.enums.MobileSponsorDecision;
 import com.ccapp.mobile.onboarding.dto.ActivateFreePlanResponse;
 import com.ccapp.mobile.onboarding.dto.MobileCountrySelectionResponse;
 import com.ccapp.mobile.onboarding.dto.MobileOnboardingStatusResponse;
@@ -183,7 +185,12 @@ public class MobileOnboardingJourneyService {
             ));
         }
         journeyRepository.save(journey);
-        return new MobileSponsorSelectionResponse(accountHolderId, sponsorAccountHolderId, true);
+        return new MobileSponsorSelectionResponse(
+                accountHolderId,
+                sponsorAccountHolderId,
+                true,
+                sponsorDecision(journey).name()
+        );
     }
 
     @Transactional
@@ -212,6 +219,7 @@ public class MobileOnboardingJourneyService {
         MobileOnboardingJourney journey = getOrCreate(accountHolderId);
         promoteStatus(journey, MobileOnboardingJourneyStatus.AUTHENTICATED);
         requireAtLeast(journey, MobileOnboardingJourneyStatus.PLAN_SELECTED, "Plan must be selected first");
+        requireSponsorDecision(journey);
 
         SubscriptionPlan plan = resolveSelectedPlan(journey, accountHolderId);
         if (!isFreePlan(plan)) {
@@ -260,6 +268,7 @@ public class MobileOnboardingJourneyService {
         MobileOnboardingJourney journey = getOrCreate(accountHolderId);
         promoteStatus(journey, MobileOnboardingJourneyStatus.AUTHENTICATED);
         requireAtLeast(journey, MobileOnboardingJourneyStatus.PLAN_SELECTED, "Plan must be selected first");
+        requireSponsorDecision(journey);
 
         SubscriptionPlan plan = resolveSelectedPlan(journey, accountHolderId);
         if (isFreePlan(plan)) {
@@ -412,6 +421,8 @@ public class MobileOnboardingJourneyService {
         MobileOnboardingJourney journey = resolveDerivedJourneySnapshot(accountHolderId, financialProfile, walletStatus);
         boolean active = financialProfile.membershipActive();
         boolean networkReady = journey.isNetworkLinked() && mlmGraphSyncService.isNetworkReady(accountHolderId);
+        MobileSponsorDecision sponsorDecision = sponsorDecision(journey);
+        MobilePlacementStatus placementStatus = placementStatus(journey, active);
         return new MobileOnboardingStatusResponse(
                 journey.getStatus().name(),
                 completedSteps(journey, walletStatus),
@@ -420,7 +431,9 @@ public class MobileOnboardingJourneyService {
                 active,
                 networkReady,
                 journey.getPaymentOperationId(),
-                journey.getPaymentReference()
+                journey.getPaymentReference(),
+                sponsorDecision.name(),
+                placementStatus.name()
         );
     }
 
@@ -527,7 +540,7 @@ public class MobileOnboardingJourneyService {
 
     private void ensureNetworkLinked(MobileOnboardingJourney journey, UUID actorUserId) {
         UUID accountHolderId = journey.getAccountHolderId();
-        if (mlmRelationshipRepository.existsByDescendantId(accountHolderId)) {
+        if (hasActualNetworkPosition(accountHolderId)) {
             ensureRootLinkIfMissing(accountHolderId);
             journey.setNetworkLinked(true);
             return;
@@ -538,11 +551,11 @@ public class MobileOnboardingJourneyService {
             try {
                 mlmPlacementService.placeAccountHolder(actorUserId, accountHolderId, sponsorAccountHolderId);
             } catch (ConflictException ex) {
-                if (mlmRelationshipRepository.countByDescendantIdAndLevelGreaterThan(accountHolderId, 0) == 0) {
+                if (!hasActualNetworkPosition(accountHolderId)) {
                     throw ex;
                 }
             }
-            journey.setNetworkLinked(mlmRelationshipRepository.existsByDescendantId(accountHolderId));
+            journey.setNetworkLinked(hasActualNetworkPosition(accountHolderId));
             return;
         }
 
@@ -954,6 +967,16 @@ public class MobileOnboardingJourneyService {
         if (journey.getStatus() == MobileOnboardingJourneyStatus.ONBOARDING_COMPLETED) {
             return null;
         }
+        if (!activeMembership
+                && !journey.isSponsorSet()
+                && journey.getStatus().ordinal() >= MobileOnboardingJourneyStatus.COUNTRY_SELECTED.ordinal()) {
+            return new MobileOnboardingStatusResponse.NextStep(
+                    "SET_SPONSOR_DECISION",
+                    "POST",
+                    "/api/mobile/onboarding/set-sponsor",
+                    "Choose a sponsor or continue without one before payment"
+            );
+        }
         return switch (journey.getStatus()) {
             case REGISTERED, AUTHENTICATED -> new MobileOnboardingStatusResponse.NextStep(
                     "SELECT_COUNTRY",
@@ -1039,6 +1062,34 @@ public class MobileOnboardingJourneyService {
                 .networkLinked(source.isNetworkLinked())
                 .onboardingCompleted(source.isOnboardingCompleted())
                 .build();
+    }
+
+    private void requireSponsorDecision(MobileOnboardingJourney journey) {
+        if (!journey.isSponsorSet()) {
+            throw new BusinessException("Sponsor decision must be set before membership activation");
+        }
+    }
+
+    private MobileSponsorDecision sponsorDecision(MobileOnboardingJourney journey) {
+        if (!journey.isSponsorSet()) {
+            return MobileSponsorDecision.SPONSOR_PENDING;
+        }
+        return journey.getSponsorAccountHolderId() == null
+                ? MobileSponsorDecision.SPONSOR_DECLINED
+                : MobileSponsorDecision.SPONSOR_SELECTED;
+    }
+
+    private MobilePlacementStatus placementStatus(MobileOnboardingJourney journey, boolean activeMembership) {
+        if (!activeMembership) {
+            return MobilePlacementStatus.NOT_APPLICABLE;
+        }
+        return hasActualNetworkPosition(journey.getAccountHolderId())
+                ? MobilePlacementStatus.PLACED
+                : MobilePlacementStatus.PENDING_PLACEMENT;
+    }
+
+    private boolean hasActualNetworkPosition(UUID accountHolderId) {
+        return mlmRelationshipRepository.countByDescendantIdAndLevelGreaterThan(accountHolderId, 0) > 0;
     }
 
     private void publish(UUID accountHolderId, MobileOnboardingEventType eventType, Map<String, String> metadata) {

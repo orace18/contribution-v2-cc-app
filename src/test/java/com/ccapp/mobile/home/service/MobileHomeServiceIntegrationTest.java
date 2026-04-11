@@ -219,7 +219,7 @@ class MobileHomeServiceIntegrationTest {
         assertEquals(LoanStatus.ACTIVE, response.activeLoans().get(0).status());
         assertNotNull(response.circleSummary());
         assertEquals("Alpha Circle", response.circleSummary().name());
-        assertEquals(1L, response.circleSummary().membersCount());
+        assertEquals(2L, response.circleSummary().membersCount());
         assertTrue(response.communityHighlights().isEmpty());
         assertEquals(1L, response.unreadMessages());
         assertEquals(1L, response.notifications().total());

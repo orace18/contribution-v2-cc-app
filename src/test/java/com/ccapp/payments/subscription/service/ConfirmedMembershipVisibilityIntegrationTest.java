@@ -22,6 +22,9 @@ import com.ccapp.identity.account_holder.service.AccountHolderService;
 import com.ccapp.identity.delegation.service.AccessControlService;
 import com.ccapp.mobile.home.dto.MobileHomeDashboardResponse;
 import com.ccapp.mobile.home.service.HomeFacadeService;
+import com.ccapp.mobile.onboarding.domain.entity.MobileOnboardingJourney;
+import com.ccapp.mobile.onboarding.domain.enums.MobileOnboardingJourneyStatus;
+import com.ccapp.mobile.onboarding.repository.MobileOnboardingJourneyRepository;
 import com.ccapp.mobile.network.dto.MobileNetworkEligibilityResponse;
 import com.ccapp.mobile.network.service.MobileNetworkService;
 import com.ccapp.payments.commission.service.MlmCommissionService;
@@ -48,12 +51,14 @@ import com.ccapp.wallet.service.WalletLedgerProjectionService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
+import org.springframework.test.context.transaction.TestTransaction;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -77,6 +82,7 @@ import static org.mockito.Mockito.when;
 })
 @Import({
         MembershipService.class,
+        MembershipReconciliationService.class,
         SubscriptionPaymentFinalizationService.class,
         OperationService.class,
         MemberFinancialProfileService.class,
@@ -116,6 +122,10 @@ class ConfirmedMembershipVisibilityIntegrationTest {
     private CountryConfigurationEngineService countryConfigurationEngineService;
     @Autowired
     private CountryChartOfAccountsService countryChartOfAccountsService;
+    @Autowired
+    private MobileOnboardingJourneyRepository mobileOnboardingJourneyRepository;
+    @Autowired
+    private EntityManager entityManager;
 
     @MockBean
     private AccountingPostingService accountingPostingService;
@@ -152,7 +162,7 @@ class ConfirmedMembershipVisibilityIntegrationTest {
 
     @BeforeEach
     void setUp() {
-        countryRepository.save(Country.builder()
+        countryRepository.findByCode("BJ").orElseGet(() -> countryRepository.save(Country.builder()
                 .id(UUID.randomUUID())
                 .code("BJ")
                 .name("Benin")
@@ -160,7 +170,7 @@ class ConfirmedMembershipVisibilityIntegrationTest {
                 .active(true)
                 .configured(true)
                 .fallback(false)
-                .build());
+                .build()));
         countryChartOfAccountsService.autoGenerateRequiredAccounts("BJ");
 
         ObjectNode membershipPayload = objectMapper.createObjectNode();
@@ -219,15 +229,16 @@ class ConfirmedMembershipVisibilityIntegrationTest {
                 .phoneVerifiedAt(OffsetDateTime.now().minusDays(1))
                 .build());
 
-        SubscriptionPlan plan = subscriptionPlanRepository.saveAndFlush(SubscriptionPlan.builder()
-                .code("CLASSIC_12M")
-                .name("Classic 12 months")
-                .grade(SubscriptionGrade.CLASSIC)
-                .durationMonths(12)
-                .country("BJ")
-                .currency("XOF")
-                .price(new BigDecimal("19000"))
-                .active(true)
+        SubscriptionPlan plan = getOrCreateClassicPlan();
+
+        mobileOnboardingJourneyRepository.saveAndFlush(MobileOnboardingJourney.builder()
+                .accountHolderId(accountHolderId)
+                .status(MobileOnboardingJourneyStatus.SPONSOR_SET)
+                .countryCode("BJ")
+                .sponsorSet(true)
+                .sponsorAccountHolderId(null)
+                .networkLinked(false)
+                .onboardingCompleted(false)
                 .build());
 
         Operation operation = operationRepository.saveAndFlush(Operation.builder()
@@ -259,8 +270,85 @@ class ConfirmedMembershipVisibilityIntegrationTest {
         assertEquals("CLASSIC", eligibility.membershipGrade());
         assertFalse(eligibility.hasNetworkPosition());
         assertFalse(eligibility.isEligible());
+        assertEquals("SPONSOR_DECLINED", eligibility.sponsorDecision());
+        assertEquals("PENDING_PLACEMENT", eligibility.placementStatus());
 
         MobileHomeDashboardResponse home = homeFacadeService.getHome(accountHolderId, accountHolderId);
         assertEquals("CLASSIC", home.user().membershipType());
+    }
+
+    @Test
+    void eligibilityRead_shouldAutoReconcilePendingMembershipWithConfirmedPayment() {
+        UUID accountHolderId = UUID.randomUUID();
+        accountHolderRepository.saveAndFlush(AccountHolder.builder()
+                .id(accountHolderId)
+                .firstName("Merveille")
+                .lastName("Kiki")
+                .phoneNumber("+2290199887766")
+                .countryCode("BJ")
+                .serviceCountryCode("BJ")
+                .phoneVerifiedAt(OffsetDateTime.now().minusDays(1))
+                .build());
+
+        mobileOnboardingJourneyRepository.saveAndFlush(MobileOnboardingJourney.builder()
+                .accountHolderId(accountHolderId)
+                .status(MobileOnboardingJourneyStatus.PLAN_SELECTED)
+                .countryCode("BJ")
+                .sponsorSet(true)
+                .sponsorAccountHolderId(null)
+                .networkLinked(false)
+                .onboardingCompleted(false)
+                .build());
+
+        SubscriptionPlan plan = getOrCreateClassicPlan();
+
+        Operation operation = operationRepository.saveAndFlush(Operation.builder()
+                .accountHolderId(accountHolderId)
+                .actorUserId(accountHolderId)
+                .type(OperationType.SUBSCRIPTION)
+                .status(OperationStatus.CONFIRMED)
+                .amount(new BigDecimal("19000"))
+                .currency("XOF")
+                .idempotencyKey("pending-confirmed-membership:" + UUID.randomUUID())
+                .description("Pending membership reconciliation test")
+                .planId(plan.getId())
+                .paymentMethod("CC_WALLET")
+                .build());
+
+        Membership pendingMembership = membershipService.createPendingMembership(operation.getId(), accountHolderId, plan);
+        assertEquals(MembershipStatus.PENDING, pendingMembership.getStatus());
+
+        entityManager.flush();
+        TestTransaction.flagForCommit();
+        TestTransaction.end();
+        TestTransaction.start();
+
+        MobileNetworkEligibilityResponse eligibility = mobileNetworkService.getEligibility(accountHolderId, accountHolderId);
+
+        entityManager.clear();
+        Membership reconciledMembership = membershipRepository.findByOperationId(operation.getId()).orElseThrow();
+        assertEquals(MembershipStatus.ACTIVE, reconciledMembership.getStatus());
+        assertTrue(memberFinancialProfileService.getProfile(accountHolderId).membershipActive());
+        assertTrue(eligibility.hasPaidMembership());
+        assertEquals("CLASSIC", eligibility.membershipGrade());
+        assertEquals("SPONSOR_DECLINED", eligibility.sponsorDecision());
+        assertEquals("PENDING_PLACEMENT", eligibility.placementStatus());
+
+        MobileHomeDashboardResponse home = homeFacadeService.getHome(accountHolderId, accountHolderId);
+        assertEquals("CLASSIC", home.user().membershipType());
+    }
+
+    private SubscriptionPlan getOrCreateClassicPlan() {
+        return subscriptionPlanRepository.findByCodeAndCountryAndActiveTrue("CLASSIC_12M", "BJ")
+                .orElseGet(() -> subscriptionPlanRepository.saveAndFlush(SubscriptionPlan.builder()
+                        .code("CLASSIC_12M")
+                        .name("Classic 12 months")
+                        .grade(SubscriptionGrade.CLASSIC)
+                        .durationMonths(12)
+                        .country("BJ")
+                        .currency("XOF")
+                        .price(new BigDecimal("19000"))
+                        .active(true)
+                        .build()));
     }
 }

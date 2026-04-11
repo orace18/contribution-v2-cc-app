@@ -23,6 +23,7 @@ import com.ccapp.mobile.onboarding.domain.enums.MobilePlanSelectionStatus;
 import com.ccapp.mobile.onboarding.repository.MobilePlanSelectionRepository;
 import com.ccapp.payments.subscription.domain.entity.Membership;
 import com.ccapp.payments.subscription.domain.enums.MembershipStatus;
+import com.ccapp.payments.subscription.service.MembershipReconciliationService;
 import com.ccapp.payments.subscription.service.MembershipService;
 import com.ccapp.progress.domain.entity.UserTask;
 import com.ccapp.progress.domain.enums.TaskStatus;
@@ -75,10 +76,12 @@ public class HomeFacadeService {
     private final CreditScoringService creditScoringService;
     private final MobilePlanSelectionRepository mobilePlanSelectionRepository;
     private final PrayerSuggestionService prayerSuggestionService;
+    private final MembershipReconciliationService membershipReconciliationService;
 
     @Transactional
     public MobileHomeDashboardResponse getHome(UUID actorUserId, UUID accountHolderId) {
         accessControlService.assertCanActOnAccountHolder(actorUserId, accountHolderId, PermissionLevel.VIEW);
+        membershipReconciliationService.reconcileAccountHolder(accountHolderId);
 
         AccountHolder accountHolder = accountHolderService.getById(accountHolderId);
         UserProfile profile = resolveProfile(accountHolderId);

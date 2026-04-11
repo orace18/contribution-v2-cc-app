@@ -145,6 +145,17 @@ public class MembershipService {
                 });
     }
 
+    @Transactional
+    public Membership failPendingMembership(UUID operationId) {
+        Membership membership = membershipRepository.findByOperationId(operationId)
+                .orElseThrow(() -> new BusinessException("Membership not found for operation"));
+        if (membership.getStatus() != MembershipStatus.PENDING) {
+            return membership;
+        }
+        membership.setStatus(MembershipStatus.FAILED);
+        return membershipRepository.save(membership);
+    }
+
     @Transactional(readOnly = true)
     public Optional<Membership> findLatestMembership(UUID accountHolderId) {
         return membershipRepository.findFirstByAccountHolderIdAndExpiresAtIsNotNullOrderByExpiresAtDescCreatedAtDesc(accountHolderId)

@@ -15,6 +15,7 @@ import com.ccapp.identity.wallet.domain.entity.Wallet;
 import com.ccapp.identity.wallet.repository.WalletRepository;
 import com.ccapp.payments.subscription.domain.entity.Membership;
 import com.ccapp.payments.subscription.domain.enums.MembershipStatus;
+import com.ccapp.payments.subscription.service.MembershipReconciliationService;
 import com.ccapp.payments.subscription.service.MembershipService;
 import com.ccapp.seedcapital.savings.domain.entity.ImfSavingsChannel;
 import com.ccapp.seedcapital.savings.domain.enums.ImfSavingsChannelStatus;
@@ -38,6 +39,7 @@ public class MemberFinancialProfileService {
     private final AccountHolderService accountHolderService;
     private final CountryContextService countryContextService;
     private final MembershipService membershipService;
+    private final MembershipReconciliationService membershipReconciliationService;
     private final WalletRepository walletRepository;
     private final AppUserRepository appUserRepository;
     private final UserRepository userRepository;
@@ -46,6 +48,7 @@ public class MemberFinancialProfileService {
     @Transactional(readOnly = true)
     public MemberFinancialProfile getProfile(UUID accountHolderId) {
         accountHolderService.getById(accountHolderId);
+        membershipReconciliationService.reconcileAccountHolder(accountHolderId);
 
         OffsetDateTime now = OffsetDateTime.now();
         User linkedUser = resolveLinkedUser(accountHolderId);

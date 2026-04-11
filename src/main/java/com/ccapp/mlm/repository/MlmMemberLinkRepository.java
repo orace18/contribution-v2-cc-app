@@ -11,7 +11,7 @@ import java.util.UUID;
 public interface MlmMemberLinkRepository extends JpaRepository<MlmMemberLink, UUID> {
 
     @Query(value = """
-            with recursive sponsor_tree as (
+            with recursive sponsor_tree(member_id, parent_id, generation, linked_at) as (
                 select links.account_holder_id as member_id,
                        links.sponsor_account_holder_id as parent_id,
                        1 as generation,
@@ -40,7 +40,7 @@ public interface MlmMemberLinkRepository extends JpaRepository<MlmMemberLink, UU
      * points to themselves (i.e. not yet placed anywhere in the binary tree).
      */
     @Query(value = """
-            with recursive sponsor_tree as (
+            with recursive sponsor_tree(member_id, linked_at) as (
                 select links.account_holder_id as member_id,
                        links.created_at as linked_at
                 from mlm_member_links links
@@ -63,7 +63,7 @@ public interface MlmMemberLinkRepository extends JpaRepository<MlmMemberLink, UU
     List<MlmTreeMemberProjection> findUnplacedInSponsorTree(UUID accountHolderId);
 
     @Query(value = """
-            with recursive placement_tree as (
+            with recursive placement_tree(member_id, parent_id, generation, linked_at) as (
                 select links.account_holder_id as member_id,
                        links.placement_account_holder_id as parent_id,
                        1 as generation,

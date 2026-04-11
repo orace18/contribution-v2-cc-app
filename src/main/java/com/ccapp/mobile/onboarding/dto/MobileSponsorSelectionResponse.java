@@ -5,6 +5,7 @@ import java.util.UUID;
 public record MobileSponsorSelectionResponse(
         UUID accountHolderId,
         UUID sponsorAccountHolderId,
-        boolean sponsorSet
+        boolean sponsorSet,
+        String sponsorDecision
 ) {
 }

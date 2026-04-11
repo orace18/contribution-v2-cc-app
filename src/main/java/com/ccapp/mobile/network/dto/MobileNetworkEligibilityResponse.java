@@ -6,6 +6,8 @@ public record MobileNetworkEligibilityResponse(
         boolean hasPaidMembership,
         String membershipGrade,
         boolean hasNetworkPosition,
-        boolean isEligible
+        boolean isEligible,
+        String sponsorDecision,
+        String placementStatus
 ) {
 }

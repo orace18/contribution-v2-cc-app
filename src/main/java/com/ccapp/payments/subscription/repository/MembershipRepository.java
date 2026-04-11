@@ -3,6 +3,7 @@ package com.ccapp.payments.subscription.repository;
 import com.ccapp.payments.subscription.domain.entity.Membership;
 import com.ccapp.payments.subscription.domain.enums.MembershipStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.domain.Pageable;
 
 import java.time.OffsetDateTime;
 import java.util.Collection;
@@ -26,6 +27,10 @@ public interface MembershipRepository extends JpaRepository<Membership, UUID> {
     Optional<Membership> findFirstByAccountHolderIdOrderByExpiresAtDescCreatedAtDesc(UUID accountHolderId);
 
     List<Membership> findByStatus(MembershipStatus status);
+
+    List<Membership> findByStatusOrderByCreatedAtAsc(MembershipStatus status, Pageable pageable);
+
+    List<Membership> findByAccountHolderIdAndStatusOrderByCreatedAtAsc(UUID accountHolderId, MembershipStatus status);
 
     List<Membership> findByAccountHolderIdInOrderByAccountHolderIdAscExpiresAtDescCreatedAtDesc(Collection<UUID> accountHolderIds);
 }

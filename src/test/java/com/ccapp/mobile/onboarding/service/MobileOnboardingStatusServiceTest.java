@@ -51,7 +51,9 @@ class MobileOnboardingStatusServiceTest {
                 false,
                 false,
                 null,
-                null
+                null,
+                "SPONSOR_PENDING",
+                "NOT_APPLICABLE"
         ));
 
         MobileOnboardingStatusResponse response = mobileOnboardingStatusService.getStatus(USER_ID, ACCOUNT_ID);
@@ -70,7 +72,9 @@ class MobileOnboardingStatusServiceTest {
                 true,
                 true,
                 null,
-                null
+                null,
+                "SPONSOR_SELECTED",
+                "PLACED"
         ));
 
         MobileOnboardingStatusResponse response = mobileOnboardingStatusService.getStatus(null, ACCOUNT_ID);

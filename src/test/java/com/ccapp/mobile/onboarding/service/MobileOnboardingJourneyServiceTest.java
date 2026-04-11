@@ -2,6 +2,7 @@ package com.ccapp.mobile.onboarding.service;
 
 import com.ccapp.common.events.DomainEvent;
 import com.ccapp.common.events.DomainEventPublisher;
+import com.ccapp.common.exception.BusinessException;
 import com.ccapp.country.dto.CountryContext;
 import com.ccapp.country.service.CountryContextService;
 import com.ccapp.financial.access.domain.FinancialAccessReasonCode;
@@ -79,6 +80,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -238,6 +240,7 @@ class MobileOnboardingJourneyServiceTest {
         when(memberFinancialProfileService.getProfile(ACCOUNT_ID))
                 .thenReturn(financialProfile(true, MembershipStatus.ACTIVE, false, null, List.of()));
         when(mlmRelationshipRepository.existsByDescendantId(ACCOUNT_ID)).thenReturn(false, true);
+        when(mlmRelationshipRepository.countByDescendantIdAndLevelGreaterThan(ACCOUNT_ID, 0)).thenReturn(0L, 1L);
 
         var response = mobileOnboardingJourneyService.activateFreePlan(ACTOR_ID, ACCOUNT_ID);
 
@@ -301,6 +304,7 @@ class MobileOnboardingJourneyServiceTest {
         when(membershipService.createPendingMembership(OPERATION_ID, ACCOUNT_ID, paidPlan))
                 .thenReturn(Membership.builder().status(MembershipStatus.PENDING).build());
         when(mlmRelationshipRepository.existsByDescendantId(ACCOUNT_ID)).thenReturn(false, true);
+        when(mlmRelationshipRepository.countByDescendantIdAndLevelGreaterThan(ACCOUNT_ID, 0)).thenReturn(0L, 1L);
 
         MobilePaymentInitiateResponse paymentResponse = mobileOnboardingJourneyService
                 .initiatePaidPlanPayment(
@@ -541,6 +545,30 @@ class MobileOnboardingJourneyServiceTest {
     }
 
     @Test
+    void onPaidPaymentConfirmed_shouldRepairPlacementWhenOnlySelfNodeExists() {
+        MobileOnboardingJourney journey = journey(MobileOnboardingJourneyStatus.PAYMENT_CONFIRMED, true, SPONSOR_ID, PLAN_ID);
+        when(journeyRepository.findByAccountHolderId(ACCOUNT_ID)).thenReturn(Optional.of(journey));
+        when(mlmRelationshipRepository.existsByDescendantId(ACCOUNT_ID)).thenReturn(true);
+        when(mlmRelationshipRepository.countByDescendantIdAndLevelGreaterThan(ACCOUNT_ID, 0)).thenReturn(0L, 1L);
+
+        Operation confirmed = Operation.builder()
+                .id(OPERATION_ID)
+                .accountHolderId(ACCOUNT_ID)
+                .actorUserId(ACTOR_ID)
+                .type(OperationType.SUBSCRIPTION)
+                .status(OperationStatus.CONFIRMED)
+                .amount(new BigDecimal("15000.0000"))
+                .currency("XOF")
+                .planId(PLAN_ID)
+                .build();
+
+        mobileOnboardingJourneyService.onPaidPaymentConfirmed(confirmed);
+
+        verify(mlmPlacementService).placeAccountHolder(ACTOR_ID, ACCOUNT_ID, SPONSOR_ID);
+        assertTrue(journey.isNetworkLinked());
+    }
+
+    @Test
     void setSponsor_shouldAllowNoSponsorEdgeCase() {
         MobileOnboardingJourney journey = journey(MobileOnboardingJourneyStatus.COUNTRY_SELECTED, false, null, null);
         when(journeyRepository.findByAccountHolderId(ACCOUNT_ID)).thenReturn(Optional.of(journey));
@@ -549,6 +577,7 @@ class MobileOnboardingJourneyServiceTest {
 
         assertTrue(response.sponsorSet());
         assertNull(response.sponsorAccountHolderId());
+        assertEquals("SPONSOR_DECLINED", response.sponsorDecision());
         assertEquals(MobileOnboardingJourneyStatus.SPONSOR_SET, journey.getStatus());
         assertPublishedEvent(MobileOnboardingEventType.SPONSOR_SELECTED);
     }
@@ -563,6 +592,7 @@ class MobileOnboardingJourneyServiceTest {
 
         assertTrue(response.sponsorSet());
         assertEquals(SPONSOR_ID, response.sponsorAccountHolderId());
+        assertEquals("SPONSOR_SELECTED", response.sponsorDecision());
         assertEquals(MobileOnboardingJourneyStatus.SPONSOR_SET, journey.getStatus());
         verify(accountHolderService).getById(SPONSOR_ID);
     }
@@ -589,6 +619,31 @@ class MobileOnboardingJourneyServiceTest {
 
         assertEquals(MobileOnboardingJourneyStatus.PLAN_SELECTED, journey.getStatus());
         assertEquals(PLAN_ID, journey.getPlanId());
+    }
+
+    @Test
+    void paidPlanFlow_shouldRequireExplicitSponsorDecisionBeforePayment() {
+        MobileOnboardingJourney journey = journey(MobileOnboardingJourneyStatus.PLAN_SELECTED, false, null, PLAN_ID);
+        when(journeyRepository.findByAccountHolderId(ACCOUNT_ID)).thenReturn(Optional.of(journey));
+
+        var error = assertThrows(BusinessException.class, () -> mobileOnboardingJourneyService.initiatePaidPlanPayment(
+                ACTOR_ID, ACCOUNT_ID, "idem-no-sponsor", "BJ", "MOBILE_MONEY_MTN", "22961000000", "MTN"
+        ));
+
+        assertEquals("Sponsor decision must be set before membership activation", error.getMessage());
+        verify(jawuPayPaymentOrchestrationService, never())
+                .initiatePayment(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void activateFreePlan_shouldRequireExplicitSponsorDecisionBeforeActivation() {
+        MobileOnboardingJourney journey = journey(MobileOnboardingJourneyStatus.PLAN_SELECTED, false, null, PLAN_ID);
+        when(journeyRepository.findByAccountHolderId(ACCOUNT_ID)).thenReturn(Optional.of(journey));
+
+        var error = assertThrows(BusinessException.class, () -> mobileOnboardingJourneyService.activateFreePlan(ACTOR_ID, ACCOUNT_ID));
+
+        assertEquals("Sponsor decision must be set before membership activation", error.getMessage());
+        verify(operationRepository, never()).findByIdempotencyKey(any());
     }
 
     @Test
@@ -701,7 +756,8 @@ class MobileOnboardingJourneyServiceTest {
 
         assertEquals("COUNTRY_SELECTED", response.currentStatus());
         assertNotNull(response.nextStep());
-        assertEquals("SELECT_PLAN", response.nextStep().code());
+        assertEquals("SET_SPONSOR_DECISION", response.nextStep().code());
+        assertEquals("SPONSOR_PENDING", response.sponsorDecision());
         assertFalse(response.isActive());
         assertTrue(response.completedSteps().contains("PHONE_VERIFIED"));
     }
@@ -735,6 +791,8 @@ class MobileOnboardingJourneyServiceTest {
         assertEquals("/wallet/activate", response.nextStep().endpoint());
         assertEquals("Wallet is ready for creation", response.nextStep().description());
         assertTrue(response.isActive());
+        assertEquals("SPONSOR_PENDING", response.sponsorDecision());
+        assertEquals("PENDING_PLACEMENT", response.placementStatus());
     }
 
     private MobileOnboardingJourney journey(MobileOnboardingJourneyStatus status,

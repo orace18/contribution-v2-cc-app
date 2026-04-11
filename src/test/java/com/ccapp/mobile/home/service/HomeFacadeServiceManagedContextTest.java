@@ -19,6 +19,7 @@ import com.ccapp.identity.domain.enums.UserRole;
 import com.ccapp.identity.repository.UserProfileRepository;
 import com.ccapp.mobile.home.dto.MobileHomeDashboardResponse;
 import com.ccapp.mobile.onboarding.repository.MobilePlanSelectionRepository;
+import com.ccapp.payments.subscription.service.MembershipReconciliationService;
 import com.ccapp.payments.subscription.service.MembershipService;
 import com.ccapp.prayer.service.PrayerSuggestionService;
 import com.ccapp.progress.repository.UserTaskRepository;
@@ -68,6 +69,8 @@ class HomeFacadeServiceManagedContextTest {
     private MobilePlanSelectionRepository mobilePlanSelectionRepository;
     @Mock
     private PrayerSuggestionService prayerSuggestionService;
+    @Mock
+    private MembershipReconciliationService membershipReconciliationService;
 
     @InjectMocks
     private HomeFacadeService homeFacadeService;
