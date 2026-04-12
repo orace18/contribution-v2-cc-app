@@ -6,6 +6,7 @@ public record CircleReadinessChecklistResponse(
         UUID circleId,
         boolean ready,
         boolean allMembersInNetwork,
+        boolean allMembershipsActive,
         boolean allWalletsActive,
         boolean allKycCompleted,
         boolean allImfLinked,

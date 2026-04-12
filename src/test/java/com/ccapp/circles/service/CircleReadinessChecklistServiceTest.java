@@ -62,8 +62,8 @@ class CircleReadinessChecklistServiceTest {
         return new MemberFinancialProfile(
                 accountHolderId,
                 AccountStatus.ACTIVE, null,
-                MembershipStatus.ACTIVE, null, true,
-                "ACTIVE", true,
+                MembershipStatus.ACTIVE, null, true,  // membershipActive = true
+                "ACTIVE", true,                        // walletActive = true
                 false,
                 FinancialAccessState.FINANCIAL_ALLOWED,
                 true, "ACTIVE",
@@ -76,8 +76,8 @@ class CircleReadinessChecklistServiceTest {
         return new MemberFinancialProfile(
                 accountHolderId,
                 AccountStatus.ACTIVE, null,
-                MembershipStatus.ACTIVE, null, true,
-                "INACTIVE", false,
+                MembershipStatus.ACTIVE, null, false,  // membershipActive = false
+                "INACTIVE", false,                      // walletActive = false
                 false,
                 FinancialAccessState.FINANCIAL_DENIED,
                 false, "MISSING",
@@ -119,13 +119,14 @@ class CircleReadinessChecklistServiceTest {
 
         assertTrue(result.ready());
         assertTrue(result.allMembersInNetwork());
+        assertTrue(result.allMembershipsActive());
         assertTrue(result.allWalletsActive());
         assertTrue(result.allKycCompleted());
         assertTrue(result.allImfLinked());
         assertTrue(result.contributionsStarted());
         assertTrue(result.reliabilityScoreReached());
-        assertEquals(6, result.completedItems());
-        assertEquals(6, result.totalItems());
+        assertEquals(7, result.completedItems());
+        assertEquals(7, result.totalItems());
     }
 
     @Test
@@ -143,6 +144,7 @@ class CircleReadinessChecklistServiceTest {
 
         assertFalse(result.ready());
         assertFalse(result.allKycCompleted());
+        assertFalse(result.allMembershipsActive());
         assertFalse(result.allWalletsActive());
         assertFalse(result.allImfLinked());
         assertFalse(result.contributionsStarted());
@@ -166,13 +168,14 @@ class CircleReadinessChecklistServiceTest {
         assertFalse(result.ready());
         assertFalse(result.allMembersInNetwork());
         // All other conditions still met
+        assertTrue(result.allMembershipsActive());
         assertTrue(result.allWalletsActive());
         assertTrue(result.allKycCompleted());
         assertTrue(result.allImfLinked());
         assertTrue(result.contributionsStarted());
         assertTrue(result.reliabilityScoreReached());
         // Seed capital implicitly blocked: ready=false → circle not eligible
-        assertEquals(5, result.completedItems());
+        assertEquals(6, result.completedItems());
     }
 
     @Test
@@ -191,7 +194,7 @@ class CircleReadinessChecklistServiceTest {
 
         CircleReadinessChecklistResponse result = service.evaluate(CIRCLE_ID);
 
-        assertFalse(result.ready(), "Circle with no network, no wallet, no contributions, low score must not be ready");
+        assertFalse(result.ready(), "Circle with no network, no membership, no wallet, no contributions, low score must not be ready");
         assertEquals(0, result.completedItems());
     }
 }

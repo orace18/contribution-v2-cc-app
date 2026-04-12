@@ -22,7 +22,7 @@ import java.util.UUID;
 public class CircleReadinessChecklistService {
 
     private static final BigDecimal MIN_RELIABILITY_SCORE = new BigDecimal("70.00");
-    private static final int TOTAL_CHECKLIST_ITEMS = 6;
+    private static final int TOTAL_CHECKLIST_ITEMS = 7;
 
     private final CircleMemberRepository circleMemberRepository;
     private final MemberFinancialProfileService memberFinancialProfileService;
@@ -38,6 +38,7 @@ public class CircleReadinessChecklistService {
         }
 
         boolean allMembersInNetwork = true;
+        boolean allMembershipsActive = true;
         boolean allWalletsActive = true;
         boolean allKycCompleted = true;
         boolean allImfLinked = true;
@@ -48,6 +49,9 @@ public class CircleReadinessChecklistService {
                 allMembersInNetwork = false;
             }
             MemberFinancialProfile profile = memberFinancialProfileService.getProfile(memberId);
+            // membershipActive is required by SeedCapitalEligibilityService (SEED_CAPITAL_ACCESS).
+            // Must appear in the checklist to avoid showing ready=true while seed capital remains blocked.
+            if (!profile.membershipActive()) allMembershipsActive = false;
             if (!profile.walletActive()) allWalletsActive = false;
             if (profile.blockingReasons().contains(FinancialAccessReasonCode.KYC_NOT_VERIFIED)) allKycCompleted = false;
             if (!profile.imfChannelReady()) allImfLinked = false;
@@ -59,13 +63,13 @@ public class CircleReadinessChecklistService {
                 .globalScore()
                 .compareTo(MIN_RELIABILITY_SCORE) >= 0;
 
-        int completedItems = countTrue(allMembersInNetwork, allWalletsActive, allKycCompleted,
-                allImfLinked, contributionsStarted, reliabilityScoreReached);
+        int completedItems = countTrue(allMembersInNetwork, allMembershipsActive, allWalletsActive,
+                allKycCompleted, allImfLinked, contributionsStarted, reliabilityScoreReached);
         boolean ready = completedItems == TOTAL_CHECKLIST_ITEMS;
 
         return new CircleReadinessChecklistResponse(
                 circleId, ready,
-                allMembersInNetwork, allWalletsActive, allKycCompleted,
+                allMembersInNetwork, allMembershipsActive, allWalletsActive, allKycCompleted,
                 allImfLinked, contributionsStarted, reliabilityScoreReached,
                 completedItems, TOTAL_CHECKLIST_ITEMS
         );
