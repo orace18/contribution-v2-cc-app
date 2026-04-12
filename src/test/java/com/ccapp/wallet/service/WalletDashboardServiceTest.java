@@ -14,6 +14,7 @@ import com.ccapp.wallet.domain.enums.WalletLedgerCategory;
 import com.ccapp.wallet.domain.enums.WalletLedgerEntryType;
 import com.ccapp.wallet.domain.enums.WalletLedgerStatus;
 import com.ccapp.wallet.domain.enums.WalletType;
+import com.ccapp.wallet.dto.WalletBalanceResponse;
 import com.ccapp.wallet.dto.WalletDashboardOperationResponse;
 import com.ccapp.wallet.dto.WalletDashboardResponse;
 import com.ccapp.wallet.repository.WalletLedgerEntryRepository;
@@ -54,6 +55,8 @@ class WalletDashboardServiceTest {
     @Mock
     private WalletLedgerEntryRepository walletLedgerEntryRepository;
     @Mock
+    private WalletBalanceService walletBalanceService;
+    @Mock
     private OperationRepository operationRepository;
 
     @InjectMocks
@@ -68,6 +71,7 @@ class WalletDashboardServiceTest {
                 "ACTIVE"
         )).thenReturn(Optional.empty());
         stubRecentWalletOperations(List.of());
+        stubBalanceService(BigDecimal.ZERO);
 
         WalletDashboardResponse response = service.getDashboard(ACTOR_USER_ID, ACCOUNT_HOLDER_ID);
 
@@ -150,19 +154,11 @@ class WalletDashboardServiceTest {
                 WalletLedgerCategory.WITHDRAWAL,
                 WalletLedgerStatus.CONFIRMED
         )).thenReturn(BigDecimal.ZERO);
-        when(walletLedgerEntryRepository.sumAmountByWalletIdAndEntryTypeAndStatus(
-                WALLET_ID,
-                WalletLedgerEntryType.CREDIT,
-                WalletLedgerStatus.CONFIRMED
-        )).thenReturn(new BigDecimal("150000.0000"));
-        when(walletLedgerEntryRepository.sumAmountByWalletIdAndEntryTypeAndStatus(
-                WALLET_ID,
-                WalletLedgerEntryType.DEBIT,
-                WalletLedgerStatus.CONFIRMED
-        )).thenReturn(new BigDecimal("70000.0000"));
         when(walletLedgerEntryRepository.findByWalletIdOrderByCreatedAtDesc(eq(WALLET_ID), any(Pageable.class)))
                 .thenReturn(List.of());
         stubRecentWalletOperations(List.of());
+        // Balance comes from the authoritative accounting ledger, not from ledger entry sums
+        stubBalanceService(new BigDecimal("80000.0000"));
 
         WalletDashboardResponse response = service.getDashboard(ACTOR_USER_ID, ACCOUNT_HOLDER_ID);
 
@@ -184,23 +180,82 @@ class WalletDashboardServiceTest {
                 WalletLedgerCategory.WITHDRAWAL,
                 WalletLedgerStatus.CONFIRMED
         )).thenReturn(new BigDecimal("30000.0000"));
-        when(walletLedgerEntryRepository.sumAmountByWalletIdAndEntryTypeAndStatus(
-                WALLET_ID,
-                WalletLedgerEntryType.CREDIT,
-                WalletLedgerStatus.CONFIRMED
-        )).thenReturn(new BigDecimal("150000.0000"));
-        when(walletLedgerEntryRepository.sumAmountByWalletIdAndEntryTypeAndStatus(
-                WALLET_ID,
-                WalletLedgerEntryType.DEBIT,
-                WalletLedgerStatus.CONFIRMED
-        )).thenReturn(new BigDecimal("30000.0000"));
+        when(walletLedgerEntryRepository.findByWalletIdOrderByCreatedAtDesc(eq(WALLET_ID), any(Pageable.class)))
+                .thenReturn(List.of());
+        stubRecentWalletOperations(List.of());
+        stubBalanceService(new BigDecimal("120000.0000"));
+
+        WalletDashboardResponse response = service.getDashboard(ACTOR_USER_ID, ACCOUNT_HOLDER_ID);
+
+        assertThat(response.totalWithdrawn()).isEqualByComparingTo("30000.0000");
+    }
+
+    // ── regression tests ───────────────────────────────────────────────────────
+
+    /**
+     * Regression: PSP-funded subscription (MoMo) must NOT reduce the mobile dashboard balance.
+     *
+     * Before the fix, WalletLedgerProjectionService created a DEBIT entry for every SUBSCRIPTION,
+     * including PSP-funded ones. This caused getDashboard() to show 21 000 FCFA while
+     * GET /wallet/balance correctly showed 40 000 FCFA (accounting ledger was never debited).
+     *
+     * After the fix:
+     * - V101 migration removes stale DEBIT entries from wallet_ledger_entries.
+     * - WalletLedgerProjectionService no longer creates DEBIT for pspReference != null.
+     * - getDashboard() now derives balance from WalletBalanceService (accounting ledger).
+     * Both endpoints return 40 000.
+     */
+    @Test
+    void getDashboard_pspFundedSubscriptionDoesNotReduceBalance() {
+        stubAuthorizedWallet();
+        // Accounting ledger says 40 000 (the deposit, no subscription debit)
+        stubBalanceService(new BigDecimal("40000.0000"));
+        // monthlyIncome: the 40 000 MoMo deposit credit
+        when(walletLedgerEntryRepository.sumAmountByWalletIdAndEntryTypeAndStatusAndCreatedAtGreaterThanEqual(
+                eq(WALLET_ID), eq(WalletLedgerEntryType.CREDIT), eq(WalletLedgerStatus.CONFIRMED), any()
+        )).thenReturn(new BigDecimal("40000.0000"));
+        // totalWithdrawn: nothing withdrawn
+        when(walletLedgerEntryRepository.sumAmountByWalletIdAndCategoryAndStatus(
+                WALLET_ID, WalletLedgerCategory.WITHDRAWAL, WalletLedgerStatus.CONFIRMED
+        )).thenReturn(BigDecimal.ZERO);
+        // No ledger entries (PSP subscription DEBIT removed by V101 migration)
         when(walletLedgerEntryRepository.findByWalletIdOrderByCreatedAtDesc(eq(WALLET_ID), any(Pageable.class)))
                 .thenReturn(List.of());
         stubRecentWalletOperations(List.of());
 
         WalletDashboardResponse response = service.getDashboard(ACTOR_USER_ID, ACCOUNT_HOLDER_ID);
 
-        assertThat(response.totalWithdrawn()).isEqualByComparingTo("30000.0000");
+        // Dashboard must match the accounting-ledger balance — 40 000, not 21 000
+        assertThat(response.balance()).isEqualByComparingTo("40000.0000");
+        assertThat(response.monthlyIncome()).isEqualByComparingTo("40000.0000");
+    }
+
+    /**
+     * Regression: wallet balance endpoint and mobile dashboard must return the same figure.
+     *
+     * getDashboard() now delegates to WalletBalanceService for the balance field,
+     * guaranteeing that both endpoints read from the same accounting ledger.
+     */
+    @Test
+    void getDashboard_balanceMatchesWalletBalanceEndpointSourceOfTruth() {
+        BigDecimal accountingLedgerBalance = new BigDecimal("55000.0000");
+
+        stubAuthorizedWallet();
+        stubBalanceService(accountingLedgerBalance);
+        when(walletLedgerEntryRepository.sumAmountByWalletIdAndEntryTypeAndStatusAndCreatedAtGreaterThanEqual(
+                any(), any(), any(), any()
+        )).thenReturn(BigDecimal.ZERO);
+        when(walletLedgerEntryRepository.sumAmountByWalletIdAndCategoryAndStatus(
+                any(), any(), any()
+        )).thenReturn(BigDecimal.ZERO);
+        when(walletLedgerEntryRepository.findByWalletIdOrderByCreatedAtDesc(any(), any()))
+                .thenReturn(List.of());
+        stubRecentWalletOperations(List.of());
+
+        WalletDashboardResponse dashboardResponse = service.getDashboard(ACTOR_USER_ID, ACCOUNT_HOLDER_ID);
+
+        // Balance in dashboard equals what WalletBalanceService (accounting ledger) would return
+        assertThat(dashboardResponse.balance()).isEqualByComparingTo(accountingLedgerBalance);
     }
 
     private AccountHolder accountHolder() {
@@ -233,5 +288,17 @@ class WalletDashboardServiceTest {
                 any(),
                 any(Pageable.class)
         )).thenReturn(operations);
+    }
+
+    private void stubBalanceService(BigDecimal mainBalance) {
+        when(walletBalanceService.getBalance(ACCOUNT_HOLDER_ID, "XOF"))
+                .thenReturn(new WalletBalanceResponse(
+                        WALLET_ID,
+                        ACCOUNT_HOLDER_ID,
+                        "XOF",
+                        mainBalance,
+                        BigDecimal.ZERO,
+                        mainBalance
+                ));
     }
 }
