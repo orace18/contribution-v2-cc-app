@@ -1095,7 +1095,16 @@ public class MobileOnboardingJourneyService {
     }
 
     private boolean hasActualNetworkPosition(UUID accountHolderId) {
-        return mlmRelationshipRepository.countByDescendantIdAndLevelGreaterThan(accountHolderId, 0) > 0;
+        if (mlmRelationshipRepository.countByDescendantIdAndLevelGreaterThan(accountHolderId, 0) > 0) {
+            return true;
+        }
+        // A root node (sponsor explicitly declined, self-placed) also has a valid network position.
+        // Detected by: MlmMemberLink exists with sponsorAccountHolderId=null and
+        // placementAccountHolderId=self — written by ensureRootLinkIfMissing.
+        return mlmMemberLinkRepository.findById(accountHolderId)
+                .map(link -> link.getSponsorAccountHolderId() == null
+                        && accountHolderId.equals(link.getPlacementAccountHolderId()))
+                .orElse(false);
     }
 
     private void publish(UUID accountHolderId, MobileOnboardingEventType eventType, Map<String, String> metadata) {

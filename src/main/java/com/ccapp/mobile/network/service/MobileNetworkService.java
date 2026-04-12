@@ -325,9 +325,17 @@ public class MobileNetworkService {
                 ? membership.getPlanGrade().name()
                 : "NONE";
 
-        // 4. MLM position in tree
+        // 4. MLM position in tree.
+        // A user is considered positioned if they have at least one ancestor at level > 0
+        // (placed under a sponsor) OR if they are a declared root node
+        // (MlmMemberLink with sponsorAccountHolderId=null and placementAccountHolderId=self,
+        //  written when sponsor is explicitly declined).
         boolean hasNetworkPosition = mlmRelationshipRepository
-                .countByDescendantIdAndLevelGreaterThan(accountHolderId, 0) > 0;
+                .countByDescendantIdAndLevelGreaterThan(accountHolderId, 0) > 0
+                || mlmMemberLinkRepository.findById(accountHolderId)
+                        .map(link -> link.getSponsorAccountHolderId() == null
+                                && accountHolderId.equals(link.getPlacementAccountHolderId()))
+                        .orElse(false);
 
         boolean isEligible = sponsorResolved && phoneVerified && hasPaidMembership && hasNetworkPosition;
         MobilePlacementStatus placementStatus = placementStatus(hasPaidMembership, hasNetworkPosition);

@@ -25,6 +25,7 @@ import com.ccapp.identity.wallet.domain.entity.Wallet;
 import com.ccapp.identity.wallet.repository.WalletRepository;
 import com.ccapp.identity.wallet.service.WalletService;
 import com.ccapp.mlm.graph.MlmGraphSyncService;
+import com.ccapp.mlm.domain.entity.MlmMemberLink;
 import com.ccapp.mlm.domain.entity.MlmRelationship;
 import com.ccapp.mlm.repository.MlmMemberLinkRepository;
 import com.ccapp.mlm.repository.MlmRelationshipRepository;
@@ -840,14 +841,21 @@ class MobileOnboardingJourneyServiceTest {
     }
 
     @Test
-    void onPaidPaymentConfirmed_withoutSponsorAndWalletActivated_shouldBlockFinalizationAndKeepNetworkLinkedFalse() {
-        // User declined sponsor (sponsorSet=true, sponsorId=null) — payment succeeds but no MLM placement possible
+    void onPaidPaymentConfirmed_withoutSponsorAndWalletActivated_shouldFinalizeAsRootNodeAndCompleteOnboarding() {
+        // User explicitly declined sponsor — must be auto-placed as root node, never blocked
         MobileOnboardingJourney journey = journey(MobileOnboardingJourneyStatus.SPONSOR_SET, true, null, PLAN_ID);
         when(journeyRepository.findByAccountHolderId(ACCOUNT_ID)).thenReturn(Optional.of(journey));
-        // Only level-0 self-relationship ever exists — no real network position
+        // Level-0 not yet created; no level > 0 ancestors ever (root node)
         when(mlmRelationshipRepository.countByDescendantIdAndLevelGreaterThan(ACCOUNT_ID, 0)).thenReturn(0L);
         when(mlmRelationshipRepository.existsByAncestorIdAndDescendantId(ACCOUNT_ID, ACCOUNT_ID)).thenReturn(false);
-        // Wallet activates (payment confirmed, phone previously verified)
+        // Root MlmMemberLink is created by ensureRootLinkIfMissing — simulate findById returning it
+        when(mlmMemberLinkRepository.findById(ACCOUNT_ID))
+                .thenReturn(Optional.of(MlmMemberLink.builder()
+                        .accountHolderId(ACCOUNT_ID)
+                        .sponsorAccountHolderId(null)
+                        .placementAccountHolderId(ACCOUNT_ID)
+                        .build()));
+        // Wallet activates immediately (phone previously verified)
         when(walletLifecycleService.activateIfEligible(eq(ACCOUNT_ID), any()))
                 .thenReturn(Optional.of(Wallet.builder()
                         .id(UUID.randomUUID())
@@ -870,39 +878,77 @@ class MobileOnboardingJourneyServiceTest {
 
         mobileOnboardingJourneyService.onPaidPaymentConfirmed(confirmed);
 
-        // Finalization blocked — network not linked (no sponsor → no level>0 placement)
-        assertNotEquals(MobileOnboardingJourneyStatus.ONBOARDING_COMPLETED, journey.getStatus());
-        assertFalse(journey.isNetworkLinked());
-        assertFalse(journey.isOnboardingCompleted());
+        // Root-node placement: networkLinked=true, onboarding completed
+        assertEquals(MobileOnboardingJourneyStatus.ONBOARDING_COMPLETED, journey.getStatus());
+        assertTrue(journey.isNetworkLinked());
+        assertTrue(journey.isOnboardingCompleted());
+        // No sponsor placement called — self-placed as root
         verify(mlmPlacementService, never()).placeAccountHolder(any(), any(), any());
-        verify(domainEventPublisher, never()).publish(argThat(event ->
-                event instanceof MobileOnboardingEvent mobileEvent
-                        && mobileEvent.eventType() == MobileOnboardingEventType.ONBOARDING_COMPLETED));
+        assertPublishedEvent(MobileOnboardingEventType.NETWORK_LINKED);
+        assertPublishedEvent(MobileOnboardingEventType.ONBOARDING_COMPLETED);
     }
 
     @Test
-    void getStatus_walletActiveWithLevelZeroOnlyAndNoSponsor_shouldNotShowOnboardingCompleted() {
-        // Wallet is active but user has only a level-0 self-relationship (no real MLM placement)
+    void onPaidPaymentConfirmed_firstUserInNetwork_shouldFinalizeAsRootNodeAndCompleteOnboarding() {
+        // First user in the network: no sponsor exists anywhere — must become the root of the tree
+        MobileOnboardingJourney journey = journey(MobileOnboardingJourneyStatus.SPONSOR_SET, true, null, PLAN_ID);
+        when(journeyRepository.findByAccountHolderId(ACCOUNT_ID)).thenReturn(Optional.of(journey));
+        when(mlmRelationshipRepository.countByDescendantIdAndLevelGreaterThan(ACCOUNT_ID, 0)).thenReturn(0L);
+        when(mlmRelationshipRepository.existsByAncestorIdAndDescendantId(ACCOUNT_ID, ACCOUNT_ID)).thenReturn(false);
+        when(mlmMemberLinkRepository.findById(ACCOUNT_ID))
+                .thenReturn(Optional.of(MlmMemberLink.builder()
+                        .accountHolderId(ACCOUNT_ID)
+                        .sponsorAccountHolderId(null)
+                        .placementAccountHolderId(ACCOUNT_ID)
+                        .build()));
+        when(walletLifecycleService.activateIfEligible(eq(ACCOUNT_ID), any()))
+                .thenReturn(Optional.of(Wallet.builder()
+                        .id(UUID.randomUUID())
+                        .accountHolderId(ACCOUNT_ID)
+                        .provider("MOBILE")
+                        .status("ACTIVE")
+                        .walletType(WalletType.USER)
+                        .build()));
+
+        mobileOnboardingJourneyService.onPaidPaymentConfirmed(Operation.builder()
+                .id(OPERATION_ID).accountHolderId(ACCOUNT_ID).actorUserId(ACTOR_ID)
+                .type(OperationType.SUBSCRIPTION).status(OperationStatus.CONFIRMED)
+                .amount(new BigDecimal("15000.0000")).currency("XOF").planId(PLAN_ID)
+                .build());
+
+        assertEquals(MobileOnboardingJourneyStatus.ONBOARDING_COMPLETED, journey.getStatus());
+        assertTrue(journey.isNetworkLinked());
+        verify(mlmPlacementService, never()).placeAccountHolder(any(), any(), any());
+        assertPublishedEvent(MobileOnboardingEventType.ONBOARDING_COMPLETED);
+    }
+
+    @Test
+    void getStatus_walletActiveWithRootMemberLinkAndNoSponsor_shouldShowOnboardingCompletedAndNetworkReady() {
+        // User with no sponsor but root MlmMemberLink — reward screen must be immediately available
         MobileOnboardingJourney journey = journey(MobileOnboardingJourneyStatus.WALLET_ACTIVATED, true, null, PLAN_ID);
+        journey.setNetworkLinked(true);   // persisted after finalizeOnboarding ran
+        journey.setOnboardingCompleted(true);
         when(journeyRepository.findByAccountHolderId(ACCOUNT_ID)).thenReturn(Optional.of(journey));
         when(accountHolderService.getById(ACCOUNT_ID)).thenReturn(AccountHolder.builder()
-                .id(ACCOUNT_ID)
-                .countryCode("BJ")
-                .serviceCountryCode("BJ")
-                .build());
+                .id(ACCOUNT_ID).countryCode("BJ").serviceCountryCode("BJ").build());
         when(memberFinancialProfileService.getProfile(ACCOUNT_ID))
                 .thenReturn(financialProfile(true, MembershipStatus.ACTIVE, true, "ACTIVE", List.of()));
         when(walletLifecycleService.resolveStatus(ACCOUNT_ID))
                 .thenReturn(walletStatusSnapshot(WalletState.ACTIVE, true, true, "Wallet active", List.of()));
-        // level-0 only — hasActualNetworkPosition must return false
+        // level-0 only — no ancestors — but root MlmMemberLink exists
         when(mlmRelationshipRepository.countByDescendantIdAndLevelGreaterThan(ACCOUNT_ID, 0)).thenReturn(0L);
+        when(mlmMemberLinkRepository.findById(ACCOUNT_ID))
+                .thenReturn(Optional.of(MlmMemberLink.builder()
+                        .accountHolderId(ACCOUNT_ID)
+                        .sponsorAccountHolderId(null)
+                        .placementAccountHolderId(ACCOUNT_ID)
+                        .build()));
 
         MobileOnboardingStatusResponse response = mobileOnboardingJourneyService.getStatus(ACCOUNT_ID);
 
-        // Journey reports wallet-activated but NOT completed because network not linked
-        assertNotEquals("ONBOARDING_COMPLETED", response.currentStatus());
-        // isNetworkReady = journey.networkLinked && mlmGraphSyncService.isNetworkReady — both gates fail
-        assertFalse(response.isNetworkReady());
+        // Root node is positioned → onboarding completed, reward screen available
+        assertEquals("ONBOARDING_COMPLETED", response.currentStatus());
+        assertTrue(response.isNetworkReady());
     }
 
     private MobileOnboardingJourney journey(MobileOnboardingJourneyStatus status,
