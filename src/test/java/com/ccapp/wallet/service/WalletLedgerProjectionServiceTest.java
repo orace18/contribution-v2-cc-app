@@ -144,6 +144,55 @@ class WalletLedgerProjectionServiceTest {
         assertThat(existingEntry.getEntryType()).isEqualTo(WalletLedgerEntryType.DEBIT);
     }
 
+    @Test
+    void syncOperation_pspFundedSubscription_doesNotDebitUserWallet() {
+        // PSP-funded subscription (e.g. MoMo payment): pspReference is set.
+        // The user already paid via the external PSP — debiting the wallet would double-charge them.
+        Wallet wallet = userWallet(WALLET_ID, ACCOUNT_HOLDER_ID, "ACTIVE");
+        Operation operation = operation(OperationType.SUBSCRIPTION, OperationStatus.CONFIRMED);
+        operation.setPspReference("jawupay-ref-abc123");
+
+        when(walletRepository.findFirstByAccountHolderIdAndWalletTypeAndStatus(
+                ACCOUNT_HOLDER_ID,
+                WalletType.USER,
+                "ACTIVE"
+        )).thenReturn(Optional.of(wallet));
+
+        service.syncOperation(operation);
+
+        verify(walletLedgerEntryRepository, times(0)).save(any());
+    }
+
+    @Test
+    void syncOperation_walletFundedSubscription_debitsUserWallet() {
+        // Wallet-funded subscription: pspReference is null.
+        // The subscription fee must be deducted from the user's internal wallet.
+        Wallet wallet = userWallet(WALLET_ID, ACCOUNT_HOLDER_ID, "ACTIVE");
+        Operation operation = operation(OperationType.SUBSCRIPTION, OperationStatus.CONFIRMED);
+        // pspReference stays null (default builder)
+
+        when(walletRepository.findFirstByAccountHolderIdAndWalletTypeAndStatus(
+                ACCOUNT_HOLDER_ID,
+                WalletType.USER,
+                "ACTIVE"
+        )).thenReturn(Optional.of(wallet));
+        when(walletLedgerEntryRepository.findByWalletIdAndOperationId(WALLET_ID, OPERATION_ID))
+                .thenReturn(Optional.empty());
+        when(walletLedgerEntryRepository.save(any(WalletLedgerEntry.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.syncOperation(operation);
+
+        ArgumentCaptor<WalletLedgerEntry> captor = ArgumentCaptor.forClass(WalletLedgerEntry.class);
+        verify(walletLedgerEntryRepository).save(captor.capture());
+
+        WalletLedgerEntry entry = captor.getValue();
+        assertThat(entry.getWalletId()).isEqualTo(WALLET_ID);
+        assertThat(entry.getEntryType()).isEqualTo(WalletLedgerEntryType.DEBIT);
+        assertThat(entry.getCategory()).isEqualTo(WalletLedgerCategory.PAYMENT);
+        assertThat(entry.getStatus()).isEqualTo(WalletLedgerStatus.CONFIRMED);
+    }
+
     private Wallet userWallet(UUID walletId, UUID accountHolderId, String status) {
         return Wallet.builder()
                 .id(walletId)

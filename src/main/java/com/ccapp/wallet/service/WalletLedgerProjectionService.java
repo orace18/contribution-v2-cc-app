@@ -101,7 +101,21 @@ public class WalletLedgerProjectionService {
                     WalletLedgerEntryType.CREDIT,
                     WalletLedgerCategory.REFUND
             );
-            case SUBSCRIPTION, MARKETPLACE_PAYMENT -> addAccountHolderProjection(
+            case SUBSCRIPTION -> {
+                // PSP-funded subscriptions (MoMo, card, etc.) are collected externally.
+                // The wallet must NOT be debited — only wallet-funded subscriptions reduce the balance.
+                boolean isPspFunded = operation.getPspReference() != null
+                        && !operation.getPspReference().isBlank();
+                if (!isPspFunded) {
+                    addAccountHolderProjection(
+                            projections,
+                            operation.getAccountHolderId(),
+                            WalletLedgerEntryType.DEBIT,
+                            WalletLedgerCategory.PAYMENT
+                    );
+                }
+            }
+            case MARKETPLACE_PAYMENT -> addAccountHolderProjection(
                     projections,
                     operation.getAccountHolderId(),
                     WalletLedgerEntryType.DEBIT,
