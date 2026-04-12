@@ -9,18 +9,19 @@ public record SponsorLookupResponse(
         String firstName,
         String lastName,
         String maskedPhone,
-        String message
+        String message,
+        String reasonCode
 ) {
 
     public static SponsorLookupResponse notFound() {
-        return new SponsorLookupResponse(false, null, null, null, null, null, "Sponsor not found");
+        return new SponsorLookupResponse(false, null, null, null, null, null, "Sponsor not found", "NOT_FOUND");
     }
 
-    public static SponsorLookupResponse notEligible(String message) {
-        return new SponsorLookupResponse(true, false, null, null, null, null, message);
+    public static SponsorLookupResponse notEligible(String message, String reasonCode) {
+        return new SponsorLookupResponse(true, false, null, null, null, null, message, reasonCode);
     }
 
     public static SponsorLookupResponse eligible(UUID accountHolderId, String firstName, String lastName, String maskedPhone) {
-        return new SponsorLookupResponse(true, true, accountHolderId, firstName, lastName, maskedPhone, null);
+        return new SponsorLookupResponse(true, true, accountHolderId, firstName, lastName, maskedPhone, null, null);
     }
 }

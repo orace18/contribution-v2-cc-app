@@ -24,7 +24,8 @@ public class MobileSponsorLookupService {
     private static final int MAX_PER_SESSION = 10;
 
     private static final String NOT_ELIGIBLE_MESSAGE =
-            "Votre parrain n'est pas encore un membre actif du Club Chrétien. Demandez-lui de finaliser son adhésion.";
+            "Ce numéro n'appartient pas à un membre du réseau Club Chrétien.";
+    private static final String NOT_IN_NETWORK_REASON = "NOT_IN_NETWORK";
 
     private final AccountHolderRepository accountHolderRepository;
     private final SponsorEligibilityValidator eligibilityValidator;
@@ -61,7 +62,7 @@ public class MobileSponsorLookupService {
 
         if (!eligibilityValidator.isEligible(sponsor)) {
             log.info("MobileSponsorLookupService not eligible accountHolderId={}", sponsor.getId());
-            return SponsorLookupResponse.notEligible(NOT_ELIGIBLE_MESSAGE);
+            return SponsorLookupResponse.notEligible(NOT_ELIGIBLE_MESSAGE, NOT_IN_NETWORK_REASON);
         }
 
         log.info("MobileSponsorLookupService eligible accountHolderId={}", sponsor.getId());
