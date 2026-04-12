@@ -14,7 +14,6 @@ import com.ccapp.wallet.domain.enums.WalletLedgerCategory;
 import com.ccapp.wallet.domain.enums.WalletLedgerEntryType;
 import com.ccapp.wallet.domain.enums.WalletLedgerStatus;
 import com.ccapp.wallet.domain.enums.WalletType;
-import com.ccapp.wallet.dto.WalletBalanceResponse;
 import com.ccapp.wallet.dto.WalletDashboardOperationResponse;
 import com.ccapp.wallet.dto.WalletDashboardResponse;
 import com.ccapp.wallet.repository.WalletLedgerEntryRepository;
@@ -66,7 +65,6 @@ public class WalletDashboardService {
     private final AccountHolderService accountHolderService;
     private final WalletRepository walletRepository;
     private final WalletLedgerEntryRepository walletLedgerEntryRepository;
-    private final WalletBalanceService walletBalanceService;
     private final OperationRepository operationRepository;
 
     @Transactional(readOnly = true)
@@ -84,6 +82,8 @@ public class WalletDashboardService {
 
         BigDecimal monthlyIncome = BigDecimal.ZERO;
         BigDecimal totalWithdrawn = BigDecimal.ZERO;
+        BigDecimal totalCredits = BigDecimal.ZERO;
+        BigDecimal totalDebits = BigDecimal.ZERO;
 
         if (wallet != null) {
             monthlyIncome = walletLedgerEntryRepository
@@ -99,16 +99,26 @@ public class WalletDashboardService {
                             WalletLedgerCategory.WITHDRAWAL,
                             WalletLedgerStatus.CONFIRMED
                     );
+            totalCredits = walletLedgerEntryRepository
+                    .sumAmountByWalletIdAndEntryTypeAndStatus(
+                            wallet.getId(),
+                            WalletLedgerEntryType.CREDIT,
+                            WalletLedgerStatus.CONFIRMED
+                    );
+            totalDebits = walletLedgerEntryRepository
+                    .sumAmountByWalletIdAndEntryTypeAndStatus(
+                            wallet.getId(),
+                            WalletLedgerEntryType.DEBIT,
+                            WalletLedgerStatus.CONFIRMED
+                    );
         }
 
-        // Use the authoritative accounting-ledger balance (same source as GET /wallet/balance).
-        // The wallet_ledger_entries projection table can diverge from the accounting journal
-        // (e.g. due to stale or erroneous PSP-funded debit entries). Delegating here guarantees
-        // both endpoints always return the same balance figure.
-        WalletBalanceResponse balanceSnapshot = walletBalanceService.getBalance(accountHolderId, "XOF");
-
+        // Balance = CREDIT - DEBIT from wallet_ledger projection table.
+        // PSP-funded subscription DEBIT entries are excluded by design:
+        //   - V101 migration removes historical stale entries.
+        //   - WalletLedgerProjectionService no longer creates DEBIT for pspReference != null.
         return new WalletDashboardResponse(
-                scaleAmount(balanceSnapshot.mainBalance()),
+                scaleAmount(totalCredits.subtract(totalDebits)),
                 scaleAmount(monthlyIncome),
                 scaleAmount(totalWithdrawn),
                 loadRecentOperations(accountHolderId, wallet)

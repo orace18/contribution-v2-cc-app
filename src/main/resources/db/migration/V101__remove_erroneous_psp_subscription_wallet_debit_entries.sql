@@ -1,5 +1,5 @@
 -- Root cause: WalletLedgerProjectionService unconditionally created a DEBIT
--- entry in wallet_ledger_entries for every SUBSCRIPTION operation, including
+-- entry in wallet_ledger for every SUBSCRIPTION operation, including
 -- those funded via an external PSP (MoMo, card). For PSP-funded subscriptions,
 -- the user's internal wallet must NOT be debited — the payment was collected
 -- externally. This caused the mobile wallet dashboard to show a lower balance
@@ -16,14 +16,14 @@
 --
 -- Wallet-funded subscriptions (psp_reference IS NULL) are untouched.
 
-DELETE FROM wallet_ledger_entries wle
-WHERE wle.entry_type = 'DEBIT'
-  AND wle.category   = 'PAYMENT'
-  AND wle.operation_id IS NOT NULL
+DELETE FROM wallet_ledger wl
+WHERE wl.entry_type  = 'DEBIT'
+  AND wl.category    = 'PAYMENT'
+  AND wl.operation_id IS NOT NULL
   AND EXISTS (
       SELECT 1
       FROM operations o
-      WHERE o.id            = wle.operation_id
+      WHERE o.id            = wl.operation_id
         AND o.type          = 'SUBSCRIPTION'
         AND o.psp_reference IS NOT NULL
         AND o.psp_reference <> ''
