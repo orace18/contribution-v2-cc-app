@@ -1,6 +1,7 @@
 package com.ccapp.circles.controller;
 
 import com.ccapp.circles.dto.*;
+import com.ccapp.circles.service.CircleReadinessChecklistService;
 import com.ccapp.circlesocial.dto.CircleActivityResponse;
 import com.ccapp.circlesocial.dto.CircleProgressResponse;
 import com.ccapp.circlesocial.dto.CircleScoreResponse;
@@ -44,6 +45,7 @@ public class CircleController {
     private final CircleActivityService circleActivityService;
     private final CircleProgressService circleProgressService;
     private final CircleScoreService circleScoreService;
+    private final CircleReadinessChecklistService circleReadinessChecklistService;
 
     @PostMapping
     @Operation(summary = "Creer un cercle")
@@ -225,6 +227,20 @@ public class CircleController {
     })
     public ResponseEntity<CommonResponse<CircleProgressResponse>> progress(@PathVariable UUID circleId) {
         return ResponseEntity.ok(CommonResponse.success("Circle progress", circleProgressService.getCircleProgress(circleId)));
+    }
+
+    @GetMapping("/{circleId}/readiness")
+    @Operation(summary = "Evaluer la checklist de readiness du cercle pour le capital-amorçage")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Checklist evaluee", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Non authentifie", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Cercle introuvable", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
+    })
+    public ResponseEntity<CommonResponse<CircleReadinessChecklistResponse>> circleReadiness(@PathVariable UUID circleId) {
+        return ResponseEntity.ok(CommonResponse.success(
+                "Circle readiness checklist",
+                circleReadinessChecklistService.evaluate(circleId)
+        ));
     }
 
     @GetMapping("/{circleId}/score")

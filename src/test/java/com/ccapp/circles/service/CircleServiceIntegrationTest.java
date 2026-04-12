@@ -1,6 +1,7 @@
 package com.ccapp.circles.service;
 
 import com.ccapp.circles.domain.enums.CircleStatus;
+import com.ccapp.circles.dto.CircleMemberResponse;
 import com.ccapp.circles.dto.CircleResponse;
 import com.ccapp.circles.dto.CircleCreatorRole;
 import com.ccapp.circles.dto.CreateCircleRequest;
@@ -8,7 +9,6 @@ import com.ccapp.circles.dto.JoinCircleRequest;
 import com.ccapp.circles.repository.CircleMemberRepository;
 import com.ccapp.circles.repository.CircleRepository;
 import com.ccapp.common.events.DomainEventPublisher;
-import com.ccapp.common.exception.BusinessException;
 import com.ccapp.config.TestJacksonAndCachingConfig;
 import com.ccapp.country.config.service.CountryConfigResolver;
 import com.ccapp.country.dto.CountryContext;
@@ -42,7 +42,6 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
@@ -86,6 +85,8 @@ class CircleServiceIntegrationTest {
     private com.ccapp.identity.repository.UserProfileRepository userProfileRepository;
     @MockBean
     private com.ccapp.seedcapital.readiness.service.CircleCoachAssignmentService circleCoachAssignmentService;
+    // UserRepository and MembershipRepository no longer injected into CircleService —
+    // gating removed from circle creation and joining.
 
     @BeforeEach
     void setUp() {
@@ -104,30 +105,51 @@ class CircleServiceIntegrationTest {
     }
 
     @Test
-    void createCircle_shouldRejectWhenPhoneIsNotVerified() {
-        UUID creatorId = createAccountHolder("Creator", "NoPhone", false);
-        createUserMapping(creatorId, AccountStatus.ACTIVE);
-        createActiveMembership(creatorId);
+    void createCircle_withoutKyc_shouldSucceed() {
+        // KYC is no longer a prerequisite — circle is the onboarding environment
+        UUID creatorId = createAccountHolder("Creator", "NoKyc", true);
+        createUserMapping(creatorId, AccountStatus.ACTIVE); // KycStatus.NOT_STARTED by default
 
-        BusinessException ex = assertThrows(
-                BusinessException.class,
-                () -> circleService.createCircle(creatorId, new CreateCircleRequest("Circle verrouille", CircleCreatorRole.MEMBER))
+        CircleResponse response = circleService.createCircle(
+                creatorId,
+                new CreateCircleRequest("Cercle Sans KYC", CircleCreatorRole.MEMBER)
         );
 
-        assertEquals("PHONE_NOT_VERIFIED", ex.getMessage());
+        assertNotNull(response.id());
+        assertEquals(CircleStatus.ACTIVE, response.status());
     }
 
     @Test
-    void createCircle_shouldRejectWhenMembershipIsInactive() {
-        UUID creatorId = createAccountHolder("Creator", "NoMembership", true);
+    void createCircle_withoutPhoneVerification_shouldSucceed() {
+        // Phone verification is no longer a prerequisite for circle creation
+        UUID creatorId = createAccountHolder("Creator", "NoPhone", false);
         createUserMapping(creatorId, AccountStatus.ACTIVE);
 
-        BusinessException ex = assertThrows(
-                BusinessException.class,
-                () -> circleService.createCircle(creatorId, new CreateCircleRequest("Circle verrouille", CircleCreatorRole.MEMBER))
+        CircleResponse response = circleService.createCircle(
+                creatorId,
+                new CreateCircleRequest("Cercle Sans Tel Verifie", CircleCreatorRole.MEMBER)
         );
 
-        assertEquals("MEMBERSHIP_INACTIVE", ex.getMessage());
+        assertNotNull(response.id());
+        assertEquals(CircleStatus.ACTIVE, response.status());
+    }
+
+    @Test
+    void createCircle_withoutMembership_shouldSucceed() {
+        // Membership is no longer a prerequisite for circle creation
+        UUID creatorId = createAccountHolder("Creator", "NoMembership", true);
+        createUserMapping(creatorId, AccountStatus.ACTIVE);
+        // No membership created
+
+        CircleResponse response = circleService.createCircle(
+                creatorId,
+                new CreateCircleRequest("Cercle Sans Abonnement", CircleCreatorRole.MEMBER)
+        );
+
+        assertNotNull(response.id());
+        assertEquals(CircleStatus.ACTIVE, response.status());
+        assertEquals(1, response.membersCount());
+        assertTrue(circleRepository.existsActiveCircleForUser(creatorId));
     }
 
     @Test
@@ -149,28 +171,27 @@ class CircleServiceIntegrationTest {
     }
 
     @Test
-    void joinCircle_shouldRejectWhenMembershipIsInactive() {
+    void joinCircle_withoutMembership_shouldSucceed() {
+        // Membership is no longer required to join a circle
         UUID creatorId = createAccountHolder("Creator", "Owner", true);
         createUserMapping(creatorId, AccountStatus.ACTIVE);
-        createActiveMembership(creatorId);
         CircleResponse circle = circleService.createCircle(
                 creatorId,
-                new CreateCircleRequest("Circle pour test join", CircleCreatorRole.MEMBER)
+                new CreateCircleRequest("Cercle Test Join", CircleCreatorRole.MEMBER)
         );
 
-        UUID joinerId = createAccountHolder("Joiner", "Blocked", true);
+        UUID joinerId = createAccountHolder("Joiner", "NoMembership", true);
         createUserMapping(joinerId, AccountStatus.ACTIVE);
+        // No membership for joiner
 
-        BusinessException ex = assertThrows(
-                BusinessException.class,
-                () -> circleService.joinCircle(
-                        joinerId,
-                        circle.id(),
-                        new JoinCircleRequest("Commerce", "UNKNOWN", new BigDecimal("100.00"))
-                )
+        CircleMemberResponse member = circleService.joinCircle(
+                joinerId,
+                circle.id(),
+                new JoinCircleRequest("Commerce", "UNKNOWN", new BigDecimal("100.00"))
         );
 
-        assertEquals("MEMBERSHIP_INACTIVE", ex.getMessage());
+        assertNotNull(member.id());
+        assertEquals(2, circleMemberRepository.countByCircle_Id(circle.id()));
     }
 
     private UUID createAccountHolder(String firstName, String lastName, boolean phoneVerified) {
