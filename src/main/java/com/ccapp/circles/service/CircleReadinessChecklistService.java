@@ -34,7 +34,7 @@ public class CircleReadinessChecklistService {
     public CircleReadinessChecklistResponse evaluate(UUID circleId) {
         List<CircleMember> members = circleMemberRepository.findByCircle_IdOrderByJoinedAtAsc(circleId);
         if (members.isEmpty()) {
-            return new CircleReadinessChecklistResponse(circleId, false, false, false, false, false, false, false, 0, TOTAL_CHECKLIST_ITEMS);
+            return new CircleReadinessChecklistResponse(circleId, false, false, false, false, false, false, false, false, 0, TOTAL_CHECKLIST_ITEMS);
         }
 
         boolean allMembersInNetwork = true;
