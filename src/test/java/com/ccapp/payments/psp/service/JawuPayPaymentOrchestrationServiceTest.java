@@ -246,6 +246,94 @@ class JawuPayPaymentOrchestrationServiceTest {
         assertThat(metadataCaptor.getValue().pspReference()).isEqualTo(QUOTE_ID.toString());
     }
 
+    /**
+     * Regression: new-provisioning users (app_users only, not in legacy users table) must be
+     * able to initiate a membership payment.  The operation must be created with accountHolderId
+     * (= AppUser.id) as the user_id slot and actorUserId in the actor_user_id slot — these are
+     * intentionally kept distinct in this test to document the expected mapping.
+     */
+    @Test
+    void initiateSubscriptionPayment_withPlanId_operationCreatedWithCorrectUserIdAndActorUserId() {
+        BigDecimal amount = new BigDecimal("15000.00");
+        UUID planId = UUID.randomUUID();
+
+        Operation initiated = operationWithStatus(OperationStatus.INITIATED);
+        when(operationService.createInitiatedOperation(
+                eq(ACCOUNT_HOLDER_ID), eq(ACTOR_USER_ID),
+                eq(OperationType.SUBSCRIPTION),
+                eq(amount), eq("XOF"), eq("idem-membership"), eq("membership-desc"), eq(planId)))
+                .thenReturn(initiated);
+
+        JawuPayQuoteResponse quote = new JawuPayQuoteResponse(
+                QUOTE_ID, 1500000L, 0L, 1500000L, OffsetDateTime.now().plusMinutes(5));
+        when(pspClient.createQuote(any())).thenReturn(quote);
+
+        JawuPayConfirmResponse confirm = new JawuPayConfirmResponse(
+                PAYMENT_ID, "PENDING", "MOCK_PSP",
+                "https://checkout.example/pay/" + PAYMENT_ID, null, "MREF-1");
+        when(pspClient.confirmPayment(any(), eq("idem-membership"))).thenReturn(confirm);
+
+        service.initiatePayment(
+                ACCOUNT_HOLDER_ID, ACTOR_USER_ID,
+                amount, "XOF", "BJ",
+                "MOMO-MTN-BJ-XOF", "22961000000", "MTN",
+                "idem-membership", "membership-desc",
+                OperationType.SUBSCRIPTION, planId
+        );
+
+        // user_id slot must be accountHolderId (= AppUser.id), never actorUserId
+        verify(operationService).createInitiatedOperation(
+                ACCOUNT_HOLDER_ID,   // → operations.user_id (must equal AppUser.id)
+                ACTOR_USER_ID,       // → operations.actor_user_id
+                OperationType.SUBSCRIPTION,
+                amount, "XOF", "idem-membership", "membership-desc", planId
+        );
+    }
+
+    /**
+     * Regression: after PSP confirm, the paymentId returned by JawuPay must be persisted
+     * on the operation so that the JawuPay SUCCESS webhook can locate it via
+     * OperationService.findByPaymentIdOrPspReference(paymentId).
+     */
+    @Test
+    void initiateSubscriptionPayment_withPlanId_paymentIdPersistedAfterPspConfirmForWebhookLookup() {
+        BigDecimal amount = new BigDecimal("15000.00");
+        UUID planId = UUID.randomUUID();
+
+        Operation initiated = operationWithStatus(OperationStatus.INITIATED);
+        when(operationService.createInitiatedOperation(
+                eq(ACCOUNT_HOLDER_ID), eq(ACTOR_USER_ID),
+                eq(OperationType.SUBSCRIPTION),
+                eq(amount), eq("XOF"), eq("idem-webhook"), eq("membership-desc"), eq(planId)))
+                .thenReturn(initiated);
+
+        JawuPayQuoteResponse quote = new JawuPayQuoteResponse(
+                QUOTE_ID, 1500000L, 0L, 1500000L, OffsetDateTime.now().plusMinutes(5));
+        when(pspClient.createQuote(any())).thenReturn(quote);
+
+        JawuPayConfirmResponse confirm = new JawuPayConfirmResponse(
+                PAYMENT_ID, "PENDING", "MOCK_PSP",
+                "https://checkout.example/pay/" + PAYMENT_ID, null, "MREF-2");
+        when(pspClient.confirmPayment(any(), eq("idem-webhook"))).thenReturn(confirm);
+
+        service.initiatePayment(
+                ACCOUNT_HOLDER_ID, ACTOR_USER_ID,
+                amount, "XOF", "BJ",
+                "MOMO-MTN-BJ-XOF", "22961000000", "MTN",
+                "idem-webhook", "membership-desc",
+                OperationType.SUBSCRIPTION, planId
+        );
+
+        ArgumentCaptor<OperationService.PspMetadata> metadataCaptor =
+                ArgumentCaptor.forClass(OperationService.PspMetadata.class);
+        verify(operationService).markPendingPsp(eq(OPERATION_ID), metadataCaptor.capture());
+
+        // paymentId must be the value returned by PSP confirm — the webhook uses this
+        // to call OperationService.findByPaymentIdOrPspReference(paymentId)
+        assertThat(metadataCaptor.getValue().paymentId()).isEqualTo(PAYMENT_ID.toString());
+        assertThat(metadataCaptor.getValue().pspReference()).isEqualTo(PAYMENT_ID.toString());
+    }
+
     @Test
     void toMinorUnits_convertsCorrectly() {
         assertThat(JawuPayPaymentOrchestrationService.toMinorUnits(new BigDecimal("1500.00"))).isEqualTo(150000L);
