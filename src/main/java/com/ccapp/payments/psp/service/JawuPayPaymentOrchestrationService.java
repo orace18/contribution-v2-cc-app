@@ -192,15 +192,19 @@ public class JawuPayPaymentOrchestrationService {
         );
 
         // Step 4 — store paymentId on the operation, transition to PENDING_PSP
+        String resolvedPspPaymentId = confirm.paymentId() != null 
+                ? confirm.paymentId().toString() 
+                : quote.quoteId().toString();
+
         operationService.markPendingPsp(operation.getId(), PspMetadata.payment(
-                confirm.paymentId() == null ? null : confirm.paymentId().toString(),
+                resolvedPspPaymentId,
                 confirm.providerReference(),
                 confirm.redirectUrl(),
                 paymentMethodId,
                 PENDING_PSP_STATUS,
                 country
         ));
-        log.info("Payment pending PSP: operationId={} paymentId={}", operation.getId(), confirm.paymentId());
+        log.info("Payment pending PSP: operationId={} paymentId={}", operation.getId(), resolvedPspPaymentId);
 
         // Step 5 — return redirectUrl to the caller
         return new InitiatePaymentResult(operation.getId(), confirm.redirectUrl());

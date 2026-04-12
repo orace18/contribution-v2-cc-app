@@ -126,7 +126,8 @@ public class JawuPayWebhookService {
         validateReferencePresence(paymentId, payoutId, providerReference);
 
         Operation operation = findOperationForWebhook(paymentId, payoutId, providerReference)
-                .orElseThrow(() -> new BusinessException("Operation not found for JawuPay webhook identifiers"));
+                .orElseThrow(() -> new BusinessException("Operation not found for JawuPay webhook identifiers [paymentId="
+                        + paymentId + ", payoutId=" + payoutId + ", providerReference=" + providerReference + "]"));
 
         validateOperationIdIfPresent(request.operationId(), operation.getId());
         if (request.amount() != null && request.amount() > 0) {

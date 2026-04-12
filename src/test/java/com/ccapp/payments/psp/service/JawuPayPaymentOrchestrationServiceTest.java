@@ -218,6 +218,35 @@ class JawuPayPaymentOrchestrationServiceTest {
     }
 
     @Test
+    void initiatePayment_whenConfirmPaymentIdIsNull_persistsQuoteIdAsPaymentId() {
+        BigDecimal amount = new BigDecimal("1500.00");
+
+        Operation initiated = operationWithStatus(OperationStatus.INITIATED);
+        when(operationService.createInitiatedOperation(
+                eq(ACCOUNT_HOLDER_ID), eq(ACTOR_USER_ID),
+                eq(OperationType.WALLET_DEPOSIT_PSP),
+                eq(amount), eq("XOF"), eq("idem-null"), eq("desc")))
+                .thenReturn(initiated);
+
+        JawuPayQuoteResponse quote = new JawuPayQuoteResponse(
+                QUOTE_ID, 150000L, 0L, 150000L, OffsetDateTime.now().plusMinutes(5));
+        when(pspClient.createQuote(any())).thenReturn(quote);
+
+        JawuPayConfirmResponse confirm = new JawuPayConfirmResponse(
+                null, "PENDING", "MOCK_PSP",
+                "https://checkout.example/pay/link", null, "REF-NUL");
+        when(pspClient.confirmPayment(any(), eq("idem-null"))).thenReturn(confirm);
+
+        service.initiatePayment(ACCOUNT_HOLDER_ID, ACTOR_USER_ID, amount, "XOF", "CI",
+                "MOBILE_MONEY_MTN", "22501234567", "MTN", "idem-null", "desc");
+
+        ArgumentCaptor<OperationService.PspMetadata> metadataCaptor = ArgumentCaptor.forClass(OperationService.PspMetadata.class);
+        verify(operationService).markPendingPsp(eq(OPERATION_ID), metadataCaptor.capture());
+        assertThat(metadataCaptor.getValue().paymentId()).isEqualTo(QUOTE_ID.toString());
+        assertThat(metadataCaptor.getValue().pspReference()).isEqualTo(QUOTE_ID.toString());
+    }
+
+    @Test
     void toMinorUnits_convertsCorrectly() {
         assertThat(JawuPayPaymentOrchestrationService.toMinorUnits(new BigDecimal("1500.00"))).isEqualTo(150000L);
         assertThat(JawuPayPaymentOrchestrationService.toMinorUnits(new BigDecimal("0.50"))).isEqualTo(50L);
