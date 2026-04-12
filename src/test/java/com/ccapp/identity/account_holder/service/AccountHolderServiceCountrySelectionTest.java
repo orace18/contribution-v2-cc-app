@@ -72,16 +72,29 @@ class AccountHolderServiceCountrySelectionTest {
 
     @Test
     void selectCountry_shouldKeepRealCountryImmutable() {
-        AccountHolder existing = accountHolder("CI", "CI");
-        stubCountrySelection("BJ", "BJ");
+        AccountHolder existing = accountHolder("BJ", "BJ");
+        stubCountrySelection("CI", "CI");
         when(accountHolderRepository.findById(ACCOUNT_HOLDER_ID)).thenReturn(Optional.of(existing));
 
-        assertThatThrownBy(() -> accountHolderService.selectCountry(ACCOUNT_HOLDER_ID, "BJ"))
+        assertThatThrownBy(() -> accountHolderService.selectCountry(ACCOUNT_HOLDER_ID, "CI"))
                 .isInstanceOf(BusinessException.class)
                 .hasMessage("Account holder country is immutable");
 
         verify(accountHolderRepository, never()).save(any(AccountHolder.class));
         verify(countryChartOfAccountsService, never()).findOrCreateWallet(any(AccountHolder.class));
+    }
+
+    @Test
+    void selectCountry_shouldAllowReselectionOfSameRealCountry() {
+        AccountHolder existing = accountHolder("BJ", "BJ");
+        stubCountrySelection("BJ", "BJ");
+        when(accountHolderRepository.findById(ACCOUNT_HOLDER_ID)).thenReturn(Optional.of(existing));
+        when(accountHolderRepository.save(any(AccountHolder.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        AccountHolder saved = accountHolderService.selectCountry(ACCOUNT_HOLDER_ID, "BJ");
+
+        assertThat(saved.getCountryCode()).isEqualTo("BJ");
+        verify(accountHolderRepository).save(existing);
     }
 
     @Test
