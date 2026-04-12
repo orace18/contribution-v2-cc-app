@@ -7,7 +7,6 @@ import com.ccapp.circlesocial.repository.CircleActivityRepository;
 import com.ccapp.circles.repository.CircleRepository;
 import com.ccapp.common.events.DomainEventPublisher;
 import com.ccapp.common.exception.NotFoundException;
-import com.ccapp.identity.app_user.repository.AppUserRepository;
 import com.ccapp.notifications.domain.enums.NotificationChannel;
 import com.ccapp.notifications.domain.enums.NotificationType;
 import com.ccapp.notifications.event.NotificationRequestedEvent;
@@ -28,7 +27,6 @@ public class CircleActivityService {
     private final CircleRepository circleRepository;
     private final CircleProgressService circleProgressService;
     private final CircleScoreService circleScoreService;
-    private final AppUserRepository appUserRepository;
     private final DomainEventPublisher domainEventPublisher;
 
     @Transactional
@@ -82,17 +80,13 @@ public class CircleActivityService {
 
     private void emitCircleActivityNotification(CircleActivity activity) {
         try {
-            UUID recipientAccountHolderId = appUserRepository.findById(activity.getActorUserId())
-                    .map(appUser -> appUser.getAccountHolderId())
-                    .orElse(null);
-
-            if (recipientAccountHolderId == null) {
-                return;
-            }
+            // actorUserId stores an account_holder_id — it is the canonical business identity
+            // for the circle domain. No app_user lookup needed or valid here.
+            UUID recipientAccountHolderId = activity.getActorUserId();
 
             domainEventPublisher.publish(NotificationRequestedEvent.create(
                     recipientAccountHolderId,
-                    activity.getActorUserId(),
+                    recipientAccountHolderId,
                     NotificationType.CIRCLE_ACTIVITY,
                     NotificationChannel.IN_APP,
                     "CIRCLE_ACTIVITY",
