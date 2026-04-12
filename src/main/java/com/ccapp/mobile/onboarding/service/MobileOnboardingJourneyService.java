@@ -495,12 +495,13 @@ public class MobileOnboardingJourneyService {
             promoteStatus(copy, MobileOnboardingJourneyStatus.WALLET_ACTIVATED);
         }
 
-        if (mlmRelationshipRepository.existsByDescendantId(accountHolderId) || copy.isNetworkLinked()) {
+        if (hasActualNetworkPosition(accountHolderId) || copy.isNetworkLinked()) {
             copy.setNetworkLinked(true);
         }
 
         if (copy.isOnboardingCompleted()
-                || copy.getStatus().ordinal() >= MobileOnboardingJourneyStatus.WALLET_ACTIVATED.ordinal()) {
+                || (copy.getStatus().ordinal() >= MobileOnboardingJourneyStatus.WALLET_ACTIVATED.ordinal()
+                        && copy.isNetworkLinked())) {
             copy.setOnboardingCompleted(true);
             promoteStatus(copy, MobileOnboardingJourneyStatus.ONBOARDING_COMPLETED);
         }
@@ -568,7 +569,7 @@ public class MobileOnboardingJourneyService {
                     .build());
         }
         ensureRootLinkIfMissing(accountHolderId);
-        journey.setNetworkLinked(mlmRelationshipRepository.existsByDescendantId(accountHolderId));
+        journey.setNetworkLinked(hasActualNetworkPosition(accountHolderId));
     }
 
     private void ensureRootLinkIfMissing(UUID accountHolderId) {
@@ -628,6 +629,11 @@ public class MobileOnboardingJourneyService {
             return;
         }
         syncNetworkLink(journey, actorUserId);
+        if (!journey.isNetworkLinked()) {
+            log.info("finalize_onboarding_blocked accountHolderId={} reason=NETWORK_NOT_LINKED sponsorSet={}",
+                    journey.getAccountHolderId(), journey.isSponsorSet());
+            return;
+        }
         journey.setOnboardingCompleted(true);
         if (promoteStatus(journey, MobileOnboardingJourneyStatus.ONBOARDING_COMPLETED)) {
             publish(journey.getAccountHolderId(), MobileOnboardingEventType.ONBOARDING_COMPLETED, Map.of());

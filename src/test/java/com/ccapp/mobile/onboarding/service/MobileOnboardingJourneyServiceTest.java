@@ -795,6 +795,115 @@ class MobileOnboardingJourneyServiceTest {
         assertEquals("PENDING_PLACEMENT", response.placementStatus());
     }
 
+    // -----------------------------------------------------------------------
+    // Anti-regression: post-payment network finalization
+    // -----------------------------------------------------------------------
+
+    @Test
+    void onPaidPaymentConfirmed_withSponsorAndWalletActivated_shouldFinalizeNetworkAndCompleteOnboarding() {
+        // Prerequisite: sponsor was set before payment
+        MobileOnboardingJourney journey = journey(MobileOnboardingJourneyStatus.SPONSOR_SET, true, SPONSOR_ID, PLAN_ID);
+        when(journeyRepository.findByAccountHolderId(ACCOUNT_ID)).thenReturn(Optional.of(journey));
+        // countByDescendantIdAndLevelGreaterThan: 0 before placement, 1 after
+        when(mlmRelationshipRepository.countByDescendantIdAndLevelGreaterThan(ACCOUNT_ID, 0)).thenReturn(0L, 1L);
+        // Wallet activates immediately on post-payment (e.g. phone was already verified)
+        when(walletLifecycleService.activateIfEligible(eq(ACCOUNT_ID), any()))
+                .thenReturn(Optional.of(Wallet.builder()
+                        .id(UUID.randomUUID())
+                        .accountHolderId(ACCOUNT_ID)
+                        .provider("MOBILE")
+                        .mobileMoneyNumber("+22961000000")
+                        .status("ACTIVE")
+                        .walletType(WalletType.USER)
+                        .build()));
+
+        Operation confirmed = Operation.builder()
+                .id(OPERATION_ID)
+                .accountHolderId(ACCOUNT_ID)
+                .actorUserId(ACTOR_ID)
+                .type(OperationType.SUBSCRIPTION)
+                .status(OperationStatus.CONFIRMED)
+                .amount(new BigDecimal("15000.0000"))
+                .currency("XOF")
+                .planId(PLAN_ID)
+                .build();
+
+        mobileOnboardingJourneyService.onPaidPaymentConfirmed(confirmed);
+
+        assertEquals(MobileOnboardingJourneyStatus.ONBOARDING_COMPLETED, journey.getStatus());
+        assertTrue(journey.isNetworkLinked());
+        assertTrue(journey.isOnboardingCompleted());
+        verify(mlmPlacementService).placeAccountHolder(ACTOR_ID, ACCOUNT_ID, SPONSOR_ID);
+        assertPublishedEvent(MobileOnboardingEventType.NETWORK_LINKED);
+        assertPublishedEvent(MobileOnboardingEventType.ONBOARDING_COMPLETED);
+    }
+
+    @Test
+    void onPaidPaymentConfirmed_withoutSponsorAndWalletActivated_shouldBlockFinalizationAndKeepNetworkLinkedFalse() {
+        // User declined sponsor (sponsorSet=true, sponsorId=null) — payment succeeds but no MLM placement possible
+        MobileOnboardingJourney journey = journey(MobileOnboardingJourneyStatus.SPONSOR_SET, true, null, PLAN_ID);
+        when(journeyRepository.findByAccountHolderId(ACCOUNT_ID)).thenReturn(Optional.of(journey));
+        // Only level-0 self-relationship ever exists — no real network position
+        when(mlmRelationshipRepository.countByDescendantIdAndLevelGreaterThan(ACCOUNT_ID, 0)).thenReturn(0L);
+        when(mlmRelationshipRepository.existsByAncestorIdAndDescendantId(ACCOUNT_ID, ACCOUNT_ID)).thenReturn(false);
+        // Wallet activates (payment confirmed, phone previously verified)
+        when(walletLifecycleService.activateIfEligible(eq(ACCOUNT_ID), any()))
+                .thenReturn(Optional.of(Wallet.builder()
+                        .id(UUID.randomUUID())
+                        .accountHolderId(ACCOUNT_ID)
+                        .provider("MOBILE")
+                        .status("ACTIVE")
+                        .walletType(WalletType.USER)
+                        .build()));
+
+        Operation confirmed = Operation.builder()
+                .id(OPERATION_ID)
+                .accountHolderId(ACCOUNT_ID)
+                .actorUserId(ACTOR_ID)
+                .type(OperationType.SUBSCRIPTION)
+                .status(OperationStatus.CONFIRMED)
+                .amount(new BigDecimal("15000.0000"))
+                .currency("XOF")
+                .planId(PLAN_ID)
+                .build();
+
+        mobileOnboardingJourneyService.onPaidPaymentConfirmed(confirmed);
+
+        // Finalization blocked — network not linked (no sponsor → no level>0 placement)
+        assertNotEquals(MobileOnboardingJourneyStatus.ONBOARDING_COMPLETED, journey.getStatus());
+        assertFalse(journey.isNetworkLinked());
+        assertFalse(journey.isOnboardingCompleted());
+        verify(mlmPlacementService, never()).placeAccountHolder(any(), any(), any());
+        verify(domainEventPublisher, never()).publish(argThat(event ->
+                event instanceof MobileOnboardingEvent mobileEvent
+                        && mobileEvent.eventType() == MobileOnboardingEventType.ONBOARDING_COMPLETED));
+    }
+
+    @Test
+    void getStatus_walletActiveWithLevelZeroOnlyAndNoSponsor_shouldNotShowOnboardingCompleted() {
+        // Wallet is active but user has only a level-0 self-relationship (no real MLM placement)
+        MobileOnboardingJourney journey = journey(MobileOnboardingJourneyStatus.WALLET_ACTIVATED, true, null, PLAN_ID);
+        when(journeyRepository.findByAccountHolderId(ACCOUNT_ID)).thenReturn(Optional.of(journey));
+        when(accountHolderService.getById(ACCOUNT_ID)).thenReturn(AccountHolder.builder()
+                .id(ACCOUNT_ID)
+                .countryCode("BJ")
+                .serviceCountryCode("BJ")
+                .build());
+        when(memberFinancialProfileService.getProfile(ACCOUNT_ID))
+                .thenReturn(financialProfile(true, MembershipStatus.ACTIVE, true, "ACTIVE", List.of()));
+        when(walletLifecycleService.resolveStatus(ACCOUNT_ID))
+                .thenReturn(walletStatusSnapshot(WalletState.ACTIVE, true, true, "Wallet active", List.of()));
+        // level-0 only — hasActualNetworkPosition must return false
+        when(mlmRelationshipRepository.countByDescendantIdAndLevelGreaterThan(ACCOUNT_ID, 0)).thenReturn(0L);
+
+        MobileOnboardingStatusResponse response = mobileOnboardingJourneyService.getStatus(ACCOUNT_ID);
+
+        // Journey reports wallet-activated but NOT completed because network not linked
+        assertNotEquals("ONBOARDING_COMPLETED", response.currentStatus());
+        // isNetworkReady = journey.networkLinked && mlmGraphSyncService.isNetworkReady — both gates fail
+        assertFalse(response.isNetworkReady());
+    }
+
     private MobileOnboardingJourney journey(MobileOnboardingJourneyStatus status,
                                             boolean sponsorSet,
                                             UUID sponsorId,
