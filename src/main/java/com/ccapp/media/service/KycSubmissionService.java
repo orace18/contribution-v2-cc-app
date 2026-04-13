@@ -26,7 +26,6 @@ import com.ccapp.media.domain.enums.KycDocumentType;
 import com.ccapp.media.repository.KycDocumentRepository;
 import com.ccapp.media.repository.MediaFileRepository;
 import com.ccapp.media.storage.ObjectStorageService;
-import com.ccapp.media.storage.PresignedUrl;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -36,9 +35,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.io.IOException;
-import java.net.URI;
-import java.time.Duration;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
@@ -83,9 +79,6 @@ public class KycSubmissionService {
 
     @Value("${cpass.kyc.requested-level:LEVEL_1}")
     private String requestedKycLevel;
-
-    @Value("${media.download-url-ttl-minutes:15}")
-    private long downloadUrlTtlMinutes;
 
     @Value("${cpass.kyc.level1.face-match-threshold:0.75}")
     private double level1FaceMatchThreshold;
@@ -184,15 +177,10 @@ public class KycSubmissionService {
         )) {
             KycDocument document = submissionDocuments.get(requiredType);
             MediaFile mediaFile = loadReadyMediaFile(accountHolder.getId(), document.getMediaFileId());
-            PresignedUrl downloadUrl = objectStorageService.createDownloadUrl(
-                    mediaFile.getBucket(),
-                    mediaFile.getObjectKey(),
-                    Duration.ofMinutes(downloadUrlTtlMinutes)
-            );
             CPassKycDocumentResponse documentResponse = cPassKycGateway.submitDocument(
                     caseId,
                     toCpassDocumentType(requiredType),
-                    createCpassUploadResource(mediaFile, downloadUrl.url()),
+                    createCpassUploadResource(requiredType, mediaFile),
                     Map.of(
                             "accountHolderId", accountHolder.getId().toString(),
                             "mediaFileId", mediaFile.getId().toString()
@@ -432,9 +420,9 @@ public class KycSubmissionService {
         return candidate != null ? candidate : normalizeOptional(fallback);
     }
 
-    private ByteArrayResource createCpassUploadResource(MediaFile mediaFile, String downloadUrl) {
-        try (java.io.InputStream inputStream = URI.create(downloadUrl).toURL().openStream()) {
-            byte[] bytes = inputStream.readAllBytes();
+    private ByteArrayResource createCpassUploadResource(KycDocumentType documentType, MediaFile mediaFile) {
+        try {
+            byte[] bytes = objectStorageService.readObject(mediaFile.getBucket(), mediaFile.getObjectKey());
             String filename = extractFilename(mediaFile.getObjectKey());
             return new ByteArrayResource(bytes) {
                 @Override
@@ -442,7 +430,17 @@ public class KycSubmissionService {
                     return filename;
                 }
             };
-        } catch (IOException | RuntimeException ex) {
+        } catch (RuntimeException ex) {
+            log.error(
+                    "kyc submit: media read failed accountHolderId={} mediaId={} documentType={} bucket={} objectKey={} reason={}",
+                    mediaFile.getAccountHolderId(),
+                    mediaFile.getId(),
+                    documentType,
+                    mediaFile.getBucket(),
+                    mediaFile.getObjectKey(),
+                    ex.getMessage(),
+                    ex
+            );
             throw new BusinessException("CPASS_KYC_DOCUMENT_READ_FAILED");
         }
     }

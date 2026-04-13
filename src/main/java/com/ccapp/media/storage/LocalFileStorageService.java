@@ -70,6 +70,20 @@ public class LocalFileStorageService implements ObjectStorageService, AutoClosea
         writeFile(fileId, data, contentType);
     }
 
+    @Override
+    public byte[] readObject(String bucket, String objectKey) {
+        String fileId = resolveFileId(bucket, objectKey);
+        Path dataPath = dataPath(fileId);
+        if (!Files.exists(dataPath)) {
+            throw new NotFoundException("Local fallback media file not found");
+        }
+        try {
+            return Files.readAllBytes(dataPath);
+        } catch (IOException ex) {
+            throw new BusinessException("Unable to read local fallback media file");
+        }
+    }
+
     public void putPublicObject(String fileId, byte[] data, String contentType) {
         String normalizedFileId = normalizeFileId(fileId);
         writeFile(normalizedFileId, data, contentType);

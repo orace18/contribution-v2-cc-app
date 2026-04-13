@@ -35,6 +35,7 @@ class LocalFileStorageServiceTest {
         assertThat(service.objectExists(bucket, objectKey)).isTrue();
         assertThat(service.createDownloadUrl(bucket, objectKey, Duration.ofMinutes(15)).url())
                 .isEqualTo(uploadUrl.url());
+        assertThat(new String(service.readObject(bucket, objectKey))).isEqualTo("passport");
 
         LocalFileStorageService.StoredLocalMediaFile storedFile = service.loadPublicObject(fileId);
         assertThat(storedFile.contentType()).isEqualTo("image/jpeg");
@@ -57,6 +58,7 @@ class LocalFileStorageServiceTest {
         String downloadUrl = service.createDownloadUrl(bucket, objectKey, Duration.ofMinutes(15)).url();
         String fileId = downloadUrl.substring(downloadUrl.lastIndexOf('/') + 1);
 
+        assertThat(new String(service.readObject(bucket, objectKey))).isEqualTo("selfie");
         LocalFileStorageService.StoredLocalMediaFile storedFile = service.loadPublicObject(fileId);
         assertThat(storedFile.contentType()).isEqualTo("image/jpeg");
         assertThat(Files.readString(storedFile.path())).isEqualTo("selfie");

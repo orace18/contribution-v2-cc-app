@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.NoSuchBucketException;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
@@ -132,6 +133,27 @@ public class MinioObjectStorageService implements ObjectStorageService, AutoClos
                     ex
             );
             throw new BusinessException("Unable to store media file");
+        }
+    }
+
+    @Override
+    public byte[] readObject(String bucket, String objectKey) {
+        try {
+            return mediaS3Client.getObjectAsBytes(
+                    GetObjectRequest.builder()
+                            .bucket(bucket)
+                            .key(objectKey)
+                            .build()
+            ).asByteArray();
+        } catch (NoSuchKeyException ex) {
+            throw new BusinessException("Uploaded media not found in object storage");
+        } catch (S3Exception ex) {
+            if (ex.statusCode() == 404) {
+                throw new BusinessException("Uploaded media not found in object storage");
+            }
+            throw new BusinessException("Unable to read media file");
+        } catch (RuntimeException ex) {
+            throw new BusinessException("Unable to read media file");
         }
     }
 

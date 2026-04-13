@@ -14,4 +14,7 @@ public interface ObjectStorageService {
 
     /** Upload raw bytes directly (used as proxy when presigned URL is not reachable by the client). */
     void putObject(String bucket, String objectKey, byte[] data, String contentType);
+
+    /** Read raw bytes directly from the backing storage without going through a public URL. */
+    byte[] readObject(String bucket, String objectKey);
 }
