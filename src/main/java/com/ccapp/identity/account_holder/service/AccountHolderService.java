@@ -20,6 +20,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.Locale;
 import java.util.UUID;
@@ -103,6 +104,31 @@ public class AccountHolderService {
                 saved.getId(), saved.getCountryCode(), saved.getServiceCountryCode());
         countryChartOfAccountsService.findOrCreateWallet(saved);
         return saved;
+    }
+
+    /**
+     * Records the civil identity declared by the user before KYC document upload.
+     * Stores firstName, lastName, birthDate, nationality, declaredDocumentType and
+     * documentNumber so the back-office can compare declared vs document identity.
+     */
+    @Transactional
+    public void declareIdentity(UUID accountHolderId,
+                                String firstName,
+                                String lastName,
+                                LocalDate birthDate,
+                                String nationality,
+                                String documentType,
+                                String documentNumber) {
+        log.info("AccountHolderService declareIdentity accountHolderId={} documentType={}", accountHolderId, documentType);
+        AccountHolder accountHolder = getById(accountHolderId);
+        accountHolder.setFirstName(normalizeName(firstName));
+        accountHolder.setLastName(normalizeName(lastName));
+        accountHolder.setBirthDate(birthDate);
+        accountHolder.setNationality(nationality == null ? null : nationality.trim().toUpperCase(Locale.ROOT));
+        accountHolder.setDeclaredDocumentType(documentType == null ? null : documentType.trim().toUpperCase(Locale.ROOT));
+        accountHolder.setDocumentNumber(documentNumber == null ? null : documentNumber.trim());
+        accountHolderRepository.save(accountHolder);
+        log.info("AccountHolderService declareIdentity saved accountHolderId={}", accountHolderId);
     }
 
     @Transactional

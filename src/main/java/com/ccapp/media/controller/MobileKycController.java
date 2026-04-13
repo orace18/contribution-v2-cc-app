@@ -3,6 +3,9 @@ package com.ccapp.media.controller;
 import com.ccapp.common.api.CommonResponse;
 import com.ccapp.common.security.AuthenticatedPrincipal;
 import com.ccapp.common.security.SecurityUtils;
+import com.ccapp.identity.account_holder.service.AccountHolderService;
+import com.ccapp.identity.managedaccounts.service.ManagedAccountReadContextService;
+import com.ccapp.media.domain.dto.DeclareIdentityRequest;
 import com.ccapp.media.domain.dto.SubmitKycRequest;
 import com.ccapp.media.domain.dto.SubmitKycResponse;
 import com.ccapp.media.service.KycSubmissionService;
@@ -29,6 +32,43 @@ import java.util.UUID;
 public class MobileKycController {
 
     private final KycSubmissionService kycSubmissionService;
+    private final AccountHolderService accountHolderService;
+    private final ManagedAccountReadContextService managedAccountReadContextService;
+
+    @PostMapping("/declare-identity")
+    @Operation(summary = "Declare civil identity before uploading KYC documents",
+            description = "Stores firstName, lastName, birthDate, nationality, documentType and documentNumber " +
+                    "on the account holder. Must be called before document upload so the back-office can " +
+                    "compare declared identity against uploaded documents.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Identity declared",
+                    content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Validation error",
+                    content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Unauthorized",
+                    content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Account holder not found",
+                    content = @Content(schema = @Schema(implementation = CommonResponse.class)))
+    })
+    public ResponseEntity<CommonResponse<Void>> declareIdentity(
+            @Valid @RequestBody DeclareIdentityRequest request) {
+        UUID actorUserId = SecurityUtils.currentUserId();
+        UUID resolvedAccountHolderId = managedAccountReadContextService.resolveViewTargetAccountHolderId(
+                actorUserId,
+                SecurityUtils.currentAccountHolderId(),
+                request.accountHolderId()
+        );
+        accountHolderService.declareIdentity(
+                resolvedAccountHolderId,
+                request.firstName(),
+                request.lastName(),
+                request.birthDate(),
+                request.nationality(),
+                request.documentType(),
+                request.documentNumber()
+        );
+        return ResponseEntity.ok(CommonResponse.success("Identity declared", null));
+    }
 
     @PostMapping("/submit")
     @Operation(summary = "Submit minimal KYC for an account holder")

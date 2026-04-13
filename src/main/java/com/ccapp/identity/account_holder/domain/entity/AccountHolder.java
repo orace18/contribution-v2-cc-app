@@ -69,6 +69,14 @@ public class AccountHolder {
     @Column(name = "document_number", length = 128)
     private String documentNumber;
 
+    /** ISO 3166-1 alpha-2 country code of the document issuer (declared by the user). */
+    @Column(name = "nationality", length = 3)
+    private String nationality;
+
+    /** Type of identity document declared by the user before upload (e.g. CNI, PASSPORT). */
+    @Column(name = "declared_document_type", length = 32)
+    private String declaredDocumentType;
+
     @Column(name = "phone_verified_at")
     private OffsetDateTime phoneVerifiedAt;
 
