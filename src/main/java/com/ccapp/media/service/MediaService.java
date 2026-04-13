@@ -41,6 +41,8 @@ import java.util.stream.Collectors;
 @Slf4j
 public class MediaService {
 
+    private static final String KYC_PROXY_UPLOAD_BASE_URL = "https://kyc-upload.internal";
+
     private final MediaFileRepository mediaFileRepository;
     private final KycDocumentRepository kycDocumentRepository;
     private final AccountHolderService accountHolderService;
@@ -97,11 +99,13 @@ public class MediaService {
                 Duration.ofMinutes(uploadUrlTtlMinutes)
         );
 
+        String clientUploadUrl = resolveClientUploadUrl(request.type(), media.getId(), uploadUrl.url());
+
         return new CreateUploadUrlResponse(
                 media.getId(),
                 bucket,
                 objectKey,
-                uploadUrl.url(),
+                clientUploadUrl,
                 uploadUrl.expiresAt()
         );
     }
@@ -330,17 +334,54 @@ public class MediaService {
     }
 
     private MediaFileResponse toResponse(MediaFile media) {
+        String publicUrl = objectStorageService.publicObjectUrl(media.getBucket(), media.getObjectKey());
+        if (isLegacyFallbackUrl(publicUrl) && isKycMediaType(media.getType())) {
+            log.info(
+                    "kyc media public url suppressed accountHolderId={} mediaId={} bucket={} objectKey={} suppressedUrl={}",
+                    media.getAccountHolderId(),
+                    media.getId(),
+                    media.getBucket(),
+                    media.getObjectKey(),
+                    publicUrl
+            );
+            publicUrl = null;
+        }
         return new MediaFileResponse(
                 media.getId(),
                 media.getAccountHolderId(),
                 media.getType(),
                 media.getBucket(),
                 media.getObjectKey(),
-                objectStorageService.publicObjectUrl(media.getBucket(), media.getObjectKey()),
+                publicUrl,
                 media.getContentType(),
                 media.getSize(),
                 media.getStatus(),
                 media.getCreatedAt()
         );
+    }
+
+    private String resolveClientUploadUrl(MediaType mediaType, UUID mediaId, String storageUploadUrl) {
+        if (!isKycMediaType(mediaType) || !isLegacyFallbackUrl(storageUploadUrl)) {
+            return storageUploadUrl;
+        }
+        String proxyUploadUrl = KYC_PROXY_UPLOAD_BASE_URL + "/api/media/" + mediaId + "/upload-proxy";
+        log.info(
+                "kyc upload url remapped mediaId={} mediaType={} storageUploadUrl={} clientUploadUrl={} reason=LEGACY_DEV_MEDIA_FALLBACK",
+                mediaId,
+                mediaType,
+                storageUploadUrl,
+                proxyUploadUrl
+        );
+        return proxyUploadUrl;
+    }
+
+    private boolean isLegacyFallbackUrl(String url) {
+        return url != null && url.contains("/dev-media/");
+    }
+
+    private boolean isKycMediaType(MediaType type) {
+        return type == MediaType.KYC_IDENTITY_FRONT
+                || type == MediaType.KYC_IDENTITY_BACK
+                || type == MediaType.KYC_SELFIE;
     }
 }

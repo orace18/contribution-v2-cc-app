@@ -6,6 +6,9 @@ import com.ccapp.identity.account_holder.service.AccountHolderService;
 import com.ccapp.identity.delegation.service.AccessControlService;
 import com.ccapp.identity.repository.UserProfileRepository;
 import com.ccapp.identity.repository.UserRepository;
+import com.ccapp.media.domain.dto.CreateUploadUrlRequest;
+import com.ccapp.media.domain.dto.CreateUploadUrlResponse;
+import com.ccapp.media.domain.dto.MediaFileResponse;
 import com.ccapp.media.domain.entity.MediaFile;
 import com.ccapp.media.domain.entity.KycDocument;
 import com.ccapp.media.domain.enums.KycDocumentStatus;
@@ -15,11 +18,14 @@ import com.ccapp.media.domain.enums.MediaType;
 import com.ccapp.media.repository.KycDocumentRepository;
 import com.ccapp.media.repository.MediaFileRepository;
 import com.ccapp.media.storage.ObjectStorageService;
+import com.ccapp.media.storage.PresignedUrl;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -27,6 +33,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
@@ -59,6 +66,16 @@ class MediaServiceTest {
 
     @InjectMocks
     private MediaService mediaService;
+
+    @BeforeEach
+    void setUp() {
+        ReflectionTestUtils.setField(mediaService, "publicBucket", "cc-media-public");
+        ReflectionTestUtils.setField(mediaService, "privateBucket", "cc-media-private");
+        ReflectionTestUtils.setField(mediaService, "kycBucket", "cc-media-kyc");
+        ReflectionTestUtils.setField(mediaService, "uploadUrlTtlMinutes", 15L);
+        ReflectionTestUtils.setField(mediaService, "downloadUrlTtlMinutes", 15L);
+        ReflectionTestUtils.setField(mediaService, "maxSizeBytes", 10_485_760L);
+    }
 
     @Test
     void proxyUpload_shouldResolveManagedTargetFromMediaOwner() {
@@ -142,5 +159,72 @@ class MediaServiceTest {
         assertEquals(KycDocumentStatus.REJECTED, previousDocument.getStatus());
         verify(kycDocumentRepository).saveAll(List.of(previousDocument));
         verify(kycDocumentRepository).save(any(KycDocument.class));
+    }
+
+    @Test
+    void createUploadUrl_shouldRemapLegacyFallbackForKycMediaToProxyUploadUrl() {
+        OffsetDateTime expiresAt = OffsetDateTime.now().plusMinutes(15);
+        CreateUploadUrlRequest request = new CreateUploadUrlRequest(
+                MediaType.KYC_IDENTITY_FRONT,
+                "image/jpeg",
+                1024L,
+                "front.jpg",
+                TARGET_ACCOUNT_HOLDER_ID
+        );
+
+        when(countryContextService.resolve(ACTOR_ACCOUNT_HOLDER_ID)).thenReturn(new CountryContext("BJ", "BJ", "XOF"));
+        when(countryContextService.resolve(TARGET_ACCOUNT_HOLDER_ID)).thenReturn(new CountryContext("BJ", "BJ", "XOF"));
+        when(accountHolderService.getById(TARGET_ACCOUNT_HOLDER_ID)).thenReturn(null);
+        when(mediaFileRepository.save(any(MediaFile.class))).thenAnswer(invocation -> {
+            MediaFile media = invocation.getArgument(0);
+            media.setId(MEDIA_ID);
+            return media;
+        });
+        when(objectStorageService.createUploadUrl(eq("cc-media-kyc"), any(String.class), eq("image/jpeg"), any()))
+                .thenReturn(new PresignedUrl(
+                        "https://api-gateway.clubchretien.org/cc-backend-monolitic/dev-media/7aecbbfe-98c8-38e1-baa0-aea2f16d92bf",
+                        expiresAt
+                ));
+
+        CreateUploadUrlResponse response = mediaService.createUploadUrl(
+                ACTOR_USER_ID,
+                ACTOR_ACCOUNT_HOLDER_ID,
+                request
+        );
+
+        assertEquals(MEDIA_ID, response.mediaId());
+        assertEquals(
+                "https://kyc-upload.internal/api/media/" + MEDIA_ID + "/upload-proxy",
+                response.uploadUrl()
+        );
+    }
+
+    @Test
+    void getMedia_shouldSuppressLegacyFallbackPublicUrlForKycMedia() {
+        MediaFile media = MediaFile.builder()
+                .id(MEDIA_ID)
+                .accountHolderId(TARGET_ACCOUNT_HOLDER_ID)
+                .type(MediaType.KYC_IDENTITY_FRONT)
+                .bucket("cc-media-kyc")
+                .objectKey("account-holders/" + TARGET_ACCOUNT_HOLDER_ID + "/kyc/front.jpg")
+                .contentType("image/jpeg")
+                .size(1024L)
+                .status(MediaStatus.READY)
+                .createdAt(OffsetDateTime.now())
+                .build();
+
+        when(mediaFileRepository.findById(MEDIA_ID)).thenReturn(Optional.of(media));
+        when(countryContextService.resolve(ACTOR_ACCOUNT_HOLDER_ID)).thenReturn(new CountryContext("BJ", "BJ", "XOF"));
+        when(countryContextService.resolve(TARGET_ACCOUNT_HOLDER_ID)).thenReturn(new CountryContext("BJ", "BJ", "XOF"));
+        when(objectStorageService.publicObjectUrl(media.getBucket(), media.getObjectKey()))
+                .thenReturn("https://api-gateway.clubchretien.org/cc-backend-monolitic/dev-media/b3dbfa81-21a4-3f48-99fa-ee74667a98e3");
+
+        MediaFileResponse response = mediaService.getMedia(
+                ACTOR_USER_ID,
+                ACTOR_ACCOUNT_HOLDER_ID,
+                MEDIA_ID
+        );
+
+        assertNull(response.publicUrl());
     }
 }
