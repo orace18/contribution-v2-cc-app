@@ -213,7 +213,7 @@ public class KycSubmissionService {
             );
             CPassKycDocumentResponse documentResponse = cPassKycGateway.submitDocument(
                     caseId,
-                    toCpassDocumentType(requiredType),
+                    toCpassDocumentType(requiredType, accountHolder.getDeclaredDocumentType()),
                     preparedUpload.resource(),
                     Map.of(
                             "accountHolderId", accountHolder.getId().toString(),
@@ -716,12 +716,19 @@ public class KycSubmissionService {
     ) {
     }
 
-    private String toCpassDocumentType(KycDocumentType documentType) {
+    private String toCpassDocumentType(KycDocumentType documentType, String declaredDocumentType) {
         return switch (documentType) {
-            case IDENTITY_FRONT -> "IDENTITY_FRONT";
-            case IDENTITY_BACK  -> "IDENTITY_BACK";
-            case SELFIE         -> "SELFIE";
+            case IDENTITY_FRONT, IDENTITY_BACK -> toPassportOrIdCard(declaredDocumentType);
+            case SELFIE                        -> "SELFIE";
         };
+    }
+
+    private String toPassportOrIdCard(String declaredDocumentType) {
+        if (declaredDocumentType != null
+                && declaredDocumentType.trim().equalsIgnoreCase("PASSPORT")) {
+            return "PASSPORT";
+        }
+        return "ID_CARD";
     }
 
     private record ProviderSignals(
