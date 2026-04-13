@@ -3,6 +3,7 @@ package com.ccapp.media.domain.dto;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import org.springframework.lang.Nullable;
 
 import java.time.LocalDate;
 import java.util.UUID;
@@ -13,7 +14,12 @@ import java.util.UUID;
  */
 public record DeclareIdentityRequest(
 
-        @NotNull(message = "accountHolderId is required")
+        /**
+         * Target account holder. When null the backend resolves the actor from the
+         * authenticated JWT principal, which is the correct behaviour for own-account KYC.
+         * Provide a value only for delegated (managed-account) flows.
+         */
+        @Nullable
         UUID accountHolderId,
 
         @NotBlank(message = "firstName is required")
