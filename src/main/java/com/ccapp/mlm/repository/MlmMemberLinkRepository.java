@@ -29,7 +29,7 @@ public interface MlmMemberLinkRepository extends JpaRepository<MlmMemberLink, UU
             select cast(member_id as varchar) as memberId,
                    cast(parent_id as varchar) as parentId,
                    generation as generation,
-                   linked_at as linkedAt
+                   cast(linked_at as varchar) as linkedAt
             from sponsor_tree
             order by generation asc, linked_at asc, member_id asc
             """, nativeQuery = true)
@@ -54,7 +54,7 @@ public interface MlmMemberLinkRepository extends JpaRepository<MlmMemberLink, UU
             select cast(s.member_id as varchar) as memberId,
                    null as parentId,
                    1 as generation,
-                   s.linked_at as linkedAt
+                   cast(s.linked_at as varchar) as linkedAt
             from sponsor_tree s
             join mlm_member_links l on l.account_holder_id = s.member_id
             where l.placement_account_holder_id = l.account_holder_id
@@ -83,7 +83,7 @@ public interface MlmMemberLinkRepository extends JpaRepository<MlmMemberLink, UU
             select cast(member_id as varchar) as memberId,
                    cast(parent_id as varchar) as parentId,
                    generation as generation,
-                   linked_at as linkedAt
+                   cast(linked_at as varchar) as linkedAt
             from placement_tree
             order by generation asc, linked_at asc, member_id asc
             """, nativeQuery = true)

@@ -37,8 +37,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
+import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -179,14 +181,17 @@ public class MobileNetworkService {
         Map<UUID, Membership> latestMembershipByMemberId = loadLatestMemberships(memberIds);
         Map<UUID, String> avatarByMemberId = loadAvatars(memberIds);
 
+        ZoneId zone = ZoneId.of(networkZone);
         List<MobileNetworkMemberSummaryResponse> members = projections.stream()
                 .map(p -> {
                     UUID memberId = UUID.fromString(p.getMemberId());
                     AccountHolder accountHolder = accountHolderById.get(memberId);
+                    // Parse String linkedAt (cast varchar from native query) → OffsetDateTime
+                    OffsetDateTime linkedAt = parseLinkedAt(p.getLinkedAt(), zone);
                     MemberLifecycle lifecycle = deriveLifecycle(
                             latestMembershipByMemberId.get(memberId),
                             accountHolder,
-                            p.getLinkedAt()
+                            linkedAt
                     );
                     return new MobileNetworkMemberSummaryResponse(
                             memberId,
@@ -417,16 +422,48 @@ public class MobileNetworkService {
                 ? mlmMemberLinkRepository.findPlacementTree(accountHolderId)
                 : mlmMemberLinkRepository.findSponsorTree(accountHolderId);
 
+        ZoneId zone = ZoneId.of(networkZone);
         List<TreeRow> rows = new ArrayList<>(projections.size());
         for (MlmTreeMemberProjection projection : projections) {
+            // getLinkedAt() returns the timestamp as a String (cast varchar in native SQL)
+            // to avoid H2 vs PostgreSQL JDBC type discrepancy (OffsetDateTime vs Instant).
+            OffsetDateTime linkedAt = parseLinkedAt(projection.getLinkedAt(), zone);
             rows.add(new TreeRow(
                     UUID.fromString(projection.getMemberId()),
                     projection.getParentId() == null ? null : UUID.fromString(projection.getParentId()),
                     projection.getGeneration() == null ? 0 : projection.getGeneration(),
-                    projection.getLinkedAt()
+                    linkedAt
             ));
         }
         return rows;
+    }
+
+    /**
+     * Parses a timestamp String as returned by {@code cast(timestamptz as varchar)} in a
+     * native query. Handles both:
+     * <ul>
+     *   <li>H2 format: {@code 2025-01-15 10:30:00.123456+01} (ISO-like with space separator)</li>
+     *   <li>PostgreSQL format: {@code 2025-01-15T10:30:00.123456Z} (strict ISO-8601 Instant)</li>
+     *   <li>Standard {@code OffsetDateTime} toString: {@code 2025-01-15T10:30:00.123456+01:00}</li>
+     * </ul>
+     * Returns {@code null} if {@code raw} is null or blank.
+     */
+    private OffsetDateTime parseLinkedAt(String raw, ZoneId fallbackZone) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        // Normalise H2's space-separated format to ISO-8601 'T' separator.
+        String normalised = raw.trim().replace(" ", "T");
+        try {
+            return OffsetDateTime.parse(normalised);
+        } catch (DateTimeParseException ignored) {
+            // Fall through — may be an Instant string ending with 'Z' without offset.
+        }
+        try {
+            return Instant.parse(normalised).atZone(fallbackZone).toOffsetDateTime();
+        } catch (DateTimeParseException ignored) {
+            return null;
+        }
     }
 
     private Map<UUID, AccountHolder> loadAccountHolders(Collection<UUID> memberIds) {

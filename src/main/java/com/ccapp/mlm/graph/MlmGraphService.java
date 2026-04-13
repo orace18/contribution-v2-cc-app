@@ -8,7 +8,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -241,11 +244,35 @@ public class MlmGraphService {
     }
 
     private GraphMember fromProjection(MlmHierarchyMemberProjection projection) {
+        // getLinkedAt() returns a String (cast(created_at as varchar) in native query)
+        // to avoid H2 vs PostgreSQL JDBC type discrepancy. Parse flexibly.
+        OffsetDateTime linkedAt = parseLinkedAt(projection.getLinkedAt());
         return new GraphMember(
                 UUID.fromString(projection.getMemberId()),
                 projection.getLevel() == null ? 0 : projection.getLevel(),
-                projection.getLinkedAt()
+                linkedAt
         );
+    }
+
+    /**
+     * Parses a timestamp String produced by {@code cast(timestamptz as varchar)}.
+     * Handles OffsetDateTime.toString(), Instant.toString(), and H2's space-separated format.
+     */
+    private OffsetDateTime parseLinkedAt(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        String normalised = raw.trim().replace(" ", "T");
+        try {
+            return OffsetDateTime.parse(normalised);
+        } catch (DateTimeParseException ignored) {
+            // Fall through
+        }
+        try {
+            return Instant.parse(normalised).atOffset(ZoneOffset.UTC);
+        } catch (DateTimeParseException ignored) {
+            return null;
+        }
     }
 
     private List<UUID> readDirectPlacementChildren(UUID userId) {

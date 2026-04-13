@@ -49,7 +49,7 @@ public interface MlmRelationshipRepository extends JpaRepository<MlmRelationship
                    r.level as level,
                    ah.first_name as firstName,
                    ah.last_name as lastName,
-                   r.created_at as linkedAt
+                   cast(r.created_at as varchar) as linkedAt
             from mlm_relationships r
             join account_holders ah on ah.id = r.ancestor_id
             where r.descendant_id = :accountHolderId
@@ -63,7 +63,7 @@ public interface MlmRelationshipRepository extends JpaRepository<MlmRelationship
                    r.level as level,
                    ah.first_name as firstName,
                    ah.last_name as lastName,
-                   r.created_at as linkedAt
+                   cast(r.created_at as varchar) as linkedAt
             from mlm_relationships r
             join account_holders ah on ah.id = r.descendant_id
             where r.ancestor_id = :accountHolderId
@@ -77,7 +77,7 @@ public interface MlmRelationshipRepository extends JpaRepository<MlmRelationship
                    r.level as level,
                    ah.first_name as firstName,
                    ah.last_name as lastName,
-                   r.created_at as linkedAt
+                   cast(r.created_at as varchar) as linkedAt
             from mlm_relationships r
             join account_holders ah on ah.id = r.descendant_id
             where r.ancestor_id = :accountHolderId

@@ -160,6 +160,97 @@ class MobileNetworkServiceIntegrationTest {
         assertTrue(blankSearch.members().isEmpty());
     }
 
+    // -------------------------------------------------------------------------
+    // Regression tests: guard against Instant → OffsetDateTime projection mismatch
+    // (UnsupportedOperationException: Cannot project java.time.Instant to
+    //  java.time.OffsetDateTime; Target type is not an interface and no matching
+    //  Converter found).
+    // These four tests cover the four endpoints that were returning HTTP 500:
+    //   GET /api/mobile/network/team/stats
+    //   GET /api/mobile/network/activity/today
+    //   GET /api/mobile/network/followups
+    //   GET /api/mobile/mlm/dashboard  (tree loading path via getTeamStats/getTree)
+    // -------------------------------------------------------------------------
+
+    @Test
+    void getTeamStats_shouldNotThrowOnInstantLinkedAt() {
+        // Regression: MlmTreeMemberProjection.getLinkedAt() was OffsetDateTime
+        // but native query returns Instant → UnsupportedOperationException.
+        UUID actorUserId = UUID.randomUUID();
+        UUID leaderId = createAccountHolder("Reg", "Leader", "+22996000010");
+        UUID memberId = createAccountHolder("Reg", "Member", "+22996000011");
+
+        createMemberLink(leaderId, null, leaderId);
+        createMemberLink(memberId, leaderId, leaderId);
+        createMembership(memberId, MembershipStatus.ACTIVE,
+                OffsetDateTime.now().minusDays(5), OffsetDateTime.now().plusDays(25));
+
+        // Must not throw UnsupportedOperationException
+        MobileNetworkTeamStatsResponse stats = mobileNetworkService.getTeamStats(actorUserId, leaderId);
+        assertEquals(1L, stats.active());
+        assertEquals(0L, stats.inactive());
+        assertEquals(0L, stats.toFollowUp());
+    }
+
+    @Test
+    void getTodayActivity_shouldNotThrowOnInstantLinkedAt() {
+        // Regression: same projection mismatch on the activity/today endpoint.
+        UUID actorUserId = UUID.randomUUID();
+        UUID leaderId = createAccountHolder("Reg2", "Leader", "+22996000020");
+        UUID memberId = createAccountHolder("Reg2", "Member", "+22996000021");
+
+        createMemberLink(leaderId, null, leaderId);
+        createMemberLink(memberId, leaderId, leaderId);
+        createMembership(memberId, MembershipStatus.ACTIVE,
+                OffsetDateTime.now().minusHours(1), OffsetDateTime.now().plusDays(30));
+
+        // Must not throw UnsupportedOperationException
+        var activity = mobileNetworkService.getTodayActivity(actorUserId, leaderId);
+        assertEquals(1L, activity.newMembers());
+        assertEquals(1L, activity.subscriptionsPaid());
+    }
+
+    @Test
+    void getFollowUps_shouldNotThrowOnInstantLinkedAt() {
+        // Regression: same projection mismatch on the followups endpoint.
+        UUID actorUserId = UUID.randomUUID();
+        UUID leaderId = createAccountHolder("Reg3", "Leader", "+22996000030");
+        UUID memberId = createAccountHolder("Reg3", "LostMember", "+22996000031");
+
+        createMemberLink(leaderId, null, leaderId);
+        createMemberLink(memberId, leaderId, leaderId);
+        createMembership(memberId, MembershipStatus.EXPIRED,
+                OffsetDateTime.now().minusDays(60), OffsetDateTime.now().minusDays(10));
+
+        // Must not throw UnsupportedOperationException
+        var followUps = mobileNetworkService.getFollowUps(actorUserId, leaderId);
+        assertFalse(followUps.isEmpty());
+        assertEquals("Reg3 LostMember", followUps.get(0).name());
+        assertTrue(followUps.get(0).inactiveDays() >= 10);
+    }
+
+    @Test
+    void getTree_sponsorAndPlacementViews_shouldNotThrowOnInstantLinkedAt() {
+        // Regression: covers the tree-loading path used by /api/mobile/mlm/dashboard
+        // (via MobileNetworkService.loadRows → MlmTreeMemberProjection.getLinkedAt()).
+        UUID actorUserId = UUID.randomUUID();
+        UUID leaderId = createAccountHolder("Reg4", "Leader", "+22996000040");
+        UUID child1 = createAccountHolder("Reg4", "ChildA", "+22996000041");
+        UUID child2 = createAccountHolder("Reg4", "ChildB", "+22996000042");
+
+        createMemberLink(leaderId, null, leaderId);
+        createMemberLink(child1, leaderId, leaderId);
+        createMemberLink(child2, leaderId, child1);
+
+        // Must not throw UnsupportedOperationException on either view
+        var genealogy = mobileNetworkService.getTree(actorUserId, leaderId, MobileNetworkTreeView.GENEALOGY);
+        assertEquals(2L, genealogy.totalMembers());
+
+        var placement = mobileNetworkService.getTree(actorUserId, leaderId, MobileNetworkTreeView.PLACEMENT);
+        assertEquals(1, placement.root().children().size());
+    }
+
+
     @Test
     void sponsorPendingShouldBlockEligibilityUntilDecisionIsMade() {
         UUID actorUserId = UUID.randomUUID();
