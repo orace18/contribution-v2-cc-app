@@ -63,6 +63,8 @@ class MediaServiceTest {
     private UserRepository userRepository;
     @Mock
     private ObjectStorageService objectStorageService;
+    @Mock
+    private KycMediaBackupService kycMediaBackupService;
 
     @InjectMocks
     private MediaService mediaService;

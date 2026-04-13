@@ -22,6 +22,7 @@ import com.ccapp.media.domain.enums.MediaStatus;
 import com.ccapp.media.domain.enums.MediaType;
 import com.ccapp.media.repository.KycDocumentRepository;
 import com.ccapp.media.repository.MediaFileRepository;
+import com.ccapp.media.storage.LocalFileStorageService;
 import com.ccapp.media.storage.ObjectStorageService;
 import com.ccapp.media.storage.PresignedUrl;
 import lombok.RequiredArgsConstructor;
@@ -51,6 +52,7 @@ public class MediaService {
     private final UserProfileRepository userProfileRepository;
     private final UserRepository userRepository;
     private final ObjectStorageService objectStorageService;
+    private final KycMediaBackupService kycMediaBackupService;
 
     @Value("${media.bucket.public:cc-media-public}")
     private String publicBucket;
@@ -126,6 +128,7 @@ public class MediaService {
 
         media.setStatus(MediaStatus.READY);
         MediaFile saved = mediaFileRepository.save(media);
+        persistKycBackupIfNeeded(saved, readStoredBytesSafely(saved), "CONFIRM_UPLOAD");
         attachMediaToDomain(saved);
         return toResponse(saved);
     }
@@ -145,6 +148,7 @@ public class MediaService {
         objectStorageService.putObject(media.getBucket(), media.getObjectKey(), data, media.getContentType());
         media.setStatus(MediaStatus.READY);
         MediaFile saved = mediaFileRepository.save(media);
+        persistKycBackupIfNeeded(saved, data, "UPLOAD_PROXY");
         attachMediaToDomain(saved);
         return toResponse(saved);
     }
@@ -383,5 +387,28 @@ public class MediaService {
         return type == MediaType.KYC_IDENTITY_FRONT
                 || type == MediaType.KYC_IDENTITY_BACK
                 || type == MediaType.KYC_SELFIE;
+    }
+
+    private void persistKycBackupIfNeeded(MediaFile media, byte[] bytes, String origin) {
+        if (!isKycMediaType(media.getType()) || bytes == null || bytes.length == 0 || !(objectStorageService instanceof LocalFileStorageService)) {
+            return;
+        }
+        kycMediaBackupService.store(media, bytes, origin);
+    }
+
+    private byte[] readStoredBytesSafely(MediaFile media) {
+        try {
+            return objectStorageService.readObject(media.getBucket(), media.getObjectKey());
+        } catch (RuntimeException ex) {
+            log.warn(
+                    "kyc media backup skipped accountHolderId={} mediaId={} bucket={} objectKey={} reason={}",
+                    media.getAccountHolderId(),
+                    media.getId(),
+                    media.getBucket(),
+                    media.getObjectKey(),
+                    ex.getMessage()
+            );
+            return null;
+        }
     }
 }

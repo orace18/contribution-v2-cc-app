@@ -24,6 +24,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -38,6 +39,8 @@ class KycDocumentResolutionServiceTest {
     private MediaFileRepository mediaFileRepository;
     @Mock
     private ObjectStorageService objectStorageService;
+    @Mock
+    private KycMediaBackupService kycMediaBackupService;
 
     @InjectMocks
     private KycDocumentResolutionService kycDocumentResolutionService;
@@ -89,6 +92,7 @@ class KycDocumentResolutionServiceTest {
                 .thenReturn("https://api.local/dev-media/" + staleFrontMedia.getId());
         when(objectStorageService.objectExists(staleFrontMedia.getBucket(), staleFrontMedia.getObjectKey()))
                 .thenReturn(false);
+        when(kycMediaBackupService.findBackup(any(MediaFile.class))).thenReturn(Optional.empty());
         when(objectStorageService.publicObjectUrl(validFrontMedia.getBucket(), validFrontMedia.getObjectKey()))
                 .thenReturn("https://media.local/" + validFrontMedia.getObjectKey());
         when(objectStorageService.publicObjectUrl(validBackMedia.getBucket(), validBackMedia.getObjectKey()))
@@ -112,6 +116,79 @@ class KycDocumentResolutionServiceTest {
         ArgumentCaptor<List<MediaFile>> mediaFilesCaptor = ArgumentCaptor.forClass(List.class);
         verify(mediaFileRepository).saveAll(mediaFilesCaptor.capture());
         assertTrue(mediaFilesCaptor.getValue().contains(staleFrontMedia));
+    }
+
+    @Test
+    void resolveActiveDocuments_shouldKeepCurrentDocumentWhenLocalFileIsMissingButBackupExists() {
+        KycDocument frontDocument = buildDocument(
+                KycDocumentType.IDENTITY_FRONT,
+                UUID.randomUUID(),
+                OffsetDateTime.now()
+        );
+        KycDocument backDocument = buildDocument(
+                KycDocumentType.IDENTITY_BACK,
+                UUID.randomUUID(),
+                OffsetDateTime.now().minusMinutes(1)
+        );
+        KycDocument selfieDocument = buildDocument(
+                KycDocumentType.SELFIE,
+                UUID.randomUUID(),
+                OffsetDateTime.now().minusMinutes(2)
+        );
+
+        MediaFile frontMedia = buildMediaFile(frontDocument.getMediaFileId(), MediaType.KYC_IDENTITY_FRONT);
+        MediaFile backMedia = buildMediaFile(backDocument.getMediaFileId(), MediaType.KYC_IDENTITY_BACK);
+        MediaFile selfieMedia = buildMediaFile(selfieDocument.getMediaFileId(), MediaType.KYC_SELFIE);
+
+        when(kycDocumentRepository.findByAccountHolderId(ACCOUNT_HOLDER_ID)).thenReturn(List.of(
+                frontDocument,
+                backDocument,
+                selfieDocument
+        ));
+        when(mediaFileRepository.findByIdAndAccountHolderId(frontDocument.getMediaFileId(), ACCOUNT_HOLDER_ID))
+                .thenReturn(Optional.of(frontMedia));
+        when(mediaFileRepository.findByIdAndAccountHolderId(backDocument.getMediaFileId(), ACCOUNT_HOLDER_ID))
+                .thenReturn(Optional.of(backMedia));
+        when(mediaFileRepository.findByIdAndAccountHolderId(selfieDocument.getMediaFileId(), ACCOUNT_HOLDER_ID))
+                .thenReturn(Optional.of(selfieMedia));
+
+        when(objectStorageService.publicObjectUrl(frontMedia.getBucket(), frontMedia.getObjectKey()))
+                .thenReturn("https://api.local/dev-media/" + frontMedia.getId());
+        when(objectStorageService.publicObjectUrl(backMedia.getBucket(), backMedia.getObjectKey()))
+                .thenReturn("https://api.local/dev-media/" + backMedia.getId());
+        when(objectStorageService.publicObjectUrl(selfieMedia.getBucket(), selfieMedia.getObjectKey()))
+                .thenReturn("https://api.local/dev-media/" + selfieMedia.getId());
+        when(objectStorageService.objectExists(any(), any())).thenReturn(false);
+        when(kycMediaBackupService.findBackup(frontMedia))
+                .thenReturn(Optional.of(new KycMediaBackupService.StoredKycMediaBackup(
+                        frontMedia.getId(),
+                        ACCOUNT_HOLDER_ID,
+                        "image/jpeg",
+                        new byte[]{1, 2, 3}
+                )));
+        when(kycMediaBackupService.findBackup(backMedia))
+                .thenReturn(Optional.of(new KycMediaBackupService.StoredKycMediaBackup(
+                        backMedia.getId(),
+                        ACCOUNT_HOLDER_ID,
+                        "image/jpeg",
+                        new byte[]{4, 5, 6}
+                )));
+        when(kycMediaBackupService.findBackup(selfieMedia))
+                .thenReturn(Optional.of(new KycMediaBackupService.StoredKycMediaBackup(
+                        selfieMedia.getId(),
+                        ACCOUNT_HOLDER_ID,
+                        "image/jpeg",
+                        new byte[]{7, 8, 9}
+                )));
+
+        Map<KycDocumentType, KycDocumentResolutionService.ResolvedKycDocument> resolvedDocuments =
+                kycDocumentResolutionService.resolveActiveDocuments(ACCOUNT_HOLDER_ID);
+
+        assertEquals("DATABASE_BACKUP", resolvedDocuments.get(KycDocumentType.IDENTITY_FRONT).source());
+        assertEquals("DATABASE_BACKUP", resolvedDocuments.get(KycDocumentType.IDENTITY_BACK).source());
+        assertEquals("DATABASE_BACKUP", resolvedDocuments.get(KycDocumentType.SELFIE).source());
+        assertEquals(KycDocumentStatus.SUBMITTED, frontDocument.getStatus());
+        assertEquals(MediaStatus.READY, frontMedia.getStatus());
     }
 
     private KycDocument buildDocument(KycDocumentType documentType, UUID mediaFileId, OffsetDateTime createdAt) {

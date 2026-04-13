@@ -78,6 +78,7 @@ public class KycSubmissionService {
     private final ObjectStorageService objectStorageService;
     private final FinancialAuditService financialAuditService;
     private final UserProfileRepository userProfileRepository;
+    private final KycMediaBackupService kycMediaBackupService;
 
     @Nullable
     @Autowired(required = false)
@@ -451,6 +452,22 @@ public class KycSubmissionService {
             String contentType = normalizeContentType(mediaFile.getContentType(), filename);
             return prepareUpload(mediaFile, documentType, bytes, filename, contentType);
         } catch (RuntimeException ex) {
+            KycMediaBackupService.StoredKycMediaBackup mediaBackup = findKycBackup(mediaFile).orElse(null);
+            if (mediaBackup != null) {
+                String filename = extractFilename(mediaFile.getObjectKey());
+                String contentType = normalizeContentType(mediaBackup.contentType(), filename);
+                log.warn(
+                        "kyc submit using backup accountHolderId={} mediaId={} documentType={} bucket={} objectKey={} backupBytes={} fallbackReason={}",
+                        mediaFile.getAccountHolderId(),
+                        mediaFile.getId(),
+                        documentType,
+                        mediaFile.getBucket(),
+                        mediaFile.getObjectKey(),
+                        mediaBackup.payload().length,
+                        ex.getMessage()
+                );
+                return prepareUpload(mediaFile, documentType, mediaBackup.payload(), filename, contentType);
+            }
             log.error(
                     "kyc submit: media read failed accountHolderId={} mediaId={} documentType={} bucket={} objectKey={} reason={}",
                     mediaFile.getAccountHolderId(),
@@ -579,6 +596,11 @@ public class KycSubmissionService {
                 filename
         );
         throw new BusinessException(CPASS_KYC_DOCUMENT_TOO_LARGE);
+    }
+
+    private java.util.Optional<KycMediaBackupService.StoredKycMediaBackup> findKycBackup(MediaFile mediaFile) {
+        java.util.Optional<KycMediaBackupService.StoredKycMediaBackup> backup = kycMediaBackupService.findBackup(mediaFile);
+        return backup == null ? java.util.Optional.empty() : backup;
     }
 
     private BufferedImage readImage(byte[] bytes) {

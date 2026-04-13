@@ -91,6 +91,8 @@ class KycSubmissionServiceTest {
     private UserProfileRepository userProfileRepository;
     @Mock
     private CPassKycGateway cPassKycGateway;
+    @Mock
+    private KycMediaBackupService kycMediaBackupService;
 
     private KycSubmissionService kycSubmissionService;
 
@@ -106,7 +108,8 @@ class KycSubmissionServiceTest {
                 kycNotificationService,
                 objectStorageService,
                 financialAuditService,
-                userProfileRepository
+                userProfileRepository,
+                kycMediaBackupService
         );
         ReflectionTestUtils.setField(kycSubmissionService, "cPassKycGateway", cPassKycGateway);
         ReflectionTestUtils.setField(kycSubmissionService, "requestedKycLevel", "LEVEL_1");
@@ -341,6 +344,38 @@ class KycSubmissionServiceTest {
             assertTrue(resource.contentLength() <= 180_000);
             assertTrue(Objects.requireNonNull(resource.getFilename()).endsWith(".jpg"));
         }
+    }
+
+    @Test
+    void submit_shouldUseBackupWhenLocalFallbackFileIsMissing() {
+        AccountHolder accountHolder = buildAccountHolder(KycStatus.NOT_STARTED);
+
+        when(accountHolderRepository.findById(ACCOUNT_HOLDER_ID)).thenReturn(Optional.of(accountHolder));
+        when(kycDocumentResolutionService.resolveActiveDocuments(ACCOUNT_HOLDER_ID)).thenReturn(buildResolvedMinimalKycDocuments());
+        when(countryContextService.resolve(ACTOR_USER_ID)).thenReturn(new CountryContext("BJ", "BJ", "XOF"));
+        when(countryContextService.resolve(ACCOUNT_HOLDER_ID)).thenReturn(new CountryContext("BJ", "BJ", "XOF"));
+        when(objectStorageService.readObject(any(), any()))
+                .thenThrow(new BusinessException("Local fallback media file not found"));
+        when(kycMediaBackupService.findBackup(any(MediaFile.class)))
+                .thenReturn(Optional.of(new KycMediaBackupService.StoredKycMediaBackup(
+                        UUID.randomUUID(),
+                        ACCOUNT_HOLDER_ID,
+                        "image/jpeg",
+                        "backup-image-content".getBytes()
+                )));
+        when(cPassKycGateway.checkOrInitKyc(any()))
+                .thenReturn(new CPassKycInitResponse("PENDING", "LEVEL_1", "case-123", "ref-123", null, null, null, null, null, null, null, null));
+        when(cPassKycGateway.submitDocument(any(), any(), any(), any()))
+                .thenReturn(new CPassKycDocumentResponse("doc-123", "SUBMITTED", "object-key", "PENDING", null, null, null, null, null, null, null, null));
+        doAnswer(invocation -> {
+            accountHolder.setKycStatus(KycStatus.PENDING);
+            return null;
+        }).when(kycReviewService).markPending(ACCOUNT_HOLDER_ID);
+
+        SubmitKycResponse response = kycSubmissionService.submit(ACTOR_USER_ID, ACTOR_USER_ID, ACCOUNT_HOLDER_ID);
+
+        assertEquals(KycStatus.PENDING, response.kycStatus());
+        verify(cPassKycGateway, times(3)).submitDocument(eq("case-123"), any(), any(), any());
     }
 
     private AccountHolder buildAccountHolder(KycStatus kycStatus) {
