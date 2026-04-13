@@ -466,8 +466,9 @@ public class KycSubmissionService {
 
     private String toCpassDocumentType(KycDocumentType documentType) {
         return switch (documentType) {
-            case IDENTITY_FRONT, IDENTITY_BACK -> "ID_CARD";
-            case SELFIE -> "SELFIE";
+            case IDENTITY_FRONT -> "IDENTITY_FRONT";
+            case IDENTITY_BACK  -> "IDENTITY_BACK";
+            case SELFIE         -> "SELFIE";
         };
     }
 
