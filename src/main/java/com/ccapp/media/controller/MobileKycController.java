@@ -6,8 +6,10 @@ import com.ccapp.common.security.SecurityUtils;
 import com.ccapp.identity.account_holder.service.AccountHolderService;
 import com.ccapp.identity.managedaccounts.service.ManagedAccountReadContextService;
 import com.ccapp.media.domain.dto.DeclareIdentityRequest;
+import com.ccapp.media.domain.dto.KycDraftResponse;
 import com.ccapp.media.domain.dto.SubmitKycRequest;
 import com.ccapp.media.domain.dto.SubmitKycResponse;
+import com.ccapp.media.service.KycDraftService;
 import com.ccapp.media.service.KycSubmissionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -32,8 +34,37 @@ import java.util.UUID;
 public class MobileKycController {
 
     private final KycSubmissionService kycSubmissionService;
+    private final KycDraftService kycDraftService;
     private final AccountHolderService accountHolderService;
     private final ManagedAccountReadContextService managedAccountReadContextService;
+
+    @GetMapping("/draft")
+    @Operation(
+            summary = "Get the current KYC draft for an account holder",
+            description = "Returns the identity fields last saved via /declare-identity and the " +
+                    "media IDs of documents already uploaded, so the mobile client can restore " +
+                    "a partially completed KYC flow without re-entering data. " +
+                    "identityDeclared=false means step 1 (identity form) has not been completed yet."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Draft retrieved",
+                    content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Unauthorized",
+                    content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Account holder not found",
+                    content = @Content(schema = @Schema(implementation = CommonResponse.class)))
+    })
+    public ResponseEntity<CommonResponse<KycDraftResponse>> getDraft(
+            @RequestParam(required = false) UUID accountHolderId) {
+        UUID actorUserId = SecurityUtils.currentUserId();
+        UUID resolved = managedAccountReadContextService.resolveViewTargetAccountHolderId(
+                actorUserId,
+                SecurityUtils.currentAccountHolderId(),
+                accountHolderId
+        );
+        KycDraftResponse draft = kycDraftService.getDraft(resolved);
+        return ResponseEntity.ok(CommonResponse.success("KYC draft", draft));
+    }
 
     @PostMapping("/declare-identity")
     @Operation(summary = "Declare civil identity before uploading KYC documents",
