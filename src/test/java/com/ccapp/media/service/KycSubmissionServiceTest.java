@@ -20,11 +20,8 @@ import com.ccapp.identity.repository.UserProfileRepository;
 import com.ccapp.media.domain.dto.SubmitKycResponse;
 import com.ccapp.media.domain.entity.KycDocument;
 import com.ccapp.media.domain.entity.MediaFile;
-import com.ccapp.media.domain.enums.KycDocumentStatus;
 import com.ccapp.media.domain.enums.KycDocumentType;
 import com.ccapp.media.domain.enums.MediaStatus;
-import com.ccapp.media.repository.KycDocumentRepository;
-import com.ccapp.media.repository.MediaFileRepository;
 import com.ccapp.media.storage.ObjectStorageService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -36,6 +33,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -57,9 +55,7 @@ class KycSubmissionServiceTest {
     private static final UUID ACCOUNT_HOLDER_ID = UUID.randomUUID();
 
     @Mock
-    private KycDocumentRepository kycDocumentRepository;
-    @Mock
-    private MediaFileRepository mediaFileRepository;
+    private KycDocumentResolutionService kycDocumentResolutionService;
     @Mock
     private AccountHolderRepository accountHolderRepository;
     @Mock
@@ -86,8 +82,7 @@ class KycSubmissionServiceTest {
     @BeforeEach
     void setUp() {
         kycSubmissionService = new KycSubmissionService(
-                kycDocumentRepository,
-                mediaFileRepository,
+                kycDocumentResolutionService,
                 accountHolderRepository,
                 accessControlService,
                 countryContextService,
@@ -106,17 +101,11 @@ class KycSubmissionServiceTest {
     @Test
     void submit_shouldMarkPendingOnlyAfterFullDossierIsSentToCpass() {
         AccountHolder accountHolder = buildAccountHolder(KycStatus.NOT_STARTED);
-        List<KycDocument> documents = buildMinimalKycDocuments();
 
         when(accountHolderRepository.findById(ACCOUNT_HOLDER_ID)).thenReturn(Optional.of(accountHolder));
-        when(kycDocumentRepository.findByAccountHolderId(ACCOUNT_HOLDER_ID)).thenReturn(documents);
+        when(kycDocumentResolutionService.resolveActiveDocuments(ACCOUNT_HOLDER_ID)).thenReturn(buildResolvedMinimalKycDocuments());
         when(countryContextService.resolve(ACTOR_USER_ID)).thenReturn(new CountryContext("BJ", "BJ", "XOF"));
         when(countryContextService.resolve(ACCOUNT_HOLDER_ID)).thenReturn(new CountryContext("BJ", "BJ", "XOF"));
-        when(mediaFileRepository.findByIdAndAccountHolderId(any(UUID.class), eq(ACCOUNT_HOLDER_ID)))
-                .thenAnswer(invocation -> Optional.of(buildReadyMediaFile(
-                        invocation.getArgument(0, UUID.class),
-                        ACCOUNT_HOLDER_ID
-                )));
         when(objectStorageService.readObject(any(), any()))
                 .thenReturn("fake-image-content".getBytes());
         when(cPassKycGateway.checkOrInitKyc(any()))
@@ -148,10 +137,10 @@ class KycSubmissionServiceTest {
     @Test
     void submit_shouldFailWithoutCompleteDossierAndNeverReachCpass() {
         AccountHolder accountHolder = buildAccountHolder(KycStatus.NOT_STARTED);
-        List<KycDocument> incompleteDocuments = buildMinimalKycDocuments().subList(0, 2);
 
         when(accountHolderRepository.findById(ACCOUNT_HOLDER_ID)).thenReturn(Optional.of(accountHolder));
-        when(kycDocumentRepository.findByAccountHolderId(ACCOUNT_HOLDER_ID)).thenReturn(incompleteDocuments);
+        when(kycDocumentResolutionService.resolveActiveDocuments(ACCOUNT_HOLDER_ID))
+                .thenReturn(buildResolvedMinimalKycDocuments(KycDocumentType.IDENTITY_FRONT, KycDocumentType.IDENTITY_BACK));
         when(countryContextService.resolve(ACTOR_USER_ID)).thenReturn(new CountryContext("BJ", "BJ", "XOF"));
         when(countryContextService.resolve(ACCOUNT_HOLDER_ID)).thenReturn(new CountryContext("BJ", "BJ", "XOF"));
 
@@ -170,11 +159,10 @@ class KycSubmissionServiceTest {
     @Test
     void submit_shouldFailWhenCpassIsUnavailableAndLeaveStatusUntouched() {
         AccountHolder accountHolder = buildAccountHolder(KycStatus.NOT_STARTED);
-        List<KycDocument> documents = buildMinimalKycDocuments();
 
         ReflectionTestUtils.setField(kycSubmissionService, "cPassKycGateway", null);
         when(accountHolderRepository.findById(ACCOUNT_HOLDER_ID)).thenReturn(Optional.of(accountHolder));
-        when(kycDocumentRepository.findByAccountHolderId(ACCOUNT_HOLDER_ID)).thenReturn(documents);
+        when(kycDocumentResolutionService.resolveActiveDocuments(ACCOUNT_HOLDER_ID)).thenReturn(buildResolvedMinimalKycDocuments());
         when(countryContextService.resolve(ACTOR_USER_ID)).thenReturn(new CountryContext("BJ", "BJ", "XOF"));
         when(countryContextService.resolve(ACCOUNT_HOLDER_ID)).thenReturn(new CountryContext("BJ", "BJ", "XOF"));
 
@@ -194,17 +182,11 @@ class KycSubmissionServiceTest {
     void submit_shouldAutoApproveLevel1WhenProviderSignalsAreVerifiedAndLowRisk() {
         AccountHolder accountHolder = buildAccountHolder(KycStatus.NOT_STARTED);
         UserProfile profile = UserProfile.builder().build();
-        List<KycDocument> documents = buildMinimalKycDocuments();
 
         when(accountHolderRepository.findById(ACCOUNT_HOLDER_ID)).thenReturn(Optional.of(accountHolder));
-        when(kycDocumentRepository.findByAccountHolderId(ACCOUNT_HOLDER_ID)).thenReturn(documents);
+        when(kycDocumentResolutionService.resolveActiveDocuments(ACCOUNT_HOLDER_ID)).thenReturn(buildResolvedMinimalKycDocuments());
         when(countryContextService.resolve(ACTOR_USER_ID)).thenReturn(new CountryContext("BJ", "BJ", "XOF"));
         when(countryContextService.resolve(ACCOUNT_HOLDER_ID)).thenReturn(new CountryContext("BJ", "BJ", "XOF"));
-        when(mediaFileRepository.findByIdAndAccountHolderId(any(UUID.class), eq(ACCOUNT_HOLDER_ID)))
-                .thenAnswer(invocation -> Optional.of(buildReadyMediaFile(
-                        invocation.getArgument(0, UUID.class),
-                        ACCOUNT_HOLDER_ID
-                )));
         when(objectStorageService.readObject(any(), any()))
                 .thenReturn("fake-image-content".getBytes());
         when(cPassKycGateway.checkOrInitKyc(any()))
@@ -285,17 +267,11 @@ class KycSubmissionServiceTest {
     @Test
     void submit_shouldFailWhenMediaReadFailsBeforeSendingDocumentsToCpass() {
         AccountHolder accountHolder = buildAccountHolder(KycStatus.NOT_STARTED);
-        List<KycDocument> documents = buildMinimalKycDocuments();
 
         when(accountHolderRepository.findById(ACCOUNT_HOLDER_ID)).thenReturn(Optional.of(accountHolder));
-        when(kycDocumentRepository.findByAccountHolderId(ACCOUNT_HOLDER_ID)).thenReturn(documents);
+        when(kycDocumentResolutionService.resolveActiveDocuments(ACCOUNT_HOLDER_ID)).thenReturn(buildResolvedMinimalKycDocuments());
         when(countryContextService.resolve(ACTOR_USER_ID)).thenReturn(new CountryContext("BJ", "BJ", "XOF"));
         when(countryContextService.resolve(ACCOUNT_HOLDER_ID)).thenReturn(new CountryContext("BJ", "BJ", "XOF"));
-        when(mediaFileRepository.findByIdAndAccountHolderId(any(UUID.class), eq(ACCOUNT_HOLDER_ID)))
-                .thenAnswer(invocation -> Optional.of(buildReadyMediaFile(
-                        invocation.getArgument(0, UUID.class),
-                        ACCOUNT_HOLDER_ID
-                )));
         when(objectStorageService.readObject(any(), any()))
                 .thenThrow(new BusinessException("Local fallback media file not found"));
         when(cPassKycGateway.checkOrInitKyc(any()))
@@ -326,12 +302,26 @@ class KycSubmissionServiceTest {
                 .build();
     }
 
-    private List<KycDocument> buildMinimalKycDocuments() {
-        return List.of(
-                buildDocument(KycDocumentType.IDENTITY_FRONT),
-                buildDocument(KycDocumentType.IDENTITY_BACK),
-                buildDocument(KycDocumentType.SELFIE)
-        );
+    private Map<KycDocumentType, KycDocumentResolutionService.ResolvedKycDocument> buildResolvedMinimalKycDocuments(KycDocumentType... documentTypes) {
+        Map<KycDocumentType, KycDocumentResolutionService.ResolvedKycDocument> resolvedDocuments =
+                new java.util.EnumMap<>(KycDocumentType.class);
+        List<KycDocumentType> types = documentTypes.length == 0
+                ? List.of(KycDocumentType.IDENTITY_FRONT, KycDocumentType.IDENTITY_BACK, KycDocumentType.SELFIE)
+                : List.of(documentTypes);
+        for (KycDocumentType documentType : types) {
+            KycDocument document = buildDocument(documentType);
+            MediaFile mediaFile = buildReadyMediaFile(document.getMediaFileId(), ACCOUNT_HOLDER_ID, documentType);
+            resolvedDocuments.put(
+                    documentType,
+                    new KycDocumentResolutionService.ResolvedKycDocument(
+                            document,
+                            mediaFile,
+                            "OBJECT_STORAGE",
+                            "https://media.test/" + mediaFile.getObjectKey()
+                    )
+            );
+        }
+        return resolvedDocuments;
     }
 
     private KycDocument buildDocument(KycDocumentType documentType) {
@@ -340,22 +330,30 @@ class KycSubmissionServiceTest {
                 .accountHolderId(ACCOUNT_HOLDER_ID)
                 .mediaFileId(UUID.randomUUID())
                 .documentType(documentType)
-                .status(KycDocumentStatus.SUBMITTED)
+                .status(com.ccapp.media.domain.enums.KycDocumentStatus.SUBMITTED)
                 .createdAt(OffsetDateTime.now())
                 .build();
     }
 
-    private MediaFile buildReadyMediaFile(UUID mediaFileId, UUID accountHolderId) {
+    private MediaFile buildReadyMediaFile(UUID mediaFileId, UUID accountHolderId, KycDocumentType documentType) {
         return MediaFile.builder()
                 .id(mediaFileId)
                 .accountHolderId(accountHolderId)
-                .type(com.ccapp.media.domain.enums.MediaType.KYC_IDENTITY_FRONT)
+                .type(toMediaType(documentType))
                 .bucket("cc-media-kyc")
-                .objectKey("account-holders/" + accountHolderId + "/" + mediaFileId + ".jpg")
+                .objectKey("account-holders/" + accountHolderId + "/" + documentType.name().toLowerCase() + "/" + mediaFileId + ".jpg")
                 .contentType("image/jpeg")
                 .size(1024L)
                 .status(MediaStatus.READY)
                 .createdAt(OffsetDateTime.now())
                 .build();
+    }
+
+    private com.ccapp.media.domain.enums.MediaType toMediaType(KycDocumentType documentType) {
+        return switch (documentType) {
+            case IDENTITY_FRONT -> com.ccapp.media.domain.enums.MediaType.KYC_IDENTITY_FRONT;
+            case IDENTITY_BACK -> com.ccapp.media.domain.enums.MediaType.KYC_IDENTITY_BACK;
+            case SELFIE -> com.ccapp.media.domain.enums.MediaType.KYC_SELFIE;
+        };
     }
 }

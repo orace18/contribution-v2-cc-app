@@ -7,6 +7,9 @@ import com.ccapp.identity.delegation.service.AccessControlService;
 import com.ccapp.identity.repository.UserProfileRepository;
 import com.ccapp.identity.repository.UserRepository;
 import com.ccapp.media.domain.entity.MediaFile;
+import com.ccapp.media.domain.entity.KycDocument;
+import com.ccapp.media.domain.enums.KycDocumentStatus;
+import com.ccapp.media.domain.enums.KycDocumentType;
 import com.ccapp.media.domain.enums.MediaStatus;
 import com.ccapp.media.domain.enums.MediaType;
 import com.ccapp.media.repository.KycDocumentRepository;
@@ -19,6 +22,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -74,6 +78,7 @@ class MediaServiceTest {
         when(countryContextService.resolve(ACTOR_ACCOUNT_HOLDER_ID)).thenReturn(new CountryContext("BJ", "BJ", "XOF"));
         when(countryContextService.resolve(TARGET_ACCOUNT_HOLDER_ID)).thenReturn(new CountryContext("BJ", "BJ", "XOF"));
         when(mediaFileRepository.save(any(MediaFile.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(kycDocumentRepository.findByAccountHolderId(TARGET_ACCOUNT_HOLDER_ID)).thenReturn(List.of());
 
         mediaService.proxyUpload(
                 ACTOR_USER_ID,
@@ -96,5 +101,46 @@ class MediaServiceTest {
                 eq("image/jpeg")
         );
         verify(mediaFileRepository).save(media);
+    }
+
+    @Test
+    void proxyUpload_shouldRejectPreviousActiveDocumentForSameSlot() {
+        MediaFile media = MediaFile.builder()
+                .id(MEDIA_ID)
+                .accountHolderId(TARGET_ACCOUNT_HOLDER_ID)
+                .type(MediaType.KYC_IDENTITY_FRONT)
+                .bucket("cc-media-kyc")
+                .objectKey("account-holders/" + TARGET_ACCOUNT_HOLDER_ID + "/front.jpg")
+                .contentType("image/jpeg")
+                .size(1024L)
+                .status(MediaStatus.PENDING_UPLOAD)
+                .createdAt(OffsetDateTime.now())
+                .build();
+        KycDocument previousDocument = KycDocument.builder()
+                .id(UUID.randomUUID())
+                .accountHolderId(TARGET_ACCOUNT_HOLDER_ID)
+                .mediaFileId(UUID.randomUUID())
+                .documentType(KycDocumentType.IDENTITY_FRONT)
+                .status(KycDocumentStatus.SUBMITTED)
+                .createdAt(OffsetDateTime.now().minusDays(1))
+                .build();
+
+        when(mediaFileRepository.findById(MEDIA_ID)).thenReturn(Optional.of(media));
+        when(countryContextService.resolve(ACTOR_ACCOUNT_HOLDER_ID)).thenReturn(new CountryContext("BJ", "BJ", "XOF"));
+        when(countryContextService.resolve(TARGET_ACCOUNT_HOLDER_ID)).thenReturn(new CountryContext("BJ", "BJ", "XOF"));
+        when(mediaFileRepository.save(any(MediaFile.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(kycDocumentRepository.findByAccountHolderId(TARGET_ACCOUNT_HOLDER_ID)).thenReturn(List.of(previousDocument));
+
+        mediaService.proxyUpload(
+                ACTOR_USER_ID,
+                ACTOR_ACCOUNT_HOLDER_ID,
+                MEDIA_ID,
+                new byte[]{1, 2, 3},
+                "image/jpeg"
+        );
+
+        assertEquals(KycDocumentStatus.REJECTED, previousDocument.getStatus());
+        verify(kycDocumentRepository).saveAll(List.of(previousDocument));
+        verify(kycDocumentRepository).save(any(KycDocument.class));
     }
 }

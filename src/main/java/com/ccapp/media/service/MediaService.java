@@ -25,16 +25,20 @@ import com.ccapp.media.repository.MediaFileRepository;
 import com.ccapp.media.storage.ObjectStorageService;
 import com.ccapp.media.storage.PresignedUrl;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class MediaService {
 
     private final MediaFileRepository mediaFileRepository;
@@ -222,7 +226,34 @@ public class MediaService {
 
         KycDocumentType kycDocumentType = toKycDocumentType(media.getType());
         if (kycDocumentType != null) {
-            KycDocument document = kycDocumentRepository.findByAccountHolderIdAndMediaFileId(media.getAccountHolderId(), media.getId())
+            List<KycDocument> accountDocuments = kycDocumentRepository.findByAccountHolderId(media.getAccountHolderId());
+
+            List<KycDocument> supersededDocuments = accountDocuments.stream()
+                    .filter(document -> document.getDocumentType() == kycDocumentType)
+                    .filter(document -> !document.getMediaFileId().equals(media.getId()))
+                    .filter(document -> document.getStatus() == KycDocumentStatus.SUBMITTED
+                            || document.getStatus() == KycDocumentStatus.VERIFIED)
+                    .toList();
+            for (KycDocument supersededDocument : supersededDocuments) {
+                supersededDocument.setStatus(KycDocumentStatus.REJECTED);
+            }
+            if (!supersededDocuments.isEmpty()) {
+                kycDocumentRepository.saveAll(supersededDocuments);
+                log.info(
+                        "kyc media superseded accountHolderId={} documentSlot={} newMediaId={} replacedMediaIds={}",
+                        media.getAccountHolderId(),
+                        kycDocumentType,
+                        media.getId(),
+                        supersededDocuments.stream()
+                                .map(KycDocument::getMediaFileId)
+                                .map(UUID::toString)
+                                .collect(Collectors.toList())
+                );
+            }
+
+            KycDocument document = accountDocuments.stream()
+                    .filter(existing -> existing.getMediaFileId().equals(media.getId()))
+                    .findFirst()
                     .orElseGet(() -> KycDocument.builder()
                             .accountHolderId(media.getAccountHolderId())
                             .mediaFileId(media.getId())
@@ -231,6 +262,15 @@ public class MediaService {
                             .build());
             document.setDocumentType(kycDocumentType);
             kycDocumentRepository.save(document);
+            log.info(
+                    "kyc media attached accountHolderId={} documentSlot={} mediaId={} bucket={} objectKey={} finalUrl={}",
+                    media.getAccountHolderId(),
+                    kycDocumentType,
+                    media.getId(),
+                    media.getBucket(),
+                    media.getObjectKey(),
+                    objectStorageService.publicObjectUrl(media.getBucket(), media.getObjectKey())
+            );
         }
     }
 

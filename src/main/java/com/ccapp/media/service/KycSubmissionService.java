@@ -19,35 +19,27 @@ import com.ccapp.identity.domain.enums.KycLevel;
 import com.ccapp.identity.domain.enums.KycStatus;
 import com.ccapp.identity.repository.UserProfileRepository;
 import com.ccapp.media.domain.dto.SubmitKycResponse;
-import com.ccapp.media.domain.entity.KycDocument;
 import com.ccapp.media.domain.entity.MediaFile;
-import com.ccapp.media.domain.enums.KycDocumentStatus;
 import com.ccapp.media.domain.enums.KycDocumentType;
-import com.ccapp.media.repository.KycDocumentRepository;
-import com.ccapp.media.repository.MediaFileRepository;
 import com.ccapp.media.storage.ObjectStorageService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.lang.Nullable;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -57,12 +49,9 @@ public class KycSubmissionService {
     private static final String CROSS_COUNTRY_DELEGATION_NOT_ALLOWED = "CROSS_COUNTRY_DELEGATION_NOT_ALLOWED";
     private static final String MINIMAL_KYC_INCOMPLETE = "MINIMAL_KYC_INCOMPLETE";
     private static final String CPASS_KYC_UNAVAILABLE = "CPASS_KYC_UNAVAILABLE";
-    private static final String KYC_DOCUMENT_MEDIA_NOT_FOUND = "KYC_DOCUMENT_MEDIA_NOT_FOUND";
-    private static final String KYC_DOCUMENT_MEDIA_NOT_READY = "KYC_DOCUMENT_MEDIA_NOT_READY";
     private static final String KYC_LEVEL_1_AUTO_APPROVED_EVENT = "KYC_LEVEL_1_AUTO_APPROVED";
 
-    private final KycDocumentRepository kycDocumentRepository;
-    private final MediaFileRepository mediaFileRepository;
+    private final KycDocumentResolutionService kycDocumentResolutionService;
     private final AccountHolderRepository accountHolderRepository;
     private final AccessControlService accessControlService;
     private final CountryContextService countryContextService;
@@ -104,7 +93,8 @@ public class KycSubmissionService {
             return buildResponse(accountHolder, submittedAt);
         }
 
-        Map<KycDocumentType, KycDocument> submissionDocuments = resolveMinimalKycDocuments(targetAccountHolderId);
+        Map<KycDocumentType, KycDocumentResolutionService.ResolvedKycDocument> submissionDocuments =
+                resolveMinimalKycDocuments(targetAccountHolderId);
         if (accountHolder.getKycStatus() != KycStatus.PENDING) {
             CpassSubmissionResult submissionResult = submitToCpass(accountHolder, submissionDocuments);
             kycNotificationService.notifySubmitted(targetAccountHolderId);
@@ -123,18 +113,11 @@ public class KycSubmissionService {
         return buildResponse(refreshedAccountHolder, submittedAt);
     }
 
-    private Map<KycDocumentType, KycDocument> resolveMinimalKycDocuments(UUID accountHolderId) {
-        Map<KycDocumentType, KycDocument> submittedDocuments = kycDocumentRepository.findByAccountHolderId(accountHolderId).stream()
-                .filter(this::isAcceptableForSubmission)
-                .sorted(Comparator.comparing(KycDocument::getCreatedAt))
-                .collect(Collectors.toMap(
-                        KycDocument::getDocumentType,
-                        document -> document,
-                        (previous, replacement) -> replacement,
-                        () -> new EnumMap<>(KycDocumentType.class)
-                ));
+    private Map<KycDocumentType, KycDocumentResolutionService.ResolvedKycDocument> resolveMinimalKycDocuments(UUID accountHolderId) {
+        Map<KycDocumentType, KycDocumentResolutionService.ResolvedKycDocument> submittedDocuments =
+                kycDocumentResolutionService.resolveActiveDocuments(accountHolderId);
 
-        Set<KycDocumentType> required = EnumSet.of(
+        EnumSet<KycDocumentType> required = EnumSet.of(
                 KycDocumentType.IDENTITY_FRONT,
                 KycDocumentType.IDENTITY_BACK,
                 KycDocumentType.SELFIE
@@ -142,16 +125,24 @@ public class KycSubmissionService {
         if (!submittedDocuments.keySet().containsAll(required)) {
             throw new BusinessException(MINIMAL_KYC_INCOMPLETE);
         }
+        for (KycDocumentType documentType : required) {
+            KycDocumentResolutionService.ResolvedKycDocument resolvedDocument = submittedDocuments.get(documentType);
+            log.info(
+                    "kyc submit resolved media accountHolderId={} documentSlot={} mediaId={} source={} bucket={} objectKey={} finalUrl={}",
+                    accountHolderId,
+                    documentType,
+                    resolvedDocument.mediaFile().getId(),
+                    resolvedDocument.source(),
+                    resolvedDocument.mediaFile().getBucket(),
+                    resolvedDocument.mediaFile().getObjectKey(),
+                    resolvedDocument.finalUrl()
+            );
+        }
         return submittedDocuments;
     }
 
-    private boolean isAcceptableForSubmission(KycDocument document) {
-        return document.getStatus() == KycDocumentStatus.SUBMITTED
-                || document.getStatus() == KycDocumentStatus.VERIFIED;
-    }
-
     private CpassSubmissionResult submitToCpass(AccountHolder accountHolder,
-                                                Map<KycDocumentType, KycDocument> submissionDocuments) {
+                                                Map<KycDocumentType, KycDocumentResolutionService.ResolvedKycDocument> submissionDocuments) {
         if (cPassKycGateway == null) {
             throw new BusinessException(CPASS_KYC_UNAVAILABLE);
         }
@@ -175,8 +166,18 @@ public class KycSubmissionService {
                 KycDocumentType.IDENTITY_BACK,
                 KycDocumentType.SELFIE
         )) {
-            KycDocument document = submissionDocuments.get(requiredType);
-            MediaFile mediaFile = loadReadyMediaFile(accountHolder.getId(), document.getMediaFileId());
+            KycDocumentResolutionService.ResolvedKycDocument resolvedDocument = submissionDocuments.get(requiredType);
+            MediaFile mediaFile = resolvedDocument.mediaFile();
+            log.info(
+                    "kyc submit sending document accountHolderId={} documentSlot={} mediaId={} source={} bucket={} objectKey={} finalUrl={}",
+                    accountHolder.getId(),
+                    requiredType,
+                    mediaFile.getId(),
+                    resolvedDocument.source(),
+                    mediaFile.getBucket(),
+                    mediaFile.getObjectKey(),
+                    resolvedDocument.finalUrl()
+            );
             CPassKycDocumentResponse documentResponse = cPassKycGateway.submitDocument(
                     caseId,
                     toCpassDocumentType(requiredType),
@@ -225,15 +226,6 @@ public class KycSubmissionService {
         String firstName = accountHolder.getFirstName() == null ? "" : accountHolder.getFirstName().trim();
         String lastName = accountHolder.getLastName() == null ? "" : accountHolder.getLastName().trim();
         return (firstName + " " + lastName).trim();
-    }
-
-    private MediaFile loadReadyMediaFile(UUID accountHolderId, UUID mediaFileId) {
-        MediaFile mediaFile = mediaFileRepository.findByIdAndAccountHolderId(mediaFileId, accountHolderId)
-                .orElseThrow(() -> new BusinessException(KYC_DOCUMENT_MEDIA_NOT_FOUND));
-        if (mediaFile.getStatus() != com.ccapp.media.domain.enums.MediaStatus.READY) {
-            throw new BusinessException(KYC_DOCUMENT_MEDIA_NOT_READY);
-        }
-        return mediaFile;
     }
 
     private String normalizeOptional(String value) {
