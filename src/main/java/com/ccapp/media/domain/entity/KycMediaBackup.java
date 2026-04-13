@@ -5,7 +5,6 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
-import jakarta.persistence.Lob;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
@@ -13,6 +12,8 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.OffsetDateTime;
 import java.util.UUID;
@@ -36,9 +37,9 @@ public class KycMediaBackup {
     @Column(name = "content_type", nullable = false, length = 128)
     private String contentType;
 
-    @Lob
     @Basic(fetch = FetchType.LAZY)
-    @Column(name = "payload", nullable = false)
+    @JdbcTypeCode(SqlTypes.VARBINARY)
+    @Column(name = "payload", nullable = false, columnDefinition = "bytea")
     private byte[] payload;
 
     @Column(name = "created_at", nullable = false, updatable = false)
