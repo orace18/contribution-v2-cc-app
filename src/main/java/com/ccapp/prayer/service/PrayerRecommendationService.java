@@ -1,5 +1,6 @@
 package com.ccapp.prayer.service;
 
+import com.ccapp.common.exception.NotFoundException;
 import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
 import com.ccapp.media.domain.entity.MediaFile;
 import com.ccapp.media.domain.enums.MediaStatus;
@@ -28,7 +29,6 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -65,6 +65,13 @@ public class PrayerRecommendationService {
         List<PrayerDailyContent> allPublished = prayerDailyContentRepository
                 .findByStatusOrderByPrayerDateDesc(PrayerDailyPrayerStatus.PUBLISHED);
 
+        log.info("[recommendation] published pool size={} accountHolderId={}", allPublished.size(), accountHolderId);
+
+        if (allPublished.isEmpty()) {
+            log.warn("[recommendation] NO_PRAYER_AVAILABLE — no published prayers in database accountHolderId={}", accountHolderId);
+            throw new NotFoundException("NO_PRAYER_AVAILABLE");
+        }
+
         // 2. Prayer IDs already completed by this user
         Set<UUID> completedIds = prayerDailyCompletionRepository
                 .findByAccountHolderIdOrderByPrayerDateDesc(accountHolderId).stream()
@@ -75,9 +82,14 @@ public class PrayerRecommendationService {
         List<PrayerDailyContent> pool = allPublished.stream()
                 .filter(p -> !completedIds.contains(p.getId()))
                 .collect(Collectors.toList());
+
+        log.info("[recommendation] uncompleted pool size={} completedCount={} accountHolderId={}",
+                pool.size(), completedIds.size(), accountHolderId);
+
         if (pool.isEmpty()) {
             pool = allPublished;
-            log.info("[recommendation] all prayers completed — falling back to full pool accountHolderId={}", accountHolderId);
+            log.info("[recommendation] all {} prayers completed — falling back to full published pool accountHolderId={}",
+                    allPublished.size(), accountHolderId);
         }
 
         // 4. Score and select best candidate
@@ -122,6 +134,10 @@ public class PrayerRecommendationService {
     private PrayerDailyContent selectBest(List<PrayerDailyContent> pool,
                                           UUID accountHolderId,
                                           PrayerTimezoneResolver.PrayerLocalContext ctx) {
+        if (pool.isEmpty()) {
+            // Caller must guard against this; defensive throw to avoid silent NPE
+            throw new NotFoundException("NO_PRAYER_AVAILABLE");
+        }
         if (pool.size() == 1) return pool.get(0);
 
         int hour      = ctx.now().toLocalTime().getHour();
@@ -139,6 +155,9 @@ public class PrayerRecommendationService {
                 .map(PrayerDailyContent::getId)
                 .collect(Collectors.toSet());
 
+        // orElseGet (lazy) avoids IndexOutOfBoundsException when pool is empty;
+        // the guard above makes this branch unreachable, but it is safer than
+        // orElse(pool.get(0)) which evaluates eagerly regardless of Optional state.
         return pool.stream()
                 .max(Comparator.comparingDouble(prayer ->
                         score(prayer,
@@ -148,7 +167,7 @@ public class PrayerRecommendationService {
                               dayOfWeek,
                               totalCompletions,
                               daySeed)))
-                .orElse(pool.get(0));
+                .orElseGet(() -> pool.get(0));
     }
 
     /**
