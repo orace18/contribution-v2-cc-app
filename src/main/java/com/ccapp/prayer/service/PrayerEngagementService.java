@@ -156,6 +156,21 @@ public class PrayerEngagementService {
         );
     }
 
+    /**
+     * Public accessor used by {@link PrayerRecommendationService} to include
+     * streak data in the today-recommendation response without duplicating logic.
+     */
+    @Transactional(readOnly = true)
+    public PrayerStreakResponse getStreakResponse(UUID accountHolderId, LocalDate referenceDate) {
+        StreakSnapshot snapshot = calculateStreak(accountHolderId, referenceDate);
+        return new PrayerStreakResponse(
+                snapshot.currentStreak(),
+                snapshot.longestStreak(),
+                snapshot.lastCompletedDate(),
+                snapshot.recentDays()
+        );
+    }
+
     @Transactional
     public void recordTrackedMissionAction(AccountHolder accountHolder, PrayerDailyMissionCode missionCode) {
         PrayerTimezoneResolver.PrayerLocalContext localContext = prayerTimezoneResolver.resolve(accountHolder, null);

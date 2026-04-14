@@ -28,6 +28,7 @@ import com.ccapp.prayer.dto.DailyPrayerCompletionResponse;
 import com.ccapp.prayer.dto.DailyPrayerResponse;
 import com.ccapp.prayer.dto.PrayerCommentResponse;
 import com.ccapp.prayer.dto.PrayerDashboardResponse;
+import com.ccapp.prayer.dto.PrayerTodayRecommendationResponse;
 import com.ccapp.prayer.dto.PrayerInteractionResponse;
 import com.ccapp.prayer.dto.PrayerPostResponse;
 import com.ccapp.prayer.dto.UpdatePrayerRequest;
@@ -64,6 +65,7 @@ public class PrayerMobileService {
     private final CircleRepository circleRepository;
     private final CircleMemberRepository circleMemberRepository;
     private final PrayerEngagementService prayerEngagementService;
+    private final PrayerRecommendationService prayerRecommendationService;
     private final PrayerNotificationPublisher prayerNotificationPublisher;
 
     @Transactional(readOnly = true)
@@ -339,6 +341,13 @@ public class PrayerMobileService {
         accessControlService.assertCanActOnAccountHolder(actorUserId, accountHolderId, PermissionLevel.VIEW);
         AccountHolder viewer = accountHolderService.getById(accountHolderId);
         return prayerEngagementService.getPrayerDashboard(viewer, timezone);
+    }
+
+    @Transactional(readOnly = true)
+    public PrayerTodayRecommendationResponse getTodayRecommendation(UUID actorUserId, UUID accountHolderId, String timezone) {
+        accessControlService.assertCanActOnAccountHolder(actorUserId, accountHolderId, PermissionLevel.VIEW);
+        AccountHolder viewer = accountHolderService.getById(accountHolderId);
+        return prayerRecommendationService.getTodayRecommendation(viewer, timezone);
     }
 
     /**

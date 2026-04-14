@@ -14,6 +14,7 @@ import com.ccapp.prayer.dto.PrayerCreateMediaUploadRequest;
 import com.ccapp.prayer.dto.PrayerCreateMediaUploadResponse;
 import com.ccapp.prayer.dto.PrayerCommentResponse;
 import com.ccapp.prayer.dto.PrayerDashboardResponse;
+import com.ccapp.prayer.dto.PrayerTodayRecommendationResponse;
 import com.ccapp.prayer.dto.PrayerInteractionResponse;
 import com.ccapp.prayer.dto.PrayerMediaUploadConfirmationResponse;
 import com.ccapp.prayer.dto.PrayerPostResponse;
@@ -187,6 +188,17 @@ public class PrayerMobileController {
                 request
         );
         return ResponseEntity.ok(CommonResponse.success("Prayer comment created", response));
+    }
+
+    @GetMapping("/today")
+    @Operation(summary = "Get a dynamically recommended daily prayer for the authenticated user")
+    public ResponseEntity<CommonResponse<PrayerTodayRecommendationResponse>> getTodayRecommendation(
+            @RequestParam(required = false) String timezone) {
+        AuthenticatedPrincipal principal = SecurityUtils.currentPrincipal();
+        UUID accountHolderId = SecurityUtils.currentAccountHolderId();
+        PrayerTodayRecommendationResponse response = prayerMobileService.getTodayRecommendation(
+                principal.userId(), accountHolderId, timezone);
+        return ResponseEntity.ok(CommonResponse.success("Today's recommended prayer", response));
     }
 
     @GetMapping("/daily/current")
