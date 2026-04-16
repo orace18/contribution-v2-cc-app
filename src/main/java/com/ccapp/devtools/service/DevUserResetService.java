@@ -173,6 +173,7 @@ public class DevUserResetService {
         deleteByUuid("mobile_plan_selections", "account_holder_id", accountHolderId);
         deleteByUuid("mobile_onboarding_journeys", "account_holder_id", accountHolderId);
         deleteByUuid("phone_verifications", "requester_account_holder_id", accountHolderId);
+        deleteBySql("DELETE FROM task_audit_logs WHERE user_task_id IN (SELECT id FROM user_tasks WHERE account_holder_id = ?)", accountHolderId);
         deleteByUuid("user_tasks", "account_holder_id", accountHolderId);
         deleteByUuid("user_progress", "account_holder_id", accountHolderId);
         deleteByUuid("media_files", "account_holder_id", accountHolderId);
