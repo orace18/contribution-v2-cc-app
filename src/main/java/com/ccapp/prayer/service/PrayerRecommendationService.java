@@ -45,6 +45,7 @@ public class PrayerRecommendationService {
     private final PrayerSupportRepository          prayerSupportRepository;
     private final PrayerEngagementService          prayerEngagementService;
     private final PrayerTimezoneResolver           prayerTimezoneResolver;
+    private final PrayerBusinessDailyCatalogSeedService prayerBusinessDailyCatalogSeedService;
     private final MediaFileRepository             mediaFileRepository;
     private final ObjectStorageService            objectStorageService;
 
@@ -63,13 +64,19 @@ public class PrayerRecommendationService {
 
         // 1. All PUBLISHED prayers
         List<PrayerDailyContent> allPublished = prayerDailyContentRepository
-                .findByStatusOrderByPrayerDateDesc(PrayerDailyPrayerStatus.PUBLISHED);
+                .findByStatusOrderByPriorityAscPrayerDateAscIdAsc(PrayerDailyPrayerStatus.PUBLISHED);
 
         log.info("[recommendation] published pool size={} accountHolderId={}", allPublished.size(), accountHolderId);
 
         if (allPublished.isEmpty()) {
             log.warn("[recommendation] NO_PRAYER_AVAILABLE — no published prayers in database accountHolderId={}", accountHolderId);
-            throw new NotFoundException("NO_PRAYER_AVAILABLE");
+            prayerBusinessDailyCatalogSeedService.seedBusinessCatalog();
+            allPublished = prayerDailyContentRepository
+                    .findByStatusOrderByPriorityAscPrayerDateAscIdAsc(PrayerDailyPrayerStatus.PUBLISHED);
+            if (allPublished.isEmpty()) {
+                PrayerDailyContent fallback = findPublishedFallbackPrayer();
+                allPublished = List.of(fallback);
+            }
         }
 
         // 2. Prayer IDs already completed by this user
@@ -118,7 +125,10 @@ public class PrayerRecommendationService {
                 selected.getPrayerDate(),
                 selected.getTitle(),
                 selected.getScriptureReference(),
+                selected.getScriptureText(),
+                selected.getShortContent(),
                 selected.getContent(),
+                selected.getDeclaration(),
                 mediaRefs,
                 todayCompletion != null,
                 todayCompletion == null ? null : todayCompletion.getResponseType(),
@@ -130,6 +140,14 @@ public class PrayerRecommendationService {
     }
 
     // ── Selection algorithm ───────────────────────────────────────────────────
+
+    private PrayerDailyContent findPublishedFallbackPrayer() {
+        return prayerDailyContentRepository
+                .findFirstByStatusAndFeaturedTrueOrderByPriorityAscPrayerDateAscIdAsc(PrayerDailyPrayerStatus.PUBLISHED)
+                .or(() -> prayerDailyContentRepository
+                        .findFirstByStatusOrderByPriorityAscPrayerDateAscIdAsc(PrayerDailyPrayerStatus.PUBLISHED))
+                .orElseThrow(() -> new NotFoundException("NO_PRAYER_AVAILABLE"));
+    }
 
     private PrayerDailyContent selectBest(List<PrayerDailyContent> pool,
                                           UUID accountHolderId,

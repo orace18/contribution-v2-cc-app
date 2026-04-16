@@ -11,9 +11,18 @@ import java.util.UUID;
 
 public interface PrayerDailyContentRepository extends JpaRepository<PrayerDailyContent, UUID> {
 
+    Optional<PrayerDailyContent> findByCode(String code);
+
     Optional<PrayerDailyContent> findByPrayerDate(LocalDate prayerDate);
 
     Optional<PrayerDailyContent> findByPrayerDateAndStatus(LocalDate prayerDate, PrayerDailyPrayerStatus status);
 
     List<PrayerDailyContent> findByStatusOrderByPrayerDateDesc(PrayerDailyPrayerStatus status);
+
+    List<PrayerDailyContent> findByStatusOrderByPriorityAscPrayerDateAscIdAsc(PrayerDailyPrayerStatus status);
+
+    Optional<PrayerDailyContent> findFirstByStatusAndFeaturedTrueOrderByPriorityAscPrayerDateAscIdAsc(
+            PrayerDailyPrayerStatus status);
+
+    Optional<PrayerDailyContent> findFirstByStatusOrderByPriorityAscPrayerDateAscIdAsc(PrayerDailyPrayerStatus status);
 }

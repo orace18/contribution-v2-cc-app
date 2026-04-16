@@ -62,6 +62,7 @@ public class PrayerEngagementService {
     private final PrayerCommentRepository prayerCommentRepository;
     private final PrayerDailyMapper prayerDailyMapper;
     private final PrayerTimezoneResolver prayerTimezoneResolver;
+    private final PrayerBusinessDailyCatalogSeedService prayerBusinessDailyCatalogSeedService;
 
     @Transactional(readOnly = true)
     public DailyPrayerResponse getCurrentDailyPrayer(AccountHolder accountHolder, String requestedTimezone) {
@@ -180,8 +181,20 @@ public class PrayerEngagementService {
     }
 
     private PrayerDailyContent findPublishedDailyPrayer(LocalDate localDate) {
-        return prayerDailyContentRepository.findByPrayerDateAndStatus(localDate, PrayerDailyPrayerStatus.PUBLISHED)
+        return findPublishedDailyPrayerCandidate(localDate)
+                .or(() -> {
+                    prayerBusinessDailyCatalogSeedService.seedBusinessCatalog();
+                    return findPublishedDailyPrayerCandidate(localDate);
+                })
                 .orElseThrow(() -> new NotFoundException("PRAYER_DAILY_NOT_FOUND"));
+    }
+
+    private java.util.Optional<PrayerDailyContent> findPublishedDailyPrayerCandidate(LocalDate localDate) {
+        return prayerDailyContentRepository.findByPrayerDateAndStatus(localDate, PrayerDailyPrayerStatus.PUBLISHED)
+                .or(() -> prayerDailyContentRepository
+                        .findFirstByStatusAndFeaturedTrueOrderByPriorityAscPrayerDateAscIdAsc(PrayerDailyPrayerStatus.PUBLISHED))
+                .or(() -> prayerDailyContentRepository
+                        .findFirstByStatusOrderByPriorityAscPrayerDateAscIdAsc(PrayerDailyPrayerStatus.PUBLISHED));
     }
 
     private void upsertDailyCheckin(UUID actorUserId,
