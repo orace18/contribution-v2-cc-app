@@ -43,21 +43,72 @@ public class PrayerDailyContent extends AuditableEntity {
     @Column(name = "prayer_date", nullable = false)
     private LocalDate prayerDate;
 
+    @Column(name = "code", length = 96)
+    private String code;
+
     @Column(name = "title", length = 160)
     private String title;
 
     @Column(name = "scripture_reference", length = 160)
     private String scriptureReference;
 
+    @Column(name = "scripture_text", length = 512)
+    private String scriptureText;
+
+    @Column(name = "short_content", length = 280)
+    private String shortContent;
+
     @Column(name = "content", nullable = false, columnDefinition = "TEXT")
     private String content;
+
+    @Column(name = "declaration", columnDefinition = "TEXT")
+    private String declaration;
+
+    @Column(name = "category", length = 64)
+    private String category;
+
+    @Column(name = "theme", length = 120)
+    private String theme;
+
+    @Column(name = "tone", length = 80)
+    private String tone;
+
+    @Column(name = "audience", length = 160)
+    private String audience;
+
+    @Column(name = "tags_csv", length = 512)
+    private String tagsCsv;
+
+    @Column(name = "language", nullable = false, length = 8)
+    @Builder.Default
+    private String language = "fr";
+
+    @Column(name = "country_scope", nullable = false, length = 64)
+    @Builder.Default
+    private String countryScope = "AFRICA_FR";
+
+    @Column(name = "featured", nullable = false)
+    @Builder.Default
+    private boolean featured = false;
+
+    @Column(name = "priority", nullable = false)
+    @Builder.Default
+    private int priority = 0;
+
+    @Column(name = "estimated_read_seconds", nullable = false)
+    @Builder.Default
+    private int estimatedReadSeconds = 45;
+
+    @Column(name = "audio_status", nullable = false, length = 32)
+    @Builder.Default
+    private String audioStatus = "NONE";
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 16)
     @Builder.Default
     private PrayerDailyPrayerStatus status = PrayerDailyPrayerStatus.DRAFT;
 
-    @Column(name = "created_by_admin_user_id", nullable = false)
+    @Column(name = "created_by_admin_user_id")
     private UUID createdByAdminUserId;
 
     @Column(name = "published_at")
@@ -67,6 +118,18 @@ public class PrayerDailyContent extends AuditableEntity {
     protected void onPersist() {
         if (status == null) {
             status = PrayerDailyPrayerStatus.DRAFT;
+        }
+        if (language == null || language.isBlank()) {
+            language = "fr";
+        }
+        if (countryScope == null || countryScope.isBlank()) {
+            countryScope = "AFRICA_FR";
+        }
+        if (estimatedReadSeconds <= 0) {
+            estimatedReadSeconds = 45;
+        }
+        if (audioStatus == null || audioStatus.isBlank()) {
+            audioStatus = "NONE";
         }
     }
 }

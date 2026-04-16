@@ -62,6 +62,7 @@ public class PrayerEngagementService {
     private final PrayerCommentRepository prayerCommentRepository;
     private final PrayerDailyMapper prayerDailyMapper;
     private final PrayerTimezoneResolver prayerTimezoneResolver;
+    private final PrayerBusinessDailyCatalogSeedService prayerBusinessDailyCatalogSeedService;
 
     @Transactional(readOnly = true)
     public DailyPrayerResponse getCurrentDailyPrayer(AccountHolder accountHolder, String requestedTimezone) {
@@ -156,6 +157,21 @@ public class PrayerEngagementService {
         );
     }
 
+    /**
+     * Public accessor used by {@link PrayerRecommendationService} to include
+     * streak data in the today-recommendation response without duplicating logic.
+     */
+    @Transactional(readOnly = true)
+    public PrayerStreakResponse getStreakResponse(UUID accountHolderId, LocalDate referenceDate) {
+        StreakSnapshot snapshot = calculateStreak(accountHolderId, referenceDate);
+        return new PrayerStreakResponse(
+                snapshot.currentStreak(),
+                snapshot.longestStreak(),
+                snapshot.lastCompletedDate(),
+                snapshot.recentDays()
+        );
+    }
+
     @Transactional
     public void recordTrackedMissionAction(AccountHolder accountHolder, PrayerDailyMissionCode missionCode) {
         PrayerTimezoneResolver.PrayerLocalContext localContext = prayerTimezoneResolver.resolve(accountHolder, null);
@@ -165,8 +181,20 @@ public class PrayerEngagementService {
     }
 
     private PrayerDailyContent findPublishedDailyPrayer(LocalDate localDate) {
-        return prayerDailyContentRepository.findByPrayerDateAndStatus(localDate, PrayerDailyPrayerStatus.PUBLISHED)
+        return findPublishedDailyPrayerCandidate(localDate)
+                .or(() -> {
+                    prayerBusinessDailyCatalogSeedService.seedBusinessCatalog();
+                    return findPublishedDailyPrayerCandidate(localDate);
+                })
                 .orElseThrow(() -> new NotFoundException("PRAYER_DAILY_NOT_FOUND"));
+    }
+
+    private java.util.Optional<PrayerDailyContent> findPublishedDailyPrayerCandidate(LocalDate localDate) {
+        return prayerDailyContentRepository.findByPrayerDateAndStatus(localDate, PrayerDailyPrayerStatus.PUBLISHED)
+                .or(() -> prayerDailyContentRepository
+                        .findFirstByStatusAndFeaturedTrueOrderByPriorityAscPrayerDateAscIdAsc(PrayerDailyPrayerStatus.PUBLISHED))
+                .or(() -> prayerDailyContentRepository
+                        .findFirstByStatusOrderByPriorityAscPrayerDateAscIdAsc(PrayerDailyPrayerStatus.PUBLISHED));
     }
 
     private void upsertDailyCheckin(UUID actorUserId,

@@ -31,12 +31,27 @@ import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import javax.imageio.IIOImage;
+import javax.imageio.ImageIO;
+import javax.imageio.ImageWriteParam;
+import javax.imageio.ImageWriter;
+import javax.imageio.stream.MemoryCacheImageOutputStream;
+import java.awt.AlphaComposite;
+import java.awt.Color;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
@@ -49,6 +64,8 @@ public class KycSubmissionService {
     private static final String CROSS_COUNTRY_DELEGATION_NOT_ALLOWED = "CROSS_COUNTRY_DELEGATION_NOT_ALLOWED";
     private static final String MINIMAL_KYC_INCOMPLETE = "MINIMAL_KYC_INCOMPLETE";
     private static final String CPASS_KYC_UNAVAILABLE = "CPASS_KYC_UNAVAILABLE";
+    private static final String CPASS_KYC_DOCUMENT_TOO_LARGE = "CPASS_KYC_DOCUMENT_TOO_LARGE";
+    private static final String CPASS_KYC_DOCUMENT_IMAGE_UNREADABLE = "CPASS_KYC_DOCUMENT_IMAGE_UNREADABLE";
     private static final String KYC_LEVEL_1_AUTO_APPROVED_EVENT = "KYC_LEVEL_1_AUTO_APPROVED";
 
     private final KycDocumentResolutionService kycDocumentResolutionService;
@@ -61,6 +78,7 @@ public class KycSubmissionService {
     private final ObjectStorageService objectStorageService;
     private final FinancialAuditService financialAuditService;
     private final UserProfileRepository userProfileRepository;
+    private final KycMediaBackupService kycMediaBackupService;
 
     @Nullable
     @Autowired(required = false)
@@ -71,6 +89,15 @@ public class KycSubmissionService {
 
     @Value("${cpass.kyc.level1.face-match-threshold:0.75}")
     private double level1FaceMatchThreshold;
+
+    @Value("${cpass.kyc.document-max-bytes:950000}")
+    private int cpassDocumentMaxBytes;
+
+    @Value("${cpass.kyc.image-max-dimension:1600}")
+    private int cpassImageMaxDimension;
+
+    @Value("${cpass.kyc.image-jpeg-quality:0.82}")
+    private float cpassImageJpegQuality;
 
     @Transactional
     public SubmitKycResponse submit(UUID actorUserId, UUID actorAccountHolderId, UUID targetAccountHolderId) {
@@ -168,20 +195,26 @@ public class KycSubmissionService {
         )) {
             KycDocumentResolutionService.ResolvedKycDocument resolvedDocument = submissionDocuments.get(requiredType);
             MediaFile mediaFile = resolvedDocument.mediaFile();
+            PreparedCpassUpload preparedUpload = createCpassUploadResource(requiredType, mediaFile);
             log.info(
-                    "kyc submit sending document accountHolderId={} documentSlot={} mediaId={} source={} bucket={} objectKey={} finalUrl={}",
+                    "kyc submit sending document accountHolderId={} documentSlot={} mediaId={} source={} bucket={} objectKey={} finalUrl={} originalBytes={} uploadBytes={} uploadContentType={} uploadFilename={} transformed={}",
                     accountHolder.getId(),
                     requiredType,
                     mediaFile.getId(),
                     resolvedDocument.source(),
                     mediaFile.getBucket(),
                     mediaFile.getObjectKey(),
-                    resolvedDocument.finalUrl()
+                    resolvedDocument.finalUrl(),
+                    preparedUpload.originalBytes(),
+                    preparedUpload.uploadBytes(),
+                    preparedUpload.contentType(),
+                    preparedUpload.filename(),
+                    preparedUpload.transformed()
             );
             CPassKycDocumentResponse documentResponse = cPassKycGateway.submitDocument(
                     caseId,
-                    toCpassDocumentType(requiredType),
-                    createCpassUploadResource(requiredType, mediaFile),
+                    toCpassDocumentType(requiredType, accountHolder.getDeclaredDocumentType()),
+                    preparedUpload.resource(),
                     Map.of(
                             "accountHolderId", accountHolder.getId().toString(),
                             "mediaFileId", mediaFile.getId().toString()
@@ -412,17 +445,29 @@ public class KycSubmissionService {
         return candidate != null ? candidate : normalizeOptional(fallback);
     }
 
-    private ByteArrayResource createCpassUploadResource(KycDocumentType documentType, MediaFile mediaFile) {
+    private PreparedCpassUpload createCpassUploadResource(KycDocumentType documentType, MediaFile mediaFile) {
         try {
             byte[] bytes = objectStorageService.readObject(mediaFile.getBucket(), mediaFile.getObjectKey());
             String filename = extractFilename(mediaFile.getObjectKey());
-            return new ByteArrayResource(bytes) {
-                @Override
-                public String getFilename() {
-                    return filename;
-                }
-            };
+            String contentType = normalizeContentType(mediaFile.getContentType(), filename);
+            return prepareUpload(mediaFile, documentType, bytes, filename, contentType);
         } catch (RuntimeException ex) {
+            KycMediaBackupService.StoredKycMediaBackup mediaBackup = findKycBackup(mediaFile).orElse(null);
+            if (mediaBackup != null) {
+                String filename = extractFilename(mediaFile.getObjectKey());
+                String contentType = normalizeContentType(mediaBackup.contentType(), filename);
+                log.warn(
+                        "kyc submit using backup accountHolderId={} mediaId={} documentType={} bucket={} objectKey={} backupBytes={} fallbackReason={}",
+                        mediaFile.getAccountHolderId(),
+                        mediaFile.getId(),
+                        documentType,
+                        mediaFile.getBucket(),
+                        mediaFile.getObjectKey(),
+                        mediaBackup.payload().length,
+                        ex.getMessage()
+                );
+                return prepareUpload(mediaFile, documentType, mediaBackup.payload(), filename, contentType);
+            }
             log.error(
                     "kyc submit: media read failed accountHolderId={} mediaId={} documentType={} bucket={} objectKey={} reason={}",
                     mediaFile.getAccountHolderId(),
@@ -435,6 +480,213 @@ public class KycSubmissionService {
             );
             throw new BusinessException("CPASS_KYC_DOCUMENT_READ_FAILED");
         }
+    }
+
+    private PreparedCpassUpload prepareUpload(MediaFile mediaFile,
+                                              KycDocumentType documentType,
+                                              byte[] originalBytes,
+                                              String filename,
+                                              String contentType) {
+        if (originalBytes.length <= cpassDocumentMaxBytes) {
+            return new PreparedCpassUpload(
+                    byteArrayResource(originalBytes, filename),
+                    filename,
+                    contentType,
+                    originalBytes.length,
+                    originalBytes.length,
+                    false
+            );
+        }
+        if (!contentType.startsWith("image/")) {
+            log.warn(
+                    "kyc submit document too large and non-image accountHolderId={} documentType={} mediaId={} originalBytes={} maxBytes={} contentType={} filename={}",
+                    mediaFile.getAccountHolderId(),
+                    documentType,
+                    mediaFile.getId(),
+                    originalBytes.length,
+                    cpassDocumentMaxBytes,
+                    contentType,
+                    filename
+            );
+            throw new BusinessException(CPASS_KYC_DOCUMENT_TOO_LARGE);
+        }
+        return compressImageForCpass(mediaFile, documentType, originalBytes, filename, contentType);
+    }
+
+    private PreparedCpassUpload compressImageForCpass(MediaFile mediaFile,
+                                                      KycDocumentType documentType,
+                                                      byte[] originalBytes,
+                                                      String filename,
+                                                      String contentType) {
+        BufferedImage sourceImage = readImage(originalBytes);
+        if (sourceImage == null) {
+            log.warn(
+                    "kyc submit image unreadable accountHolderId={} documentType={} mediaId={} originalBytes={} contentType={} filename={}",
+                    mediaFile.getAccountHolderId(),
+                    documentType,
+                    mediaFile.getId(),
+                    originalBytes.length,
+                    contentType,
+                    filename
+            );
+            throw new BusinessException(CPASS_KYC_DOCUMENT_IMAGE_UNREADABLE);
+        }
+
+        int sourceWidth = sourceImage.getWidth();
+        int sourceHeight = sourceImage.getHeight();
+        int largestDimension = Math.max(sourceWidth, sourceHeight);
+        double scale = largestDimension > 0
+                ? Math.min(1.0d, (double) cpassImageMaxDimension / largestDimension)
+                : 1.0d;
+        float quality = clampJpegQuality(cpassImageJpegQuality);
+        byte[] smallestAttempt = originalBytes;
+        int smallestWidth = sourceWidth;
+        int smallestHeight = sourceHeight;
+
+        for (int attempt = 0; attempt < 8; attempt++) {
+            int targetWidth = Math.max(1, (int) Math.round(sourceWidth * scale));
+            int targetHeight = Math.max(1, (int) Math.round(sourceHeight * scale));
+            BufferedImage scaledImage = scaleImage(sourceImage, targetWidth, targetHeight);
+            byte[] encodedBytes = encodeJpeg(scaledImage, quality);
+            if (encodedBytes.length < smallestAttempt.length) {
+                smallestAttempt = encodedBytes;
+                smallestWidth = targetWidth;
+                smallestHeight = targetHeight;
+            }
+            if (encodedBytes.length <= cpassDocumentMaxBytes) {
+                String uploadFilename = replaceExtension(filename, ".jpg");
+                log.info(
+                        "kyc submit document compressed accountHolderId={} documentType={} mediaId={} originalBytes={} uploadBytes={} maxBytes={} originalContentType={} uploadContentType=image/jpeg width={} height={} quality={} filename={}",
+                        mediaFile.getAccountHolderId(),
+                        documentType,
+                        mediaFile.getId(),
+                        originalBytes.length,
+                        encodedBytes.length,
+                        cpassDocumentMaxBytes,
+                        contentType,
+                        targetWidth,
+                        targetHeight,
+                        quality,
+                        uploadFilename
+                );
+                return new PreparedCpassUpload(
+                        byteArrayResource(encodedBytes, uploadFilename),
+                        uploadFilename,
+                        "image/jpeg",
+                        originalBytes.length,
+                        encodedBytes.length,
+                        true
+                );
+            }
+            scale *= 0.82d;
+            quality = clampJpegQuality(quality - 0.07f);
+        }
+
+        log.warn(
+                "kyc submit document still too large after compression accountHolderId={} documentType={} mediaId={} originalBytes={} smallestBytes={} maxBytes={} smallestWidth={} smallestHeight={} contentType={} filename={}",
+                mediaFile.getAccountHolderId(),
+                documentType,
+                mediaFile.getId(),
+                originalBytes.length,
+                smallestAttempt.length,
+                cpassDocumentMaxBytes,
+                smallestWidth,
+                smallestHeight,
+                contentType,
+                filename
+        );
+        throw new BusinessException(CPASS_KYC_DOCUMENT_TOO_LARGE);
+    }
+
+    private java.util.Optional<KycMediaBackupService.StoredKycMediaBackup> findKycBackup(MediaFile mediaFile) {
+        java.util.Optional<KycMediaBackupService.StoredKycMediaBackup> backup = kycMediaBackupService.findBackup(mediaFile);
+        return backup == null ? java.util.Optional.empty() : backup;
+    }
+
+    private BufferedImage readImage(byte[] bytes) {
+        try (ByteArrayInputStream inputStream = new ByteArrayInputStream(bytes)) {
+            return ImageIO.read(inputStream);
+        } catch (IOException ex) {
+            throw new BusinessException(CPASS_KYC_DOCUMENT_IMAGE_UNREADABLE);
+        }
+    }
+
+    private BufferedImage scaleImage(BufferedImage sourceImage, int targetWidth, int targetHeight) {
+        BufferedImage scaledImage = new BufferedImage(targetWidth, targetHeight, BufferedImage.TYPE_INT_RGB);
+        Graphics2D graphics = scaledImage.createGraphics();
+        try {
+            graphics.setComposite(AlphaComposite.SrcOver);
+            graphics.setColor(Color.WHITE);
+            graphics.fillRect(0, 0, targetWidth, targetHeight);
+            graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+            graphics.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+            graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            graphics.drawImage(sourceImage, 0, 0, targetWidth, targetHeight, null);
+        } finally {
+            graphics.dispose();
+        }
+        return scaledImage;
+    }
+
+    private byte[] encodeJpeg(BufferedImage image, float quality) {
+        Iterator<ImageWriter> writers = ImageIO.getImageWritersByFormatName("jpg");
+        if (!writers.hasNext()) {
+            throw new BusinessException(CPASS_KYC_DOCUMENT_IMAGE_UNREADABLE);
+        }
+        ImageWriter writer = writers.next();
+        try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+             MemoryCacheImageOutputStream imageOutputStream = new MemoryCacheImageOutputStream(outputStream)) {
+            writer.setOutput(imageOutputStream);
+            ImageWriteParam writeParam = writer.getDefaultWriteParam();
+            if (writeParam.canWriteCompressed()) {
+                writeParam.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
+                writeParam.setCompressionQuality(clampJpegQuality(quality));
+            }
+            writer.write(null, new IIOImage(image, null, null), writeParam);
+            writer.dispose();
+            return outputStream.toByteArray();
+        } catch (IOException ex) {
+            writer.dispose();
+            throw new BusinessException(CPASS_KYC_DOCUMENT_IMAGE_UNREADABLE);
+        }
+    }
+
+    private ByteArrayResource byteArrayResource(byte[] bytes, String filename) {
+        return new ByteArrayResource(bytes) {
+            @Override
+            public String getFilename() {
+                return filename;
+            }
+        };
+    }
+
+    private String normalizeContentType(String contentType, String filename) {
+        if (contentType != null && !contentType.isBlank()) {
+            return contentType.trim().toLowerCase(Locale.ROOT);
+        }
+        String normalizedFilename = filename == null ? "" : filename.toLowerCase(Locale.ROOT);
+        if (normalizedFilename.endsWith(".png")) {
+            return "image/png";
+        }
+        if (normalizedFilename.endsWith(".jpg") || normalizedFilename.endsWith(".jpeg")) {
+            return "image/jpeg";
+        }
+        return "application/octet-stream";
+    }
+
+    private String replaceExtension(String filename, String extension) {
+        if (filename == null || filename.isBlank()) {
+            return "kyc-document" + extension;
+        }
+        int dotIndex = filename.lastIndexOf('.');
+        if (dotIndex <= 0) {
+            return filename + extension;
+        }
+        return filename.substring(0, dotIndex) + extension;
+    }
+
+    private float clampJpegQuality(float quality) {
+        return Math.max(0.40f, Math.min(0.95f, quality));
     }
 
     private String extractFilename(String objectKey) {
@@ -454,12 +706,29 @@ public class KycSubmissionService {
     ) {
     }
 
-    private String toCpassDocumentType(KycDocumentType documentType) {
+    private record PreparedCpassUpload(
+            ByteArrayResource resource,
+            String filename,
+            String contentType,
+            int originalBytes,
+            int uploadBytes,
+            boolean transformed
+    ) {
+    }
+
+    private String toCpassDocumentType(KycDocumentType documentType, String declaredDocumentType) {
         return switch (documentType) {
-            case IDENTITY_FRONT -> "IDENTITY_FRONT";
-            case IDENTITY_BACK  -> "IDENTITY_BACK";
-            case SELFIE         -> "SELFIE";
+            case IDENTITY_FRONT, IDENTITY_BACK -> toPassportOrIdCard(declaredDocumentType);
+            case SELFIE                        -> "SELFIE";
         };
+    }
+
+    private String toPassportOrIdCard(String declaredDocumentType) {
+        if (declaredDocumentType != null
+                && declaredDocumentType.trim().equalsIgnoreCase("PASSPORT")) {
+            return "PASSPORT";
+        }
+        return "ID_CARD";
     }
 
     private record ProviderSignals(

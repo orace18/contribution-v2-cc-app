@@ -30,6 +30,7 @@ public class KycDocumentResolutionService {
     private final KycDocumentRepository kycDocumentRepository;
     private final MediaFileRepository mediaFileRepository;
     private final ObjectStorageService objectStorageService;
+    private final KycMediaBackupService kycMediaBackupService;
 
     @Transactional
     public Map<KycDocumentType, ResolvedKycDocument> resolveActiveDocuments(UUID accountHolderId) {
@@ -136,6 +137,23 @@ public class KycDocumentResolutionService {
         }
 
         if (isLegacyFallbackUrl(finalUrl) && !objectStorageService.objectExists(mediaFile.getBucket(), mediaFile.getObjectKey())) {
+            KycMediaBackupService.StoredKycMediaBackup mediaBackup = findKycBackup(mediaFile).orElse(null);
+            if (mediaBackup != null) {
+                log.info(
+                        "kyc media resolved accountHolderId={} documentSlot={} documentId={} mediaId={} source={} bucket={} objectKey={} finalUrl={} backupBytes={} documentCreatedAt={}",
+                        accountHolderId,
+                        documentType,
+                        document.getId(),
+                        mediaId,
+                        "DATABASE_BACKUP",
+                        mediaFile.getBucket(),
+                        mediaFile.getObjectKey(),
+                        finalUrl,
+                        mediaBackup.payload().length,
+                        document.getCreatedAt()
+                );
+                return new ResolvedKycDocument(document, mediaFile, "DATABASE_BACKUP", finalUrl);
+            }
             log.warn(
                     "kyc media candidate purged accountHolderId={} documentSlot={} documentId={} mediaId={} source={} bucket={} objectKey={} finalUrl={} reason=LEGACY_FALLBACK_NOT_FOUND",
                     accountHolderId,
@@ -165,6 +183,11 @@ public class KycDocumentResolutionService {
                 document.getCreatedAt()
         );
         return new ResolvedKycDocument(document, mediaFile, source, finalUrl);
+    }
+
+    private java.util.Optional<KycMediaBackupService.StoredKycMediaBackup> findKycBackup(MediaFile mediaFile) {
+        java.util.Optional<KycMediaBackupService.StoredKycMediaBackup> backup = kycMediaBackupService.findBackup(mediaFile);
+        return backup == null ? java.util.Optional.empty() : backup;
     }
 
     private boolean isAcceptableForResolution(KycDocument document) {

@@ -23,22 +23,37 @@ import com.ccapp.media.domain.entity.MediaFile;
 import com.ccapp.media.domain.enums.KycDocumentType;
 import com.ccapp.media.domain.enums.MediaStatus;
 import com.ccapp.media.storage.ObjectStorageService;
+import org.springframework.core.io.Resource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import javax.imageio.IIOImage;
+import javax.imageio.ImageIO;
+import javax.imageio.ImageWriteParam;
+import javax.imageio.ImageWriter;
+import javax.imageio.stream.MemoryCacheImageOutputStream;
+import java.awt.Color;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.Random;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -76,6 +91,8 @@ class KycSubmissionServiceTest {
     private UserProfileRepository userProfileRepository;
     @Mock
     private CPassKycGateway cPassKycGateway;
+    @Mock
+    private KycMediaBackupService kycMediaBackupService;
 
     private KycSubmissionService kycSubmissionService;
 
@@ -91,11 +108,15 @@ class KycSubmissionServiceTest {
                 kycNotificationService,
                 objectStorageService,
                 financialAuditService,
-                userProfileRepository
+                userProfileRepository,
+                kycMediaBackupService
         );
         ReflectionTestUtils.setField(kycSubmissionService, "cPassKycGateway", cPassKycGateway);
         ReflectionTestUtils.setField(kycSubmissionService, "requestedKycLevel", "LEVEL_1");
         ReflectionTestUtils.setField(kycSubmissionService, "level1FaceMatchThreshold", 0.75d);
+        ReflectionTestUtils.setField(kycSubmissionService, "cpassDocumentMaxBytes", 950_000);
+        ReflectionTestUtils.setField(kycSubmissionService, "cpassImageMaxDimension", 1600);
+        ReflectionTestUtils.setField(kycSubmissionService, "cpassImageJpegQuality", 0.82f);
     }
 
     @Test
@@ -288,6 +309,75 @@ class KycSubmissionServiceTest {
         verify(kycNotificationService, never()).notifySubmitted(any());
     }
 
+    @Test
+    void submit_shouldCompressOversizedImagesBeforeSendingToCpass() throws IOException {
+        AccountHolder accountHolder = buildAccountHolder(KycStatus.NOT_STARTED);
+        byte[] oversizedBytes = createNoisyJpeg(1400, 1400, 0.98f);
+
+        ReflectionTestUtils.setField(kycSubmissionService, "cpassDocumentMaxBytes", 180_000);
+        ReflectionTestUtils.setField(kycSubmissionService, "cpassImageMaxDimension", 1200);
+        ReflectionTestUtils.setField(kycSubmissionService, "cpassImageJpegQuality", 0.72f);
+
+        assertTrue(oversizedBytes.length > 180_000);
+
+        when(accountHolderRepository.findById(ACCOUNT_HOLDER_ID)).thenReturn(Optional.of(accountHolder));
+        when(kycDocumentResolutionService.resolveActiveDocuments(ACCOUNT_HOLDER_ID)).thenReturn(buildResolvedMinimalKycDocuments());
+        when(countryContextService.resolve(ACTOR_USER_ID)).thenReturn(new CountryContext("BJ", "BJ", "XOF"));
+        when(countryContextService.resolve(ACCOUNT_HOLDER_ID)).thenReturn(new CountryContext("BJ", "BJ", "XOF"));
+        when(objectStorageService.readObject(any(), any())).thenReturn(oversizedBytes);
+        when(cPassKycGateway.checkOrInitKyc(any()))
+                .thenReturn(new CPassKycInitResponse("PENDING", "LEVEL_1", "case-123", "ref-123", null, null, null, null, null, null, null, null));
+        when(cPassKycGateway.submitDocument(any(), any(), any(), any()))
+                .thenReturn(new CPassKycDocumentResponse("doc-123", "SUBMITTED", "object-key", "PENDING", null, null, null, null, null, null, null, null));
+        doAnswer(invocation -> {
+            accountHolder.setKycStatus(KycStatus.PENDING);
+            return null;
+        }).when(kycReviewService).markPending(ACCOUNT_HOLDER_ID);
+
+        SubmitKycResponse response = kycSubmissionService.submit(ACTOR_USER_ID, ACTOR_USER_ID, ACCOUNT_HOLDER_ID);
+
+        assertEquals(KycStatus.PENDING, response.kycStatus());
+
+        ArgumentCaptor<Resource> resourceCaptor = ArgumentCaptor.forClass(Resource.class);
+        verify(cPassKycGateway, times(3)).submitDocument(eq("case-123"), any(), resourceCaptor.capture(), any());
+        for (Resource resource : resourceCaptor.getAllValues()) {
+            assertTrue(resource.contentLength() <= 180_000);
+            assertTrue(Objects.requireNonNull(resource.getFilename()).endsWith(".jpg"));
+        }
+    }
+
+    @Test
+    void submit_shouldUseBackupWhenLocalFallbackFileIsMissing() {
+        AccountHolder accountHolder = buildAccountHolder(KycStatus.NOT_STARTED);
+
+        when(accountHolderRepository.findById(ACCOUNT_HOLDER_ID)).thenReturn(Optional.of(accountHolder));
+        when(kycDocumentResolutionService.resolveActiveDocuments(ACCOUNT_HOLDER_ID)).thenReturn(buildResolvedMinimalKycDocuments());
+        when(countryContextService.resolve(ACTOR_USER_ID)).thenReturn(new CountryContext("BJ", "BJ", "XOF"));
+        when(countryContextService.resolve(ACCOUNT_HOLDER_ID)).thenReturn(new CountryContext("BJ", "BJ", "XOF"));
+        when(objectStorageService.readObject(any(), any()))
+                .thenThrow(new BusinessException("Local fallback media file not found"));
+        when(kycMediaBackupService.findBackup(any(MediaFile.class)))
+                .thenReturn(Optional.of(new KycMediaBackupService.StoredKycMediaBackup(
+                        UUID.randomUUID(),
+                        ACCOUNT_HOLDER_ID,
+                        "image/jpeg",
+                        "backup-image-content".getBytes()
+                )));
+        when(cPassKycGateway.checkOrInitKyc(any()))
+                .thenReturn(new CPassKycInitResponse("PENDING", "LEVEL_1", "case-123", "ref-123", null, null, null, null, null, null, null, null));
+        when(cPassKycGateway.submitDocument(any(), any(), any(), any()))
+                .thenReturn(new CPassKycDocumentResponse("doc-123", "SUBMITTED", "object-key", "PENDING", null, null, null, null, null, null, null, null));
+        doAnswer(invocation -> {
+            accountHolder.setKycStatus(KycStatus.PENDING);
+            return null;
+        }).when(kycReviewService).markPending(ACCOUNT_HOLDER_ID);
+
+        SubmitKycResponse response = kycSubmissionService.submit(ACTOR_USER_ID, ACTOR_USER_ID, ACCOUNT_HOLDER_ID);
+
+        assertEquals(KycStatus.PENDING, response.kycStatus());
+        verify(cPassKycGateway, times(3)).submitDocument(eq("case-123"), any(), any(), any());
+    }
+
     private AccountHolder buildAccountHolder(KycStatus kycStatus) {
         return AccountHolder.builder()
                 .id(ACCOUNT_HOLDER_ID)
@@ -355,5 +445,34 @@ class KycSubmissionServiceTest {
             case IDENTITY_BACK -> com.ccapp.media.domain.enums.MediaType.KYC_IDENTITY_BACK;
             case SELFIE -> com.ccapp.media.domain.enums.MediaType.KYC_SELFIE;
         };
+    }
+
+    private byte[] createNoisyJpeg(int width, int height, float quality) throws IOException {
+        BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+        Random random = new Random(42L);
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                int red = random.nextInt(256);
+                int green = random.nextInt(256);
+                int blue = random.nextInt(256);
+                image.setRGB(x, y, new Color(red, green, blue).getRGB());
+            }
+        }
+        return encodeJpeg(image, quality);
+    }
+
+    private byte[] encodeJpeg(BufferedImage image, float quality) throws IOException {
+        Iterator<ImageWriter> writers = ImageIO.getImageWritersByFormatName("jpg");
+        ImageWriter writer = writers.next();
+        try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+             MemoryCacheImageOutputStream imageOutputStream = new MemoryCacheImageOutputStream(outputStream)) {
+            writer.setOutput(imageOutputStream);
+            ImageWriteParam writeParam = writer.getDefaultWriteParam();
+            writeParam.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
+            writeParam.setCompressionQuality(quality);
+            writer.write(null, new IIOImage(image, null, null), writeParam);
+            writer.dispose();
+            return outputStream.toByteArray();
+        }
     }
 }

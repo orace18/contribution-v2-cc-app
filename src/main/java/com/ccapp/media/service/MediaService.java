@@ -22,6 +22,7 @@ import com.ccapp.media.domain.enums.MediaStatus;
 import com.ccapp.media.domain.enums.MediaType;
 import com.ccapp.media.repository.KycDocumentRepository;
 import com.ccapp.media.repository.MediaFileRepository;
+import com.ccapp.media.storage.LocalFileStorageService;
 import com.ccapp.media.storage.ObjectStorageService;
 import com.ccapp.media.storage.PresignedUrl;
 import lombok.RequiredArgsConstructor;
@@ -41,6 +42,8 @@ import java.util.stream.Collectors;
 @Slf4j
 public class MediaService {
 
+    private static final String KYC_PROXY_UPLOAD_BASE_URL = "https://kyc-upload.internal";
+
     private final MediaFileRepository mediaFileRepository;
     private final KycDocumentRepository kycDocumentRepository;
     private final AccountHolderService accountHolderService;
@@ -49,6 +52,7 @@ public class MediaService {
     private final UserProfileRepository userProfileRepository;
     private final UserRepository userRepository;
     private final ObjectStorageService objectStorageService;
+    private final KycMediaBackupService kycMediaBackupService;
 
     @Value("${media.bucket.public:cc-media-public}")
     private String publicBucket;
@@ -97,11 +101,13 @@ public class MediaService {
                 Duration.ofMinutes(uploadUrlTtlMinutes)
         );
 
+        String clientUploadUrl = resolveClientUploadUrl(request.type(), media.getId(), uploadUrl.url());
+
         return new CreateUploadUrlResponse(
                 media.getId(),
                 bucket,
                 objectKey,
-                uploadUrl.url(),
+                clientUploadUrl,
                 uploadUrl.expiresAt()
         );
     }
@@ -122,6 +128,7 @@ public class MediaService {
 
         media.setStatus(MediaStatus.READY);
         MediaFile saved = mediaFileRepository.save(media);
+        persistKycBackupIfNeeded(saved, readStoredBytesSafely(saved), "CONFIRM_UPLOAD");
         attachMediaToDomain(saved);
         return toResponse(saved);
     }
@@ -141,6 +148,7 @@ public class MediaService {
         objectStorageService.putObject(media.getBucket(), media.getObjectKey(), data, media.getContentType());
         media.setStatus(MediaStatus.READY);
         MediaFile saved = mediaFileRepository.save(media);
+        persistKycBackupIfNeeded(saved, data, "UPLOAD_PROXY");
         attachMediaToDomain(saved);
         return toResponse(saved);
     }
@@ -330,17 +338,77 @@ public class MediaService {
     }
 
     private MediaFileResponse toResponse(MediaFile media) {
+        String publicUrl = objectStorageService.publicObjectUrl(media.getBucket(), media.getObjectKey());
+        if (isLegacyFallbackUrl(publicUrl) && isKycMediaType(media.getType())) {
+            log.info(
+                    "kyc media public url suppressed accountHolderId={} mediaId={} bucket={} objectKey={} suppressedUrl={}",
+                    media.getAccountHolderId(),
+                    media.getId(),
+                    media.getBucket(),
+                    media.getObjectKey(),
+                    publicUrl
+            );
+            publicUrl = null;
+        }
         return new MediaFileResponse(
                 media.getId(),
                 media.getAccountHolderId(),
                 media.getType(),
                 media.getBucket(),
                 media.getObjectKey(),
-                objectStorageService.publicObjectUrl(media.getBucket(), media.getObjectKey()),
+                publicUrl,
                 media.getContentType(),
                 media.getSize(),
                 media.getStatus(),
                 media.getCreatedAt()
         );
+    }
+
+    private String resolveClientUploadUrl(MediaType mediaType, UUID mediaId, String storageUploadUrl) {
+        if (!isKycMediaType(mediaType) || !isLegacyFallbackUrl(storageUploadUrl)) {
+            return storageUploadUrl;
+        }
+        String proxyUploadUrl = KYC_PROXY_UPLOAD_BASE_URL + "/api/media/" + mediaId + "/upload-proxy";
+        log.info(
+                "kyc upload url remapped mediaId={} mediaType={} storageUploadUrl={} clientUploadUrl={} reason=LEGACY_DEV_MEDIA_FALLBACK",
+                mediaId,
+                mediaType,
+                storageUploadUrl,
+                proxyUploadUrl
+        );
+        return proxyUploadUrl;
+    }
+
+    private boolean isLegacyFallbackUrl(String url) {
+        return url != null && url.contains("/dev-media/");
+    }
+
+    private boolean isKycMediaType(MediaType type) {
+        return type == MediaType.KYC_IDENTITY_FRONT
+                || type == MediaType.KYC_IDENTITY_BACK
+                || type == MediaType.KYC_SELFIE;
+    }
+
+    private void persistKycBackupIfNeeded(MediaFile media, byte[] bytes, String origin) {
+        if (!isKycMediaType(media.getType()) || bytes == null || bytes.length == 0 || !(objectStorageService instanceof LocalFileStorageService)) {
+            return;
+        }
+        kycMediaBackupService.store(media, bytes, origin);
+    }
+
+    private byte[] readStoredBytesSafely(MediaFile media) {
+        try {
+            return objectStorageService.readObject(media.getBucket(), media.getObjectKey());
+        } catch (RuntimeException ex) {
+            log.warn(
+                    "kyc media backup skipped accountHolderId={} mediaId={} bucket={} objectKey={} reason={}",
+                    media.getAccountHolderId(),
+                    media.getId(),
+                    media.getBucket(),
+                    media.getObjectKey(),
+                    ex.getMessage()
+            );
+            return null;
+        }
     }
 }
