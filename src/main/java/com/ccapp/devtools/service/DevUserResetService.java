@@ -168,6 +168,7 @@ public class DevUserResetService {
 
     private void deleteOperationScopedData(UUID accountHolderId, Collection<UUID> appUserIds, Collection<UUID> walletIds) {
         deleteByUuid("memberships", "account_holder_id", accountHolderId);
+        deleteBySql("DELETE FROM notification_attempts WHERE notification_id IN (SELECT id FROM notifications WHERE account_holder_id = ?)", accountHolderId);
         deleteByUuid("notifications", "account_holder_id", accountHolderId);
         deleteByUuid("mobile_plan_selections", "account_holder_id", accountHolderId);
         deleteByUuid("mobile_onboarding_journeys", "account_holder_id", accountHolderId);
@@ -188,6 +189,7 @@ public class DevUserResetService {
         deleteChatScopedData(accountHolderId);
         for (UUID appUserId : appUserIds) {
             deleteByUuid("operations", "actor_user_id", appUserId);
+            deleteBySql("DELETE FROM notification_attempts WHERE notification_id IN (SELECT id FROM notifications WHERE actor_user_id = ?)", appUserId);
             deleteByUuid("notifications", "actor_user_id", appUserId);
         }
     }
