@@ -174,6 +174,9 @@ public class DevUserResetService {
         // 10. Supporting-scoped data
         deleteSupportingScopedData(ah, appUserIds);
 
+        // 10.5 Media files (after chat, identity, prayer, kyc are cleared)
+        deleteByUuid("media_files", "account_holder_id", ah);
+
         // 11. Core entities
         deleteByUuid("wallets", "account_holder_id", ah);
         deleteByUuids("app_users", "id", appUserIds);
@@ -257,7 +260,6 @@ public class DevUserResetService {
         deleteBySql("DELETE FROM task_audit_logs WHERE user_task_id IN (SELECT id FROM user_tasks WHERE account_holder_id = ?)", accountHolderId);
         deleteByUuid("user_tasks", "account_holder_id", accountHolderId);
         deleteByUuid("user_progress", "account_holder_id", accountHolderId);
-        deleteByUuid("media_files", "account_holder_id", accountHolderId);
         deleteByUuid("kyc_documents", "account_holder_id", accountHolderId);
         deleteByUuid("credit_eligibility", "account_holder_id", accountHolderId);
         deleteByUuid("loans", "account_holder_id", accountHolderId);
