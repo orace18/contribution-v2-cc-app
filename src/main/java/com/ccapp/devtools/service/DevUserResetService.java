@@ -137,6 +137,7 @@ public class DevUserResetService {
 
     private void deleteRelatedData(ResolvedUserTarget target) {
         entityManager.flush();
+        disableImmutableTriggers();
 
         UUID ah = target.accountHolderId();
         Collection<UUID> appUserIds = target.appUserIds();
@@ -179,6 +180,7 @@ public class DevUserResetService {
         deleteByUuids("users", "id", target.userIds());
         deleteByUuid("account_holders", "id", ah);
 
+        enableImmutableTriggers();
         entityManager.clear();
     }
 
@@ -446,6 +448,16 @@ public class DevUserResetService {
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────────
+
+    private void disableImmutableTriggers() {
+        jdbcTemplate.execute("ALTER TABLE ledger_entries DISABLE TRIGGER trg_no_mutation_ledger_entries");
+        jdbcTemplate.execute("ALTER TABLE accounting_events DISABLE TRIGGER trg_no_mutation_accounting_events");
+    }
+
+    private void enableImmutableTriggers() {
+        jdbcTemplate.execute("ALTER TABLE ledger_entries ENABLE TRIGGER trg_no_mutation_ledger_entries");
+        jdbcTemplate.execute("ALTER TABLE accounting_events ENABLE TRIGGER trg_no_mutation_accounting_events");
+    }
 
     private List<UUID> selectUuidList(String sql, UUID value) {
         return jdbcTemplate.query(sql, (rs, rowNum) -> rs.getObject(1, UUID.class), value);
