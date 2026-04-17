@@ -192,7 +192,6 @@ public class DevUserResetService {
         deleteByUuids("wallet_reservations", "wallet_id", walletIds);
         deleteByUuids("wallet_auto_debit_rules", "wallet_id", walletIds);
         deleteByUuids("wallet_ledger", "wallet_id", walletIds);
-        deleteByUuids("wallet_debit_security", "wallet_id", walletIds);
     }
 
     // ── Pre-operation FK dependents ─────────────────────────────────────────────
@@ -245,8 +244,7 @@ public class DevUserResetService {
         }
         deleteByUuids("commission_payout_items", "operation_id", uniqueOpIds);
 
-        // wallet_debit_security.operation_id → operations (wallet_id already cleared above, belt-and-suspenders)
-        deleteByUuids("wallet_debit_security", "operation_id", uniqueOpIds);
+
     }
 
     // ── Operation scope ─────────────────────────────────────────────────────────
