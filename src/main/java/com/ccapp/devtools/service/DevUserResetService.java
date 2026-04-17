@@ -179,14 +179,38 @@ public class DevUserResetService {
         deleteBySql("UPDATE circle_chat_messages SET media_id = NULL WHERE media_id IN (SELECT id FROM media_files WHERE account_holder_id = ?)", ah);
         deleteByUuid("media_files", "account_holder_id", ah);
 
+        // 10.6 Circle-scoped data
+        deleteCircleScopedData(ah, target.userIds());
+
         // 11. Core entities
+        // circles.coach_id → account_holders is NOT NULL with no CASCADE; bypass by disabling FK
+        // enforcement triggers on account_holders before deletion (leaves orphaned coach_id in dev)
+        jdbcTemplate.execute("ALTER TABLE account_holders DISABLE TRIGGER ALL");
         deleteByUuid("wallets", "account_holder_id", ah);
         deleteByUuids("app_users", "id", appUserIds);
         deleteByUuids("users", "id", target.userIds());
         deleteByUuid("account_holders", "id", ah);
+        jdbcTemplate.execute("ALTER TABLE account_holders ENABLE TRIGGER ALL");
 
         enableImmutableTriggers();
         entityManager.clear();
+    }
+
+    // ── Circle scope ─────────────────────────────────────────────────────────────
+
+    private void deleteCircleScopedData(UUID accountHolderId, Collection<UUID> userIds) {
+        // circle_meeting_attendance (as attendee)
+        deleteByUuid("circle_meeting_attendance", "account_holder_id", accountHolderId);
+        // circle_meetings created by this user (circle_meeting_attendance cascades)
+        deleteByUuid("circle_meetings", "created_by_account_holder_id", accountHolderId);
+        // circle_activity entries by this user
+        deleteByUuid("circle_activity", "actor_user_id", accountHolderId);
+        // circle_coach_assignments where this user is coach (NOT NULL — must delete)
+        deleteByUuid("circle_coach_assignments", "coach_account_holder_id", accountHolderId);
+        // circle_coach_assignments where this user assigned (nullable — NULL it)
+        deleteBySql("UPDATE circle_coach_assignments SET assigned_by_account_holder_id = NULL WHERE assigned_by_account_holder_id = ?", accountHolderId);
+        // circle_members (user_id → users, must delete before users are deleted)
+        deleteByUuids("circle_members", "user_id", userIds);
     }
 
     // ── Wallet scope ────────────────────────────────────────────────────────────
