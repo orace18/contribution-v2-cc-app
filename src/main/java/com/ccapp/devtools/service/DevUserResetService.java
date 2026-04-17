@@ -175,6 +175,8 @@ public class DevUserResetService {
         deleteSupportingScopedData(ah, appUserIds);
 
         // 10.5 Media files (after chat, identity, prayer, kyc are cleared)
+        // circle_chat_messages.media_id → media_files (nullable, no cascade — NULL it before delete)
+        deleteBySql("UPDATE circle_chat_messages SET media_id = NULL WHERE media_id IN (SELECT id FROM media_files WHERE account_holder_id = ?)", ah);
         deleteByUuid("media_files", "account_holder_id", ah);
 
         // 11. Core entities
