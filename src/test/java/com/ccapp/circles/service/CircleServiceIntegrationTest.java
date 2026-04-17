@@ -41,6 +41,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -168,7 +169,9 @@ class CircleServiceIntegrationTest {
         assertEquals(1, response.membersCount());
         assertTrue(circleRepository.existsActiveCircleForUser(creatorId));
         assertEquals(1, circleMemberRepository.countByCircle_Id(response.id()));
-        assertTrue(circleMemberRepository.findByCircle_IdAndRole(response.id(), CircleMemberRole.COACH).isPresent());
+        var coachMembership = circleMemberRepository.findByCircle_IdAndRole(response.id(), CircleMemberRole.COACH);
+        assertTrue(coachMembership.isPresent());
+        assertFalse(coachMembership.get().isFinancialMember());
     }
 
     @Test

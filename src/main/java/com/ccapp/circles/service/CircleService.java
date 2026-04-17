@@ -271,13 +271,14 @@ public class CircleService {
                                            CircleMemberRole role,
                                            String businessActivity,
                                            OffsetDateTime joinedAt) {
+        boolean financialMember = role == CircleMemberRole.MEMBER;
         return CircleMember.builder()
                 .circle(circle)
                 .accountHolderId(accountHolderId)
                 .role(role)
-                // Legacy compatibility only. Circle core no longer uses this flag as
-                // a source of financial truth, but older read paths still depend on it.
-                .financialMember(true)
+                // Legacy compatibility only. Older read paths still depend on this flag,
+                // but it must stay coherent with the participant role enforced by the DB.
+                .financialMember(financialMember)
                 .businessActivity(normalizeOptionalText(businessActivity))
                 .loanStatus(null)
                 .repaymentProgress(null)
