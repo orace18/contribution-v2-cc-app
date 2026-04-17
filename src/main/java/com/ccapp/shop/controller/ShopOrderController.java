@@ -6,6 +6,7 @@ import com.ccapp.shop.dto.CheckoutRequest;
 import com.ccapp.shop.dto.RefundShopOrderRequest;
 import com.ccapp.shop.dto.ShopOrderResponse;
 import com.ccapp.shop.dto.UpdateShopOrderStatusRequest;
+import com.ccapp.shop.service.LegacyShopMutationSecurityService;
 import com.ccapp.shop.service.ShopOrderService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -32,13 +33,14 @@ import java.util.UUID;
 public class ShopOrderController {
 
     private final ShopOrderService shopOrderService;
+    private final LegacyShopMutationSecurityService legacyShopMutationSecurityService;
 
     @PostMapping("/checkout")
     @Operation(summary = "Checkout cart and create order")
     public ResponseEntity<CommonResponse<ShopOrderResponse>> checkout(@Valid @RequestBody CheckoutRequest request) {
         return ResponseEntity.ok(CommonResponse.success(
                 "Shop order created",
-                shopOrderService.checkout(SecurityUtils.currentAccountHolderId(), request)
+                shopOrderService.checkout(legacyShopMutationSecurityService.authorizeCheckout(), request)
         ));
     }
 
@@ -64,9 +66,7 @@ public class ShopOrderController {
     @Operation(summary = "Update order status")
     public ResponseEntity<CommonResponse<ShopOrderResponse>> updateStatus(@PathVariable UUID orderId,
                                                                           @Valid @RequestBody UpdateShopOrderStatusRequest request) {
-        UUID actorUserId = SecurityUtils.currentPrincipal().userId() != null
-                ? SecurityUtils.currentPrincipal().userId()
-                : SecurityUtils.currentAccountHolderId();
+        UUID actorUserId = legacyShopMutationSecurityService.authorizeStatusUpdate(orderId, request.status());
         ShopOrderResponse response = shopOrderService.updateStatus(orderId, actorUserId, request);
         return ResponseEntity.ok(CommonResponse.success(
                 response.otpRequired() ? "Marketplace payment OTP sent" : "Shop order status updated",
@@ -78,6 +78,7 @@ public class ShopOrderController {
     @Operation(summary = "Refund a delivered order")
     public ResponseEntity<CommonResponse<ShopOrderResponse>> refund(@PathVariable UUID orderId,
                                                                     @Valid @RequestBody(required = false) RefundShopOrderRequest request) {
+        legacyShopMutationSecurityService.authorizeRefund(orderId);
         return ResponseEntity.ok(CommonResponse.success(
                 "Shop order refunded",
                 shopOrderService.refundDeliveredOrder(orderId, request)

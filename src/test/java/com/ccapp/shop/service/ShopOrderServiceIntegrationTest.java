@@ -36,6 +36,7 @@ import com.ccapp.shop.dto.UpdateShopOrderStatusRequest;
 import com.ccapp.shop.event.MarketplaceCommissionAllocatedEvent;
 import com.ccapp.shop.event.ShopOrderDeliveredEvent;
 import com.ccapp.shop.event.ShopOrderPaidEvent;
+import com.ccapp.wallet.event.WalletCreditedEvent;
 import com.ccapp.shop.repository.ShopCommissionPoolRepository;
 import com.ccapp.shop.repository.ShopOrderItemRepository;
 import com.ccapp.shop.repository.ShopOrderRepository;
@@ -254,14 +255,14 @@ class ShopOrderServiceIntegrationTest {
         shopOrderService.updateStatus(created.id(), buyerId, new UpdateShopOrderStatusRequest(ShopOrderStatus.PAID, null, null, null));
         shopOrderService.updateStatus(created.id(), buyerId, new UpdateShopOrderStatusRequest(ShopOrderStatus.SHIPPED, null, null, null));
         shopOrderService.updateStatus(created.id(), buyerId, new UpdateShopOrderStatusRequest(ShopOrderStatus.DELIVERED, null, null, null));
-        shopOrderService.updateStatus(created.id(), buyerId, new UpdateShopOrderStatusRequest(ShopOrderStatus.DELIVERED, null, null, null));
 
         ArgumentCaptor<DomainEvent> eventCaptor = ArgumentCaptor.forClass(DomainEvent.class);
-        Mockito.verify(domainEventPublisher, Mockito.times(3)).publish(eventCaptor.capture());
+        Mockito.verify(domainEventPublisher, Mockito.atLeast(4)).publish(eventCaptor.capture());
 
         List<DomainEvent> events = eventCaptor.getAllValues();
         assertTrue(events.stream().anyMatch(ShopOrderPaidEvent.class::isInstance));
         assertTrue(events.stream().anyMatch(MarketplaceCommissionAllocatedEvent.class::isInstance));
+        assertTrue(events.stream().anyMatch(WalletCreditedEvent.class::isInstance));
         ShopOrderDeliveredEvent deliveredEvent = events.stream()
                 .filter(ShopOrderDeliveredEvent.class::isInstance)
                 .map(ShopOrderDeliveredEvent.class::cast)
@@ -310,6 +311,64 @@ class ShopOrderServiceIntegrationTest {
                 )
         );
         assertTrue(ex.getMessage().contains("Invalid order status transition"));
+        Mockito.verify(domainEventPublisher, Mockito.never()).publish(any());
+    }
+
+    @Test
+    void updateStatus_shouldRejectCancellationFromDeliveredOrder() {
+        UUID merchantId = createAccountHolder("Merchant", "Four");
+        UUID buyerId = createAccountHolder("Buyer", "Four");
+        ShopProduct product = shopProductRepository.save(ShopProduct.builder()
+                .merchantId(merchantId)
+                .name("Fourth Product")
+                .description("Product description")
+                .price(new BigDecimal("8000.0000"))
+                .currency("XOF")
+                .commissionPercent(new BigDecimal("15.00"))
+                .cvValue(new BigDecimal("500.0000"))
+                .active(true)
+                .build());
+
+        ShopOrderResponse created = shopOrderService.checkout(
+                buyerId,
+                new CheckoutRequest(
+                        List.of(new CheckoutItemRequest(product.getId(), 1)),
+                        "WALLET",
+                        UUID.randomUUID()
+                )
+        );
+
+        when(operationService.findByIdempotencyKey("marketplace-payment:" + created.id()))
+                .thenReturn(Optional.of(Operation.builder()
+                        .id(UUID.randomUUID())
+                        .accountHolderId(buyerId)
+                        .actorUserId(buyerId)
+                        .type(OperationType.MARKETPLACE_PAYMENT)
+                        .status(OperationStatus.CONFIRMED)
+                        .amount(new BigDecimal("8000.0000"))
+                        .currency("XOF")
+                        .idempotencyKey("marketplace-payment:" + created.id())
+                        .build()));
+
+        shopOrderService.updateStatus(created.id(), buyerId, new UpdateShopOrderStatusRequest(ShopOrderStatus.PAID, null, null, null));
+        shopOrderService.updateStatus(created.id(), merchantId, new UpdateShopOrderStatusRequest(ShopOrderStatus.SHIPPED, null, null, null));
+        shopOrderService.updateStatus(created.id(), merchantId, new UpdateShopOrderStatusRequest(ShopOrderStatus.DELIVERED, null, null, null));
+
+        BusinessException ex = assertThrows(
+                BusinessException.class,
+                () -> shopOrderService.updateStatus(
+                        created.id(),
+                        buyerId,
+                        new UpdateShopOrderStatusRequest(ShopOrderStatus.CANCELLED, null, null, null)
+                )
+        );
+
+        assertTrue(ex.getMessage().contains("Invalid order status transition"));
+        ShopOrder persisted = shopOrderRepository.findById(created.id()).orElseThrow();
+        assertEquals(ShopOrderStatus.DELIVERED, persisted.getStatus());
+
+        Mockito.clearInvocations(domainEventPublisher);
+        shopOrderService.updateStatus(created.id(), buyerId, new UpdateShopOrderStatusRequest(ShopOrderStatus.DELIVERED, null, null, null));
         Mockito.verify(domainEventPublisher, Mockito.never()).publish(any());
     }
 

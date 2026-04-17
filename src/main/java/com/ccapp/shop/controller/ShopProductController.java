@@ -1,9 +1,9 @@
 package com.ccapp.shop.controller;
 
 import com.ccapp.common.api.CommonResponse;
-import com.ccapp.common.security.SecurityUtils;
 import com.ccapp.shop.dto.CreateShopProductRequest;
 import com.ccapp.shop.dto.ShopProductResponse;
+import com.ccapp.shop.service.LegacyShopMutationSecurityService;
 import com.ccapp.shop.service.ShopProductService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -33,6 +33,7 @@ import java.util.UUID;
 public class ShopProductController {
 
     private final ShopProductService shopProductService;
+    private final LegacyShopMutationSecurityService legacyShopMutationSecurityService;
 
     @GetMapping
     @Operation(summary = "List active marketplace products")
@@ -55,7 +56,7 @@ public class ShopProductController {
     public ResponseEntity<CommonResponse<ShopProductResponse>> create(@Valid @RequestBody CreateShopProductRequest request) {
         return ResponseEntity.ok(CommonResponse.success(
                 "Shop product created",
-                shopProductService.createProduct(SecurityUtils.currentAccountHolderId(), request)
+                shopProductService.createProduct(legacyShopMutationSecurityService.authorizeProductCreate(), request)
         ));
     }
 }
