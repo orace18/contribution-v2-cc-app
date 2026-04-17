@@ -180,7 +180,7 @@ public class DevUserResetService {
         deleteByUuid("media_files", "account_holder_id", ah);
 
         // 10.6 Circle-scoped data
-        deleteCircleScopedData(ah, target.userIds());
+        deleteCircleScopedData(ah);
 
         // 11. Core entities
         // circles.coach_id → account_holders is NOT NULL with no CASCADE; bypass by disabling FK
@@ -198,10 +198,10 @@ public class DevUserResetService {
 
     // ── Circle scope ─────────────────────────────────────────────────────────────
 
-    private void deleteCircleScopedData(UUID accountHolderId, Collection<UUID> userIds) {
-        // circle_meeting_attendance (as attendee)
+    private void deleteCircleScopedData(UUID accountHolderId) {
+        // circle_meeting_attendance (as attendee) — ON DELETE CASCADE handles other attendees when meeting deleted
         deleteByUuid("circle_meeting_attendance", "account_holder_id", accountHolderId);
-        // circle_meetings created by this user (circle_meeting_attendance cascades)
+        // circle_meetings created by this user (circle_meeting_attendance cascades via ON DELETE CASCADE)
         deleteByUuid("circle_meetings", "created_by_account_holder_id", accountHolderId);
         // circle_activity entries by this user
         deleteByUuid("circle_activity", "actor_user_id", accountHolderId);
@@ -209,8 +209,12 @@ public class DevUserResetService {
         deleteByUuid("circle_coach_assignments", "coach_account_holder_id", accountHolderId);
         // circle_coach_assignments where this user assigned (nullable — NULL it)
         deleteBySql("UPDATE circle_coach_assignments SET assigned_by_account_holder_id = NULL WHERE assigned_by_account_holder_id = ?", accountHolderId);
-        // circle_members (user_id → users, must delete before users are deleted)
-        deleteByUuids("circle_members", "user_id", userIds);
+        // circle_repayments → circle_loans → circle_members (FK chain — must clear before deleting circle_members)
+        deleteBySql("DELETE FROM circle_repayments WHERE loan_id IN (SELECT id FROM circle_loans WHERE borrower_id IN (SELECT id FROM circle_members WHERE account_holder_id = ?))", accountHolderId);
+        deleteBySql("DELETE FROM circle_loans WHERE borrower_id IN (SELECT id FROM circle_members WHERE account_holder_id = ?)", accountHolderId);
+        deleteBySql("DELETE FROM circle_contributions WHERE member_id IN (SELECT id FROM circle_members WHERE account_holder_id = ?)", accountHolderId);
+        // circle_members: V32 renamed user_id → account_holder_id (FK now → account_holders, not users)
+        deleteByUuid("circle_members", "account_holder_id", accountHolderId);
     }
 
     // ── Wallet scope ────────────────────────────────────────────────────────────
