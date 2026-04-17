@@ -227,10 +227,6 @@ public class DevUserResetService {
                     "UPDATE commission_payout_items SET commission_id = NULL WHERE commission_id IN (SELECT id FROM mlm_commissions WHERE operation_id = ?)",
                     opId
             );
-            deleteBySql(
-                    "DELETE FROM mlm_volume_ledger WHERE commission_id IN (SELECT id FROM mlm_commissions WHERE operation_id = ?)",
-                    opId
-            );
         }
         deleteByUuids("mlm_commissions", "operation_id", uniqueOpIds);
 
@@ -376,10 +372,6 @@ public class DevUserResetService {
         // mlm_commissions by beneficiary — break bidirectional cycle first
         deleteBySql(
                 "UPDATE commission_payout_items SET commission_id = NULL WHERE commission_id IN (SELECT id FROM mlm_commissions WHERE beneficiary_account_holder_id = ?)",
-                accountHolderId
-        );
-        deleteBySql(
-                "DELETE FROM mlm_volume_ledger WHERE commission_id IN (SELECT id FROM mlm_commissions WHERE beneficiary_account_holder_id = ?)",
                 accountHolderId
         );
         deleteBySql(
