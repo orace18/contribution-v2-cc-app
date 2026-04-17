@@ -415,6 +415,7 @@ public class DevUserResetService {
     // ── Supporting scope ─────────────────────────────────────────────────────────
 
     private void deleteSupportingScopedData(UUID accountHolderId, Collection<UUID> appUserIds) {
+        deleteBySql("DELETE FROM invite_codes WHERE invite_id IN (SELECT id FROM circle_invites WHERE created_by_account_holder_id = ?)", accountHolderId);
         deleteByUuid("circle_invites", "created_by_account_holder_id", accountHolderId);
         deleteByUuid("circle_member_interactions", "member_id", accountHolderId);
         deleteByUuid("circle_member_interactions", "sender_id", accountHolderId);
