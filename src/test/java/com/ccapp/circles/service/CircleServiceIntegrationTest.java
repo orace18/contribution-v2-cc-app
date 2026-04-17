@@ -1,9 +1,9 @@
 package com.ccapp.circles.service;
 
+import com.ccapp.circles.domain.enums.CircleMemberRole;
 import com.ccapp.circles.domain.enums.CircleStatus;
 import com.ccapp.circles.dto.CircleMemberResponse;
 import com.ccapp.circles.dto.CircleResponse;
-import com.ccapp.circles.dto.CircleCreatorRole;
 import com.ccapp.circles.dto.CreateCircleRequest;
 import com.ccapp.circles.dto.JoinCircleRequest;
 import com.ccapp.circles.repository.CircleMemberRepository;
@@ -112,7 +112,7 @@ class CircleServiceIntegrationTest {
 
         CircleResponse response = circleService.createCircle(
                 creatorId,
-                new CreateCircleRequest("Cercle Sans KYC", CircleCreatorRole.MEMBER)
+                new CreateCircleRequest("Cercle Sans KYC")
         );
 
         assertNotNull(response.id());
@@ -127,7 +127,7 @@ class CircleServiceIntegrationTest {
 
         CircleResponse response = circleService.createCircle(
                 creatorId,
-                new CreateCircleRequest("Cercle Sans Tel Verifie", CircleCreatorRole.MEMBER)
+                new CreateCircleRequest("Cercle Sans Tel Verifie")
         );
 
         assertNotNull(response.id());
@@ -143,7 +143,7 @@ class CircleServiceIntegrationTest {
 
         CircleResponse response = circleService.createCircle(
                 creatorId,
-                new CreateCircleRequest("Cercle Sans Abonnement", CircleCreatorRole.MEMBER)
+                new CreateCircleRequest("Cercle Sans Abonnement")
         );
 
         assertNotNull(response.id());
@@ -160,7 +160,7 @@ class CircleServiceIntegrationTest {
 
         CircleResponse response = circleService.createCircle(
                 creatorId,
-                new CreateCircleRequest("Les Batisseurs", CircleCreatorRole.MEMBER)
+                new CreateCircleRequest("Les Batisseurs")
         );
 
         assertNotNull(response.id());
@@ -168,6 +168,7 @@ class CircleServiceIntegrationTest {
         assertEquals(1, response.membersCount());
         assertTrue(circleRepository.existsActiveCircleForUser(creatorId));
         assertEquals(1, circleMemberRepository.countByCircle_Id(response.id()));
+        assertTrue(circleMemberRepository.findByCircle_IdAndRole(response.id(), CircleMemberRole.COACH).isPresent());
     }
 
     @Test
@@ -177,7 +178,7 @@ class CircleServiceIntegrationTest {
         createUserMapping(creatorId, AccountStatus.ACTIVE);
         CircleResponse circle = circleService.createCircle(
                 creatorId,
-                new CreateCircleRequest("Cercle Test Join", CircleCreatorRole.MEMBER)
+                new CreateCircleRequest("Cercle Test Join")
         );
 
         UUID joinerId = createAccountHolder("Joiner", "NoMembership", true);

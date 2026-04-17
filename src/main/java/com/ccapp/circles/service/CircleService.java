@@ -99,12 +99,10 @@ public class CircleService {
                 .build());
 
         OffsetDateTime now = OffsetDateTime.now();
-        // Legacy creatorRole input remains accepted for wire compatibility, but the creator
-        // is always treated as a circle member. Circle core no longer assigns a coach here.
         CircleMember creatorMembership = circleMemberRepository.save(buildCircleMember(
                 circle,
                 accountHolderId,
-                CircleMemberRole.MEMBER,
+                CircleMemberRole.COACH,
                 null,
                 now
         ));
