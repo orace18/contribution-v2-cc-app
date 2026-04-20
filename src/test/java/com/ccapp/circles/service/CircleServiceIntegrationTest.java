@@ -6,9 +6,11 @@ import com.ccapp.circles.dto.CircleMemberResponse;
 import com.ccapp.circles.dto.CircleResponse;
 import com.ccapp.circles.dto.CreateCircleRequest;
 import com.ccapp.circles.dto.JoinCircleRequest;
+import com.ccapp.circles.dto.UpdateCircleMemberRoleRequest;
 import com.ccapp.circles.repository.CircleMemberRepository;
 import com.ccapp.circles.repository.CircleRepository;
 import com.ccapp.common.events.DomainEventPublisher;
+import com.ccapp.common.exception.BusinessException;
 import com.ccapp.config.TestJacksonAndCachingConfig;
 import com.ccapp.country.config.service.CountryConfigResolver;
 import com.ccapp.country.dto.CountryContext;
@@ -43,6 +45,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
@@ -196,6 +199,64 @@ class CircleServiceIntegrationTest {
 
         assertNotNull(member.id());
         assertEquals(2, circleMemberRepository.countByCircle_Id(circle.id()));
+    }
+
+    @Test
+    void updateMemberRole_shouldPromoteMemberToCoachAndDemoteExistingCoach() {
+        UUID creatorId = createAccountHolder("Creator", "Owner", true);
+        createUserMapping(creatorId, AccountStatus.ACTIVE);
+        CircleResponse circle = circleService.createCircle(
+                creatorId,
+                new CreateCircleRequest("Cercle Roles")
+        );
+
+        UUID memberId = createAccountHolder("Member", "Coach", true);
+        createUserMapping(memberId, AccountStatus.ACTIVE);
+        circleService.joinCircle(
+                memberId,
+                circle.id(),
+                new JoinCircleRequest("Commerce", "UNKNOWN", new BigDecimal("100.00"))
+        );
+
+        CircleMemberResponse updated = circleService.updateMemberRole(
+                creatorId,
+                circle.id(),
+                memberId,
+                new UpdateCircleMemberRoleRequest(CircleMemberRole.COACH)
+        );
+
+        assertEquals(CircleMemberRole.COACH, updated.role());
+        var promotedMember = circleMemberRepository.findByCircle_IdAndAccountHolderId(circle.id(), memberId).orElseThrow();
+        var previousCoach = circleMemberRepository.findByCircle_IdAndAccountHolderId(circle.id(), creatorId).orElseThrow();
+        assertEquals(CircleMemberRole.COACH, promotedMember.getRole());
+        assertFalse(promotedMember.isFinancialMember());
+        assertEquals(CircleMemberRole.MEMBER, previousCoach.getRole());
+        assertTrue(previousCoach.isFinancialMember());
+    }
+
+    @Test
+    void updateMemberRole_shouldRejectChangingCurrentCoachWithoutReplacement() {
+        UUID creatorId = createAccountHolder("Creator", "Owner", true);
+        createUserMapping(creatorId, AccountStatus.ACTIVE);
+        CircleResponse circle = circleService.createCircle(
+                creatorId,
+                new CreateCircleRequest("Cercle Coach Unique")
+        );
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> circleService.updateMemberRole(
+                        creatorId,
+                        circle.id(),
+                        creatorId,
+                        new UpdateCircleMemberRoleRequest(CircleMemberRole.MEMBER)
+                )
+        );
+
+        assertEquals(
+                "Assign a new coach before changing the current coach role",
+                exception.getMessage()
+        );
     }
 
     private UUID createAccountHolder(String firstName, String lastName, boolean phoneVerified) {

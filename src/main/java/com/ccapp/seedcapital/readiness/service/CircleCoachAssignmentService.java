@@ -34,27 +34,20 @@ public class CircleCoachAssignmentService {
                                                      UUID circleId,
                                                      AssignCircleCoachRequest request) {
         circleReadinessAccessService.assertLegacyOwner(requesterAccountHolderId, circleId);
-        circleReadinessAccessService.requireActiveCircle(circleId);
-        accountHolderRepository.findById(request.coachAccountHolderId())
-                .orElseThrow(() -> new NotFoundException("Coach account holder not found"));
-
-        CircleCoachAssignment assignment = circleCoachAssignmentRepository.findById(circleId)
-                .orElseGet(() -> CircleCoachAssignment.builder().circleId(circleId).build());
-        assignment.setCoachAccountHolderId(request.coachAccountHolderId());
-        assignment.setAssignedByAccountHolderId(requesterAccountHolderId);
-        assignment.setAssignedAt(OffsetDateTime.now());
-        assignment.setSource(CircleCoachAssignmentSource.MANUAL);
-        assignment.setNote(normalizeOptionalText(request.note()));
-
-        CircleCoachAssignment saved = circleCoachAssignmentRepository.save(assignment);
-        domainEventPublisher.publish(CircleActivityRequestedEvent.create(
-                circleId,
+        return upsertManualAssignment(
                 requesterAccountHolderId,
-                ActivityType.COACH_ASSIGNED,
+                circleId,
                 request.coachAccountHolderId(),
-                "Coach assigned to circle"
-        ));
-        return toResponse(saved);
+                request.note()
+        );
+    }
+
+    @Transactional
+    public CircleCoachAssignmentResponse syncManualAssignmentFromMemberRoleChange(UUID actorAccountHolderId,
+                                                                                  UUID circleId,
+                                                                                  UUID coachAccountHolderId,
+                                                                                  String note) {
+        return upsertManualAssignment(actorAccountHolderId, circleId, coachAccountHolderId, note);
     }
 
     @Transactional(readOnly = true)
@@ -140,6 +133,33 @@ public class CircleCoachAssignmentService {
                 snapshot.coachLinkedAt(),
                 null
         );
+    }
+
+    private CircleCoachAssignmentResponse upsertManualAssignment(UUID actorAccountHolderId,
+                                                                 UUID circleId,
+                                                                 UUID coachAccountHolderId,
+                                                                 String note) {
+        circleReadinessAccessService.requireActiveCircle(circleId);
+        accountHolderRepository.findById(coachAccountHolderId)
+                .orElseThrow(() -> new NotFoundException("Coach account holder not found"));
+
+        CircleCoachAssignment assignment = circleCoachAssignmentRepository.findById(circleId)
+                .orElseGet(() -> CircleCoachAssignment.builder().circleId(circleId).build());
+        assignment.setCoachAccountHolderId(coachAccountHolderId);
+        assignment.setAssignedByAccountHolderId(actorAccountHolderId);
+        assignment.setAssignedAt(OffsetDateTime.now());
+        assignment.setSource(CircleCoachAssignmentSource.MANUAL);
+        assignment.setNote(normalizeOptionalText(note));
+
+        CircleCoachAssignment saved = circleCoachAssignmentRepository.save(assignment);
+        domainEventPublisher.publish(CircleActivityRequestedEvent.create(
+                circleId,
+                actorAccountHolderId,
+                ActivityType.COACH_ASSIGNED,
+                coachAccountHolderId,
+                "Coach assigned to circle"
+        ));
+        return toResponse(saved);
     }
 
     private String normalizeOptionalText(String value) {

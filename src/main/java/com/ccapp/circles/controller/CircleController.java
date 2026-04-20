@@ -123,6 +123,24 @@ public class CircleController {
         return ResponseEntity.ok(CommonResponse.success("Circle members", circleService.listMembers(circleId)));
     }
 
+    @PatchMapping("/{circleId}/members/{memberAccountHolderId}/role")
+    @Operation(summary = "Mettre a jour le role d'un membre dans le cercle")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Role membre mis a jour", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Regle metier invalide (ex: aucun coach restant)", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "403", description = "Acces refuse", content = @Content(schema = @Schema(implementation = CommonResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Cercle ou membre introuvable", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
+    })
+    public ResponseEntity<CommonResponse<CircleMemberResponse>> updateMemberRole(@PathVariable UUID circleId,
+                                                                                 @PathVariable UUID memberAccountHolderId,
+                                                                                 @Valid @RequestBody UpdateCircleMemberRoleRequest request) {
+        UUID requesterAccountHolderId = SecurityUtils.currentAccountHolderId();
+        return ResponseEntity.ok(CommonResponse.success(
+                "Circle member role updated",
+                circleService.updateMemberRole(requesterAccountHolderId, circleId, memberAccountHolderId, request)
+        ));
+    }
+
     @PatchMapping("/{circleId}/meeting-policy")
     @Operation(summary = "Mettre a jour la cadence canonique des reunions du cercle")
     public ResponseEntity<CommonResponse<CircleMeetingPolicyResponse>> updateMeetingPolicy(@PathVariable UUID circleId,

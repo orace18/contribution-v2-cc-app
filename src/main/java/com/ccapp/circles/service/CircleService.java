@@ -12,6 +12,7 @@ import com.ccapp.circles.dto.CreateAssistedMemberRequest;
 import com.ccapp.circles.dto.CreateCircleRequest;
 import com.ccapp.circles.dto.JoinCircleRequest;
 import com.ccapp.circles.dto.MyCircleResponse;
+import com.ccapp.circles.dto.UpdateCircleMemberRoleRequest;
 import com.ccapp.circles.repository.CircleMemberRepository;
 import com.ccapp.circles.repository.CircleRepository;
 import com.ccapp.circlesocial.domain.enums.ActivityType;
@@ -195,6 +196,54 @@ public class CircleService {
         ));
     }
 
+    @Transactional
+    public CircleMemberResponse updateMemberRole(UUID requesterAccountHolderId,
+                                                 UUID circleId,
+                                                 UUID memberAccountHolderId,
+                                                 UpdateCircleMemberRoleRequest request) {
+        Circle circle = circleRepository.findByIdAndStatus(circleId, CircleStatus.ACTIVE)
+                .orElseThrow(() -> new NotFoundException("Active circle not found"));
+        assertCanManageMemberRoles(requesterAccountHolderId, circle);
+
+        CircleMember targetMember = circleMemberRepository
+                .findByCircle_IdAndAccountHolderId(circleId, memberAccountHolderId)
+                .orElseThrow(() -> new NotFoundException("Member not found in this circle"));
+        CircleMemberRole targetRole = request.role();
+
+        if (targetMember.getRole() == CircleMemberRole.COACH
+                && targetRole != CircleMemberRole.COACH) {
+            throw new BusinessException("Assign a new coach before changing the current coach role");
+        }
+
+        if (targetRole != CircleMemberRole.MEMBER) {
+            List<CircleMember> displacedMembers = circleMemberRepository.findByCircle_IdOrderByJoinedAtAsc(circleId)
+                    .stream()
+                    .filter(member -> !Objects.equals(member.getId(), targetMember.getId()))
+                    .filter(member -> member.getRole() == targetRole)
+                    .toList();
+            for (CircleMember displacedMember : displacedMembers) {
+                applyRole(displacedMember, CircleMemberRole.MEMBER);
+            }
+            if (!displacedMembers.isEmpty()) {
+                circleMemberRepository.saveAll(displacedMembers);
+            }
+        }
+
+        applyRole(targetMember, targetRole);
+        CircleMember savedTarget = circleMemberRepository.save(targetMember);
+
+        if (targetRole == CircleMemberRole.COACH) {
+            circleCoachAssignmentService.syncManualAssignmentFromMemberRoleChange(
+                    requesterAccountHolderId,
+                    circleId,
+                    savedTarget.getAccountHolderId(),
+                    "Synced from circle member role update"
+            );
+        }
+
+        return toMemberResponse(savedTarget);
+    }
+
     @Transactional(readOnly = true, noRollbackFor = NotFoundException.class)
     public MyCircleResponse getMyCircle(UUID accountHolderId) {
         List<Circle> activeCircles = circleRepository.findActiveCirclesForUser(accountHolderId);
@@ -286,8 +335,33 @@ public class CircleService {
                 .build();
     }
 
+    private void applyRole(CircleMember member, CircleMemberRole role) {
+        member.setRole(role);
+        member.setFinancialMember(role == CircleMemberRole.MEMBER);
+    }
+
     private boolean isAdvisorRole(CircleMemberRole role) {
         return role == CircleMemberRole.ADVISOR_G1 || role == CircleMemberRole.ADVISOR_G2;
+    }
+
+    private void assertCanManageMemberRoles(UUID requesterAccountHolderId, Circle circle) {
+        if (Objects.equals(legacyCircleManagerAccountHolderId(circle), requesterAccountHolderId)) {
+            return;
+        }
+
+        Optional<UUID> assignedCoachAccountHolderId = circleCoachAssignmentService.findAssignedCoachAccountHolderId(circle.getId());
+        if (assignedCoachAccountHolderId.filter(requesterAccountHolderId::equals).isPresent()) {
+            return;
+        }
+
+        boolean isCoachMember = circleMemberRepository.findByCircle_IdAndAccountHolderId(circle.getId(), requesterAccountHolderId)
+                .map(member -> member.getRole() == CircleMemberRole.COACH)
+                .orElse(false);
+        if (isCoachMember) {
+            return;
+        }
+
+        throw new BusinessException("Only the circle owner or coach can manage member roles");
     }
 
     private void ensureCircleUnlocked(UUID circleId) {
