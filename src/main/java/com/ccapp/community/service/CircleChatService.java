@@ -204,9 +204,9 @@ public class CircleChatService {
     }
 
     private void validateContent(CircleChatMessageType type, CircleChatMessageRequest request) {
-        if (type == CircleChatMessageType.TEXT) {
+        if (type == CircleChatMessageType.TEXT || type == CircleChatMessageType.MEETING) {
             if (request.content() == null || request.content().isBlank()) {
-                throw new BusinessException("content is required for TEXT messages");
+                throw new BusinessException("content is required for " + type + " messages");
             }
         } else {
             if (request.mediaId() == null) {

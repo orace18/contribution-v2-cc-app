@@ -58,7 +58,13 @@ public class CircleReadinessAccessService {
 
     @Transactional(readOnly = true)
     public void assertCanManageMeetings(UUID requesterAccountHolderId, UUID circleId) {
-        assertCanManageReadiness(requesterAccountHolderId, circleId);
+        Circle circle = requireActiveCircle(circleId);
+        if (circleMemberRepository.existsByCircle_IdAndAccountHolderId(circleId, requesterAccountHolderId)
+                || Objects.equals(circle.getCoachId(), requesterAccountHolderId)
+                || isAssignedCoach(circleId, requesterAccountHolderId)) {
+            return;
+        }
+        throw new BusinessException("Only circle members can schedule meetings");
     }
 
     @Transactional(readOnly = true)
