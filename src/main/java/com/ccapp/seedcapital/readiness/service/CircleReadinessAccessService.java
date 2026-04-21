@@ -2,6 +2,7 @@ package com.ccapp.seedcapital.readiness.service;
 
 import com.ccapp.circles.domain.entity.Circle;
 import com.ccapp.circles.domain.entity.CircleMember;
+import com.ccapp.circles.domain.enums.CircleMemberRole;
 import com.ccapp.circles.domain.enums.CircleStatus;
 import com.ccapp.circles.repository.CircleMemberRepository;
 import com.ccapp.circles.repository.CircleRepository;
@@ -19,6 +20,12 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class CircleReadinessAccessService {
+
+    private static final List<CircleMemberRole> MEETING_STATUS_MANAGER_ROLES = List.of(
+            CircleMemberRole.COACH,
+            CircleMemberRole.ADVISOR_G1,
+            CircleMemberRole.ADVISOR_G2
+    );
 
     private final CircleRepository circleRepository;
     private final CircleMemberRepository circleMemberRepository;
@@ -65,6 +72,21 @@ public class CircleReadinessAccessService {
             return;
         }
         throw new BusinessException("Only circle members can schedule meetings");
+    }
+
+    @Transactional(readOnly = true)
+    public void assertCanUpdateMeetingStatus(UUID requesterAccountHolderId, UUID circleId) {
+        Circle circle = requireActiveCircle(circleId);
+        if (Objects.equals(circle.getCoachId(), requesterAccountHolderId)
+                || isAssignedCoach(circleId, requesterAccountHolderId)
+                || circleMemberRepository.existsByCircle_IdAndAccountHolderIdAndRoleIn(
+                circleId,
+                requesterAccountHolderId,
+                MEETING_STATUS_MANAGER_ROLES
+        )) {
+            return;
+        }
+        throw new BusinessException("Only the coach and advisors can update meeting status");
     }
 
     @Transactional(readOnly = true)

@@ -13,6 +13,8 @@ public interface CircleMeetingRepository extends JpaRepository<CircleMeeting, UU
 
     List<CircleMeeting> findByCircleIdOrderByMeetingAtDesc(UUID circleId);
 
+    Optional<CircleMeeting> findByIdAndCircleId(UUID id, UUID circleId);
+
     Optional<CircleMeeting> findFirstByCircleIdAndStatusAndMeetingAtAfterOrderByMeetingAtAsc(UUID circleId,
                                                                                               CircleMeetingStatus status,
                                                                                               OffsetDateTime meetingAt);

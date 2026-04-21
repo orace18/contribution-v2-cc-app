@@ -11,6 +11,7 @@ import com.ccapp.seedcapital.readiness.domain.enums.CircleMeetingAttendanceStatu
 import com.ccapp.seedcapital.readiness.domain.enums.CircleMeetingStatus;
 import com.ccapp.seedcapital.readiness.dto.CircleMeetingResponse;
 import com.ccapp.seedcapital.readiness.dto.RecordCircleMeetingRequest;
+import com.ccapp.seedcapital.readiness.dto.UpdateCircleMeetingStatusRequest;
 import com.ccapp.seedcapital.readiness.repository.CircleMeetingAttendanceRepository;
 import com.ccapp.seedcapital.readiness.repository.CircleMeetingRepository;
 import lombok.RequiredArgsConstructor;
@@ -39,7 +40,10 @@ public class CircleMeetingService {
                                                RecordCircleMeetingRequest request) {
         circleReadinessAccessService.assertCanManageMeetings(requesterAccountHolderId, circleId);
         List<CircleMember> members = circleReadinessAccessService.requireActiveMembers(circleId);
-        CircleMeetingStatus status = request.status() == null ? CircleMeetingStatus.COMPLETED : request.status();
+        CircleMeetingStatus status = request.status() == null ? CircleMeetingStatus.SCHEDULED : request.status();
+        if (status != CircleMeetingStatus.SCHEDULED) {
+            throw new BusinessException("New meetings can only be created with SCHEDULED status");
+        }
         LinkedHashSet<UUID> presentMemberIds = sanitizePresentMemberIds(request.presentMemberAccountHolderIds());
 
         validateAttendanceConsistency(status, presentMemberIds);
@@ -73,17 +77,60 @@ public class CircleMeetingService {
             circleMeetingAttendanceRepository.saveAll(attendanceRows);
         }
 
-        if (status == CircleMeetingStatus.COMPLETED) {
+        return toResponse(meeting);
+    }
+
+    @Transactional
+    public CircleMeetingResponse updateMeetingStatus(UUID requesterAccountHolderId,
+                                                     UUID circleId,
+                                                     UUID meetingId,
+                                                     UpdateCircleMeetingStatusRequest request) {
+        circleReadinessAccessService.assertCanUpdateMeetingStatus(requesterAccountHolderId, circleId);
+        CircleMeeting meeting = circleMeetingRepository.findByIdAndCircleId(meetingId, circleId)
+                .orElseThrow(() -> new BusinessException("Circle meeting not found"));
+
+        CircleMeetingStatus nextStatus = request.status();
+        if (nextStatus != CircleMeetingStatus.COMPLETED && nextStatus != CircleMeetingStatus.CANCELLED) {
+            throw new BusinessException("Only COMPLETED or CANCELLED meeting statuses are allowed here");
+        }
+
+        if (meeting.getStatus() == nextStatus) {
+            return toResponse(meeting);
+        }
+
+        if (meeting.getStatus() != CircleMeetingStatus.SCHEDULED) {
+            throw new BusinessException("Only scheduled meetings can be updated");
+        }
+
+        int attendanceCount = 0;
+        boolean quorumReached = false;
+        if (nextStatus == CircleMeetingStatus.COMPLETED) {
+            attendanceCount = (int) circleMeetingAttendanceRepository
+                    .findByMeetingIdOrderByCreatedAtAsc(meeting.getId())
+                    .stream()
+                    .filter(attendance -> attendance.getStatus() == CircleMeetingAttendanceStatus.PRESENT)
+                    .count();
+            quorumReached = meeting.getParticipantCount() != null
+                    && meeting.getParticipantCount() > 0
+                    && attendanceCount >= requiredQuorum(meeting.getParticipantCount());
+        }
+
+        meeting.setStatus(nextStatus);
+        meeting.setAttendanceCount(attendanceCount);
+        meeting.setQuorumReached(quorumReached);
+        CircleMeeting savedMeeting = circleMeetingRepository.save(meeting);
+
+        if (nextStatus == CircleMeetingStatus.COMPLETED) {
             domainEventPublisher.publish(CircleActivityRequestedEvent.create(
                     circleId,
                     requesterAccountHolderId,
                     ActivityType.MEETING_COMPLETED,
-                    meeting.getId(),
+                    savedMeeting.getId(),
                     quorumReached ? "Circle meeting completed with quorum" : "Circle meeting completed without quorum"
             ));
         }
 
-        return toResponse(meeting);
+        return toResponse(savedMeeting);
     }
 
     @Transactional(readOnly = true)

@@ -10,6 +10,7 @@ import com.ccapp.seedcapital.readiness.dto.SeedCapitalCreditCandidateResponse;
 import com.ccapp.seedcapital.readiness.dto.CircleTrustScoreResponse;
 import com.ccapp.seedcapital.readiness.dto.RecordCircleMeetingRequest;
 import com.ccapp.seedcapital.readiness.dto.SeedCapitalEligibilityResponse;
+import com.ccapp.seedcapital.readiness.dto.UpdateCircleMeetingStatusRequest;
 import com.ccapp.seedcapital.readiness.service.CircleCoachAssignmentService;
 import com.ccapp.seedcapital.readiness.service.CircleMeetingService;
 import com.ccapp.seedcapital.readiness.service.CircleTrustScoreService;
@@ -23,6 +24,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -65,6 +67,18 @@ public class CircleReadinessController {
         return ResponseEntity.ok(CommonResponse.success(
                 "Circle meetings",
                 circleMeetingService.listMeetings(requesterAccountHolderId, circleId)
+        ));
+    }
+
+    @PatchMapping("/meetings/{meetingId}")
+    @Operation(summary = "Mettre a jour le statut d'une reunion de cercle")
+    public ResponseEntity<CommonResponse<CircleMeetingResponse>> updateMeetingStatus(@PathVariable UUID circleId,
+                                                                                     @PathVariable UUID meetingId,
+                                                                                     @Valid @RequestBody UpdateCircleMeetingStatusRequest request) {
+        UUID requesterAccountHolderId = SecurityUtils.currentAccountHolderId();
+        return ResponseEntity.ok(CommonResponse.success(
+                "Circle meeting status updated",
+                circleMeetingService.updateMeetingStatus(requesterAccountHolderId, circleId, meetingId, request)
         ));
     }
 

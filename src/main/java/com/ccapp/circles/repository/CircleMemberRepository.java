@@ -33,6 +33,10 @@ public interface CircleMemberRepository extends JpaRepository<CircleMember, UUID
 
     Optional<CircleMember> findByCircle_IdAndRole(UUID circleId, CircleMemberRole role);
 
+    boolean existsByCircle_IdAndAccountHolderIdAndRoleIn(UUID circleId,
+                                                         UUID accountHolderId,
+                                                         Collection<CircleMemberRole> roles);
+
     @Query("""
             select count(cm) from CircleMember cm, AccountHolder ah
             where cm.circle.id = :circleId
