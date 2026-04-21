@@ -117,27 +117,43 @@ public class KycSubmissionService {
 
         OffsetDateTime submittedAt = OffsetDateTime.now();
         if (accountHolder.getKycStatus() == KycStatus.VERIFIED) {
-            return buildResponse(accountHolder, submittedAt);
+            return buildResponse(accountHolder, submittedAt, null);
         }
 
         Map<KycDocumentType, KycDocumentResolutionService.ResolvedKycDocument> submissionDocuments =
                 resolveMinimalKycDocuments(targetAccountHolderId);
         if (accountHolder.getKycStatus() != KycStatus.PENDING) {
+            log.info("kyc submit triggering CPaaS accountHolderId={} priorStatus={}", accountHolder.getId(), accountHolder.getKycStatus());
             CpassSubmissionResult submissionResult = submitToCpass(accountHolder, submissionDocuments);
             kycNotificationService.notifySubmitted(targetAccountHolderId);
             applyCpassStatus(accountHolder, submissionResult);
+            
+            delegatedActionService.logIfDelegatedActor(
+                    targetAccountHolderId,
+                    actorUserId,
+                    DelegatedActionType.KYC_SUBMITTED,
+                    "{\"submittedAt\":\"" + submittedAt + "\"}"
+            );
+
+            AccountHolder refreshedAccountHolder = accountHolderRepository.findById(targetAccountHolderId)
+                    .orElse(accountHolder);
+                    
+            String caseId = submissionResult.initResponse() != null ? submissionResult.initResponse().kycCaseId() : null;
+            return buildResponse(refreshedAccountHolder, submittedAt, caseId);
+        } else {
+            log.warn("kyc submit skipped CPaaS because status is already PENDING accountHolderId={}", accountHolder.getId());
+            
+            delegatedActionService.logIfDelegatedActor(
+                    targetAccountHolderId,
+                    actorUserId,
+                    DelegatedActionType.KYC_SUBMITTED,
+                    "{\"submittedAt\":\"" + submittedAt + "\"}"
+            );
+            
+            AccountHolder refreshedAccountHolder = accountHolderRepository.findById(targetAccountHolderId)
+                    .orElse(accountHolder);
+            return buildResponse(refreshedAccountHolder, submittedAt, null);
         }
-
-        delegatedActionService.logIfDelegatedActor(
-                targetAccountHolderId,
-                actorUserId,
-                DelegatedActionType.KYC_SUBMITTED,
-                "{\"submittedAt\":\"" + submittedAt + "\"}"
-        );
-
-        AccountHolder refreshedAccountHolder = accountHolderRepository.findById(targetAccountHolderId)
-                .orElse(accountHolder);
-        return buildResponse(refreshedAccountHolder, submittedAt);
     }
 
     private Map<KycDocumentType, KycDocumentResolutionService.ResolvedKycDocument> resolveMinimalKycDocuments(UUID accountHolderId) {
@@ -227,6 +243,10 @@ public class KycSubmissionService {
 
     private void applyCpassStatus(AccountHolder accountHolder, CpassSubmissionResult submissionResult) {
         ProviderSignals signals = resolveProviderSignals(submissionResult);
+        
+        log.info("kyc submit provider signals evaluated accountHolderId={} documentValid={} faceMatchScore={} identityStatus={} riskLevel={}",
+                 accountHolder.getId(), signals.documentValid(), signals.faceMatchScore(), signals.identityStatus(), signals.riskLevel());
+
         if (meetsLevel1AutoApproval(signals)) {
             applyOcrProfileData(accountHolder, signals);
             kycReviewService.approveKyc(accountHolder.getId(), KycLevel.LEVEL_1_BASIC);
@@ -239,6 +259,9 @@ public class KycSubmissionService {
                 submissionResult.initResponse().status(),
                 latestDocumentStatus(submissionResult.documentResponses())
         );
+        
+        log.info("kyc submit fallback providerStatus accountHolderId={} status={}", accountHolder.getId(), providerStatus);
+
         if (providerStatus == null || providerStatus.isBlank()) {
             kycReviewService.markPending(accountHolder.getId());
             return;
@@ -268,12 +291,14 @@ public class KycSubmissionService {
         return value.trim();
     }
 
-    private SubmitKycResponse buildResponse(AccountHolder accountHolder, OffsetDateTime submittedAt) {
+    private SubmitKycResponse buildResponse(AccountHolder accountHolder, OffsetDateTime submittedAt, String caseId) {
         return new SubmitKycResponse(
                 accountHolder.getId(),
                 accountHolder.getKycStatus(),
                 accountHolder.resolveKycLevel(),
-                submittedAt
+                submittedAt,
+                caseId,
+                null, null, null, null, null, null
         );
     }
 

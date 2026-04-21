@@ -10,6 +10,13 @@ public record SubmitKycResponse(
         UUID accountHolderId,
         KycStatus kycStatus,
         KycLevel kycLevel,
-        OffsetDateTime submittedAt
+        OffsetDateTime submittedAt,
+        String caseId,
+        String productStatus,
+        String reasonCode,
+        String nextAction,
+        String statusReason,
+        String recommendation,
+        Double confidenceScore
 ) {
 }

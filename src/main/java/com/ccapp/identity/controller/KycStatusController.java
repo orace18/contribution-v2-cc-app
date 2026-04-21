@@ -19,6 +19,11 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.lang.Nullable;
+
+import com.ccapp.cpass.kyc.CPassKycGateway;
+import com.ccapp.cpass.kyc.CPassKycStatusResponse;
 
 import java.util.UUID;
 
@@ -32,6 +37,10 @@ public class KycStatusController {
     private final KycStatusConsistencyService kycStatusConsistencyService;
     private final ManagedAccountReadContextService managedAccountReadContextService;
 
+    @Nullable
+    @Autowired(required = false)
+    private CPassKycGateway cPassKycGateway;
+
     @GetMapping("/status")
     @Operation(summary = "Fetch current KYC status for the authenticated account holder")
     @ApiResponses(value = {
@@ -40,7 +49,9 @@ public class KycStatusController {
     })
     public ResponseEntity<CommonResponse<KycStatusResponse>> getStatus(
             @Parameter(description = "Optional target accountHolderId for an authorized managed account")
-            @RequestParam(name = "accountHolderId", required = false) UUID requestedAccountHolderId) {
+            @RequestParam(name = "accountHolderId", required = false) UUID requestedAccountHolderId,
+            @Parameter(description = "Optional CPaaS caseId to retrieve dynamic tracking status")
+            @RequestParam(name = "caseId", required = false) String caseId) {
         UUID actorUserId = SecurityUtils.currentUserId();
         var accountHolderId = managedAccountReadContextService.resolveViewTargetAccountHolderId(
                 actorUserId,
@@ -49,6 +60,29 @@ public class KycStatusController {
         );
         var kycStatus = kycStatusConsistencyService.reconcileAccountHolderStatus(accountHolderId);
         var kycLevel = kycStatusConsistencyService.resolveAccountHolderLevel(accountHolderId);
-        return ResponseEntity.ok(CommonResponse.success("KYC status", new KycStatusResponse(kycStatus, kycLevel)));
+        
+        String cpassProductStatus = null;
+        String cpassReasonCode = null;
+        String cpassNextAction = null;
+        String cpassStatusReason = null;
+        String cpassRecommendation = null;
+        Double cpassConfidenceScore = null;
+
+        if (caseId != null && !caseId.isBlank() && cPassKycGateway != null) {
+             CPassKycStatusResponse cpassRes = cPassKycGateway.getKycStatus(caseId);
+             if (cpassRes != null) {
+                 cpassProductStatus = cpassRes.productStatus();
+                 cpassReasonCode = cpassRes.reasonCode();
+                 cpassNextAction = cpassRes.nextAction();
+                 cpassStatusReason = cpassRes.statusReason();
+                 cpassRecommendation = cpassRes.recommendation();
+                 cpassConfidenceScore = cpassRes.confidenceScore();
+             }
+        }
+        
+        return ResponseEntity.ok(CommonResponse.success("KYC status", new KycStatusResponse(
+            kycStatus, kycLevel, caseId, cpassProductStatus, cpassReasonCode, cpassNextAction,
+            cpassStatusReason, cpassRecommendation, cpassConfidenceScore
+        )));
     }
 }

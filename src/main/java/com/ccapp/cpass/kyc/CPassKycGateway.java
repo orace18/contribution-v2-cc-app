@@ -140,4 +140,26 @@ public class CPassKycGateway {
         sb.append("}");
         return sb.toString();
     }
+
+    /**
+     * Fetches the current KYC status and actionable details.
+     */
+    public CPassKycStatusResponse getKycStatus(String caseId) {
+        log.info("cpass: kyc get-status caseId={}", caseId);
+        try {
+            return authClient.restClient().get()
+                    .uri("/kyc/status?caseId=" + caseId)
+                    .header("Authorization", "Bearer " + authClient.getBearerToken())
+                    .header("X-Client-ID", authClient.getClientId())
+                    .retrieve()
+                    .body(CPassKycStatusResponse.class);
+        } catch (RestClientResponseException ex) {
+            log.error("cpass: kyc get-status failed status={} body={}",
+                    ex.getStatusCode().value(), ex.getResponseBodyAsString());
+            return null;
+        } catch (Exception ex) {
+            log.error("cpass: kyc get-status error reason={}", ex.getMessage());
+            return null;
+        }
+    }
 }
