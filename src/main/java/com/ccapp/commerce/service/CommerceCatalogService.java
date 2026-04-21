@@ -97,7 +97,8 @@ public class CommerceCatalogService {
                                     ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP)
                                     : product.getCommissionPercent().setScale(2, RoundingMode.HALF_UP),
                             commerceProduct == null ? ZERO : scale(commerceProduct.getDsbAmount()),
-                            product.isActive()
+                            product.isActive(),
+                            product.getImageUrl()
                     );
                 })
                 .toList();

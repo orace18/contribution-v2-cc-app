@@ -14,6 +14,7 @@ public record CommerceProductResponse(
         BigDecimal cvValue,
         BigDecimal commissionPercent,
         BigDecimal dsbAmount,
-        boolean active
+        boolean active,
+        String imageUrl
 ) {
 }
