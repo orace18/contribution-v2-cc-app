@@ -4,6 +4,8 @@ import com.ccapp.common.api.CommonResponse;
 import com.ccapp.common.security.SensitiveDataRedactor;
 import com.ccapp.prayer.exception.PrayerPhase1NotImplementedException;
 import jakarta.validation.ConstraintViolationException;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -17,6 +19,7 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 import java.util.stream.Collectors;
 
 @RestControllerAdvice
+@Slf4j
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(NotFoundException.class)
@@ -81,10 +84,28 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(CommonResponse.error("Resource not found"));
     }
 
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<CommonResponse<Void>> handleDataIntegrity(DataIntegrityViolationException ex) {
+        String detail = ex.getMostSpecificCause().getMessage();
+        String code = resolveConstraintCode(detail);
+        log.error("[identity] DataIntegrityViolationException constraint-code={} detail={}", code, detail);
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(CommonResponse.error(code));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<CommonResponse<Void>> handleUnexpected(Exception ex) {
+        log.error("[system] Unhandled exception", ex);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(CommonResponse.error("Internal server error"));
+    }
+
+    private String resolveConstraintCode(String detail) {
+        if (detail == null) return "DATABASE_CONSTRAINT_VIOLATION";
+        if (detail.contains("uk_users_email")) return "EMAIL_ALREADY_BOUND_TO_EXISTING_ACCOUNT";
+        if (detail.contains("uk_users_firebase_uid")) return "IDENTITY_CONFLICT_MANUAL_REVIEW_REQUIRED";
+        if (detail.contains("uk_app_users_firebase_uid")) return "IDENTITY_CONFLICT_MANUAL_REVIEW_REQUIRED";
+        if (detail.contains("uk_user_device_identifier")) return "DEVICE_ALREADY_REGISTERED";
+        return "DATABASE_CONSTRAINT_VIOLATION";
     }
 
     private String sanitize(String value) {

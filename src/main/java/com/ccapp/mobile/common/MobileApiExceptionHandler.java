@@ -10,6 +10,7 @@ import com.ccapp.payments.psp.client.JawuPayPspClientImpl;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -43,6 +44,22 @@ public class MobileApiExceptionHandler {
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ApiEnvelope<Void>> handleBusiness(BusinessException ex) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiEnvelope.error(sanitize(ex.getMessage())));
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ApiEnvelope<Void>> handleDataIntegrity(DataIntegrityViolationException ex) {
+        String detail = ex.getMostSpecificCause() != null ? ex.getMostSpecificCause().getMessage() : null;
+        String code = resolveConstraintCode(detail);
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiEnvelope.error(sanitize(code)));
+    }
+
+    private String resolveConstraintCode(String detail) {
+        if (detail == null) return "DATABASE_CONSTRAINT_VIOLATION";
+        if (detail.contains("uk_users_email")) return "EMAIL_ALREADY_BOUND_TO_EXISTING_ACCOUNT";
+        if (detail.contains("uk_users_firebase_uid")) return "IDENTITY_CONFLICT_MANUAL_REVIEW_REQUIRED";
+        if (detail.contains("uk_app_users_firebase_uid")) return "IDENTITY_CONFLICT_MANUAL_REVIEW_REQUIRED";
+        if (detail.contains("uk_user_device_identifier")) return "DEVICE_ALREADY_REGISTERED";
+        return "DATABASE_CONSTRAINT_VIOLATION";
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

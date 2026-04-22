@@ -4,6 +4,9 @@ import com.ccapp.common.exception.BusinessException;
 import com.ccapp.common.exception.NotFoundException;
 import com.ccapp.common.exception.UnauthorizedException;
 import com.ccapp.common.security.ClientRequestMetadata;
+import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
+import com.ccapp.identity.account_holder.domain.enums.AccountCreatedVia;
+import com.ccapp.identity.account_holder.repository.AccountHolderRepository;
 import com.ccapp.identity.account_holder.service.AccountHolderService;
 import com.ccapp.identity.app_user.domain.entity.AppUser;
 import com.ccapp.identity.app_user.repository.AppUserRepository;
@@ -47,6 +50,7 @@ public class IdentityDeviceSessionService {
     private final UserDeviceRepository userDeviceRepository;
     private final UserSessionRepository userSessionRepository;
     private final AccountHolderService accountHolderService;
+    private final AccountHolderRepository accountHolderRepository;
     private final AppUserRepository appUserRepository;
     private final RefreshTokenService refreshTokenService;
     private final IdentitySecurityService identitySecurityService;
@@ -61,9 +65,9 @@ public class IdentityDeviceSessionService {
     @Transactional
     public SyncResponse sync(FirebaseUserClaims claims, SyncRequest request) {
         ClientRequestMetadata metadata = identitySecurityService.currentRequestMetadata();
-        log.info("Identity sync start firebaseUid={} platform={} deviceIdentifier={}",
-                claims.uid(), request.platform(), request.deviceIdentifier());
-        User user = ensureUser(claims.uid(), claims.email());
+        log.info("[identity-sync] start firebaseUid={} platform={} deviceIdentifier={} hasPhone={}",
+                claims.uid(), request.platform(), request.deviceIdentifier(), claims.phoneNumber() != null);
+        User user = ensureUser(claims.uid(), claims.email(), claims.phoneNumber());
 
         ensureDelegatedIdentityModel(user);
         user.setKycStatus(kycStatusConsistencyService.reconcileAccountHolderStatus(user.getId()));
@@ -86,7 +90,8 @@ public class IdentityDeviceSessionService {
         );
         SessionCreation sessionCreation = createSession(user, deviceResult.device(), metadata, riskLevel);
 
-        log.info("Identity sync success userId={} sessionId={}", user.getId(), sessionCreation.session().getId());
+        log.info("[identity-sync] success userId={} sessionId={} deviceNew={}",
+                user.getId(), sessionCreation.session().getId(), deviceResult.newDevice());
         return new SyncResponse(
                 user.getId(),
                 user.getFirebaseUid(),
@@ -101,16 +106,80 @@ public class IdentityDeviceSessionService {
 
     @Transactional
     public User ensureUser(String firebaseUid, String email) {
-        User user = userRepository.findByFirebaseUid(firebaseUid)
-                .orElseGet(() -> userRepository.save(User.builder()
-                        .firebaseUid(firebaseUid)
-                        .email(normalizeOptional(email))
-                        .role(UserRole.USER)
-                        .accountStatus(AccountStatus.ACTIVE)
-                        .kycStatus(KycStatus.NOT_STARTED)
-                        .build()));
-        syncUserClaims(user, new FirebaseUserClaims(firebaseUid, email, null));
-        return user;
+        return ensureUser(firebaseUid, email, null);
+    }
+
+    @Transactional
+    public User ensureUser(String firebaseUid, String email, String phoneNumber) {
+        String normalizedEmail = normalizeOptional(email);
+
+        // Cas A : firebaseUid connu → réutiliser (idempotent, happy path)
+        Optional<User> byUid = userRepository.findByFirebaseUid(firebaseUid);
+        if (byUid.isPresent()) {
+            log.debug("[identity-sync] resolve=REUSE firebaseUid={} userId={}", firebaseUid, byUid.get().getId());
+            User user = byUid.get();
+            syncUserClaims(user, new FirebaseUserClaims(firebaseUid, email, phoneNumber));
+            return user;
+        }
+
+        // Cas B/C : email existant sans ce firebaseUid → rattacher (migration V1 ou réauthentification)
+        if (normalizedEmail != null) {
+            Optional<User> byEmail = userRepository.findByEmailIgnoreCase(normalizedEmail);
+            if (byEmail.isPresent()) {
+                User existing = byEmail.get();
+                log.warn("[identity-sync] resolve=RELINK userId={} email={} previousFirebaseUid={} newFirebaseUid={} reason=email-match",
+                        existing.getId(), normalizedEmail, existing.getFirebaseUid(), firebaseUid);
+                existing.setFirebaseUid(firebaseUid);
+                return userRepository.save(existing);
+            }
+        }
+
+        // Cas D/E : lookup par numéro de téléphone vérifié
+        String normalizedPhone = normalizeOptional(phoneNumber);
+        if (normalizedPhone != null) {
+            Optional<AccountHolder> byPhone = accountHolderRepository.findByPhoneNumber(normalizedPhone);
+            if (byPhone.isPresent()) {
+                AccountHolder foundHolder = byPhone.get();
+                List<AppUser> existingAppUsers = appUserRepository.findByAccountHolderId(foundHolder.getId());
+                boolean hasAutonomousIdentity = !existingAppUsers.isEmpty();
+                if (foundHolder.getCreatedVia() == AccountCreatedVia.MANAGED_ACCOUNT) {
+                    // Cas E : managed account — demande confirmation avant de libérer le compte
+                    if (!hasAutonomousIdentity) {
+                        log.warn("[identity-sync] resolve=MANAGED_ACCOUNT_BLOCKED firebaseUid={} phone={} managedAccountHolderId={}",
+                                firebaseUid, normalizedPhone, foundHolder.getId());
+                        throw new BusinessException("MANAGED_ACCOUNT_REQUIRES_RELEASE_CONFIRMATION");
+                    }
+                } else if (!hasAutonomousIdentity) {
+                    // Cas D : AccountHolder V1 STANDARD sans identité autonome → rattacher sans créer de doublon AccountHolder
+                    log.warn("[identity-sync] resolve=RELINK_V1_PHONE firebaseUid={} phone={} v1AccountHolderId={}",
+                            firebaseUid, normalizedPhone, foundHolder.getId());
+                    User v1User = userRepository.save(User.builder()
+                            .firebaseUid(firebaseUid)
+                            .email(normalizedEmail)
+                            .role(UserRole.USER)
+                            .accountStatus(AccountStatus.ACTIVE)
+                            .kycStatus(KycStatus.NOT_STARTED)
+                            .build());
+                    appUserRepository.save(AppUser.builder()
+                            .id(v1User.getId())
+                            .firebaseUid(firebaseUid)
+                            .accountHolderId(foundHolder.getId())
+                            .role(UserRole.USER)
+                            .build());
+                    return v1User;
+                }
+            }
+        }
+
+        // Cas G : nouvel utilisateur → créer
+        log.info("[identity-sync] resolve=CREATE firebaseUid={} email={}", firebaseUid, normalizedEmail);
+        return userRepository.save(User.builder()
+                .firebaseUid(firebaseUid)
+                .email(normalizedEmail)
+                .role(UserRole.USER)
+                .accountStatus(AccountStatus.ACTIVE)
+                .kycStatus(KycStatus.NOT_STARTED)
+                .build());
     }
 
     @Transactional
@@ -325,6 +394,13 @@ public class IdentityDeviceSessionService {
     private void syncUserClaims(User user, FirebaseUserClaims claims) {
         String normalizedEmail = normalizeOptional(claims.email());
         if (normalizedEmail != null && !normalizedEmail.equals(user.getEmail())) {
+            Optional<User> conflicting = userRepository.findByEmailIgnoreCase(normalizedEmail);
+            if (conflicting.isPresent() && !conflicting.get().getId().equals(user.getId())) {
+                log.warn("[identity-sync] email-update-skipped-conflict userId={} currentEmail={} claimedEmail={} conflictingUserId={}",
+                        user.getId(), user.getEmail(), normalizedEmail, conflicting.get().getId());
+                return;
+            }
+            log.debug("[identity-sync] email-updated userId={} email={}", user.getId(), normalizedEmail);
             user.setEmail(normalizedEmail);
             userRepository.save(user);
         }

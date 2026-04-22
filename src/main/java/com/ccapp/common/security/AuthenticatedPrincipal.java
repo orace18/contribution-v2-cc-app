@@ -8,6 +8,7 @@ import java.util.UUID;
 public record AuthenticatedPrincipal(
         String firebaseUid,
         String email,
+        String phoneNumber,
         UUID userId,
         UUID accountHolderId,
         boolean internal

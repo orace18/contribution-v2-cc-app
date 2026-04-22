@@ -114,6 +114,7 @@ public class FirebaseAuthenticationFilter extends OncePerRequestFilter {
         AuthenticatedPrincipal principal = AuthenticatedPrincipal.builder()
                 .firebaseUid(claims.uid())
                 .email(claims.email())
+                .phoneNumber(claims.phoneNumber())
                 .userId(appUser.getId())
                 .accountHolderId(appUser.getAccountHolderId())
                 .internal(false)
