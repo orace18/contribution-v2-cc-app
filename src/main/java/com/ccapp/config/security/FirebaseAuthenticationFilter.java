@@ -1,10 +1,9 @@
 package com.ccapp.config.security;
 
+import com.ccapp.common.exception.BusinessException;
 import com.ccapp.identity.service.UserProvisioningService;
 import com.ccapp.common.security.AuthenticatedPrincipal;
 import com.ccapp.identity.app_user.domain.entity.AppUser;
-import com.ccapp.identity.app_user.repository.AppUserRepository;
-import com.ccapp.identity.repository.UserRepository;
 import com.ccapp.identity.service.FirebaseTokenVerifier;
 import com.ccapp.identity.service.FirebaseUserClaims;
 import org.springframework.beans.factory.annotation.Value;
@@ -20,7 +19,6 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
-import com.ccapp.identity.account_holder.repository.AccountHolderRepository;
 
 import java.io.IOException;
 import java.util.List;
@@ -32,9 +30,6 @@ import java.util.UUID;
 public class FirebaseAuthenticationFilter extends OncePerRequestFilter {
 
     private final FirebaseTokenVerifier tokenVerifier;
-    private final AppUserRepository appUserRepository;
-    private final UserRepository userRepository;
-    private final AccountHolderRepository accountHolderRepository;
     private final UserProvisioningService userProvisioningService;
 
     @Value("${firebase.auth.enabled:false}")
@@ -97,18 +92,16 @@ public class FirebaseAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
 
-        AppUser appUser = appUserRepository
-                .findByFirebaseUid(claims.uid())
-                .orElse(null);
-        UUID legacyUserId = userRepository.findByFirebaseUid(claims.uid())
-                .map(user -> user.getId())
-                .orElse(null);
-        if (appUser == null) {
-            if (legacyUserId != null && accountHolderRepository.existsById(legacyUserId)) {
-                appUser = userProvisioningService.provisionFromLegacy(legacyUserId, claims);
-            } else {
-                appUser = userProvisioningService.provisionNew(claims);
-            }
+        AppUser appUser;
+        try {
+            appUser = userProvisioningService.resolveForClaims(claims);
+        } catch (BusinessException ex) {
+            log.warn("Firebase identity provisioning failed path={} method={} firebaseUid={} reason={}",
+                    path, request.getMethod(), claims.uid(), ex.getMessage());
+            response.setStatus(HttpServletResponse.SC_CONFLICT);
+            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+            response.getWriter().write("{\"success\":false,\"message\":\"" + ex.getMessage() + "\",\"data\":null}");
+            return;
         }
 
         AuthenticatedPrincipal principal = AuthenticatedPrincipal.builder()

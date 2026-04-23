@@ -1,10 +1,10 @@
 package com.ccapp.media.controller;
 
 import com.ccapp.common.api.CommonResponse;
-import com.ccapp.common.security.AuthenticatedPrincipal;
-import com.ccapp.common.security.SecurityUtils;
 import com.ccapp.identity.account_holder.service.AccountHolderService;
+import com.ccapp.identity.app_user.domain.entity.AppUser;
 import com.ccapp.identity.managedaccounts.service.ManagedAccountReadContextService;
+import com.ccapp.identity.service.CurrentIdentityService;
 import com.ccapp.media.domain.dto.DeclareIdentityRequest;
 import com.ccapp.media.domain.dto.KycDraftResponse;
 import com.ccapp.media.domain.dto.SubmitKycRequest;
@@ -37,6 +37,7 @@ public class MobileKycController {
     private final KycDraftService kycDraftService;
     private final AccountHolderService accountHolderService;
     private final ManagedAccountReadContextService managedAccountReadContextService;
+    private final CurrentIdentityService currentIdentityService;
 
     @GetMapping("/draft")
     @Operation(
@@ -56,10 +57,10 @@ public class MobileKycController {
     })
     public ResponseEntity<CommonResponse<KycDraftResponse>> getDraft(
             @RequestParam(required = false) UUID accountHolderId) {
-        UUID actorUserId = SecurityUtils.currentUserId();
+        AppUser actor = currentIdentityService.resolveCurrentAppUser();
         UUID resolved = managedAccountReadContextService.resolveViewTargetAccountHolderId(
-                actorUserId,
-                SecurityUtils.currentAccountHolderId(),
+                actor.getId(),
+                actor.getAccountHolderId(),
                 accountHolderId
         );
         KycDraftResponse draft = kycDraftService.getDraft(resolved);
@@ -83,10 +84,10 @@ public class MobileKycController {
     })
     public ResponseEntity<CommonResponse<Void>> declareIdentity(
             @Valid @RequestBody DeclareIdentityRequest request) {
-        UUID actorUserId = SecurityUtils.currentUserId();
+        AppUser actor = currentIdentityService.resolveCurrentAppUser();
         UUID resolvedAccountHolderId = managedAccountReadContextService.resolveViewTargetAccountHolderId(
-                actorUserId,
-                SecurityUtils.currentAccountHolderId(),
+                actor.getId(),
+                actor.getAccountHolderId(),
                 request.accountHolderId()
         );
         accountHolderService.declareIdentity(
@@ -117,9 +118,9 @@ public class MobileKycController {
             @ApiResponse(responseCode = "404", description = "Account holder not found", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
     })
     public ResponseEntity<CommonResponse<SubmitKycResponse>> submit(@Valid @RequestBody SubmitKycRequest request) {
-        UUID actorAccountHolderId = SecurityUtils.currentAccountHolderId();
-        AuthenticatedPrincipal principal = SecurityUtils.currentPrincipal();
-        UUID actorUserId = principal.userId() != null ? principal.userId() : actorAccountHolderId;
+        AppUser actor = currentIdentityService.resolveCurrentAppUser();
+        UUID actorAccountHolderId = actor.getAccountHolderId();
+        UUID actorUserId = actor.getId();
 
         SubmitKycResponse response = kycSubmissionService.submit(actorUserId, actorAccountHolderId, request.accountHolderId());
         return ResponseEntity.ok(CommonResponse.success("KYC submitted", response));

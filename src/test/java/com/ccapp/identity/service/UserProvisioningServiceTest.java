@@ -4,7 +4,9 @@ import com.ccapp.identity.account_holder.domain.entity.AccountHolder;
 import com.ccapp.identity.account_holder.repository.AccountHolderRepository;
 import com.ccapp.identity.app_user.domain.entity.AppUser;
 import com.ccapp.identity.app_user.repository.AppUserRepository;
+import com.ccapp.identity.domain.entity.User;
 import com.ccapp.identity.domain.enums.UserRole;
+import com.ccapp.identity.repository.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -12,7 +14,11 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.Optional;
+import java.util.UUID;
+
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -24,12 +30,17 @@ class UserProvisioningServiceTest {
     private AccountHolderRepository accountHolderRepository;
     @Mock
     private AppUserRepository appUserRepository;
+    @Mock
+    private UserRepository userRepository;
 
     @InjectMocks
     private UserProvisioningService userProvisioningService;
 
     @Test
     void provisionNew_shouldBootstrapProvisionalInternationalCountryContext() {
+        when(userRepository.findByEmailIgnoreCase("new.member@ccapp.test")).thenReturn(Optional.empty());
+        when(accountHolderRepository.findByPhoneNumber("+22961000000")).thenReturn(Optional.empty());
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(accountHolderRepository.save(any(AccountHolder.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(appUserRepository.save(any(AppUser.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -37,9 +48,17 @@ class UserProvisioningServiceTest {
                 new FirebaseUserClaims("firebase-user-1", "new.member@ccapp.test", "+22961000000")
         );
 
+        ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(userCaptor.capture());
+        User savedBackendUser = userCaptor.getValue();
+
         ArgumentCaptor<AccountHolder> accountHolderCaptor = ArgumentCaptor.forClass(AccountHolder.class);
         verify(accountHolderRepository).save(accountHolderCaptor.capture());
         AccountHolder savedAccountHolder = accountHolderCaptor.getValue();
+        assertThat(savedBackendUser.getId()).isEqualTo(savedAccountHolder.getId());
+        assertThat(savedBackendUser.getId()).isEqualTo(savedUser.getId());
+        assertThat(savedBackendUser.getFirebaseUid()).isEqualTo("firebase-user-1");
+        assertThat(savedBackendUser.getEmail()).isEqualTo("new.member@ccapp.test");
         assertThat(savedAccountHolder.getCountryCode()).isEqualTo("INT");
         assertThat(savedAccountHolder.getServiceCountryCode()).isEqualTo("INT");
         assertThat(savedAccountHolder.getFirstName()).isEqualTo("new.member");
@@ -48,5 +67,121 @@ class UserProvisioningServiceTest {
         assertThat(savedUser.getFirebaseUid()).isEqualTo("firebase-user-1");
         assertThat(savedUser.getAccountHolderId()).isEqualTo(savedAccountHolder.getId());
         assertThat(savedUser.getRole()).isEqualTo(UserRole.USER);
+    }
+
+    @Test
+    void resolveForClaims_shouldRepairMissingUserRowForExistingAppUser() {
+        UUID id = UUID.randomUUID();
+        AppUser existingAppUser = AppUser.builder()
+                .id(id)
+                .firebaseUid("firebase-user-1")
+                .accountHolderId(id)
+                .role(UserRole.USER)
+                .build();
+        when(appUserRepository.findByFirebaseUid("firebase-user-1")).thenReturn(Optional.of(existingAppUser));
+        when(userRepository.findByFirebaseUid("firebase-user-1")).thenReturn(Optional.empty());
+        when(userRepository.findByEmailIgnoreCase("new.member@ccapp.test")).thenReturn(Optional.empty());
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(accountHolderRepository.existsById(id)).thenReturn(true);
+
+        AppUser resolved = userProvisioningService.resolveForClaims(
+                new FirebaseUserClaims("firebase-user-1", "new.member@ccapp.test", "+22961000000")
+        );
+
+        assertThat(resolved).isSameAs(existingAppUser);
+        ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(userCaptor.capture());
+        assertThat(userCaptor.getValue().getId()).isEqualTo(id);
+        assertThat(userCaptor.getValue().getFirebaseUid()).isEqualTo("firebase-user-1");
+        assertThat(userCaptor.getValue().getEmail()).isEqualTo("new.member@ccapp.test");
+    }
+
+    @Test
+    void resolveForClaims_shouldRejectOldEmailBoundToDifferentUser() {
+        UUID oldUserId = UUID.randomUUID();
+        User oldUser = User.builder()
+                .id(oldUserId)
+                .firebaseUid("old-firebase")
+                .email("member@ccapp.test")
+                .role(UserRole.USER)
+                .build();
+        when(appUserRepository.findByFirebaseUid("new-firebase")).thenReturn(Optional.empty());
+        when(userRepository.findByFirebaseUid("new-firebase")).thenReturn(Optional.empty());
+        when(userRepository.findByEmailIgnoreCase("member@ccapp.test")).thenReturn(Optional.of(oldUser));
+
+        assertThatThrownBy(() -> userProvisioningService.resolveForClaims(
+                new FirebaseUserClaims("new-firebase", "member@ccapp.test", null)
+        )).isInstanceOf(com.ccapp.common.exception.BusinessException.class)
+                .hasMessage("IDENTITY_EMAIL_ALREADY_LINKED");
+    }
+
+    @Test
+    void resolveForClaims_shouldRejectOldPhoneBoundToResidualAccountHolder() {
+        UUID residualAccountHolderId = UUID.randomUUID();
+        AccountHolder residual = AccountHolder.builder()
+                .id(residualAccountHolderId)
+                .firstName("Old")
+                .lastName("Holder")
+                .phoneNumber("+22961000000")
+                .build();
+        when(appUserRepository.findByFirebaseUid("new-firebase")).thenReturn(Optional.empty());
+        when(userRepository.findByFirebaseUid("new-firebase")).thenReturn(Optional.empty());
+        when(userRepository.findByEmailIgnoreCase("new.member@ccapp.test")).thenReturn(Optional.empty());
+        when(accountHolderRepository.findByPhoneNumber("+22961000000")).thenReturn(Optional.of(residual));
+
+        assertThatThrownBy(() -> userProvisioningService.resolveForClaims(
+                new FirebaseUserClaims("new-firebase", "new.member@ccapp.test", "+22961000000")
+        )).isInstanceOf(com.ccapp.common.exception.BusinessException.class)
+                .hasMessage("IDENTITY_PHONE_ALREADY_LINKED");
+    }
+
+    @Test
+    void resolveForClaims_shouldRejectAppUserWhoseAccountHolderWasDeleted() {
+        UUID appUserId = UUID.randomUUID();
+        AppUser appUser = AppUser.builder()
+                .id(appUserId)
+                .firebaseUid("firebase-user-1")
+                .accountHolderId(appUserId)
+                .role(UserRole.USER)
+                .build();
+        User user = User.builder()
+                .id(appUserId)
+                .firebaseUid("firebase-user-1")
+                .email("member@ccapp.test")
+                .role(UserRole.USER)
+                .build();
+        when(appUserRepository.findByFirebaseUid("firebase-user-1")).thenReturn(Optional.of(appUser));
+        when(userRepository.findByFirebaseUid("firebase-user-1")).thenReturn(Optional.of(user));
+        when(accountHolderRepository.existsById(appUserId)).thenReturn(false);
+
+        assertThatThrownBy(() -> userProvisioningService.resolveForClaims(
+                new FirebaseUserClaims("firebase-user-1", "member@ccapp.test", null)
+        )).isInstanceOf(com.ccapp.common.exception.BusinessException.class)
+                .hasMessage("IDENTITY_GRAPH_AMBIGUOUS");
+    }
+
+    @Test
+    void resolveForClaims_shouldRejectSameFirebaseUidMappedToDifferentUserAndAppUser() {
+        UUID userId = UUID.randomUUID();
+        UUID appUserId = UUID.randomUUID();
+        AppUser appUser = AppUser.builder()
+                .id(appUserId)
+                .firebaseUid("firebase-user-1")
+                .accountHolderId(appUserId)
+                .role(UserRole.USER)
+                .build();
+        User user = User.builder()
+                .id(userId)
+                .firebaseUid("firebase-user-1")
+                .email("member@ccapp.test")
+                .role(UserRole.USER)
+                .build();
+        when(appUserRepository.findByFirebaseUid("firebase-user-1")).thenReturn(Optional.of(appUser));
+        when(userRepository.findByFirebaseUid("firebase-user-1")).thenReturn(Optional.of(user));
+
+        assertThatThrownBy(() -> userProvisioningService.resolveForClaims(
+                new FirebaseUserClaims("firebase-user-1", "member@ccapp.test", null)
+        )).isInstanceOf(com.ccapp.common.exception.BusinessException.class)
+                .hasMessage("IDENTITY_GRAPH_AMBIGUOUS");
     }
 }

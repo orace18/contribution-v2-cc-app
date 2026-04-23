@@ -2,12 +2,15 @@ package com.ccapp.identity.controller;
 
 import com.ccapp.common.api.CommonResponse;
 import com.ccapp.common.security.AuthenticatedPrincipal;
+import com.ccapp.identity.app_user.domain.entity.AppUser;
 import com.ccapp.identity.domain.entity.User;
 import com.ccapp.identity.domain.enums.AccountStatus;
 import com.ccapp.identity.domain.enums.KycStatus;
 import com.ccapp.identity.domain.enums.OnboardingStep;
 import com.ccapp.identity.domain.enums.UserRole;
 import com.ccapp.identity.dto.OnboardingStatusResponse;
+import com.ccapp.identity.dto.SelectCountryRequest;
+import com.ccapp.identity.service.CurrentIdentityService;
 import com.ccapp.identity.service.IdentityService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -28,6 +31,7 @@ import static org.mockito.Mockito.when;
 class IdentityControllerTest {
 
     private final IdentityService identityService = mock(IdentityService.class);
+    private final CurrentIdentityService currentIdentityService = mock(CurrentIdentityService.class);
 
     @AfterEach
     void tearDown() {
@@ -40,7 +44,7 @@ class IdentityControllerTest {
         UUID backendUserId = UUID.randomUUID();
         setAuthenticatedPrincipal(principalUserId, "firebase-google-user", "member@ccapp.test");
 
-        IdentityController controller = new IdentityController(identityService);
+        IdentityController controller = new IdentityController(identityService, currentIdentityService);
         User backendUser = User.builder()
                 .id(backendUserId)
                 .firebaseUid("firebase-google-user")
@@ -63,16 +67,43 @@ class IdentityControllerTest {
                 null
         );
 
-        when(identityService.ensureUser("firebase-google-user", "member@ccapp.test")).thenReturn(backendUser);
+        when(currentIdentityService.resolveCurrentAppUser()).thenReturn(AppUser.builder()
+                .id(backendUserId)
+                .firebaseUid("firebase-google-user")
+                .accountHolderId(backendUserId)
+                .role(UserRole.USER)
+                .build());
+        when(identityService.findUser(backendUserId)).thenReturn(backendUser);
         when(identityService.getOnboardingStatus(backendUserId)).thenReturn(expected);
 
         ResponseEntity<CommonResponse<OnboardingStatusResponse>> response = controller.onboardingStatus();
 
         assertTrue(response.getBody().success());
         assertEquals(expected, response.getBody().data());
-        verify(identityService).ensureUser("firebase-google-user", "member@ccapp.test");
+        verify(currentIdentityService).resolveCurrentAppUser();
+        verify(identityService).findUser(backendUserId);
         verify(identityService).getOnboardingStatus(backendUserId);
         verify(identityService, never()).getOnboardingStatus(principalUserId);
+    }
+
+    @Test
+    void selectCountry_shouldUseCanonicalUserResolvedFromFirebaseToken() {
+        UUID stalePrincipalUserId = UUID.randomUUID();
+        UUID canonicalUserId = UUID.randomUUID();
+        setAuthenticatedPrincipal(stalePrincipalUserId, "firebase-google-user", "member@ccapp.test");
+        IdentityController controller = new IdentityController(identityService, currentIdentityService);
+
+        when(currentIdentityService.resolveCurrentAppUser()).thenReturn(AppUser.builder()
+                .id(canonicalUserId)
+                .firebaseUid("firebase-google-user")
+                .accountHolderId(canonicalUserId)
+                .role(UserRole.USER)
+                .build());
+
+        controller.selectCountry(new SelectCountryRequest("BJ"));
+
+        verify(identityService).selectCountry(canonicalUserId, "BJ");
+        verify(identityService, never()).selectCountry(stalePrincipalUserId, "BJ");
     }
 
     private void setAuthenticatedPrincipal(UUID userId, String firebaseUid, String email) {

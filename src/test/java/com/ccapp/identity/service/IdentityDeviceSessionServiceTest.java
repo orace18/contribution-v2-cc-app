@@ -40,7 +40,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -121,40 +120,37 @@ class IdentityDeviceSessionServiceTest {
     // ── Cas B : email existant, firebaseUid différent → rattacher ──────────
 
     @Test
-    void ensureUser_shouldRelinkWhenEmailExistsWithDifferentFirebaseUid() {
+    void ensureUser_shouldRejectWhenEmailExistsWithDifferentFirebaseUid() {
         UUID userId = UUID.randomUUID();
         User existingUser = buildActiveUser(userId, "old-firebase-uid", "member@ccapp.test");
         when(userRepository.findByFirebaseUid("new-firebase-uid")).thenReturn(Optional.empty());
         when(userRepository.findByEmailIgnoreCase("member@ccapp.test")).thenReturn(Optional.of(existingUser));
-        when(userRepository.save(existingUser)).thenReturn(existingUser);
+        BusinessException ex = assertThrows(BusinessException.class, () ->
+                identityDeviceSessionService.ensureUser("new-firebase-uid", "member@ccapp.test"));
 
-        User result = identityDeviceSessionService.ensureUser("new-firebase-uid", "member@ccapp.test");
+        assertEquals("IDENTITY_EMAIL_ALREADY_LINKED", ex.getMessage());
 
-        assertSame(existingUser, result);
-        assertEquals("new-firebase-uid", result.getFirebaseUid());
-        verify(userRepository).save(existingUser);
+        assertEquals("old-firebase-uid", existingUser.getFirebaseUid());
+        verify(userRepository, never()).save(any(User.class));
         // Ne crée pas de doublon
-        ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
-        verify(userRepository).save(captor.capture());
-        assertEquals("new-firebase-uid", captor.getValue().getFirebaseUid());
     }
 
     // ── Cas C : migration V1 → email existant sans firebaseUid cohérent ────
 
     @Test
-    void ensureUser_shouldRelinkForV1MigrationByEmail() {
+    void ensureUser_shouldRejectV1MigrationByEmailWhenFirebaseUidDiffers() {
         UUID legacyUserId = UUID.randomUUID();
         // Simuler un utilisateur V1 qui a un firebase_uid placeholder différent
         User legacyUser = buildActiveUser(legacyUserId, "v1-placeholder-uid", "legacy@ccapp.test");
         when(userRepository.findByFirebaseUid("new-firebase-uid")).thenReturn(Optional.empty());
         when(userRepository.findByEmailIgnoreCase("legacy@ccapp.test")).thenReturn(Optional.of(legacyUser));
-        when(userRepository.save(legacyUser)).thenReturn(legacyUser);
+        BusinessException ex = assertThrows(BusinessException.class, () ->
+                identityDeviceSessionService.ensureUser("new-firebase-uid", "legacy@ccapp.test"));
 
-        User result = identityDeviceSessionService.ensureUser("new-firebase-uid", "legacy@ccapp.test");
+        assertEquals("IDENTITY_EMAIL_ALREADY_LINKED", ex.getMessage());
 
-        assertEquals(legacyUserId, result.getId());
-        assertEquals("new-firebase-uid", result.getFirebaseUid());
-        verify(userRepository).save(legacyUser);
+        assertEquals("v1-placeholder-uid", legacyUser.getFirebaseUid());
+        verify(userRepository, never()).save(any(User.class));
     }
 
     // ── Cas E : managed account détecté par phone ───────────────────────────
@@ -357,7 +353,33 @@ class IdentityDeviceSessionServiceTest {
     // ── Sync ne génère pas de 500 quand l'email est déjà connu ─────────────
 
     @Test
-    void sync_shouldNotThrow500WhenEmailAlreadyBoundToDifferentFirebaseUid() {
+    void sync_shouldRejectAmbiguousAppUserBoundToSameFirebaseUid() {
+        UUID userId = UUID.randomUUID();
+        UUID conflictingAppUserId = UUID.randomUUID();
+        User existingUser = buildActiveUser(userId, "firebase-uid", "member@ccapp.test");
+        AppUser conflictingAppUser = AppUser.builder()
+                .id(conflictingAppUserId)
+                .firebaseUid("firebase-uid")
+                .accountHolderId(conflictingAppUserId)
+                .role(UserRole.USER)
+                .build();
+
+        when(identitySecurityService.currentRequestMetadata()).thenReturn(new ClientRequestMetadata("203.0.113.20", "BJ", null));
+        when(userRepository.findByFirebaseUid("firebase-uid")).thenReturn(Optional.of(existingUser));
+        when(userProfileRepository.findByUserId(userId)).thenReturn(Optional.empty());
+        when(appUserRepository.findById(userId)).thenReturn(Optional.empty());
+        when(appUserRepository.findByFirebaseUid("firebase-uid")).thenReturn(Optional.of(conflictingAppUser));
+
+        BusinessException ex = assertThrows(BusinessException.class, () -> identityDeviceSessionService.sync(
+                new FirebaseUserClaims("firebase-uid", "member@ccapp.test", null),
+                new SyncRequest("device-1", Platform.ANDROID, "push-token")));
+
+        assertEquals("IDENTITY_GRAPH_AMBIGUOUS", ex.getMessage());
+        verify(userDeviceRepository, never()).save(any(UserDevice.class));
+    }
+
+    @Test
+    void sync_shouldRejectWhenEmailAlreadyBoundToDifferentFirebaseUid() {
         UUID existingUserId = UUID.randomUUID();
         UUID deviceId = UUID.randomUUID();
         UUID sessionId = UUID.randomUUID();
@@ -366,35 +388,14 @@ class IdentityDeviceSessionServiceTest {
         when(identitySecurityService.currentRequestMetadata()).thenReturn(new ClientRequestMetadata("1.2.3.4", "FR", null));
         when(userRepository.findByFirebaseUid("new-uid")).thenReturn(Optional.empty());
         when(userRepository.findByEmailIgnoreCase("shared@ccapp.test")).thenReturn(Optional.of(existingUser));
-        when(userRepository.save(existingUser)).thenReturn(existingUser);
-        when(userProfileRepository.findByUserId(existingUserId)).thenReturn(Optional.empty());
-        when(appUserRepository.findById(existingUserId)).thenReturn(Optional.of(
-                AppUser.builder().id(existingUserId).firebaseUid("new-uid").accountHolderId(existingUserId).role(UserRole.USER).build()));
-        when(accountHolderService.exists(existingUserId)).thenReturn(true);
-        when(kycStatusConsistencyService.reconcileAccountHolderStatus(existingUserId)).thenReturn(KycStatus.NOT_STARTED);
-        when(userDeviceRepository.findByUserIdAndDeviceIdentifierAndDeletedFalse(existingUserId, "dev-1")).thenReturn(Optional.empty());
-        when(userDeviceRepository.countByUserIdAndDeletedFalse(existingUserId)).thenReturn(0L);
-        when(userDeviceRepository.save(any(UserDevice.class))).thenAnswer(inv -> {
-            UserDevice d = inv.getArgument(0);
-            d.setId(deviceId);
-            return d;
-        });
-        when(identitySecurityService.assessLoginRisk(any(UUID.class), any(UserDevice.class), anyBoolean(), anyBoolean(), any(), any())).thenReturn(SecurityRiskLevel.LOW);
-        when(refreshTokenService.generateToken()).thenReturn("token");
-        when(refreshTokenService.hash("token")).thenReturn("hash");
-        when(userSessionRepository.save(any(UserSession.class))).thenAnswer(inv -> {
-            UserSession s = inv.getArgument(0);
-            s.setId(sessionId);
-            return s;
-        });
 
         // Ne doit PAS lever DataIntegrityViolationException → pas de 500
-        SyncResponse response = identityDeviceSessionService.sync(
+        BusinessException ex = assertThrows(BusinessException.class, () -> identityDeviceSessionService.sync(
                 new FirebaseUserClaims("new-uid", "shared@ccapp.test", null),
-                new SyncRequest("dev-1", Platform.ANDROID, null));
+                new SyncRequest("dev-1", Platform.ANDROID, null)));
 
-        assertEquals(existingUserId, response.userId());
-        assertEquals("new-uid", response.firebaseUid());
+        assertEquals("IDENTITY_EMAIL_ALREADY_LINKED", ex.getMessage());
+        assertEquals("old-uid", existingUser.getFirebaseUid());
     }
 
     // ── Cas A + syncUserClaims : email Firebase déjà lié à un autre utilisateur ──

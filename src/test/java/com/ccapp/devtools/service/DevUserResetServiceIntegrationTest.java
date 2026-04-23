@@ -286,6 +286,56 @@ class DevUserResetServiceIntegrationTest {
                 .expiresAt(now.plusMinutes(5))
                 .build());
 
+        UUID kycMediaId = UUID.randomUUID();
+        UUID identityVerificationId = UUID.randomUUID();
+        jdbcTemplate.update(
+                "INSERT INTO media_files (id, account_holder_id, type, bucket, object_key, content_type, size, status, created_at) " +
+                        "VALUES (?, ?, 'KYC_IDENTITY_FRONT', 'dev-kyc', ?, 'image/jpeg', 12, 'READY', ?)",
+                kycMediaId,
+                accountHolder.getId(),
+                "kyc/" + kycMediaId,
+                now
+        );
+        jdbcTemplate.update(
+                "INSERT INTO kyc_documents (id, account_holder_id, media_file_id, document_type, status, created_at) " +
+                        "VALUES (?, ?, ?, 'IDENTITY_FRONT', 'VERIFIED', ?)",
+                UUID.randomUUID(),
+                accountHolder.getId(),
+                kycMediaId,
+                now
+        );
+        jdbcTemplate.update(
+                "INSERT INTO kyc_media_backups (media_file_id, account_holder_id, content_type, payload, created_at) " +
+                        "VALUES (?, ?, 'image/jpeg', ?, ?)",
+                kycMediaId,
+                accountHolder.getId(),
+                new byte[]{1, 2, 3},
+                now
+        );
+        jdbcTemplate.update(
+                "INSERT INTO identity_verifications (id, account_holder_id, reference_id, status, current_step, " +
+                        "document_type, created_at, updated_at) " +
+                        "VALUES (?, ?, 'case-full-reset', 'APPROVED', 'COMPLETED', 'NATIONAL_ID', ?, ?)",
+                identityVerificationId,
+                accountHolder.getId(),
+                now,
+                now
+        );
+        jdbcTemplate.update(
+                "INSERT INTO verification_documents (id, verification_id, document_front_key, selfie_key, bucket_name, uploaded_at) " +
+                        "VALUES (?, ?, 'front-key', 'selfie-key', 'dev-kyc', ?)",
+                UUID.randomUUID(),
+                identityVerificationId,
+                now
+        );
+        jdbcTemplate.update(
+                "INSERT INTO verification_analysis (id, verification_id, document_readable, analyzed_at) " +
+                        "VALUES (?, ?, TRUE, ?)",
+                UUID.randomUUID(),
+                identityVerificationId,
+                now
+        );
+
         DevUserResetService.DevUserResetResult result = devUserResetService.deleteUser(
                 "reset.qa@clubchretien.dev",
                 null,
@@ -311,6 +361,12 @@ class DevUserResetServiceIntegrationTest {
         assertEquals(0L, mobileOnboardingJourneyRepository.count());
         assertEquals(0L, mobilePlanSelectionRepository.count());
         assertEquals(0L, phoneVerificationRepository.count());
+        assertEquals(0L, count("SELECT COUNT(*) FROM kyc_documents WHERE account_holder_id = ?", accountHolder.getId()));
+        assertEquals(0L, count("SELECT COUNT(*) FROM kyc_media_backups WHERE account_holder_id = ?", accountHolder.getId()));
+        assertEquals(0L, count("SELECT COUNT(*) FROM media_files WHERE id = ?", kycMediaId));
+        assertEquals(0L, count("SELECT COUNT(*) FROM identity_verifications WHERE account_holder_id = ?", accountHolder.getId()));
+        assertEquals(0L, count("SELECT COUNT(*) FROM verification_documents WHERE verification_id = ?", identityVerificationId));
+        assertEquals(0L, count("SELECT COUNT(*) FROM verification_analysis WHERE verification_id = ?", identityVerificationId));
         assertEquals(0L, walletLedgerEntryRepository.count());
         assertEquals(0L, walletReservationRepository.count());
         assertEquals(0L, walletOtpChallengeRepository.count());
@@ -324,5 +380,59 @@ class DevUserResetServiceIntegrationTest {
 
         assertNotNull(secondAttempt);
         assertFalse(secondAttempt.deleted());
+    }
+
+    @Test
+    void deleteUser_shouldRemoveResidualAppUserAndAccountHolderWithSameFirebaseUidWhenDeletingByEmail() {
+        UUID oldUserId = UUID.randomUUID();
+        UUID residualAccountHolderId = UUID.randomUUID();
+        String firebaseUid = "firebase-residual-" + oldUserId;
+        OffsetDateTime now = OffsetDateTime.now();
+
+        jdbcTemplate.update(
+                "INSERT INTO users (id, firebase_uid, email, role, account_status, kyc_status, created_at, updated_at) " +
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                oldUserId,
+                firebaseUid,
+                "residual.qa@clubchretien.dev",
+                UserRole.USER.name(),
+                AccountStatus.ACTIVE.name(),
+                KycStatus.NOT_STARTED.name(),
+                now,
+                now
+        );
+        jdbcTemplate.update(
+                "INSERT INTO account_holders (id, first_name, last_name, phone_number, country_code, service_country_code, " +
+                        "account_type, created_via, kyc_status, kyc_level, created_at) " +
+                        "VALUES (?, 'Residual', 'Holder', '22991000001', 'INT', 'INT', 'STANDARD', 'SELF', " +
+                        "'NOT_STARTED', 'LEVEL_0_UNVERIFIED', ?)",
+                residualAccountHolderId,
+                now
+        );
+        jdbcTemplate.update(
+                "INSERT INTO app_users (id, firebase_uid, account_holder_id, role, created_at) VALUES (?, ?, ?, 'USER', ?)",
+                residualAccountHolderId,
+                firebaseUid,
+                residualAccountHolderId,
+                now
+        );
+
+        DevUserResetService.DevUserResetResult result = devUserResetService.deleteUser(
+                "residual.qa@clubchretien.dev",
+                null,
+                UUID.randomUUID(),
+                "qa-admin@clubchretien.dev"
+        );
+
+        assertTrue(result.deleted());
+        assertEquals(residualAccountHolderId, result.accountHolderId());
+        assertEquals(0L, count("SELECT COUNT(*) FROM users WHERE id IN (?, ?)", oldUserId, residualAccountHolderId));
+        assertEquals(0L, count("SELECT COUNT(*) FROM app_users WHERE firebase_uid = ?", firebaseUid));
+        assertEquals(0L, count("SELECT COUNT(*) FROM account_holders WHERE id = ?", residualAccountHolderId));
+    }
+
+    private long count(String sql, Object... args) {
+        Long value = jdbcTemplate.queryForObject(sql, Long.class, args);
+        return value == null ? 0L : value;
     }
 }

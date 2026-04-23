@@ -1,9 +1,10 @@
 package com.ccapp.identity.controller;
 
 import com.ccapp.common.api.CommonResponse;
-import com.ccapp.common.security.SecurityUtils;
+import com.ccapp.identity.app_user.domain.entity.AppUser;
 import com.ccapp.identity.dto.KycStatusResponse;
 import com.ccapp.identity.managedaccounts.service.ManagedAccountReadContextService;
+import com.ccapp.identity.service.CurrentIdentityService;
 import com.ccapp.identity.service.KycStatusConsistencyService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -36,6 +37,7 @@ public class KycStatusController {
 
     private final KycStatusConsistencyService kycStatusConsistencyService;
     private final ManagedAccountReadContextService managedAccountReadContextService;
+    private final CurrentIdentityService currentIdentityService;
 
     @Nullable
     @Autowired(required = false)
@@ -52,10 +54,10 @@ public class KycStatusController {
             @RequestParam(name = "accountHolderId", required = false) UUID requestedAccountHolderId,
             @Parameter(description = "Optional CPaaS caseId to retrieve dynamic tracking status")
             @RequestParam(name = "caseId", required = false) String caseId) {
-        UUID actorUserId = SecurityUtils.currentUserId();
+        AppUser actor = currentIdentityService.resolveCurrentAppUser();
         var accountHolderId = managedAccountReadContextService.resolveViewTargetAccountHolderId(
-                actorUserId,
-                SecurityUtils.currentAccountHolderId(),
+                actor.getId(),
+                actor.getAccountHolderId(),
                 requestedAccountHolderId
         );
         var kycStatus = kycStatusConsistencyService.reconcileAccountHolderStatus(accountHolderId);

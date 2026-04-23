@@ -9,6 +9,7 @@ import com.ccapp.identity.repository.UserRepository;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,6 +19,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -94,6 +96,28 @@ public class DevUserResetService {
         if (directAppUser != null) {
             appUserIds.add(directAppUser.getId());
             accountHolderId = directAppUser.getAccountHolderId();
+        }
+
+        String firebaseUid = linkedUser != null ? normalize(linkedUser.getFirebaseUid()) : null;
+        if (firebaseUid == null && directAppUser != null) {
+            firebaseUid = normalize(directAppUser.getFirebaseUid());
+        }
+        if (firebaseUid != null) {
+            AppUser appUserByFirebaseUid = appUserRepository.findByFirebaseUid(firebaseUid).orElse(null);
+            if (appUserByFirebaseUid != null) {
+                appUserIds.add(appUserByFirebaseUid.getId());
+                userIds.add(appUserByFirebaseUid.getId());
+                if (accountHolderId == null) {
+                    accountHolderId = appUserByFirebaseUid.getAccountHolderId();
+                }
+            }
+            User userByFirebaseUid = userRepository.findByFirebaseUid(firebaseUid).orElse(null);
+            if (userByFirebaseUid != null) {
+                userIds.add(userByFirebaseUid.getId());
+                if (email == null) {
+                    email = normalize(userByFirebaseUid.getEmail());
+                }
+            }
         }
 
         AccountHolder directAccountHolder = accountHolderRepository.findById(identifier).orElse(null);
@@ -185,12 +209,17 @@ public class DevUserResetService {
         // 11. Core entities
         // circles.coach_id → account_holders is NOT NULL with no CASCADE; bypass by disabling FK
         // enforcement triggers on account_holders before deletion (leaves orphaned coach_id in dev)
-        jdbcTemplate.execute("ALTER TABLE account_holders DISABLE TRIGGER ALL");
+        boolean managePostgresTriggers = shouldManageImmutableTriggers();
+        if (managePostgresTriggers) {
+            jdbcTemplate.execute("ALTER TABLE account_holders DISABLE TRIGGER ALL");
+        }
         deleteByUuid("wallets", "account_holder_id", ah);
         deleteByUuids("app_users", "id", appUserIds);
         deleteByUuids("users", "id", target.userIds());
         deleteByUuid("account_holders", "id", ah);
-        jdbcTemplate.execute("ALTER TABLE account_holders ENABLE TRIGGER ALL");
+        if (managePostgresTriggers) {
+            jdbcTemplate.execute("ALTER TABLE account_holders ENABLE TRIGGER ALL");
+        }
 
         enableImmutableTriggers();
         entityManager.clear();
@@ -290,6 +319,7 @@ public class DevUserResetService {
         deleteBySql("DELETE FROM task_audit_logs WHERE user_task_id IN (SELECT id FROM user_tasks WHERE account_holder_id = ?)", accountHolderId);
         deleteByUuid("user_tasks", "account_holder_id", accountHolderId);
         deleteByUuid("user_progress", "account_holder_id", accountHolderId);
+        deleteKycVerificationArtifacts(accountHolderId);
         deleteByUuid("kyc_documents", "account_holder_id", accountHolderId);
         deleteByUuid("credit_eligibility", "account_holder_id", accountHolderId);
         deleteByUuid("loans", "account_holder_id", accountHolderId);
@@ -310,6 +340,17 @@ public class DevUserResetService {
     }
 
     // ── Shop scope ──────────────────────────────────────────────────────────────
+
+    private void deleteKycVerificationArtifacts(UUID accountHolderId) {
+        List<UUID> identityVerificationIds = selectUuidList(
+                "SELECT id FROM identity_verifications WHERE account_holder_id = ?",
+                accountHolderId
+        );
+        deleteByUuids("verification_analysis", "verification_id", identityVerificationIds);
+        deleteByUuids("verification_documents", "verification_id", identityVerificationIds);
+        deleteByUuid("identity_verifications", "account_holder_id", accountHolderId);
+        deleteByUuid("kyc_media_backups", "account_holder_id", accountHolderId);
+    }
 
     private void deleteShopScopedData(UUID accountHolderId) {
         // Before deleting shop_orders: clear non-cascade FK refs
@@ -483,13 +524,25 @@ public class DevUserResetService {
     // ── Helpers ──────────────────────────────────────────────────────────────────
 
     private void disableImmutableTriggers() {
+        if (!shouldManageImmutableTriggers()) {
+            return;
+        }
         jdbcTemplate.execute("ALTER TABLE ledger_entries DISABLE TRIGGER trg_no_mutation_ledger_entries");
         jdbcTemplate.execute("ALTER TABLE accounting_events DISABLE TRIGGER trg_no_mutation_accounting_events");
     }
 
     private void enableImmutableTriggers() {
+        if (!shouldManageImmutableTriggers()) {
+            return;
+        }
         jdbcTemplate.execute("ALTER TABLE ledger_entries ENABLE TRIGGER trg_no_mutation_ledger_entries");
         jdbcTemplate.execute("ALTER TABLE accounting_events ENABLE TRIGGER trg_no_mutation_accounting_events");
+    }
+
+    private boolean shouldManageImmutableTriggers() {
+        String productName = jdbcTemplate.execute((ConnectionCallback<String>) connection ->
+                connection.getMetaData().getDatabaseProductName());
+        return productName != null && productName.toLowerCase(Locale.ROOT).contains("postgresql");
     }
 
     private List<UUID> selectUuidList(String sql, UUID value) {

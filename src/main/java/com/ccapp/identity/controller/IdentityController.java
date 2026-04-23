@@ -5,7 +5,9 @@ import com.ccapp.common.security.AuthenticatedPrincipal;
 import com.ccapp.common.security.SecurityUtils;
 import com.ccapp.identity.dto.*;
 import com.ccapp.identity.dto.UpdateNameRequest;
+import com.ccapp.identity.app_user.domain.entity.AppUser;
 import com.ccapp.identity.domain.entity.User;
+import com.ccapp.identity.service.CurrentIdentityService;
 import com.ccapp.identity.service.FirebaseUserClaims;
 import com.ccapp.identity.service.IdentityService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -33,6 +35,7 @@ import java.util.UUID;
 public class IdentityController {
 
     private final IdentityService identityService;
+    private final CurrentIdentityService currentIdentityService;
 
     @PostMapping("/sync")
     @Operation(summary = "Synchroniser l'identite utilisateur")
@@ -57,7 +60,7 @@ public class IdentityController {
             @ApiResponse(responseCode = "404", description = "Utilisateur introuvable", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
     })
     public ResponseEntity<Void> selectCountry(@Valid @RequestBody SelectCountryRequest request) {
-        UUID userId = SecurityUtils.currentUserId();
+        UUID userId = currentIdentityService.resolveCurrentAppUser().getId();
         log.info("IdentityController selectCountry userId={} country={}", userId, request.country());
         identityService.selectCountry(userId, request.country());
         return ResponseEntity.noContent().build();
@@ -72,7 +75,7 @@ public class IdentityController {
             @ApiResponse(responseCode = "404", description = "Utilisateur introuvable", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
     })
     public ResponseEntity<CommonResponse<MeResponse>> onboarding(@Valid @RequestBody OnboardingRequest request) {
-        UUID userId = SecurityUtils.currentUserId();
+        UUID userId = currentIdentityService.resolveCurrentAppUser().getId();
         log.info("IdentityController onboarding userId={}", userId);
         return ResponseEntity.ok(CommonResponse.success("Onboarding updated", identityService.onboarding(userId, request)));
     }
@@ -86,7 +89,8 @@ public class IdentityController {
     })
     public ResponseEntity<CommonResponse<OnboardingStatusResponse>> onboardingStatus() {
         AuthenticatedPrincipal principal = SecurityUtils.currentPrincipal();
-        User user = identityService.ensureUser(principal.firebaseUid(), principal.email());
+        AppUser appUser = currentIdentityService.resolveCurrentAppUser();
+        User user = identityService.findUser(appUser.getId());
         log.debug("IdentityController onboardingStatus principalUserId={} resolvedUserId={} firebaseUid={}",
                 principal.userId(), user.getId(), principal.firebaseUid());
         return ResponseEntity.ok(CommonResponse.success("Onboarding status", identityService.getOnboardingStatus(user.getId())));
@@ -101,7 +105,7 @@ public class IdentityController {
             @ApiResponse(responseCode = "404", description = "Utilisateur introuvable", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
     })
     public ResponseEntity<CommonResponse<OnboardingStatusResponse>> onboardingStep1(@Valid @RequestBody OnboardingStep1Request request) {
-        UUID userId = SecurityUtils.currentUserId();
+        UUID userId = currentIdentityService.resolveCurrentAppUser().getId();
         log.info("IdentityController onboardingStep1 userId={}", userId);
         return ResponseEntity.ok(CommonResponse.success("Onboarding step 1 updated", identityService.onboardingStep1(userId, request)));
     }
@@ -115,7 +119,7 @@ public class IdentityController {
             @ApiResponse(responseCode = "404", description = "Utilisateur introuvable", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
     })
     public ResponseEntity<CommonResponse<OnboardingStatusResponse>> onboardingStep2(@Valid @RequestBody OnboardingStep2Request request) {
-        UUID userId = SecurityUtils.currentUserId();
+        UUID userId = currentIdentityService.resolveCurrentAppUser().getId();
         log.info("IdentityController onboardingStep2 userId={}", userId);
         return ResponseEntity.ok(CommonResponse.success("Onboarding step 2 updated", identityService.onboardingStep2(userId, request)));
     }
@@ -129,7 +133,7 @@ public class IdentityController {
             @ApiResponse(responseCode = "404", description = "Utilisateur introuvable", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
     })
     public ResponseEntity<CommonResponse<OnboardingStatusResponse>> onboardingStep3(@Valid @RequestBody OnboardingStep3Request request) {
-        UUID userId = SecurityUtils.currentUserId();
+        UUID userId = currentIdentityService.resolveCurrentAppUser().getId();
         log.info("IdentityController onboardingStep3 userId={}", userId);
         return ResponseEntity.ok(CommonResponse.success("Onboarding step 3 updated", identityService.onboardingStep3(userId, request)));
     }
@@ -143,7 +147,7 @@ public class IdentityController {
             @ApiResponse(responseCode = "404", description = "Utilisateur introuvable", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
     })
     public ResponseEntity<Void> updateName(@Valid @RequestBody UpdateNameRequest request) {
-        UUID userId = SecurityUtils.currentUserId();
+        UUID userId = currentIdentityService.resolveCurrentAppUser().getId();
         log.info("IdentityController updateName userId={}", userId);
         identityService.updateName(userId, request);
         return ResponseEntity.noContent().build();
@@ -157,7 +161,7 @@ public class IdentityController {
             @ApiResponse(responseCode = "404", description = "Utilisateur introuvable", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
     })
     public ResponseEntity<CommonResponse<MeResponse>> me() {
-        UUID userId = SecurityUtils.currentUserId();
+        UUID userId = currentIdentityService.resolveCurrentAppUser().getId();
         log.debug("IdentityController me userId={}", userId);
         return ResponseEntity.ok(CommonResponse.success("Current user", identityService.me(userId)));
     }
@@ -170,7 +174,7 @@ public class IdentityController {
             @ApiResponse(responseCode = "401", description = "Non authentifie", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
     })
     public ResponseEntity<CommonResponse<UserDeviceDto>> registerDevice(@Valid @RequestBody RegisterDeviceRequest request) {
-        UUID userId = SecurityUtils.currentUserId();
+        UUID userId = currentIdentityService.resolveCurrentAppUser().getId();
         log.info("IdentityController registerDevice userId={} platform={} deviceIdentifier={}",
                 userId, request.platform(), request.deviceIdentifier());
         return ResponseEntity.ok(CommonResponse.success("Device upserted", identityService.registerDevice(userId, request)));
@@ -184,7 +188,7 @@ public class IdentityController {
             @ApiResponse(responseCode = "404", description = "Device introuvable", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
     })
     public ResponseEntity<CommonResponse<Void>> blockDevice(@PathVariable UUID deviceId) {
-        UUID userId = SecurityUtils.currentUserId();
+        UUID userId = currentIdentityService.resolveCurrentAppUser().getId();
         log.info("IdentityController blockDevice userId={} deviceId={}", userId, deviceId);
         identityService.blockDevice(userId, deviceId);
         return ResponseEntity.ok(CommonResponse.success("Device blocked"));
@@ -210,7 +214,7 @@ public class IdentityController {
             @ApiResponse(responseCode = "404", description = "Session introuvable", content = @Content(schema = @Schema(implementation = CommonResponse.class)))
     })
     public ResponseEntity<CommonResponse<Void>> revokeSession(@PathVariable UUID sessionId) {
-        UUID userId = SecurityUtils.currentUserId();
+        UUID userId = currentIdentityService.resolveCurrentAppUser().getId();
         log.info("IdentityController revokeSession userId={} sessionId={}", userId, sessionId);
         identityService.revokeSession(userId, sessionId);
         return ResponseEntity.ok(CommonResponse.success("Session revoked"));

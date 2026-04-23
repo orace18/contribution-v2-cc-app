@@ -127,10 +127,9 @@ public class IdentityDeviceSessionService {
             Optional<User> byEmail = userRepository.findByEmailIgnoreCase(normalizedEmail);
             if (byEmail.isPresent()) {
                 User existing = byEmail.get();
-                log.warn("[identity-sync] resolve=RELINK userId={} email={} previousFirebaseUid={} newFirebaseUid={} reason=email-match",
+                log.warn("[identity-sync] resolve=EMAIL_CONFLICT userId={} email={} previousFirebaseUid={} newFirebaseUid={} reason=email-match",
                         existing.getId(), normalizedEmail, existing.getFirebaseUid(), firebaseUid);
-                existing.setFirebaseUid(firebaseUid);
-                return userRepository.save(existing);
+                throw new BusinessException("IDENTITY_EMAIL_ALREADY_LINKED");
             }
         }
 
@@ -372,13 +371,32 @@ public class IdentityDeviceSessionService {
 
     private void ensureDelegatedIdentityModel(User user) {
         UserProfile profile = userProfileRepository.findByUserId(user.getId()).orElse(null);
-        Optional<AppUser> existingAppUser = appUserRepository.findById(user.getId())
-                .or(() -> appUserRepository.findByFirebaseUid(user.getFirebaseUid()));
-        if (existingAppUser.isPresent()) {
-            if (!accountHolderService.exists(existingAppUser.get().getAccountHolderId())) {
+        Optional<AppUser> appUserById = appUserRepository.findById(user.getId());
+        if (appUserById.isPresent()) {
+            AppUser appUser = appUserById.get();
+            if (user.getFirebaseUid() != null && !user.getFirebaseUid().equals(appUser.getFirebaseUid())) {
+                Optional<AppUser> appUserByFirebaseUid = appUserRepository.findByFirebaseUid(user.getFirebaseUid());
+                if (appUserByFirebaseUid.isPresent() && !appUserByFirebaseUid.get().getId().equals(user.getId())) {
+                    log.warn("[identity-sync] resolve=GRAPH_AMBIGUOUS userId={} firebaseUid={} appUserIdByUid={}",
+                            user.getId(), user.getFirebaseUid(), appUserByFirebaseUid.get().getId());
+                    throw new BusinessException("IDENTITY_GRAPH_AMBIGUOUS");
+                }
+                log.warn("[identity-sync] repair=APP_USER_FIREBASE_UID userId={} previousFirebaseUid={} newFirebaseUid={}",
+                        user.getId(), appUser.getFirebaseUid(), user.getFirebaseUid());
+                appUser.setFirebaseUid(user.getFirebaseUid());
+                appUserRepository.save(appUser);
+            }
+            if (!accountHolderService.exists(appUser.getAccountHolderId())) {
                 accountHolderService.ensureFromLegacyUser(user, profile);
             }
             return;
+        }
+
+        Optional<AppUser> appUserByFirebaseUid = appUserRepository.findByFirebaseUid(user.getFirebaseUid());
+        if (appUserByFirebaseUid.isPresent()) {
+            log.warn("[identity-sync] resolve=GRAPH_AMBIGUOUS userId={} firebaseUid={} appUserIdByUid={} accountHolderIdByUid={}",
+                    user.getId(), user.getFirebaseUid(), appUserByFirebaseUid.get().getId(), appUserByFirebaseUid.get().getAccountHolderId());
+            throw new BusinessException("IDENTITY_GRAPH_AMBIGUOUS");
         }
 
         accountHolderService.ensureFromLegacyUser(user, profile);
