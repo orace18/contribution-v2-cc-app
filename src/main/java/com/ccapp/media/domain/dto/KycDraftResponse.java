@@ -30,6 +30,10 @@ public record KycDraftResponse(
         Map<KycDocumentType, UUID> uploadedMediaIds,
         KycStatus kycStatus,
         KycLevel kycLevel,
-        boolean identityDeclared
+        boolean identityDeclared,
+        /** CPaaS KYC case identifier — present once the dossier has been submitted to CPaaS.
+         *  The mobile client must pass this as {@code ?caseId=} on GET /kyc/status to receive
+         *  the enriched CPaaS verdict (productStatus, reasonCode, nextAction, …). */
+        String caseId
 ) {
 }

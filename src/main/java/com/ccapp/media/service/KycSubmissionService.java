@@ -125,9 +125,19 @@ public class KycSubmissionService {
         if (accountHolder.getKycStatus() != KycStatus.PENDING) {
             log.info("kyc submit triggering CPaaS accountHolderId={} priorStatus={}", accountHolder.getId(), accountHolder.getKycStatus());
             CpassSubmissionResult submissionResult = submitToCpass(accountHolder, submissionDocuments);
+
+            // Persist caseId immediately so GET /kyc/draft can surface it after an app reload.
+            String caseId = submissionResult.initResponse() != null
+                    ? normalizeOptional(submissionResult.initResponse().kycCaseId())
+                    : null;
+            if (caseId != null) {
+                accountHolder.setCpassCaseId(caseId);
+                log.info("kyc submit caseId persisted accountHolderId={} caseId={}", accountHolder.getId(), caseId);
+            }
+
             kycNotificationService.notifySubmitted(targetAccountHolderId);
             applyCpassStatus(accountHolder, submissionResult);
-            
+
             delegatedActionService.logIfDelegatedActor(
                     targetAccountHolderId,
                     actorUserId,
@@ -137,22 +147,24 @@ public class KycSubmissionService {
 
             AccountHolder refreshedAccountHolder = accountHolderRepository.findById(targetAccountHolderId)
                     .orElse(accountHolder);
-                    
-            String caseId = submissionResult.initResponse() != null ? submissionResult.initResponse().kycCaseId() : null;
             return buildResponse(refreshedAccountHolder, submittedAt, caseId);
         } else {
-            log.warn("kyc submit skipped CPaaS because status is already PENDING accountHolderId={}", accountHolder.getId());
-            
+            // Status is already PENDING from a prior submission — CPaaS was already called.
+            // Return the persisted caseId so the mobile can start enriched polling immediately.
+            String existingCaseId = normalizeOptional(accountHolder.getCpassCaseId());
+            log.info("kyc submit already PENDING, returning persisted caseId accountHolderId={} caseId={}",
+                    accountHolder.getId(), existingCaseId);
+
             delegatedActionService.logIfDelegatedActor(
                     targetAccountHolderId,
                     actorUserId,
                     DelegatedActionType.KYC_SUBMITTED,
                     "{\"submittedAt\":\"" + submittedAt + "\"}"
             );
-            
+
             AccountHolder refreshedAccountHolder = accountHolderRepository.findById(targetAccountHolderId)
                     .orElse(accountHolder);
-            return buildResponse(refreshedAccountHolder, submittedAt, null);
+            return buildResponse(refreshedAccountHolder, submittedAt, existingCaseId);
         }
     }
 

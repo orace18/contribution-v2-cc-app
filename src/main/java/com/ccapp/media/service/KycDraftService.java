@@ -64,7 +64,8 @@ public class KycDraftService {
                 uploadedMediaIds,
                 ah.getKycStatus(),
                 ah.resolveKycLevel(),
-                identityDeclared
+                identityDeclared,
+                ah.getCpassCaseId()
         );
     }
 }

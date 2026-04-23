@@ -90,6 +90,11 @@ public class AccountHolder {
     @Column(name = "phone_verification_device", length = 128)
     private String phoneVerificationDevice;
 
+    /** CPaaS KYC case identifier obtained at submission time. Persisted so the
+     *  polling endpoint can enrich GET /kyc/status after an app reload. */
+    @Column(name = "cpass_case_id", length = 128)
+    private String cpassCaseId;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
 
