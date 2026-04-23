@@ -77,7 +77,14 @@ public class DevTargetedUserResetService {
                         "AND type IN ('KYC_IDENTITY_FRONT', 'KYC_IDENTITY_BACK', 'KYC_SELFIE')",
                 accountHolderId
         ));
+        List<UUID> identityVerificationIds = selectUuidList(
+                "SELECT id FROM identity_verifications WHERE account_holder_id = ?",
+                accountHolderId
+        );
 
+        int verificationAnalysisDeleted = deleteByUuids("verification_analysis", "verification_id", identityVerificationIds);
+        int verificationDocumentsDeleted = deleteByUuids("verification_documents", "verification_id", identityVerificationIds);
+        int identityVerificationsDeleted = deleteByUuid("identity_verifications", "account_holder_id", accountHolderId);
         int mediaBackupsDeleted = deleteByUuids("kyc_media_backups", "media_file_id", kycMediaIds);
         int documentsDeleted = deleteByUuid("kyc_documents", "account_holder_id", accountHolderId);
         int mediaFilesDeleted = deleteByUuids("media_files", "id", kycMediaIds);
@@ -89,7 +96,8 @@ public class DevTargetedUserResetService {
                         "birth_date = NULL, " +
                         "document_number = NULL, " +
                         "nationality = NULL, " +
-                        "declared_document_type = NULL " +
+                        "declared_document_type = NULL, " +
+                        "cpass_case_id = NULL " +
                         "WHERE id = ?",
                 accountHolderId
         );
@@ -109,6 +117,9 @@ public class DevTargetedUserResetService {
         summary.put("kycDocumentsDeleted", documentsDeleted);
         summary.put("kycMediaBackupsDeleted", mediaBackupsDeleted);
         summary.put("kycMediaFilesDeleted", mediaFilesDeleted);
+        summary.put("identityVerificationsDeleted", identityVerificationsDeleted);
+        summary.put("verificationDocumentsDeleted", verificationDocumentsDeleted);
+        summary.put("verificationAnalysisDeleted", verificationAnalysisDeleted);
         summary.put("financialAuditRowsDeleted", financialAuditRowsDeleted);
         summary.put("userTasksDeleted", taskCounts.userTasksDeleted());
         summary.put("taskAuditLogsDeleted", taskCounts.taskAuditLogsDeleted());

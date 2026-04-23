@@ -14,6 +14,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @DataJpaTest(properties = {
@@ -39,7 +40,8 @@ class DevTargetedUserResetServiceIntegrationTest {
         jdbcTemplate.update(
                 "UPDATE account_holders SET kyc_status = 'VERIFIED', kyc_level = 'LEVEL_1_BASIC', " +
                         "kyc_verified_at = ?, birth_date = ?, document_number = ?, nationality = ?, " +
-                        "declared_document_type = ?, phone_verified_at = ?, phone_verification_source = ? " +
+                        "declared_document_type = ?, phone_verified_at = ?, phone_verification_source = ?, " +
+                        "cpass_case_id = ? " +
                         "WHERE id = ?",
                 now,
                 java.sql.Date.valueOf("1990-01-01"),
@@ -48,6 +50,7 @@ class DevTargetedUserResetServiceIntegrationTest {
                 "CNI",
                 now,
                 "INTERNAL_OTP",
+                "case-kyc-reset",
                 accountHolderId
         );
         jdbcTemplate.update("UPDATE users SET kyc_status = 'VERIFIED' WHERE id = ?", accountHolderId);
@@ -75,6 +78,30 @@ class DevTargetedUserResetServiceIntegrationTest {
                 new byte[]{1, 2, 3},
                 now
         );
+        UUID verificationId = UUID.randomUUID();
+        jdbcTemplate.update(
+                "INSERT INTO identity_verifications (id, account_holder_id, reference_id, status, current_step, " +
+                        "document_type, created_at, updated_at) " +
+                        "VALUES (?, ?, 'case-kyc-reset', 'APPROVED', 'COMPLETED', 'NATIONAL_ID', ?, ?)",
+                verificationId,
+                accountHolderId,
+                now,
+                now
+        );
+        jdbcTemplate.update(
+                "INSERT INTO verification_documents (id, verification_id, document_front_key, selfie_key, bucket_name, uploaded_at) " +
+                        "VALUES (?, ?, 'front-key', 'selfie-key', 'dev-kyc', ?)",
+                UUID.randomUUID(),
+                verificationId,
+                now
+        );
+        jdbcTemplate.update(
+                "INSERT INTO verification_analysis (id, verification_id, document_readable, analyzed_at) " +
+                        "VALUES (?, ?, TRUE, ?)",
+                UUID.randomUUID(),
+                verificationId,
+                now
+        );
         seedTask(accountHolderId, taskId, "COMPLETE_KYC");
 
         DevDomainResetResponse result = resetService.resetKyc(
@@ -91,6 +118,10 @@ class DevTargetedUserResetServiceIntegrationTest {
         assertEquals(0L, count("SELECT COUNT(*) FROM kyc_documents WHERE account_holder_id = ?", accountHolderId));
         assertEquals(0L, count("SELECT COUNT(*) FROM kyc_media_backups WHERE account_holder_id = ?", accountHolderId));
         assertEquals(0L, count("SELECT COUNT(*) FROM media_files WHERE id = ?", mediaId));
+        assertEquals(0L, count("SELECT COUNT(*) FROM identity_verifications WHERE account_holder_id = ?", accountHolderId));
+        assertEquals(0L, count("SELECT COUNT(*) FROM verification_documents WHERE verification_id = ?", verificationId));
+        assertEquals(0L, count("SELECT COUNT(*) FROM verification_analysis WHERE verification_id = ?", verificationId));
+        assertNull(value("SELECT cpass_case_id FROM account_holders WHERE id = ?", accountHolderId));
         assertEquals(0L, count("SELECT COUNT(*) FROM user_tasks WHERE id = ?", taskId));
         assertNotNull(value("SELECT phone_verified_at FROM account_holders WHERE id = ?", accountHolderId));
 
