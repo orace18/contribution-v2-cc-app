@@ -49,15 +49,35 @@ public class UserProvisioningService {
 
     @Transactional
     public AppUser provisionNew(FirebaseUserClaims claims) {
-        UUID id = UUID.randomUUID();
+        // Idempotency guard: a concurrent request (same Firebase UID, duplicate login race) may
+        // have already provisioned this user between resolveForClaims' initial check and now.
+        Optional<AppUser> alreadyProvisioned = appUserRepository.findByFirebaseUid(claims.uid());
+        if (alreadyProvisioned.isPresent()) {
+            return alreadyProvisioned.get();
+        }
+
         String email = normalizeOptional(claims.email());
-        assertEmailNotBoundToAnotherUser(email, id, claims.uid());
-        assertPhoneNotBoundToAnotherAccountHolder(normalizeOptional(claims.phoneNumber()), id, claims.uid());
-        User user = userRepository.save(newUser(id, claims.uid(), email));
+        assertEmailNotBoundToAnotherUser(email, null, claims.uid());
+        assertPhoneNotBoundToAnotherAccountHolder(normalizeOptional(claims.phoneNumber()), null, claims.uid());
+
+        // Do NOT pre-set the User ID. With @GeneratedValue(UUID) and a manually set non-null ID,
+        // Spring Data JPA calls entityManager.merge() instead of persist() (isNew() = false).
+        // Hibernate 6 treats the pre-set-ID entity as "detached from a previous session" and
+        // throws StaleObjectStateException when the row does not exist — exactly the failure
+        // mode seen after a dev-tools delete. Null ID → isNew() = true → persist() → clean INSERT.
+        User user = userRepository.save(User.builder()
+                .firebaseUid(claims.uid())
+                .email(email)
+                .role(UserRole.USER)
+                .accountStatus(AccountStatus.ACTIVE)
+                .kycStatus(KycStatus.NOT_STARTED)
+                .build());
+
+        UUID generatedId = user.getId();
         String name = email != null ? email.split("@")[0] : "user";
 
         accountHolderRepository.save(AccountHolder.builder()
-                .id(user.getId())
+                .id(generatedId)
                 .firstName(name)
                 .lastName("")
                 .countryCode("INT")
@@ -70,9 +90,9 @@ public class UserProvisioningService {
                 .build());
 
         return appUserRepository.save(AppUser.builder()
-                .id(user.getId())
+                .id(generatedId)
                 .firebaseUid(claims.uid())
-                .accountHolderId(user.getId())
+                .accountHolderId(generatedId)
                 .role(UserRole.USER)
                 .build());
     }
@@ -151,6 +171,9 @@ public class UserProvisioningService {
                 claims.uid(), accountHolderId);
     }
 
+    // Used by provisionFromLegacy and ensureCanonicalUserForAppUser — these paths
+    // supply a specific ID that must be preserved for AccountHolder linkage.
+    // provisionNew() bypasses this and lets @GeneratedValue assign the ID.
     private User newUser(UUID id, String firebaseUid, String email) {
         return User.builder()
                 .id(id)

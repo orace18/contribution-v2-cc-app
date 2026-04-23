@@ -7,6 +7,8 @@ import com.ccapp.identity.app_user.domain.entity.AppUser;
 import com.ccapp.identity.service.FirebaseTokenVerifier;
 import com.ccapp.identity.service.FirebaseUserClaims;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -94,7 +96,7 @@ public class FirebaseAuthenticationFilter extends OncePerRequestFilter {
 
         AppUser appUser;
         try {
-            appUser = userProvisioningService.resolveForClaims(claims);
+            appUser = resolveWithRetry(claims, path, request.getMethod());
         } catch (BusinessException ex) {
             log.warn("Firebase identity provisioning failed path={} method={} firebaseUid={} reason={}",
                     path, request.getMethod(), claims.uid(), ex.getMessage());
@@ -121,6 +123,25 @@ public class FirebaseAuthenticationFilter extends OncePerRequestFilter {
         SecurityContextHolder.getContext().setAuthentication(authentication);
 
         filterChain.doFilter(request, response);
+    }
+
+    /**
+     * Resolves the Firebase claims to an AppUser, retrying once on transient locking or
+     * duplicate-key failures. These can occur when:
+     * - A concurrent login races with a dev-tools delete (ObjectOptimisticLockingFailureException)
+     * - Two simultaneous logins both attempt to provision the same new user (DataIntegrityViolationException)
+     * The second attempt always reads fresh DB state in a new transaction.
+     */
+    private AppUser resolveWithRetry(FirebaseUserClaims claims, String path, String method) {
+        try {
+            return userProvisioningService.resolveForClaims(claims);
+        } catch (ObjectOptimisticLockingFailureException | DataIntegrityViolationException ex) {
+            log.warn(
+                    "Firebase provisioning transient failure, retrying path={} method={} firebaseUid={} reason={}",
+                    path, method, claims.uid(), ex.getMessage()
+            );
+            return userProvisioningService.resolveForClaims(claims);
+        }
     }
 
     private void maybeApplyDevMockAuthentication(String path) {
