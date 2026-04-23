@@ -17,6 +17,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -114,7 +115,7 @@ class DevResidualPurgeServiceTest {
         Set<UUID> userIds = Set.of(userId);
 
         // Simulate a FK constraint failure on account_holders delete
-        when(jdbcTemplate.execute(any(String.class))).thenThrow(new RuntimeException("trigger management not supported"));
+        doThrow(new RuntimeException("trigger management not supported")).when(jdbcTemplate).execute(any(String.class));
         when(jdbcTemplate.update(any(String.class), any(Object.class)))
                 .thenAnswer(inv -> {
                     String sql = inv.getArgument(0);

@@ -9,6 +9,8 @@ import com.ccapp.devtools.dto.TargetedResetRequest;
 import com.ccapp.devtools.service.DevToolsEnvironmentGuard;
 import com.ccapp.devtools.service.DevTargetedUserResetService;
 import com.ccapp.devtools.service.DevUserResetService;
+import com.ccapp.devtools.service.DevUserVerificationService;
+import com.ccapp.devtools.service.DevResidualPurgeService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -41,6 +43,8 @@ class DevToolsControllerTest {
     private final DevUserResetService devUserResetService = mock(DevUserResetService.class);
     private final DevTargetedUserResetService devTargetedUserResetService = mock(DevTargetedUserResetService.class);
     private final AdminAuditService adminAuditService = mock(AdminAuditService.class);
+    private final DevUserVerificationService devUserVerificationService = mock(DevUserVerificationService.class);
+    private final DevResidualPurgeService devResidualPurgeService = mock(DevResidualPurgeService.class);
 
     private UUID adminId;
     private String adminEmail;
@@ -73,6 +77,9 @@ class DevToolsControllerTest {
         UUID accountHolderId = UUID.randomUUID();
         when(devUserResetService.deleteUser(eq("qa.user@clubchretien.dev"), isNull(UUID.class), eq(adminId), eq(adminEmail)))
                 .thenReturn(DevUserResetService.DevUserResetResult.deleted(userId, accountHolderId, "qa.user@clubchretien.dev"));
+        when(devUserVerificationService.buildChecklist(any(), any())).thenReturn(List.of());
+        when(devUserVerificationService.hasResiduals(any())).thenReturn(false);
+        when(devUserVerificationService.computeStatus(any())).thenReturn("CLEAN");
 
         mockMvc.perform(post("/dev-tools/delete-user")
                         .contentType(APPLICATION_JSON)
@@ -171,7 +178,9 @@ class DevToolsControllerTest {
                 devUserResetService,
                 devTargetedUserResetService,
                 new DevToolsEnvironmentGuard(environment),
-                adminAuditService
+                adminAuditService,
+                devUserVerificationService,
+                devResidualPurgeService
         );
         return MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(new GlobalExceptionHandler())
