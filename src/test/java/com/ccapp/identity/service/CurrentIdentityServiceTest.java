@@ -1,7 +1,9 @@
 package com.ccapp.identity.service;
 
 import com.ccapp.common.security.AuthenticatedPrincipal;
-import com.ccapp.identity.app_user.domain.entity.AppUser;
+import com.ccapp.identity.domain.entity.User;
+import com.ccapp.identity.domain.enums.AccountStatus;
+import com.ccapp.identity.domain.enums.KycStatus;
 import com.ccapp.identity.domain.enums.UserRole;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -20,6 +22,8 @@ import static org.mockito.Mockito.when;
 class CurrentIdentityServiceTest {
 
     @Mock
+    private IdentityService identityService;
+    @Mock
     private UserProvisioningService userProvisioningService;
 
     @AfterEach
@@ -28,36 +32,30 @@ class CurrentIdentityServiceTest {
     }
 
     @Test
-    void resolveCurrentAppUser_shouldIgnoreStalePrincipalIdsAndUseFirebaseClaims() {
+    void resolveCurrentUser_shouldIgnoreStalePrincipalIdsAndUseFirebaseClaims() {
         UUID staleUserId = UUID.randomUUID();
-        UUID staleAccountHolderId = UUID.randomUUID();
         UUID canonicalUserId = UUID.randomUUID();
-        FirebaseUserClaims claims = new FirebaseUserClaims(
-                "firebase-uid",
-                "member@ccapp.test",
-                "+22961000000"
-        );
-        AppUser canonical = AppUser.builder()
+        User canonical = User.builder()
                 .id(canonicalUserId)
-                .firebaseUid(claims.uid())
-                .accountHolderId(canonicalUserId)
+                .firebaseUid("firebase-uid")
+                .email("member@ccapp.test")
                 .role(UserRole.USER)
+                .accountStatus(AccountStatus.ACTIVE)
+                .kycStatus(KycStatus.NOT_STARTED)
                 .build();
         SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
                 AuthenticatedPrincipal.builder()
-                        .firebaseUid(claims.uid())
-                        .email(claims.email())
-                        .phoneNumber(claims.phoneNumber())
+                        .firebaseUid("firebase-uid")
+                        .email("member@ccapp.test")
                         .userId(staleUserId)
-                        .accountHolderId(staleAccountHolderId)
                         .build(),
                 null
         ));
-        when(userProvisioningService.resolveForClaims(claims)).thenReturn(canonical);
+        when(identityService.ensureUser("firebase-uid", "member@ccapp.test")).thenReturn(canonical);
 
-        AppUser resolved = new CurrentIdentityService(userProvisioningService).resolveCurrentAppUser();
+        User resolved = new CurrentIdentityService(identityService, userProvisioningService).resolveCurrentUser();
 
         assertThat(resolved.getId()).isEqualTo(canonicalUserId);
-        assertThat(resolved.getAccountHolderId()).isEqualTo(canonicalUserId);
+        assertThat(resolved.getFirebaseUid()).isEqualTo("firebase-uid");
     }
 }

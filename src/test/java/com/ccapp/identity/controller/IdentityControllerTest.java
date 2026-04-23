@@ -2,7 +2,6 @@ package com.ccapp.identity.controller;
 
 import com.ccapp.common.api.CommonResponse;
 import com.ccapp.common.security.AuthenticatedPrincipal;
-import com.ccapp.identity.app_user.domain.entity.AppUser;
 import com.ccapp.identity.domain.entity.User;
 import com.ccapp.identity.domain.enums.AccountStatus;
 import com.ccapp.identity.domain.enums.KycStatus;
@@ -67,21 +66,14 @@ class IdentityControllerTest {
                 null
         );
 
-        when(currentIdentityService.resolveCurrentAppUser()).thenReturn(AppUser.builder()
-                .id(backendUserId)
-                .firebaseUid("firebase-google-user")
-                .accountHolderId(backendUserId)
-                .role(UserRole.USER)
-                .build());
-        when(identityService.findUser(backendUserId)).thenReturn(backendUser);
+        when(currentIdentityService.resolveCurrentUser()).thenReturn(backendUser);
         when(identityService.getOnboardingStatus(backendUserId)).thenReturn(expected);
 
         ResponseEntity<CommonResponse<OnboardingStatusResponse>> response = controller.onboardingStatus();
 
         assertTrue(response.getBody().success());
         assertEquals(expected, response.getBody().data());
-        verify(currentIdentityService).resolveCurrentAppUser();
-        verify(identityService).findUser(backendUserId);
+        verify(currentIdentityService).resolveCurrentUser();
         verify(identityService).getOnboardingStatus(backendUserId);
         verify(identityService, never()).getOnboardingStatus(principalUserId);
     }
@@ -93,15 +85,11 @@ class IdentityControllerTest {
         setAuthenticatedPrincipal(stalePrincipalUserId, "firebase-google-user", "member@ccapp.test");
         IdentityController controller = new IdentityController(identityService, currentIdentityService);
 
-        when(currentIdentityService.resolveCurrentAppUser()).thenReturn(AppUser.builder()
-                .id(canonicalUserId)
-                .firebaseUid("firebase-google-user")
-                .accountHolderId(canonicalUserId)
-                .role(UserRole.USER)
-                .build());
+        when(currentIdentityService.resolveCurrentUserId()).thenReturn(canonicalUserId);
 
         controller.selectCountry(new SelectCountryRequest("BJ"));
 
+        verify(currentIdentityService).resolveCurrentUserId();
         verify(identityService).selectCountry(canonicalUserId, "BJ");
         verify(identityService, never()).selectCountry(stalePrincipalUserId, "BJ");
     }
