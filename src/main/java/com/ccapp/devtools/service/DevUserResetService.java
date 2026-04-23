@@ -66,7 +66,7 @@ public class DevUserResetService {
                 performedByValue,
                 true
         );
-        return DevUserResetResult.deleted(target.primaryUserId(), target.accountHolderId(), target.email());
+        return DevUserResetResult.deleted(target.primaryUserId(), target.accountHolderId(), target.email(), target.userIds());
     }
 
     private Optional<ResolvedUserTarget> resolveTarget(String email, UUID requestedUserId) {
@@ -589,14 +589,19 @@ public class DevUserResetService {
             boolean deleted,
             UUID userId,
             UUID accountHolderId,
-            String email
+            String email,
+            Set<UUID> userIds
     ) {
         public static DevUserResetResult deleted(UUID userId, UUID accountHolderId, String email) {
-            return new DevUserResetResult(true, userId, accountHolderId, email);
+            return new DevUserResetResult(true, userId, accountHolderId, email, Set.of(userId));
+        }
+
+        public static DevUserResetResult deleted(UUID userId, UUID accountHolderId, String email, Set<UUID> userIds) {
+            return new DevUserResetResult(true, userId, accountHolderId, email, userIds);
         }
 
         public static DevUserResetResult alreadyDeleted(UUID userId, String email) {
-            return new DevUserResetResult(false, userId, null, email);
+            return new DevUserResetResult(false, userId, null, email, Set.of());
         }
     }
 }
