@@ -152,6 +152,34 @@ public class KycSubmissionService {
             // Status is already PENDING from a prior submission — CPaaS was already called.
             // Return the persisted caseId so the mobile can start enriched polling immediately.
             String existingCaseId = normalizeOptional(accountHolder.getCpassCaseId());
+
+            // Legacy dossiers submitted before cpass_case_id column existed have existingCaseId=null.
+            // Re-probe CPaaS to recover the case ID — checkOrInitKyc is idempotent and safe to call
+            // repeatedly: it returns the existing case rather than creating a duplicate.
+            if (existingCaseId == null && cPassKycGateway != null) {
+                try {
+                    CPassKycInitResponse recovery = cPassKycGateway.checkOrInitKyc(new CPassKycInitRequest(
+                            accountHolder.getId().toString(),
+                            buildFullName(accountHolder),
+                            accountHolder.getPhoneNumber(),
+                            null,
+                            requestedKycLevel
+                    ));
+                    existingCaseId = normalizeOptional(recovery.kycCaseId());
+                    if (existingCaseId != null) {
+                        accountHolder.setCpassCaseId(existingCaseId);
+                        log.info("kyc submit legacy caseId recovered accountHolderId={} caseId={}",
+                                accountHolder.getId(), existingCaseId);
+                    } else {
+                        log.warn("kyc submit legacy caseId recovery returned no caseId accountHolderId={}",
+                                accountHolder.getId());
+                    }
+                } catch (Exception e) {
+                    log.warn("kyc submit legacy caseId recovery failed accountHolderId={} reason={}",
+                            accountHolder.getId(), e.getMessage());
+                }
+            }
+
             log.info("kyc submit already PENDING, returning persisted caseId accountHolderId={} caseId={}",
                     accountHolder.getId(), existingCaseId);
 
