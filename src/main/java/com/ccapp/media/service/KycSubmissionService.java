@@ -19,8 +19,10 @@ import com.ccapp.identity.domain.enums.KycLevel;
 import com.ccapp.identity.domain.enums.KycStatus;
 import com.ccapp.identity.repository.UserProfileRepository;
 import com.ccapp.media.domain.dto.SubmitKycResponse;
+import com.ccapp.media.domain.entity.KycDocument;
 import com.ccapp.media.domain.entity.MediaFile;
 import com.ccapp.media.domain.enums.KycDocumentType;
+import com.ccapp.media.repository.KycDocumentRepository;
 import com.ccapp.media.storage.ObjectStorageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -48,6 +50,7 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.EnumMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -67,6 +70,11 @@ public class KycSubmissionService {
     private static final String CPASS_KYC_DOCUMENT_TOO_LARGE = "CPASS_KYC_DOCUMENT_TOO_LARGE";
     private static final String CPASS_KYC_DOCUMENT_IMAGE_UNREADABLE = "CPASS_KYC_DOCUMENT_IMAGE_UNREADABLE";
     private static final String KYC_LEVEL_1_AUTO_APPROVED_EVENT = "KYC_LEVEL_1_AUTO_APPROVED";
+    private static final EnumSet<KycDocumentType> MINIMAL_KYC_DOCUMENT_TYPES = EnumSet.of(
+            KycDocumentType.IDENTITY_FRONT,
+            KycDocumentType.IDENTITY_BACK,
+            KycDocumentType.SELFIE
+    );
 
     private final KycDocumentResolutionService kycDocumentResolutionService;
     private final AccountHolderRepository accountHolderRepository;
@@ -78,6 +86,7 @@ public class KycSubmissionService {
     private final ObjectStorageService objectStorageService;
     private final FinancialAuditService financialAuditService;
     private final UserProfileRepository userProfileRepository;
+    private final KycDocumentRepository kycDocumentRepository;
     private final KycMediaBackupService kycMediaBackupService;
 
     @Nullable
@@ -123,7 +132,9 @@ public class KycSubmissionService {
         Map<KycDocumentType, KycDocumentResolutionService.ResolvedKycDocument> submissionDocuments =
                 resolveMinimalKycDocuments(targetAccountHolderId);
         if (accountHolder.getKycStatus() != KycStatus.PENDING) {
-            log.info("kyc submit triggering CPaaS accountHolderId={} priorStatus={}", accountHolder.getId(), accountHolder.getKycStatus());
+            String previousCaseId = normalizeOptional(accountHolder.getCpassCaseId());
+            log.info("kyc submit triggering CPaaS accountHolderId={} priorStatus={} previousCaseId={} mediaIdsCurrent={} mediaIdsAlreadySubmitted={} decision=created_or_resubmitted",
+                    accountHolder.getId(), accountHolder.getKycStatus(), previousCaseId, mediaIdsByType(submissionDocuments), Map.of());
             CpassSubmissionResult submissionResult = submitToCpass(accountHolder, submissionDocuments);
 
             // Persist caseId immediately so GET /kyc/draft can surface it after an app reload.
@@ -134,6 +145,7 @@ public class KycSubmissionService {
                 accountHolder.setCpassCaseId(caseId);
                 log.info("kyc submit caseId persisted accountHolderId={} caseId={}", accountHolder.getId(), caseId);
             }
+            markDocumentsSubmittedToCpass(submissionDocuments, caseId, submittedAt);
 
             kycNotificationService.notifySubmitted(targetAccountHolderId);
             applyCpassStatus(accountHolder, submissionResult);
@@ -180,8 +192,38 @@ public class KycSubmissionService {
                 }
             }
 
-            log.info("kyc submit already PENDING, returning persisted caseId accountHolderId={} caseId={}",
-                    accountHolder.getId(), existingCaseId);
+            Map<KycDocumentType, UUID> currentMediaIds = mediaIdsByType(submissionDocuments);
+            Map<KycDocumentType, UUID> alreadySubmittedMediaIds = submittedMediaIdsByType(accountHolder.getId(), existingCaseId);
+            if (!alreadySubmittedMediaIds.isEmpty() && alreadySubmittedMediaIds.equals(currentMediaIds)) {
+                log.info("kyc submit already PENDING accountHolderId={} previousCaseId={} mediaIdsCurrent={} mediaIdsAlreadySubmitted={} decision=reused_case",
+                        accountHolder.getId(), existingCaseId, currentMediaIds, alreadySubmittedMediaIds);
+
+                delegatedActionService.logIfDelegatedActor(
+                        targetAccountHolderId,
+                        actorUserId,
+                        DelegatedActionType.KYC_SUBMITTED,
+                        "{\"submittedAt\":\"" + submittedAt + "\"}"
+                );
+
+                AccountHolder refreshedAccountHolder = accountHolderRepository.findById(targetAccountHolderId)
+                        .orElse(accountHolder);
+                return buildResponse(refreshedAccountHolder, submittedAt, existingCaseId);
+            }
+
+            log.info("kyc submit PENDING media changed accountHolderId={} previousCaseId={} mediaIdsCurrent={} mediaIdsAlreadySubmitted={} decision=resubmitted",
+                    accountHolder.getId(), existingCaseId, currentMediaIds, alreadySubmittedMediaIds);
+            CpassSubmissionResult submissionResult = submitToCpass(accountHolder, submissionDocuments);
+            String caseId = submissionResult.initResponse() != null
+                    ? normalizeOptional(submissionResult.initResponse().kycCaseId())
+                    : existingCaseId;
+            if (caseId != null && !caseId.equals(existingCaseId)) {
+                accountHolder.setCpassCaseId(caseId);
+                log.info("kyc submit replacement caseId persisted accountHolderId={} previousCaseId={} caseId={}",
+                        accountHolder.getId(), existingCaseId, caseId);
+            }
+            markDocumentsSubmittedToCpass(submissionDocuments, caseId, submittedAt);
+            kycNotificationService.notifySubmitted(targetAccountHolderId);
+            applyCpassStatus(accountHolder, submissionResult);
 
             delegatedActionService.logIfDelegatedActor(
                     targetAccountHolderId,
@@ -192,7 +234,7 @@ public class KycSubmissionService {
 
             AccountHolder refreshedAccountHolder = accountHolderRepository.findById(targetAccountHolderId)
                     .orElse(accountHolder);
-            return buildResponse(refreshedAccountHolder, submittedAt, existingCaseId);
+            return buildResponse(refreshedAccountHolder, submittedAt, caseId);
         }
     }
 
@@ -200,15 +242,10 @@ public class KycSubmissionService {
         Map<KycDocumentType, KycDocumentResolutionService.ResolvedKycDocument> submittedDocuments =
                 kycDocumentResolutionService.resolveActiveDocuments(accountHolderId);
 
-        EnumSet<KycDocumentType> required = EnumSet.of(
-                KycDocumentType.IDENTITY_FRONT,
-                KycDocumentType.IDENTITY_BACK,
-                KycDocumentType.SELFIE
-        );
-        if (!submittedDocuments.keySet().containsAll(required)) {
+        if (!submittedDocuments.keySet().containsAll(MINIMAL_KYC_DOCUMENT_TYPES)) {
             throw new BusinessException(MINIMAL_KYC_INCOMPLETE);
         }
-        for (KycDocumentType documentType : required) {
+        for (KycDocumentType documentType : MINIMAL_KYC_DOCUMENT_TYPES) {
             KycDocumentResolutionService.ResolvedKycDocument resolvedDocument = submittedDocuments.get(documentType);
             log.info(
                     "kyc submit resolved media accountHolderId={} documentSlot={} mediaId={} source={} bucket={} objectKey={} finalUrl={}",
@@ -244,11 +281,7 @@ public class KycSubmissionService {
         }
 
         List<CPassKycDocumentResponse> documentResponses = new ArrayList<>();
-        for (KycDocumentType requiredType : EnumSet.of(
-                KycDocumentType.IDENTITY_FRONT,
-                KycDocumentType.IDENTITY_BACK,
-                KycDocumentType.SELFIE
-        )) {
+        for (KycDocumentType requiredType : MINIMAL_KYC_DOCUMENT_TYPES) {
             KycDocumentResolutionService.ResolvedKycDocument resolvedDocument = submissionDocuments.get(requiredType);
             MediaFile mediaFile = resolvedDocument.mediaFile();
             PreparedCpassUpload preparedUpload = createCpassUploadResource(requiredType, mediaFile);
@@ -279,6 +312,59 @@ public class KycSubmissionService {
             documentResponses.add(documentResponse);
         }
         return new CpassSubmissionResult(response, List.copyOf(documentResponses));
+    }
+
+    private Map<KycDocumentType, UUID> mediaIdsByType(
+            Map<KycDocumentType, KycDocumentResolutionService.ResolvedKycDocument> documents) {
+        EnumMap<KycDocumentType, UUID> mediaIds = new EnumMap<>(KycDocumentType.class);
+        for (KycDocumentType documentType : MINIMAL_KYC_DOCUMENT_TYPES) {
+            KycDocumentResolutionService.ResolvedKycDocument document = documents.get(documentType);
+            if (document != null && document.mediaFile() != null) {
+                mediaIds.put(documentType, document.mediaFile().getId());
+            }
+        }
+        return Map.copyOf(mediaIds);
+    }
+
+    private Map<KycDocumentType, UUID> submittedMediaIdsByType(UUID accountHolderId, String caseId) {
+        if (caseId == null) {
+            return Map.of();
+        }
+        EnumMap<KycDocumentType, KycDocument> latestDocuments = new EnumMap<>(KycDocumentType.class);
+        List<KycDocument> submittedDocuments = kycDocumentRepository.findByAccountHolderIdAndCpassCaseId(accountHolderId, caseId);
+        for (KycDocument document : submittedDocuments) {
+            if (document.getCpassSubmittedAt() != null && document.getDocumentType() != null) {
+                KycDocument current = latestDocuments.get(document.getDocumentType());
+                if (current == null || document.getCpassSubmittedAt().isAfter(current.getCpassSubmittedAt())) {
+                    latestDocuments.put(document.getDocumentType(), document);
+                }
+            }
+        }
+        EnumMap<KycDocumentType, UUID> mediaIds = new EnumMap<>(KycDocumentType.class);
+        latestDocuments.forEach((documentType, document) -> mediaIds.put(documentType, document.getMediaFileId()));
+        return Map.copyOf(mediaIds);
+    }
+
+    private void markDocumentsSubmittedToCpass(
+            Map<KycDocumentType, KycDocumentResolutionService.ResolvedKycDocument> documents,
+            String caseId,
+            OffsetDateTime submittedAt) {
+        if (caseId == null) {
+            return;
+        }
+        List<KycDocument> documentsToSave = new ArrayList<>();
+        for (KycDocumentType documentType : MINIMAL_KYC_DOCUMENT_TYPES) {
+            KycDocumentResolutionService.ResolvedKycDocument resolvedDocument = documents.get(documentType);
+            if (resolvedDocument != null && resolvedDocument.document() != null) {
+                KycDocument document = resolvedDocument.document();
+                document.setCpassCaseId(caseId);
+                document.setCpassSubmittedAt(submittedAt);
+                documentsToSave.add(document);
+            }
+        }
+        if (!documentsToSave.isEmpty()) {
+            kycDocumentRepository.saveAll(documentsToSave);
+        }
     }
 
     private void applyCpassStatus(AccountHolder accountHolder, CpassSubmissionResult submissionResult) {

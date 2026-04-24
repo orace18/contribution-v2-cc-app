@@ -39,6 +39,12 @@ public class KycDocument {
     @Column(name = "status", nullable = false, length = 16)
     private KycDocumentStatus status;
 
+    @Column(name = "cpass_case_id", length = 128)
+    private String cpassCaseId;
+
+    @Column(name = "cpass_submitted_at")
+    private OffsetDateTime cpassSubmittedAt;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
 

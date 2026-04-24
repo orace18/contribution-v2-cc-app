@@ -12,4 +12,6 @@ public interface KycDocumentRepository extends JpaRepository<KycDocument, UUID> 
     Optional<KycDocument> findByAccountHolderIdAndMediaFileId(UUID accountHolderId, UUID mediaFileId);
 
     List<KycDocument> findByAccountHolderId(UUID accountHolderId);
+
+    List<KycDocument> findByAccountHolderIdAndCpassCaseId(UUID accountHolderId, String cpassCaseId);
 }

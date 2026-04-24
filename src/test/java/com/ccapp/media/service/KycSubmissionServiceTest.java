@@ -22,6 +22,7 @@ import com.ccapp.media.domain.entity.KycDocument;
 import com.ccapp.media.domain.entity.MediaFile;
 import com.ccapp.media.domain.enums.KycDocumentType;
 import com.ccapp.media.domain.enums.MediaStatus;
+import com.ccapp.media.repository.KycDocumentRepository;
 import com.ccapp.media.storage.ObjectStorageService;
 import org.springframework.core.io.Resource;
 import org.junit.jupiter.api.BeforeEach;
@@ -90,6 +91,8 @@ class KycSubmissionServiceTest {
     @Mock
     private UserProfileRepository userProfileRepository;
     @Mock
+    private KycDocumentRepository kycDocumentRepository;
+    @Mock
     private CPassKycGateway cPassKycGateway;
     @Mock
     private KycMediaBackupService kycMediaBackupService;
@@ -109,6 +112,7 @@ class KycSubmissionServiceTest {
                 objectStorageService,
                 financialAuditService,
                 userProfileRepository,
+                kycDocumentRepository,
                 kycMediaBackupService
         );
         ReflectionTestUtils.setField(kycSubmissionService, "cPassKycGateway", cPassKycGateway);
@@ -212,8 +216,9 @@ class KycSubmissionServiceTest {
                 .thenReturn("fake-image-content".getBytes());
         when(cPassKycGateway.checkOrInitKyc(any()))
                 .thenReturn(new CPassKycInitResponse("PENDING", "LEVEL_1", "case-123", "ref-123", null, null, null, null, null, null, null, null));
-        when(cPassKycGateway.submitDocument(any(), eq("IDENTITY_FRONT"), any(), any()))
-                .thenReturn(new CPassKycDocumentResponse(
+        when(cPassKycGateway.submitDocument(any(), any(), any(), any()))
+                .thenReturn(
+                        new CPassKycDocumentResponse(
                         "doc-front",
                         "SUBMITTED",
                         "object-key-front",
@@ -226,9 +231,8 @@ class KycSubmissionServiceTest {
                         "Doe",
                         LocalDate.of(1990, 1, 2),
                         "DOC-12345"
-                ));
-        when(cPassKycGateway.submitDocument(any(), eq("IDENTITY_BACK"), any(), any()))
-                .thenReturn(new CPassKycDocumentResponse(
+                        ),
+                        new CPassKycDocumentResponse(
                         "doc-back",
                         "SUBMITTED",
                         "object-key-back",
@@ -241,9 +245,8 @@ class KycSubmissionServiceTest {
                         "Doe",
                         LocalDate.of(1990, 1, 2),
                         "DOC-12345"
-                ));
-        when(cPassKycGateway.submitDocument(any(), eq("SELFIE"), any(), any()))
-                .thenReturn(new CPassKycDocumentResponse(
+                        ),
+                        new CPassKycDocumentResponse(
                         "doc-selfie",
                         "SUBMITTED",
                         "object-key-selfie",
@@ -256,7 +259,8 @@ class KycSubmissionServiceTest {
                         "Doe",
                         LocalDate.of(1990, 1, 2),
                         "DOC-12345"
-                ));
+                        )
+                );
         when(userProfileRepository.findByUserId(ACCOUNT_HOLDER_ID)).thenReturn(Optional.of(profile));
         doAnswer(invocation -> {
             accountHolder.setKycStatus(KycStatus.VERIFIED);
@@ -378,6 +382,115 @@ class KycSubmissionServiceTest {
         verify(cPassKycGateway, times(3)).submitDocument(eq("case-123"), any(), any(), any());
     }
 
+    @Test
+    void submit_shouldReusePendingCaseWhenMediaIsUnchanged() {
+        AccountHolder accountHolder = buildAccountHolder(KycStatus.PENDING);
+        accountHolder.setCpassCaseId("case-123");
+        Map<KycDocumentType, KycDocumentResolutionService.ResolvedKycDocument> resolvedDocuments =
+                buildResolvedMinimalKycDocuments();
+
+        when(accountHolderRepository.findById(ACCOUNT_HOLDER_ID)).thenReturn(Optional.of(accountHolder));
+        when(kycDocumentResolutionService.resolveActiveDocuments(ACCOUNT_HOLDER_ID)).thenReturn(resolvedDocuments);
+        when(kycDocumentRepository.findByAccountHolderIdAndCpassCaseId(ACCOUNT_HOLDER_ID, "case-123"))
+                .thenReturn(buildSubmittedSnapshot(resolvedDocuments, "case-123"));
+        when(countryContextService.resolve(ACTOR_USER_ID)).thenReturn(new CountryContext("BJ", "BJ", "XOF"));
+        when(countryContextService.resolve(ACCOUNT_HOLDER_ID)).thenReturn(new CountryContext("BJ", "BJ", "XOF"));
+
+        SubmitKycResponse response = kycSubmissionService.submit(ACTOR_USER_ID, ACTOR_USER_ID, ACCOUNT_HOLDER_ID);
+
+        assertEquals(KycStatus.PENDING, response.kycStatus());
+        assertEquals("case-123", response.caseId());
+        verify(cPassKycGateway, never()).checkOrInitKyc(any());
+        verify(cPassKycGateway, never()).submitDocument(any(), any(), any(), any());
+        verify(kycNotificationService, never()).notifySubmitted(any());
+    }
+
+    @Test
+    void submit_shouldResubmitPendingCaseWhenMediaChanged() {
+        AccountHolder accountHolder = buildAccountHolder(KycStatus.PENDING);
+        accountHolder.setCpassCaseId("case-123");
+        Map<KycDocumentType, KycDocumentResolutionService.ResolvedKycDocument> currentDocuments =
+                buildResolvedMinimalKycDocuments();
+        Map<KycDocumentType, KycDocumentResolutionService.ResolvedKycDocument> previouslySubmittedDocuments =
+                buildResolvedMinimalKycDocuments();
+
+        when(accountHolderRepository.findById(ACCOUNT_HOLDER_ID)).thenReturn(Optional.of(accountHolder));
+        when(kycDocumentResolutionService.resolveActiveDocuments(ACCOUNT_HOLDER_ID)).thenReturn(currentDocuments);
+        when(kycDocumentRepository.findByAccountHolderIdAndCpassCaseId(ACCOUNT_HOLDER_ID, "case-123"))
+                .thenReturn(buildSubmittedSnapshot(previouslySubmittedDocuments, "case-123"));
+        when(countryContextService.resolve(ACTOR_USER_ID)).thenReturn(new CountryContext("BJ", "BJ", "XOF"));
+        when(countryContextService.resolve(ACCOUNT_HOLDER_ID)).thenReturn(new CountryContext("BJ", "BJ", "XOF"));
+        when(objectStorageService.readObject(any(), any()))
+                .thenReturn("fake-image-content".getBytes());
+        when(cPassKycGateway.checkOrInitKyc(any()))
+                .thenReturn(new CPassKycInitResponse("PENDING", "LEVEL_1", "case-456", "ref-456", null, null, null, null, null, null, null, null));
+        when(cPassKycGateway.submitDocument(any(), any(), any(), any()))
+                .thenReturn(new CPassKycDocumentResponse("doc-456", "SUBMITTED", "object-key", "PENDING", null, null, null, null, null, null, null, null));
+        doAnswer(invocation -> {
+            accountHolder.setKycStatus(KycStatus.PENDING);
+            return null;
+        }).when(kycReviewService).markPending(ACCOUNT_HOLDER_ID);
+
+        SubmitKycResponse response = kycSubmissionService.submit(ACTOR_USER_ID, ACTOR_USER_ID, ACCOUNT_HOLDER_ID);
+
+        assertEquals(KycStatus.PENDING, response.kycStatus());
+        assertEquals("case-456", response.caseId());
+        assertEquals("case-456", accountHolder.getCpassCaseId());
+        verify(cPassKycGateway).checkOrInitKyc(any());
+        verify(cPassKycGateway, times(3)).submitDocument(eq("case-456"), any(), any(), any());
+        verify(kycDocumentRepository).saveAll(any());
+        verify(kycNotificationService).notifySubmitted(ACCOUNT_HOLDER_ID);
+    }
+
+    @Test
+    void submit_shouldResubmitAfterResubmissionRequired() {
+        AccountHolder accountHolder = buildAccountHolder(KycStatus.RESUBMIT_REQUIRED);
+        accountHolder.setCpassCaseId("case-123");
+
+        when(accountHolderRepository.findById(ACCOUNT_HOLDER_ID)).thenReturn(Optional.of(accountHolder));
+        when(kycDocumentResolutionService.resolveActiveDocuments(ACCOUNT_HOLDER_ID)).thenReturn(buildResolvedMinimalKycDocuments());
+        when(countryContextService.resolve(ACTOR_USER_ID)).thenReturn(new CountryContext("BJ", "BJ", "XOF"));
+        when(countryContextService.resolve(ACCOUNT_HOLDER_ID)).thenReturn(new CountryContext("BJ", "BJ", "XOF"));
+        when(objectStorageService.readObject(any(), any()))
+                .thenReturn("fake-image-content".getBytes());
+        when(cPassKycGateway.checkOrInitKyc(any()))
+                .thenReturn(new CPassKycInitResponse("PENDING", "LEVEL_1", "case-456", "ref-456", null, null, null, null, null, null, null, null));
+        when(cPassKycGateway.submitDocument(any(), any(), any(), any()))
+                .thenReturn(new CPassKycDocumentResponse("doc-456", "SUBMITTED", "object-key", "PENDING", null, null, null, null, null, null, null, null));
+        doAnswer(invocation -> {
+            accountHolder.setKycStatus(KycStatus.PENDING);
+            return null;
+        }).when(kycReviewService).markPending(ACCOUNT_HOLDER_ID);
+
+        SubmitKycResponse response = kycSubmissionService.submit(ACTOR_USER_ID, ACTOR_USER_ID, ACCOUNT_HOLDER_ID);
+
+        assertEquals(KycStatus.PENDING, response.kycStatus());
+        assertEquals("case-456", response.caseId());
+        verify(cPassKycGateway).checkOrInitKyc(any());
+        verify(cPassKycGateway, times(3)).submitDocument(eq("case-456"), any(), any(), any());
+        verify(kycNotificationService).notifySubmitted(ACCOUNT_HOLDER_ID);
+    }
+
+    @Test
+    void submit_shouldNotResubmitAfterApproved() {
+        AccountHolder accountHolder = buildAccountHolder(KycStatus.VERIFIED);
+        accountHolder.setCpassCaseId("case-123");
+        accountHolder.setKycLevel(KycLevel.LEVEL_1_BASIC);
+
+        when(accountHolderRepository.findById(ACCOUNT_HOLDER_ID)).thenReturn(Optional.of(accountHolder));
+        when(countryContextService.resolve(ACTOR_USER_ID)).thenReturn(new CountryContext("BJ", "BJ", "XOF"));
+        when(countryContextService.resolve(ACCOUNT_HOLDER_ID)).thenReturn(new CountryContext("BJ", "BJ", "XOF"));
+
+        SubmitKycResponse response = kycSubmissionService.submit(ACTOR_USER_ID, ACTOR_USER_ID, ACCOUNT_HOLDER_ID);
+
+        assertEquals(KycStatus.VERIFIED, response.kycStatus());
+        assertEquals(KycLevel.LEVEL_1_BASIC, response.kycLevel());
+        verify(kycDocumentResolutionService, never()).resolveActiveDocuments(any());
+        verify(cPassKycGateway, never()).checkOrInitKyc(any());
+        verify(cPassKycGateway, never()).submitDocument(any(), any(), any(), any());
+        verify(kycNotificationService, never()).notifySubmitted(any());
+    }
+
     private AccountHolder buildAccountHolder(KycStatus kycStatus) {
         return AccountHolder.builder()
                 .id(ACCOUNT_HOLDER_ID)
@@ -412,6 +525,18 @@ class KycSubmissionServiceTest {
             );
         }
         return resolvedDocuments;
+    }
+
+    private List<KycDocument> buildSubmittedSnapshot(
+            Map<KycDocumentType, KycDocumentResolutionService.ResolvedKycDocument> resolvedDocuments,
+            String caseId) {
+        return resolvedDocuments.values().stream()
+                .map(KycDocumentResolutionService.ResolvedKycDocument::document)
+                .peek(document -> {
+                    document.setCpassCaseId(caseId);
+                    document.setCpassSubmittedAt(OffsetDateTime.now());
+                })
+                .toList();
     }
 
     private KycDocument buildDocument(KycDocumentType documentType) {
