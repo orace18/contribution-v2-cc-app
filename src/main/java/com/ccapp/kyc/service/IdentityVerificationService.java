@@ -31,6 +31,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Locale;
@@ -57,6 +58,7 @@ public class IdentityVerificationService {
     private final ApplicationEventPublisher eventPublisher;
     private final ObjectMapper objectMapper;
     private final String kycBucket;
+    private final long downloadUrlTtlMinutes;
 
     public IdentityVerificationService(IdentityVerificationRepository identityVerificationRepository,
                                        VerificationDocumentRepository verificationDocumentRepository,
@@ -65,7 +67,8 @@ public class IdentityVerificationService {
                                        KycReviewService kycReviewService,
                                        ApplicationEventPublisher eventPublisher,
                                        ObjectMapper objectMapper,
-                                       @Value("${media.bucket.kyc:cc-media-kyc}") String kycBucket) {
+                                       @Value("${media.bucket.kyc:cc-media-kyc}") String kycBucket,
+                                       @Value("${media.download-url-ttl-minutes:15}") long downloadUrlTtlMinutes) {
         this.identityVerificationRepository = identityVerificationRepository;
         this.verificationDocumentRepository = verificationDocumentRepository;
         this.verificationAnalysisRepository = verificationAnalysisRepository;
@@ -74,6 +77,7 @@ public class IdentityVerificationService {
         this.eventPublisher = eventPublisher;
         this.objectMapper = objectMapper;
         this.kycBucket = kycBucket;
+        this.downloadUrlTtlMinutes = downloadUrlTtlMinutes;
     }
 
     @Transactional
@@ -230,6 +234,9 @@ public class IdentityVerificationService {
         DocumentAnalysisDto documentAnalysis = null;
         FaceMatchDto faceMatch = null;
         ScoreDetailsDto scoreDetails = null;
+        VerificationDocumentEntity verificationDocument = verificationDocumentRepository
+                .findByVerification(verification)
+                .orElse(null);
 
         if (analysis != null) {
             String documentNumber = analysis.getExtractedDocumentNumber();
@@ -263,9 +270,33 @@ public class IdentityVerificationService {
                 verification.getReliabilityScore(),
                 scoreDetails,
                 verification.getDecisionReason(),
+                createSignedDownloadUrl(verificationDocument, verificationDocument == null ? null : verificationDocument.getDocumentFrontKey()),
+                createSignedDownloadUrl(verificationDocument, verificationDocument == null ? null : verificationDocument.getDocumentBackKey()),
+                createSignedDownloadUrl(verificationDocument, verificationDocument == null ? null : verificationDocument.getSelfieKey()),
                 verification.getCreatedAt(),
                 verification.getUpdatedAt()
         );
+    }
+
+    private String createSignedDownloadUrl(VerificationDocumentEntity verificationDocument, String objectKey) {
+        if (verificationDocument == null || objectKey == null || objectKey.isBlank()) {
+            return null;
+        }
+        try {
+            return objectStorageService
+                    .createDownloadUrl(
+                            verificationDocument.getBucketName(),
+                            objectKey,
+                            Duration.ofMinutes(downloadUrlTtlMinutes)
+                    )
+                    .url();
+        } catch (Exception ex) {
+            log.warn("verification media signed url generation failed verificationId={} key={} reason={}",
+                    verificationDocument.getVerification().getId(),
+                    objectKey,
+                    ex.getMessage());
+            return null;
+        }
     }
 
     private IdentityVerificationEntity requireAccountHolderVerification(UUID accountHolderId, UUID verificationId) {

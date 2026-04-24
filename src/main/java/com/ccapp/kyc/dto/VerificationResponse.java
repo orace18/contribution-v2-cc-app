@@ -15,6 +15,9 @@ public record VerificationResponse(
         Integer reliabilityScore,
         ScoreDetailsDto scoreDetails,
         String decisionReason,
+        String documentFrontUrl,
+        String documentBackUrl,
+        String selfieUrl,
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt
 ) {
